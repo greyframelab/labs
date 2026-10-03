@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Lab #01 — Skid Bar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Extra+Condensed:wght@600;800&family=Saira:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: the page is a lap. Content scrolls on the left; the native scrollbar is replaced by a fixed race track on the right. */
+:root{
+  --asphalt:#141518;      /* page ground, slight blue bias */
+  --track:#2b2d32;        /* track surface */
+  --paint:#ece6d6;        /* line paint / primary text */
+  --muted:#8d919a;        /* secondary text */
+  --kerb:#d63a2a;         /* kerb red, car livery */
+  --timing:#f5c518;       /* timing yellow */
+  --purple:#a35bff;       /* fastest overall */
+  --panel:rgba(20,21,24,.82);
+  --line:rgba(236,230,214,.12);
+  --display:"Saira Extra Condensed","Arial Narrow",Impact,sans-serif;
+  --body:"Saira",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --trackW:54px;
+  color-scheme:dark;
+}
+@media (max-width:600px){:root{--trackW:46px}}
+html{scrollbar-width:none;background:var(--asphalt)}
+html::-webkit-scrollbar{display:none}
+body{background:var(--asphalt);color:var(--paint);font-family:var(--body);font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased}
+main{padding-inline:16px calc(var(--trackW) + 36px);padding-block:0}
+@media (min-width:900px){main{padding-inline:clamp(32px,8vw,120px) calc(var(--trackW) + 80px)}}
+
+/* ---------- Track (custom scrollbar) ---------- */
+#track{position:fixed;z-index:2;right:max(12px,env(safe-area-inset-right,0px));top:calc(env(safe-area-inset-top,0px) + 12px);bottom:calc(env(safe-area-inset-bottom,0px) + 12px);width:var(--trackW);border-radius:10px;background:
+  radial-gradient(circle at 30% 20%,rgba(255,255,255,.025) 0 1px,transparent 1.5px) 0 0/7px 7px,
+  radial-gradient(circle at 70% 60%,rgba(0,0,0,.25) 0 1px,transparent 1.5px) 0 0/9px 9px,
+  var(--track);
+  touch-action:none;cursor:grab;outline:none}
+#track:active{cursor:grabbing}
+#track:focus-visible{box-shadow:0 0 0 2px var(--timing)}
+#track::before,#track::after{content:"";position:absolute;top:0;bottom:0;width:5px;background:repeating-linear-gradient(to bottom,var(--kerb) 0 12px,var(--paint) 12px 24px);opacity:.9}
+#track::before{left:0;border-radius:10px 0 0 10px}
+#track::after{right:0;border-radius:0 10px 10px 0}
+.grid-box{position:absolute;left:14%;right:14%;top:10px;height:44px;border:2px solid var(--paint);border-bottom:none;opacity:.55}
+.flag{position:absolute;left:5px;right:5px;bottom:0;height:16px;border-radius:0 0 6px 6px;background:conic-gradient(var(--paint) 25%,#111 0 50%,var(--paint) 0 75%,#111 0) 0 0/8px 8px}
+.sector{position:absolute;left:5px;right:5px;height:2px;background:var(--timing);opacity:.75}
+.sector span{position:absolute;right:calc(100% + 8px);top:-8px;font:500 10px/1 var(--mono);letter-spacing:.08em;color:var(--timing)}
+canvas{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}
+#marks{z-index:3}
+#fx{z-index:4}
+
+/* ---------- HUD ---------- */
+.hud{position:fixed;z-index:6;left:16px;top:calc(env(safe-area-inset-top,0px) + 12px);display:grid;grid-template-columns:auto auto;gap:2px 16px;align-items:end;padding:10px 14px;border-radius:8px;background:var(--panel);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--line);font-family:var(--mono);font-variant-numeric:tabular-nums}
+.hud .k{font-size:10px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase}
+.hud .lap{font-size:20px;font-weight:500;line-height:1.1}
+.hud .spd{grid-row:span 2;text-align:right;font:800 40px/0.9 var(--display);letter-spacing:.01em}
+.hud .spd small{display:block;font:500 10px/1.4 var(--mono);letter-spacing:.12em;color:var(--muted)}
+.hud .row{grid-column:1/-1;display:flex;gap:6px;align-items:center;margin-top:4px;font-size:11px}
+.chip{padding:1px 6px;border-radius:3px;background:rgba(255,255,255,.06);color:var(--muted);min-width:46px;text-align:center}
+.chip.purple{background:var(--purple);color:#fff}
+.chip.yellow{background:var(--timing);color:#111}
+.best{margin-left:auto;color:var(--muted)}
+.best b{color:var(--paint);font-weight:500}
+.hud .msg{grid-column:1/-1;font-size:10px;letter-spacing:.1em;color:var(--kerb);text-transform:uppercase}
+
+/* ---------- Content ---------- */
+section{min-height:96vh;display:flex;flex-direction:column;justify-content:center;gap:20px;padding-block:120px 64px;border-top:1px dashed var(--line);position:relative}
+section:first-child{border-top:none;padding-top:150px;min-height:100vh}
+.eyebrow{font:500 12px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--timing)}
+h1,h2{font-family:var(--display);font-weight:800;text-transform:uppercase;line-height:.86;margin:0;text-wrap:balance;letter-spacing:-.005em}
+h1{font-size:clamp(76px,17vw,210px)}
+h1 em{font-style:normal;color:var(--kerb)}
+h2{font-size:clamp(56px,11vw,140px)}
+.big-s{font:800 clamp(110px,26vw,300px)/.8 var(--display);color:transparent;-webkit-text-stroke:1.5px rgba(236,230,214,.18);margin:0;user-select:none}
+.lede{font-size:clamp(20px,2.6vw,28px);line-height:1.35;max-width:26ch;margin:0;color:var(--paint)}
+p{margin:0;max-width:56ch;color:var(--muted)}
+p strong{color:var(--paint);font-weight:500}
+.hint{display:inline-flex;align-items:center;gap:10px;font:500 12px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--paint)}
+.hint::after{content:"";width:2px;height:28px;background:linear-gradient(var(--timing),transparent);animation:drip 1.6s ease-in-out infinite}
+@keyframes drip{0%{transform:scaleY(.3);transform-origin:top}50%{transform:scaleY(1)}100%{transform:scaleY(.3);transform-origin:bottom}}
+.result{display:flex;flex-wrap:wrap;gap:12px 28px;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.result div{display:flex;flex-direction:column;gap:2px}
+.result span{font-size:10px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase}
+.result b{font:800 44px/1 var(--display);color:var(--paint)}
+.result b.purple{color:var(--purple)}
+.checker{height:20px;width:min(100%,520px);background:conic-gradient(var(--paint) 25%,#111 0 50%,var(--paint) 0 75%,#111 0) 0 0/20px 20px;border-radius:2px}
+
+/* ---------- Info sheet ---------- */
+#infoBtn{position:fixed;z-index:7;left:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);display:flex;align-items:center;gap:8px;padding:9px 14px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--paint);font:500 12px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;cursor:pointer;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+#infoBtn:hover{border-color:var(--timing)}
+#infoBtn:focus-visible,.close:focus-visible,a:focus-visible{outline:2px solid var(--timing);outline-offset:2px}
+#info{position:fixed;z-index:8;left:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);width:min(420px,calc(100vw - var(--trackW) - 52px));max-height:calc(100% - 120px);overflow:auto;padding:22px;border-radius:12px;background:#1b1c20;border:1px solid var(--line);box-shadow:0 20px 60px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:14px;font-size:15px;line-height:1.5;animation:rise .28s cubic-bezier(.2,.9,.3,1)}
+@keyframes rise{from{transform:translateY(16px);opacity:0}}
+#info h3{font:800 34px/.9 var(--display);text-transform:uppercase;margin:0}
+#info .meta{font:500 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--timing)}
+#info h4{font:500 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:4px 0 6px}
+#info p,#info li{color:var(--paint);max-width:none}
+#info ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+#info a{color:var(--timing)}
+#info .close{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--paint);font-size:18px;cursor:pointer}
+#allLabs{font:500 12px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase}
+
+/* ---------- Finish toast ---------- */
+#toast{position:fixed;z-index:9;left:50%;top:42%;transform:translate(-50%,-50%);padding:18px 28px;border-radius:10px;background:#0e0f11;border:1px solid var(--line);text-align:center;font-family:var(--mono);pointer-events:none}
+#toast .t{font:800 64px/1 var(--display);font-variant-numeric:tabular-nums}
+#toast .s{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+#toast.show{animation:pop 1.8s cubic-bezier(.2,.9,.3,1) forwards}
+@keyframes pop{0%{opacity:0;transform:translate(-50%,-40%) scale(.92)}12%{opacity:1;transform:translate(-50%,-50%) scale(1)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-56%)}}
+@media (prefers-reduced-motion:reduce){.hint::after{animation:none}#info{animation:none}#toast.show{animation:none;opacity:1}}
+</style>
+
+<div id="track" role="scrollbar" aria-controls="lap" aria-orientation="vertical" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Race track scrollbar. Drag the car to scroll." tabindex="0">
+  <div class="grid-box"></div>
+  <div class="sector" style="top:33.333%"><span>S1</span></div>
+  <div class="sector" style="top:66.666%"><span>S2</span></div>
+  <div class="flag"></div>
+</div>
+<canvas id="marks" aria-hidden="true"></canvas>
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<div class="hud" aria-live="off">
+  <div><div class="k">Lap</div><div class="lap" id="lapT">0:00.000</div></div>
+  <div class="spd"><span id="spd">0</span><small>km/h</small></div>
+  <div class="row"><span class="chip" id="s1">S1</span><span class="chip" id="s2">S2</span><span class="chip" id="s3">S3</span></div>
+  <div class="row"><span class="best">Best <b id="bestT">—</b></span></div>
+  <div class="msg" id="msg" hidden>Lap deleted · track limits</div>
+</div>
+
+<main id="lap">
+  <section>
+    <div class="eyebrow">Lab #01 · UI · Grid</div>
+    <h1>Skid <em>Bar</em></h1>
+    <p class="lede">What if the scrollbar had tyres?</p>
+    <p>The bar on the right is a race track and the car is your scroll position. <strong>Scroll fast</strong> and it accelerates. <strong>Brake hard</strong> and the tail steps out. <strong>Reverse</strong> and it pulls a handbrake turn. Every slide leaves rubber on the track.</p>
+    <div class="hint">Scroll down to start the lap</div>
+  </section>
+
+  <section>
+    <p class="big-s" aria-hidden="true">S1</p>
+    <div class="eyebrow">Sector 1 · Main straight</div>
+    <h2>Speed is scroll velocity</h2>
+    <p>The number in the timing panel reads how fast the page is moving: one km/h for every 14 pixels per second. A long flick on a trackpad or a hard swipe on a phone will push it past 300.</p>
+    <p>The timer started the moment you left the grid. Crossing the yellow line on the track closes the sector.</p>
+  </section>
+
+  <section>
+    <p class="big-s" aria-hidden="true">S2</p>
+    <div class="eyebrow">Sector 2 · Hairpin</div>
+    <h2>Flick back up</h2>
+    <p>The car has no reverse gear. Change scroll direction and it spins 180° on the handbrake, swings wide and paints a loop of rubber on the asphalt.</p>
+    <p>Try it here, then carry on down. Turning around costs time.</p>
+  </section>
+
+  <section>
+    <p class="big-s" aria-hidden="true">S3</p>
+    <div class="eyebrow">Sector 3 · Chicane</div>
+    <h2>Brake lights on</h2>
+    <p>Stop a fast scroll suddenly and the rear lamps flare while the back of the car slides out. Short, sharp flicks make it twitch through the chicane.</p>
+    <p>You can also grab the car or tap the track to jump. It works like any scrollbar, but the stewards will delete the lap for exceeding track limits.</p>
+  </section>
+
+  <section>
+    <div class="checker" aria-hidden="true"></div>
+    <div class="eyebrow">Finish</div>
+    <h2>Lap complete</h2>
+    <div class="result">
+      <div><span>Last lap</span><b id="lastBig">—</b></div>
+      <div><span>Personal best</span><b id="bestBig" class="purple">—</b></div>
+    </div>
+    <p>Sector colours follow the timing screens: <strong>purple</strong> is your fastest ever, <strong>yellow</strong> is slower. Scroll back to the top to reset the grid and go again.</p>
+    <p>Skid marks fade after 20 seconds. Look at the track: they pile up where you stopped to read.</p>
+  </section>
+</main>
+
+<button id="infoBtn" type="button" aria-expanded="false" aria-controls="info">About this lab</button>
+<aside id="info" hidden aria-label="About this lab">
+  <button class="close" type="button" aria-label="Close">×</button>
+  <div class="meta">Lab #01 · UI · 3 Oct 2026</div>
+  <h3>Skid Bar</h3>
+  <div><h4>Idea</h4><p>What if the scrollbar had tyres? A pun on the scroll "bar" turned into a track, where your reading speed becomes driving.</p></div>
+  <div><h4>Controls</h4><ul>
+    <li>Scroll, swipe or use the keyboard to drive.</li>
+    <li>Reverse direction to spin the car.</li>
+    <li>Drag the car or tap the track to jump. That deletes the current lap.</li>
+    <li>Back to the top resets the grid.</li>
+  </ul></div>
+  <div><h4>Inspired by</h4><ul>
+    <li>Mario Kart drift sparks: feedback that grows while you hold an input.</li>
+    <li>Bruno Simon's portfolio, where you drive a car to navigate the site.</li>
+    <li>F1 timing screens: purple for the fastest sector, yellow for slower.</li>
+  </ul></div>
+  <div><h4>For game UI</h4><p>Garages, inventories and level select screens are long scrolls. Give the scroll weight (momentum, a reaction when it stops) and leave a trace of where the player paused. Fading skid marks work as a free heatmap of attention.</p></div>
+  <a id="allLabs" href="https://claude.ai/artifact/CDYy2LnuZN3Tdb1A9BSHrG" target="_blank" rel="noopener">← All labs</a>
+  <script>if (/github\.io$/.test(location.hostname)) { const a = document.getElementById('allLabs'); a.href = '../'; a.removeAttribute('target'); }</script>
+</aside>
+
+<div id="toast" hidden><div class="s" id="toastS">Lap</div><div class="t" id="toastT">0:00.000</div></div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const track = $('track'), marksC = $('marks'), fxC = $('fx');
+  const mctx = marksC.getContext('2d'), fctx = fxC.getContext('2d');
+  const mq = matchMedia('(prefers-reduced-motion: reduce)');
+  let RM = mq.matches; mq.addEventListener?.('change', e => RM = e.matches);
+  const css = getComputedStyle(document.documentElement);
+  const C = { kerb: css.getPropertyValue('--kerb').trim(), paint: css.getPropertyValue('--paint').trim() };
+
+  // ---------- geometry ----------
+  let G = {}, dpr = 1;
+  function layout(){
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    for (const c of [marksC, fxC]) { c.width = innerWidth * dpr; c.height = innerHeight * dpr; }
+    const r = track.getBoundingClientRect();
+    const W = r.width, carL = W * 0.74, carW = W * 0.42;
+    G = { W, x: r.left, cx: r.left + W / 2, top: r.top, len: r.height, carL, carW,
+          yMin: r.top + 60 + carL / 2, yMax: r.bottom - 18 - carL / 2 };
+  }
+  layout(); addEventListener('resize', layout);
+
+  // ---------- state ----------
+  const maxScroll = () => Math.max(1, document.documentElement.scrollHeight - innerHeight);
+  const car = { y: G.yMin, vy: 0, x: 0, theta: 0, dir: 1, turning: false, turnTo: 0, side: 1, slip: 0, slipV: 0, slipSide: 1, braking: false };
+  let prevSy = scrollY, v = 0, prevV = 0, acc = 0, last = performance.now();
+  let marks = [], smoke = [], prevWheels = null;
+  const lap = { state: 'grid', start: 0, splits: [], deleted: false };
+  let best = null, bestSec = [null, null, null];
+  try { const s = JSON.parse(localStorage.getItem('skidbar') || 'null'); if (s) { best = s.best; bestSec = s.sec || bestSec; } } catch (e) {}
+  const save = () => { try { localStorage.setItem('skidbar', JSON.stringify({ best, sec: bestSec })); } catch (e) {} };
+  const fmt = ms => { if (ms == null) return '—'; const s = ms / 1000, m = Math.floor(s / 60); return m + ':' + (s % 60).toFixed(3).padStart(6, '0'); };
+  const fmtS = ms => (ms / 1000).toFixed(2);
+  if (best != null) { $('bestT').textContent = fmt(best); $('bestBig').textContent = fmt(best); }
+
+  // ---------- dragging the car / tapping the track ----------
+  let dragging = false;
+  function seek(clientY){
+    const p = Math.min(1, Math.max(0, (clientY - G.yMin) / (G.yMax - G.yMin)));
+    scrollTo({ top: p * maxScroll(), behavior: 'instant' });
+    if (lap.state === 'running' && !lap.deleted) { lap.deleted = true; $('msg').hidden = false; }
+  }
+  track.addEventListener('pointerdown', e => { dragging = true; track.setPointerCapture(e.pointerId); seek(e.clientY); e.preventDefault(); });
+  track.addEventListener('pointermove', e => { if (dragging) seek(e.clientY); });
+  const stop = () => dragging = false;
+  track.addEventListener('pointerup', stop); track.addEventListener('pointercancel', stop);
+  track.addEventListener('keydown', e => {
+    const step = { ArrowDown: 80, ArrowUp: -80, PageDown: innerHeight * .9, PageUp: -innerHeight * .9 }[e.key];
+    if (step) { scrollBy({ top: step }); e.preventDefault(); }
+  });
+
+  // ---------- info sheet ----------
+  const info = $('info'), btn = $('infoBtn');
+  const setInfo = open => { info.hidden = !open; btn.hidden = open; btn.setAttribute('aria-expanded', open); if (open) info.querySelector('.close').focus(); else btn.focus(); };
+  btn.onclick = () => setInfo(true);
+  info.querySelector('.close').onclick = () => setInfo(false);
+  addEventListener('keydown', e => { if (e.key === 'Escape' && !info.hidden) setInfo(false); });
+
+  // ---------- lap timing ----------
+  function finishLap(now){
+    const total = now - lap.start;
+    lap.state = 'done';
+    const s = [lap.splits[0], lap.splits[1] - lap.splits[0], total - lap.splits[1]];
+    const toast = $('toast');
+    $('lastBig').textContent = lap.deleted ? 'Deleted' : fmt(total);
+    if (lap.deleted) {
+      $('toastS').textContent = 'Lap deleted · track limits'; $('toastT').textContent = fmt(total); $('toastT').style.color = C.kerb;
+    } else {
+      s.forEach((t, i) => {
+        const el = $('s' + (i + 1)); const isBest = bestSec[i] == null || t <= bestSec[i];
+        if (isBest) bestSec[i] = t;
+        el.className = 'chip ' + (isBest ? 'purple' : 'yellow'); el.textContent = fmtS(t);
+      });
+      const pb = best == null || total < best;
+      if (pb) best = total;
+      save();
+      $('bestT').textContent = fmt(best); $('bestBig').textContent = fmt(best);
+      $('toastS').textContent = pb ? 'Personal best' : 'Lap complete';
+      $('toastT').textContent = fmt(total);
+      $('toastT').style.color = pb ? getComputedStyle(document.documentElement).getPropertyValue('--purple') : C.paint;
+    }
+    $('lapT').textContent = fmt(total);
+    toast.hidden = false; toast.classList.remove('show'); void toast.offsetWidth; toast.classList.add('show');
+    clearTimeout(finishLap.t); finishLap.t = setTimeout(() => toast.hidden = true, 1900);
+  }
+  function resetGrid(){
+    lap.state = 'grid'; lap.splits = []; lap.deleted = false;
+    $('msg').hidden = true; $('lapT').textContent = fmt(0);
+    for (let i = 1; i <= 3; i++) { const el = $('s' + i); el.className = 'chip'; el.textContent = 'S' + i; }
+  }
+
+  // ---------- drawing ----------
+  function rr(ctx, x, y, w, h, r){ ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h); }
+  function drawCar(ctx, x, y, a, brake){
+    const L = G.carL, W = G.carW;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+    ctx.fillStyle = 'rgba(0,0,0,.4)'; rr(ctx, -W / 2 - 1, -L / 2 + 2, W + 2, L, W * .35); ctx.fill();
+    ctx.fillStyle = '#0b0b0c';
+    for (const sx of [-1, 1]) for (const sy of [-1, 1]) { rr(ctx, sx * W * .5 - W * .13, sy * L * .29 - L * .1, W * .26, L * .2, 2); ctx.fill(); }
+    ctx.fillStyle = C.kerb; rr(ctx, -W / 2, -L / 2, W, L, W * .38); ctx.fill();
+    ctx.fillStyle = C.paint; ctx.fillRect(-W * .09, -L / 2 + 1, W * .18, L - 2);
+    ctx.fillStyle = '#121316'; rr(ctx, -W * .3, -L * .1, W * .6, L * .3, W * .18); ctx.fill();
+    ctx.fillStyle = '#fff3c4'; ctx.fillRect(-W * .36, L / 2 - 3, W * .16, 2); ctx.fillRect(W * .2, L / 2 - 3, W * .16, 2);
+    ctx.fillStyle = brake ? '#ff3b2f' : '#7a1a14';
+    if (brake) { ctx.shadowColor = '#ff3b2f'; ctx.shadowBlur = 12; }
+    ctx.fillRect(-W * .38, -L / 2 + 1, W * .2, 2.5); ctx.fillRect(W * .18, -L / 2 + 1, W * .2, 2.5);
+    ctx.restore();
+  }
+  const rot = (lx, ly, a) => [lx * Math.cos(a) - ly * Math.sin(a), lx * Math.sin(a) + ly * Math.cos(a)];
+
+  // ---------- loop ----------
+  let hudT = 0;
+  function frame(now){
+    const dt = Math.min(0.033, Math.max(0.001, (now - last) / 1000)); last = now;
+    const sy = scrollY, max = maxScroll(), p = Math.min(1, Math.max(0, sy / max));
+    const raw = (sy - prevSy) / dt; prevSy = sy;
+    v += (raw - v) * Math.min(1, dt * 14);
+    const a = (v - prevV) / dt; prevV = v; acc += (a - acc) * Math.min(1, dt * 10);
+    const speed = Math.abs(v);
+
+    // position: critically damped spring toward scroll position
+    const target = G.yMin + p * (G.yMax - G.yMin);
+    if (RM || dragging) { car.y = target; car.vy = 0; }
+    else { const k = 240, c = 2 * Math.sqrt(k); car.vy += (k * (target - car.y) - c * car.vy) * dt; car.y += car.vy * dt; }
+
+    // direction change -> handbrake turn
+    if (!car.turning && speed > 140 && Math.sign(v) !== car.dir) {
+      car.dir = Math.sign(v); car.side = -car.side;
+      car.turnTo = car.theta + Math.PI * car.side;
+      if (RM) car.theta = car.turnTo; else car.turning = true;
+    }
+    let prog = 0;
+    if (car.turning) {
+      const diff = car.turnTo - car.theta, step = 12 * dt;
+      if (Math.abs(diff) <= step) { car.theta = car.turnTo; car.turning = false; }
+      else car.theta += Math.sign(diff) * step;
+      prog = 1 - Math.abs(car.turnTo - car.theta) / Math.PI;
+    }
+
+    // braking slide
+    const brakeF = speed > 200 ? Math.max(0, -acc * Math.sign(v)) : 0;
+    if (!car.braking && brakeF > 2600) { car.braking = true; car.slipSide = Math.random() < .5 ? -1 : 1; }
+    if (car.braking && brakeF < 700) car.braking = false;
+    let slipT = car.braking ? car.slipSide * Math.min(.55, brakeF / 14000) : 0;
+    if (car.turning) slipT = .4 * car.side;
+    slipT += Math.sin(now / 90) * Math.min(1, speed / 5000) * .05;
+    if (RM) { car.slip = 0; car.slipV = 0; }
+    else { car.slipV += (140 * (slipT - car.slip) - 16 * car.slipV) * dt; car.slip += car.slipV * dt; }
+    const xT = car.turning && !RM ? Math.sin(prog * Math.PI) * G.W * .16 * car.side : 0;
+    car.x += (xT - car.x) * Math.min(1, dt * 18);
+
+    const ang = car.theta + car.slip, cx = G.cx + car.x, cy = car.y;
+    const skidding = !RM && (car.turning || Math.abs(car.slip) > .12);
+    const brakeLights = brakeF > 1400 || car.braking;
+
+    // skid marks + smoke from the rear wheels (nose points +y in car space)
+    const wheels = [-1, 1].map(s => { const [dx, dy] = rot(s * G.carW * .42, -G.carL * .3, ang); return [cx + dx, cy + dy]; });
+    if (skidding) {
+      if (prevWheels) wheels.forEach((w, i) => {
+        const pw = prevWheels[i];
+        if (Math.hypot(w[0] - pw[0], w[1] - pw[1]) < 60)
+          marks.push([(pw[0] - G.x) / G.W, (pw[1] - G.top) / G.len, (w[0] - G.x) / G.W, (w[1] - G.top) / G.len, now]);
+      });
+      prevWheels = wheels;
+      for (const w of wheels) if (Math.random() < .7) smoke.push({ x: w[0], y: w[1], vx: (Math.random() - .5) * 30, vy: (Math.random() - .5) * 30 - 10, r: 3 + Math.random() * 3, life: 0, max: .7 + Math.random() * .5 });
+      if (smoke.length > 260) smoke.splice(0, smoke.length - 260);
+    } else prevWheels = null;
+
+    // marks layer
+    marks = marks.filter(m => now - m[4] < 20000);
+    mctx.setTransform(dpr, 0, 0, dpr, 0, 0); mctx.clearRect(0, 0, innerWidth, innerHeight);
+    mctx.lineCap = 'round'; mctx.lineWidth = Math.max(2.5, G.carW * .22);
+    const buckets = 8;
+    for (let b = 0; b < buckets; b++) {
+      mctx.beginPath(); let any = false;
+      for (const m of marks) {
+        const age = (now - m[4]) / 20000;
+        if (Math.min(buckets - 1, Math.floor(age * buckets)) !== b) continue;
+        mctx.moveTo(G.x + m[0] * G.W, G.top + m[1] * G.len); mctx.lineTo(G.x + m[2] * G.W, G.top + m[3] * G.len); any = true;
+      }
+      if (any) { mctx.strokeStyle = `rgba(6,6,8,${.62 * (1 - b / buckets)})`; mctx.stroke(); }
+    }
+
+    // fx layer: smoke + car
+    fctx.setTransform(dpr, 0, 0, dpr, 0, 0); fctx.clearRect(0, 0, innerWidth, innerHeight);
+    for (const s of smoke) { s.life += dt; s.x += s.vx * dt; s.y += s.vy * dt; s.r += 26 * dt; }
+    smoke = smoke.filter(s => s.life < s.max);
+    for (const s of smoke) { const t = s.life / s.max; fctx.fillStyle = `rgba(214,214,220,${.2 * (1 - t)})`; fctx.beginPath(); fctx.arc(s.x, s.y, s.r, 0, 6.283); fctx.fill(); }
+    drawCar(fctx, cx, cy, ang, brakeLights);
+
+    // lap logic
+    if (lap.state === 'grid' && sy > 2) { lap.state = 'running'; lap.start = now; }
+    if (lap.state === 'done' && sy <= 2) resetGrid();
+    if (lap.state === 'running') {
+      const el = now - lap.start;
+      while (lap.splits.length < 2 && p >= (lap.splits.length + 1) / 3) lap.splits.push(el);
+      if (p >= .997) finishLap(now);
+      else if (sy <= 2 && el > 300) resetGrid();
+    }
+
+    // HUD (throttled)
+    if (now - hudT > 50) {
+      hudT = now;
+      $('spd').textContent = Math.round(Math.min(372, speed / 14));
+      if (lap.state === 'running') $('lapT').textContent = fmt(now - lap.start);
+      track.setAttribute('aria-valuenow', Math.round(p * 100));
+    }
+    requestAnimationFrame(frame);
+  }
+  car.y = G.yMin + Math.min(1, scrollY / maxScroll()) * (G.yMax - G.yMin);
+  requestAnimationFrame(frame);
+})();
+</script>
