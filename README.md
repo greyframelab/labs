@@ -1,2 +1,13 @@
-# labs
-Weekly experiments in UI, motion and creative coding for games, apps and interfaces.
+# Greyframe Labs
+
+Weekly experiments in UI, motion and creative coding for games, apps and interfaces. A new one every Monday.
+
+**Live:** https://greyframelab.github.io/labs/
+
+| # | Lab | Category |
+|---|-----|----------|
+| 01 | [Skid Bar](lab-01-skid-bar/) | UI |
+
+Each lab is a single self-contained HTML file that runs in the browser on desktop and mobile.
+
+Built by Toni Santafé, game UI/UX designer.
