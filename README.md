@@ -1,11 +1,12 @@
 # Greyframe Labs
 
-Weekly experiments in UI, motion and creative coding for games, apps and interfaces. A new one every Monday.
+Experiments in UI, motion and creative coding for games, apps and interfaces. A new one every day.
 
 **Live:** https://greyframelab.github.io/labs/
 
 | # | Lab | Category |
 |---|-----|----------|
+| 02 | [Ghost Type](lab-02-ghost-type/) | Motion |
 | 01 | [Skid Bar](lab-01-skid-bar/) | UI |
 
 Each lab is a single self-contained HTML file that runs in the browser on desktop and mobile.
