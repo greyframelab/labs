@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Lab #02 — Ghost Type</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Major+Mono+Display&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: one dark room. The ghost fills the stage; title top-left, its mood machine along the bottom. Single dark look by design. */
+:root{
+  --void:#050407;          /* page ground, violet-black */
+  --static:#8a8494;        /* secondary text */
+  --ink:#ece8f2;           /* primary text */
+  --cyan:#29e7ff;          /* lonely */
+  --magenta:#ff2bd6;       /* spooked */
+  --green:#39ff88;         /* calm */
+  --line:rgba(236,232,242,.12);
+  --panel:rgba(12,10,16,.86);
+  --mood:var(--cyan);
+  --display:"Major Mono Display","IBM Plex Mono",ui-monospace,monospace;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--void);color:var(--ink);font-family:var(--mono);overflow:hidden;-webkit-font-smoothing:antialiased;touch-action:none;user-select:none;-webkit-user-select:none}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+#stage{z-index:1;cursor:crosshair;outline:none}
+.scan{position:fixed;inset:0;z-index:3;pointer-events:none;background:
+  repeating-linear-gradient(to bottom,rgba(255,255,255,.025) 0 1px,transparent 1px 3px),
+  radial-gradient(ellipse at 50% 45%,transparent 45%,rgba(0,0,0,.65) 100%)}
+
+header{position:fixed;z-index:5;left:16px;right:16px;top:calc(env(safe-area-inset-top,0px) + 16px);display:flex;flex-direction:column;gap:6px;pointer-events:none}
+.eyebrow{font:500 11px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--static)}
+.eyebrow b{color:var(--mood);font-weight:500;transition:color .4s}
+h1{margin:0;font:400 clamp(28px,5vw,44px)/1 var(--display);letter-spacing:.02em;text-transform:lowercase}
+#hint{margin:2px 0 0;font:400 13px/1.45 var(--mono);color:var(--static);max-width:34ch;min-height:2.9em;transition:opacity .25s}
+
+.moods{position:fixed;z-index:5;left:16px;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 64px);display:flex;flex-wrap:wrap;justify-content:center;gap:6px;pointer-events:none}
+.moods span{font:500 10.5px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;padding:6px 8px;border-radius:3px;border:1px solid var(--line);color:var(--static);transition:color .3s,border-color .3s,background-color .3s}
+.moods span.on{color:#050407;background:var(--mood);border-color:var(--mood)}
+.moods .lbl{border:none;padding-inline:0 4px;color:var(--static);opacity:.7}
+
+#infoBtn{position:fixed;z-index:7;left:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);display:flex;align-items:center;gap:8px;padding:9px 14px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:500 12px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;cursor:pointer;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+#infoBtn:hover{border-color:var(--mood)}
+#infoBtn:focus-visible,.close:focus-visible,#info a:focus-visible,#stage:focus-visible+.focusring{outline:2px solid var(--mood);outline-offset:2px}
+.kbd{position:fixed;z-index:5;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 24px);font:400 11px/1 var(--mono);letter-spacing:.06em;color:var(--static);opacity:.7;pointer-events:none}
+@media (max-width:640px){.kbd{display:none}}
+#stage:focus-visible{box-shadow:inset 0 0 0 2px var(--mood)}
+
+#info{box-sizing:border-box;position:fixed;z-index:8;left:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);width:min(420px,calc(100vw - 32px));max-height:calc(100% - 100px);overflow:auto;padding:22px;border-radius:10px;background:#0d0b11;border:1px solid var(--line);box-shadow:0 20px 60px rgba(0,0,0,.6);display:flex;flex-direction:column;gap:14px;font:400 14px/1.55 var(--mono);user-select:text;-webkit-user-select:text;animation:rise .28s cubic-bezier(.2,.9,.3,1)}
+@keyframes rise{from{transform:translateY(16px);opacity:0}}
+#info h3{font:400 30px/1 var(--display);margin:0;text-transform:lowercase}
+#info .meta{font:500 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mood)}
+#info h4{font:500 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--static);margin:4px 0 6px}
+#info p,#info li{color:var(--ink);margin:0}
+#info ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+#info a{color:var(--mood)}
+#info .close{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--ink);font-size:18px;cursor:pointer}
+#allLabs{font:500 12px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase}
+@media (prefers-reduced-motion:reduce){#info{animation:none}.moods span,.eyebrow b{transition:none}}
+</style>
+
+<canvas id="stage" tabindex="0" aria-label="A ghost made of words. Move toward it with the pointer, a finger or the arrow keys. Press Space to startle it." aria-describedby="hint"></canvas>
+<div class="scan" aria-hidden="true"></div>
+
+<header>
+  <div class="eyebrow">Lab #02 · <b>Motion</b> · Glyphs</div>
+  <h1>Ghost Type</h1>
+  <p id="hint" aria-live="polite">It wants you closer. Move toward it.</p>
+</header>
+
+<div class="moods" aria-label="Ghost mood">
+  <span class="lbl">Mood</span>
+  <span data-m="lonely" class="on">Lonely</span>
+  <span data-m="spooked">Spooked</span>
+  <span data-m="calm">Calm</span>
+  <span data-m="attached">Attached</span>
+  <span data-m="abandoned">Abandoned</span>
+</div>
+<div class="kbd" aria-hidden="true">Arrows move · Space startles · Esc leaves</div>
+
+<button id="infoBtn" type="button" aria-expanded="false" aria-controls="info">About this lab</button>
+<aside id="info" hidden aria-label="About this lab">
+  <button class="close" type="button" aria-label="Close">×</button>
+  <div class="meta">Lab #02 · Motion · 5 Oct 2026</div>
+  <h3>Ghost Type</h3>
+  <div><h4>Idea</h4><p>What if a ghost was made of the words it can't stop thinking? A pun on "ghost type": a spirit set in type, whose mood rewrites the letters it is made of. Rush in and it scrambles. Stay still and it calms down. Leave after it trusted you and it remembers.</p></div>
+  <div><h4>Controls</h4><ul>
+    <li>Move the cursor or drag a finger toward the ghost. Fast movement spooks it.</li>
+    <li>Hold still over it for a second to calm it. Keep still to earn its trust.</li>
+    <li>Move away (or lift your finger) once it trusts you.</li>
+    <li>Click or tap it to say boo. Keyboard: arrows move, Space startles, Esc leaves.</li>
+  </ul></div>
+  <div><h4>Inspired by</h4><ul>
+    <li><a href="https://x.com/_1mposter" target="_blank" rel="noopener">@_1mposter</a>: silhouettes filled with repeated words and ASCII glyphs, neon on black, where the text gives the image its meaning.</li>
+    <li>Pac-Man's ghosts: a tiny AI state machine (chase, scatter, frightened) you read instantly through colour and behaviour.</li>
+    <li>Concrete poetry and Apollinaire's calligrams, where the shape of the text is part of what it says.</li>
+  </ul></div>
+  <div><h4>For game UI</h4><p>Companion affinity, enemy alert levels and NPC trust usually hide in a meter. Let the state change the material instead: the same object, rewritten in a new word, colour and motion. The mood row underneath doubles as a readable debug view of the AI, which is handy in playtests.</p></div>
+  <a id="allLabs" href="https://claude.ai/artifact/CDYy2LnuZN3Tdb1A9BSHrG" target="_blank" rel="noopener">← All labs</a>
+  <script>if (/github\.io$/.test(location.hostname)) { const a = document.getElementById('allLabs'); a.href = '../'; a.removeAttribute('target'); }</script>
+</aside>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const cv = $('stage'), gc = document.createElement('canvas');
+  const ctx = cv.getContext('2d'), gx2 = gc.getContext('2d');
+  const mq = matchMedia('(prefers-reduced-motion: reduce)');
+  let RM = mq.matches; mq.addEventListener?.('change', e => { RM = e.matches; });
+
+  // ---------- moods ----------
+  const M = {
+    lonely:    { phrase: 'COME·CLOSER·',      rgb: [41, 231, 255], hint: 'It wants you closer. Move toward it.' },
+    spooked:   { phrase: 'NOT·SO·FAST·',      rgb: [255, 43, 214], hint: 'Too fast. Slow down and hold still over it.' },
+    calm:      { phrase: 'STAY·',             rgb: [57, 255, 136], hint: 'Good. Keep still.' },
+    attached:  { phrase: 'YOU·STAYED·',       rgb: [57, 255, 136], hint: 'It trusts you now. Try leaving.' },
+    abandoned: { phrase: 'YOU·ALWAYS·LEAVE·', rgb: [120, 150, 200], hint: 'It remembers. Come back slowly.' },
+    boo:       { phrase: 'BOO!·',             rgb: [255, 43, 214], hint: 'Fair enough.' },
+  };
+  const NOISE = '▓▒░#%&@$*+=<>/\\|01{}[]';
+  const rnd = s => s[(Math.random() * s.length) | 0];
+
+  // ---------- geometry ----------
+  let W, H, dpr, R, FS, CW, CH, baseX, baseY;
+  let P = []; // glyph particles
+  let bg = [];
+  function layout(){
+    dpr = Math.min(2, devicePixelRatio || 1);
+    W = innerWidth; H = innerHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    gc.width = Math.ceil(W / 7); gc.height = Math.ceil(H / 7);
+    const top = W < 640 ? 150 : 130, bottom = W < 640 ? 130 : 110;
+    R = Math.max(80, Math.min(W * 0.4, (H - top - bottom) / 2.55, 270));
+    FS = Math.max(9, Math.min(16, R / 15.5));
+    CW = FS * 0.62; CH = FS * 1.04;
+    baseX = W / 2;
+    baseY = top + (H - top - bottom) / 2 - 0.2 * R;
+    build();
+    bg = Array.from({ length: Math.round(W * H / 9000) }, () => ({ x: Math.random() * W, y: Math.random() * H, c: rnd(NOISE), a: .04 + Math.random() * .09 }));
+  }
+  // shape in ghost units (r = 1). y grows downward; head center at 0,0.
+  const TAIL = 1.3, AMP = 0.13;
+  const halfW = y => 1 + 0.07 * Math.max(0, y);
+  function inBody(x, y, t){
+    if (y < 0) return x * x + y * y < 1;
+    if (Math.abs(x) > halfW(y)) return false;
+    return y < TAIL + AMP * Math.sin(x * Math.PI * 2.4 + t * 3.2);
+  }
+  function build(){
+    const old = P;
+    P = [];
+    const cols = Math.ceil(2.3 * R / CW), rows = Math.ceil((TAIL + AMP + 1.05) * R / CH);
+    let k = 0;
+    for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+      const lx = ((i + .5) * CW - 1.15 * R) / R, ly = ((j + .5) * CH - 1.02 * R) / R;
+      if (!inBody(lx, ly, 0) && !(ly > 0 && ly < TAIL + AMP && Math.abs(lx) < halfW(ly))) continue;
+      const hx = baseX + lx * R, hy = baseY + ly * R;
+      P.push({ lx, ly, row: j, k: k++, x: hx, y: hy, vx: 0, vy: 0, ch: '', to: '', s0: 0, s1: 0, a: 0, shade: 0, drip: 0, dripV: 0 });
+    }
+    const ph = M[state].phrase;
+    for (const p of P) { p.ch = p.to = ph[p.k % ph.length]; }
+    if (!old.length) for (const p of P) { p.y += (Math.random() - .5) * 40; p.x += (Math.random() - .5) * 40; }
+  }
+
+  // ---------- state machine ----------
+  let state = 'lonely', stateT = 0, stillT = 0, calmT = 0, abandonT = 0, booT = 0, spookHold = 0;
+  const ptr = { x: 0, y: 0, on: false, sx: 0, sy: 0, speed: 0, kb: false };
+  const col = [41, 231, 255];
+  const chips = [...document.querySelectorAll('.moods span[data-m]')];
+  function setState(s, now){
+    if (s === state) return;
+    state = s; stateT = 0;
+    const ph = M[s].phrase;
+    const ox = ptr.on ? ptr.x : baseX, oy = ptr.on ? ptr.y : baseY;
+    for (const p of P) {
+      p.to = ph[p.k % ph.length];
+      if (RM) { p.ch = p.to; p.s1 = 0; continue; }
+      const d = Math.hypot(p.x - ox, p.y - oy) / R;
+      p.s0 = now + d * 260 + Math.random() * 90;
+      p.s1 = p.s0 + 160 + Math.random() * 160;
+    }
+    $('hint').textContent = M[s].hint;
+    const chipM = s === 'boo' ? 'spooked' : s;
+    chips.forEach(c => c.classList.toggle('on', c.dataset.m === chipM));
+    const c = M[s].rgb; document.documentElement.style.setProperty('--mood', `rgb(${c})`);
+  }
+  function localOf(x, y){ return [(x - gX) / R, (y - gY) / R]; }
+  const isNear = () => { if (!ptr.on) return false; const [lx, ly] = localOf(ptr.x, ptr.y); return Math.hypot(lx, (ly - .2) * .85) < 1.45; };
+  const isOver = (x, y) => { const [lx, ly] = localOf(x, y); return Math.hypot(lx, (ly - .2) * .85) < 1.15; };
+
+  function boo(now){
+    booT = 1.3; setState('boo', now);
+    if (RM) return;
+    for (const p of P) {
+      const dx = p.x - gX, dy = p.y - (gY + .2 * R), d = Math.hypot(dx, dy) || 1;
+      const f = 500 + Math.random() * 700;
+      p.vx += dx / d * f; p.vy += dy / d * f - 120;
+    }
+    glitch = { y: gY - R, h: 2.4 * R, dx: 0, t: .18 };
+  }
+
+  // ---------- input ----------
+  let down = null;
+  cv.addEventListener('pointerdown', e => {
+    ptr.kb = false; ptr.on = true; ptr.x = e.clientX; ptr.y = e.clientY;
+    down = { x: e.clientX, y: e.clientY, t: performance.now() };
+    cv.setPointerCapture?.(e.pointerId);
+  });
+  cv.addEventListener('pointermove', e => { ptr.kb = false; ptr.on = true; ptr.x = e.clientX; ptr.y = e.clientY; });
+  cv.addEventListener('pointerup', e => {
+    const now = performance.now();
+    if (down && now - down.t < 260 && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 12 && isOver(e.clientX, e.clientY)) boo(now);
+    down = null;
+    if (e.pointerType !== 'mouse') ptr.on = false;
+  });
+  cv.addEventListener('pointercancel', () => { down = null; ptr.on = false; });
+  document.addEventListener('pointerleave', () => { ptr.on = false; });
+  cv.addEventListener('mouseleave', () => { ptr.on = false; });
+  const keys = {};
+  cv.addEventListener('keydown', e => {
+    if (e.key.startsWith('Arrow')) {
+      if (!ptr.on || !ptr.kb) { ptr.on = true; ptr.kb = true; ptr.x = W / 2; ptr.y = H - 40; }
+      keys[e.key] = true; e.preventDefault();
+    } else if (e.key === ' ' || e.key === 'Enter') { boo(performance.now()); e.preventDefault(); }
+    else if (e.key === 'Escape') { ptr.on = false; }
+  });
+  cv.addEventListener('keyup', e => { keys[e.key] = false; });
+  cv.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+
+  // ---------- info sheet ----------
+  const info = $('info'), btn = $('infoBtn');
+  const setInfo = open => { info.hidden = !open; btn.hidden = open; btn.setAttribute('aria-expanded', open); if (open) info.querySelector('.close').focus(); else btn.focus(); };
+  btn.onclick = () => setInfo(true);
+  info.querySelector('.close').onclick = () => setInfo(false);
+  addEventListener('keydown', e => { if (e.key === 'Escape' && !info.hidden) setInfo(false); });
+
+  // ---------- loop ----------
+  let last = performance.now(), gX = 0, gY = 0, drift = [0, 0], glitch = null;
+  const eye = { ry: .21, rx: .15, dy: 0, mouth: 0, lookX: 0, lookY: 0 };
+  let tailT = 0;
+  function frame(now){
+    const dt = Math.min(.033, Math.max(.001, (now - last) / 1000)); last = now;
+    const t = now / 1000;
+    stateT += dt;
+
+    // keyboard pointer
+    if (ptr.kb) {
+      const v = 260 * dt;
+      if (keys.ArrowLeft) ptr.x -= v; if (keys.ArrowRight) ptr.x += v;
+      if (keys.ArrowUp) ptr.y -= v; if (keys.ArrowDown) ptr.y += v;
+      ptr.x = Math.max(0, Math.min(W, ptr.x)); ptr.y = Math.max(0, Math.min(H, ptr.y));
+    }
+    // pointer speed (smoothed, px/s)
+    const raw = ptr.on ? Math.hypot(ptr.x - ptr.sx, ptr.y - ptr.sy) / dt : 0;
+    ptr.sx = ptr.x; ptr.sy = ptr.y;
+    ptr.speed += (raw - ptr.speed) * Math.min(1, dt * 10);
+
+    // mood logic
+    const near = isNear();
+    const fast = ptr.speed > R * 2.2;
+    spookHold = Math.max(0, spookHold - dt);
+    if (booT > 0) { booT -= dt; if (booT <= 0) setState(near ? 'spooked' : 'lonely', now); }
+    else if (near) {
+      if (fast && state !== 'calm' && state !== 'attached') { stillT = 0; calmT = 0; spookHold = .5; setState('spooked', now); }
+      else if (spookHold <= 0 || state === 'calm' || state === 'attached') {
+        stillT += dt;
+        if (state === 'calm' || state === 'attached') calmT += dt;
+        if (stillT > .9 && state !== 'attached') setState(calmT > 3.5 ? 'attached' : 'calm', now);
+        else if (stillT <= .9 && state !== 'calm' && state !== 'attached' && state !== 'spooked') setState('spooked', now);
+      }
+      abandonT = 0;
+    } else {
+      stillT = 0;
+      if (state === 'attached' || (state === 'calm' && calmT > 1)) { abandonT = 4.5; setState('abandoned', now); }
+      calmT = 0;
+      if (state === 'abandoned') { abandonT -= dt; if (abandonT <= 0) setState('lonely', now); }
+      else if (state !== 'lonely') setState('lonely', now);
+    }
+
+    // colour
+    const tc = M[state].rgb;
+    for (let i = 0; i < 3; i++) col[i] += (tc[i] - col[i]) * Math.min(1, dt * 6);
+
+    // ghost body motion
+    const bob = RM ? 0 : Math.sin(t * 1.1) * 0.035 * R;
+    let dTx = 0, dTy = 0;
+    if (ptr.on && !RM) {
+      const dx = ptr.x - baseX, dy = ptr.y - baseY;
+      const pull = state === 'lonely' ? .07 : state === 'spooked' || state === 'boo' ? -.12 : state === 'attached' ? .1 : .04;
+      dTx = Math.max(-R * .6, Math.min(R * .6, dx * pull)); dTy = Math.max(-R * .3, Math.min(R * .3, dy * pull * .5));
+    }
+    drift[0] += (dTx - drift[0]) * Math.min(1, dt * 2.2);
+    drift[1] += (dTy - drift[1]) * Math.min(1, dt * 2.2);
+    gX = baseX + drift[0]; gY = baseY + drift[1] + bob;
+    const tilt = RM ? 0 : Math.sin(t * .8) * .03 - drift[0] / R * .08;
+    const cosT = Math.cos(tilt), sinT = Math.sin(tilt);
+    if (!RM) tailT = t * (state === 'spooked' || state === 'boo' ? 2.2 : state === 'abandoned' ? .45 : 1);
+
+    // face
+    const tgt = {
+      lonely:    { ry: .21, rx: .15, dy: 0,   mouth: 0 },
+      spooked:   { ry: .3,  rx: .19, dy: -.03, mouth: .15 },
+      boo:       { ry: .32, rx: .2,  dy: -.04, mouth: .22 },
+      calm:      { ry: .05, rx: .16, dy: .02, mouth: 0 },
+      attached:  { ry: .045, rx: .17, dy: 0,  mouth: 0 },
+      abandoned: { ry: .17, rx: .14, dy: .1,  mouth: .05 },
+    }[state];
+    const ek = Math.min(1, dt * (RM ? 60 : 9));
+    for (const k in tgt) eye[k] += (tgt[k] - eye[k]) * ek;
+    // blink
+    const blink = !RM && (state === 'lonely' || state === 'abandoned') && (t % 4.3) < .12 ? .2 : 1;
+    let lx = 0, ly = 0;
+    if (ptr.on) { const [px, py] = localOf(ptr.x, ptr.y); const d = Math.hypot(px, py) || 1; lx = px / d * Math.min(1, d) * .07; ly = py / d * Math.min(1, d) * .05; }
+    if (state === 'abandoned') { lx = 0; ly = .04; }
+    eye.lookX += (lx - eye.lookX) * Math.min(1, dt * 6); eye.lookY += (ly - eye.lookY) * Math.min(1, dt * 6);
+    const ERy = eye.ry * blink;
+    const ex = .36, ey = -.12 + eye.dy;
+    const inHole = (x, y) => {
+      for (const s of [-1, 1]) {
+        const dx = (x - (s * ex + eye.lookX)) / eye.rx, dy = (y - (ey + eye.lookY)) / ERy;
+        if (dx * dx + dy * dy < 1) return true;
+      }
+      if (eye.mouth > .02) { const dx = x - eye.lookX * .6, dy = (y - .3 - eye.lookY * .6) / 1.2; if (dx * dx + dy * dy < eye.mouth * eye.mouth) return true; }
+      return false;
+    };
+
+    // forces
+    const rep = { lonely: [.45, 1800], spooked: [.85, 9000], boo: [.9, 6000], calm: [.55, -500], attached: [.6, -650], abandoned: [.4, 1200] }[state];
+    const RR = rep[0] * R, SS = rep[1];
+    const k = 95, c = 12;
+    const sag = state === 'abandoned' ? Math.min(1, stateT / 1.5) : 0;
+    const beat = state === 'attached' && !RM ? Math.pow(Math.max(0, Math.sin(t * 5.2)), 12) * .025 : 0;
+    const swayA = state === 'spooked' ? .07 : .04;
+    for (const p of P) {
+      // home position
+      let hx = p.lx, hy = p.ly;
+      if (!RM) {
+        hx += Math.sin(tailT * 1.6 + hy * 2.2) * swayA * Math.max(0, hy + .3);
+        if (state === 'spooked') hx += (Math.random() - .5) * .012;
+        hy += sag * .07 * (hy + 1);
+        hx *= 1 + beat; hy *= 1 + beat;
+      }
+      const inside = inBody(p.lx, p.ly, tailT) && !inHole(p.lx, p.ly);
+      p.a += ((inside ? 1 : 0) - p.a) * Math.min(1, dt * (RM ? 60 : 10));
+      const sx = gX + (hx * cosT - hy * sinT) * R, sy = gY + (hx * sinT + hy * cosT) * R;
+
+      // drips when abandoned
+      if (sag > 0 && !RM && p.ly > .4 && (p.k * 7919) % 23 === 0) {
+        p.dripV += 160 * dt; p.drip += p.dripV * dt;
+        if (p.drip > R * .55) { p.drip = 0; p.dripV = 0; }
+      } else if (p.drip) { p.drip *= .85; if (p.drip < .5) { p.drip = 0; p.dripV = 0; } }
+
+      if (RM) { p.x = sx; p.y = sy + p.drip; p.vx = p.vy = 0; }
+      else {
+        let ax = k * (sx - p.x) - c * p.vx, ay = k * (sy + p.drip - p.y) - c * p.vy;
+        if (ptr.on) {
+          const dx = p.x - ptr.x, dy = p.y - ptr.y, d = Math.hypot(dx, dy);
+          if (d < RR && d > .5) {
+            const f = (1 - d / RR); let s = SS * f * f;
+            if (SS < 0) s = SS * f * Math.min(1, d / (R * .3)); // attract, but don't collapse
+            ax += dx / d * s; ay += dy / d * s;
+          }
+        }
+        p.vx += ax * dt; p.vy += ay * dt; p.x += p.vx * dt; p.y += p.vy * dt;
+      }
+      // scramble
+      if (p.ch !== p.to) {
+        if (now >= p.s1) p.ch = p.to;
+      }
+    }
+
+    // glitch bands
+    if (!RM) {
+      if (glitch) { glitch.t -= dt; if (glitch.t <= 0) glitch = null; }
+      const rate = state === 'spooked' ? 7 : state === 'boo' ? 10 : state === 'abandoned' ? 1.2 : .35;
+      if (!glitch && Math.random() < rate * dt) glitch = { y: gY - R + Math.random() * 2.3 * R, h: CH * (1 + Math.random() * 4), dx: (Math.random() - .5) * R * .25, t: .05 + Math.random() * .1 };
+    } else glitch = null;
+
+    // ---------- draw ----------
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = '#050407'; ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `500 ${FS}px "IBM Plex Mono", ui-monospace, monospace`;
+    // static
+    ctx.fillStyle = '#8a8494';
+    for (const b of bg) {
+      if (!RM && Math.random() < .01) b.c = rnd(NOISE);
+      ctx.globalAlpha = b.a; ctx.fillText(b.c, b.x, b.y);
+    }
+    // floor shadow
+    ctx.globalAlpha = .18;
+    const sh = ctx.createRadialGradient(gX, baseY + 1.75 * R, 0, gX, baseY + 1.75 * R, R);
+    sh.addColorStop(0, `rgba(${col.map(Math.round)},.5)`); sh.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = sh; ctx.save(); ctx.translate(gX, baseY + 1.75 * R); ctx.scale(1, .16); ctx.translate(-gX, -(baseY + 1.75 * R));
+    ctx.fillRect(gX - R, baseY + .75 * R, 2 * R, 2 * R); ctx.restore();
+
+    const rgb = col.map(Math.round).join(',');
+    ctx.fillStyle = `rgb(${rgb})`;
+    const split = [];
+    for (const p of P) {
+      if (p.a < .02) continue;
+      let ch = p.ch;
+      if (p.ch !== p.to && now >= p.s0) ch = rnd(NOISE);
+      const dot = ch === '·';
+      // volume shading: brighter toward top-left, dimmer at the tails
+      const shade = .55 + .45 * Math.max(0, 1 - Math.hypot(p.lx + .35, p.ly + .45) / 1.9);
+      const flick = RM ? 1 : .85 + .15 * Math.sin(t * 3 + p.k * 1.3);
+      ctx.globalAlpha = p.a * shade * flick * (dot ? .35 : 1);
+      let x = p.x;
+      if (glitch && p.y > glitch.y && p.y < glitch.y + glitch.h) { x += glitch.dx; split.push(p, ch, x); }
+      ctx.fillText(ch, x, p.y);
+    }
+    if (split.length) {
+      ctx.globalAlpha = .55;
+      const off = Math.max(2, FS * .22);
+      ctx.fillStyle = '#ff2bd6'; for (let i = 0; i < split.length; i += 3) ctx.fillText(split[i + 1], split[i + 2] - off, split[i].y);
+      ctx.fillStyle = '#29e7ff'; for (let i = 0; i < split.length; i += 3) ctx.fillText(split[i + 1], split[i + 2] + off, split[i].y);
+    }
+    // pointer reticle
+    if (ptr.on) {
+      ctx.globalAlpha = .7; ctx.strokeStyle = `rgb(${rgb})`; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(ptr.x, ptr.y, ptr.kb ? 12 : 9, 0, 6.283); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    // glow: downsample the frame and add it back, soft and cheap
+    gx2.globalCompositeOperation = 'copy'; gx2.imageSmoothingEnabled = true;
+    gx2.drawImage(cv, 0, 0, gc.width, gc.height);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = .55; ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(gc, 0, 0, cv.width, cv.height);
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+    requestAnimationFrame(frame);
+  }
+
+  const start = () => { layout(); requestAnimationFrame(t => { last = t; frame(t); }); };
+  let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(layout, 120); });
+  (document.fonts?.load ? Promise.race([document.fonts.load('500 16px "IBM Plex Mono"'), new Promise(r => setTimeout(r, 1500))]) : Promise.resolve()).then(start);
+  window.__ghost = { get state(){ return state; }, get count(){ return P.length; } };
+})();
+</script>
