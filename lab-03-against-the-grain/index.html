@@ -247,8 +247,8 @@ body{background:var(--turf-deep);color:var(--chalk);font-family:var(--body);font
     const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy);
     if (len < .5) return;
     const ux = dx / len, uy = dy / len; combDir = [ux, uy];
-    const R = Math.max(22, U * .075);
-    const k = Math.max(.22, Math.min(.75, len / (R * .5))) * .55;
+    const R = Math.max(26, U * .09);
+    const k = Math.max(.45, Math.min(1, len / (R * .4))) * .85;
     const steps = Math.ceil(len / (R * .25));
     for (let s = 1; s <= steps; s++) brush(a[0] + dx * s / steps, a[1] + dy * s / steps, ux, uy, R, k / Math.sqrt(steps));
     combed = true;
@@ -330,12 +330,21 @@ body{background:var(--turf-deep);color:var(--chalk);font-family:var(--body);font
     const ux = b.vx / s, uy = b.vy / s;
     const [g0, g1] = sample(b.x, b.y);
     const along = g0 * ux + g1 * uy;
-    // grain bends the roll sideways and changes friction along it
+    // grain steers the roll: running with it, the ball turns to follow the lay of the grass;
+    // running against it, the grass shoves it sideways and drags harder
     if (surf === 'grass') {
-      const kp = U * 1.05 * Math.min(1, s / (U * .18));
-      b.vx += (g0 - along * ux) * kp * dt; b.vy += (g1 - along * uy) * kp * dt;
+      const gm = Math.hypot(g0, g1);
+      if (gm > .05 && along > -.25 * gm) {
+        const cross = ux * g1 - uy * g0, dot = ux * g0 + uy * g1;
+        const diff = Math.atan2(cross, dot), turn = Math.sign(diff) * Math.min(Math.abs(diff), 5.2 * gm * dt);
+        const c = Math.cos(turn), si = Math.sin(turn), vx = b.vx * c - b.vy * si;
+        b.vy = b.vx * si + b.vy * c; b.vx = vx;
+      } else {
+        const kp = U * .9 * Math.min(1, s / (U * .18));
+        b.vx += (g0 - along * ux) * kp * dt; b.vy += (g1 - along * uy) * kp * dt;
+      }
     }
-    const dec = surf === 'sand' ? U * 3 : U * .5 * (1 - .55 * along);
+    const dec = surf === 'sand' ? U * 3 : U * .5 * (1 - .5 * along);
     let ns = Math.max(0, s - dec * dt);
     // cup
     const dxC = cup[0] - b.x, dyC = cup[1] - b.y, dC = Math.hypot(dxC, dyC);
@@ -569,7 +578,7 @@ body{background:var(--turf-deep);color:var(--chalk);font-family:var(--body);font
 
     // groomer brush cursor
     if (ptr.on && mode !== 'aim') {
-      const R = Math.max(22, U * .075), near = Math.hypot(ptr.x - ball.x, ptr.y - ball.y) < Math.max(34, ballR * 3.2) && !ball.moving;
+      const R = Math.max(26, U * .09), near = Math.hypot(ptr.x - ball.x, ptr.y - ball.y) < Math.max(34, ballR * 3.2) && !ball.moving;
       ctx.save(); ctx.translate(ptr.x, ptr.y);
       if (near && !mode) {
         ctx.strokeStyle = 'rgba(242,240,228,.9)'; ctx.lineWidth = 1.5;
