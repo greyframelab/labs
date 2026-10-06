@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Lab #03 — Against the Grain</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=DM+Sans:wght@400;500&family=DM+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one putting green fills the screen. Scorecard floats top-left, coaching line and tools sit at the bottom edge. */
+:root{
+  --turf-deep:#162d1c;      /* ground behind the canvas */
+  --chalk:#f2f0e4;          /* lines, text, the ball */
+  --chalk-dim:rgba(242,240,228,.64);
+  --panel:rgba(12,24,15,.80);
+  --line:rgba(242,240,228,.15);
+  --flag:#ff6a3d;           /* pin flag, power, warnings */
+  --sand:#d8bd86;
+  --display:"Bricolage Grotesque","Arial Narrow",system-ui,sans-serif;
+  --body:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"DM Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%;overflow:hidden;overscroll-behavior:none}
+body{background:var(--turf-deep);color:var(--chalk);font-family:var(--body);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+#green{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:none}
+
+/* ---------- scorecard ---------- */
+#score{position:fixed;z-index:3;left:16px;top:calc(env(safe-area-inset-top,0px) + 16px);display:grid;gap:10px;padding:12px 14px;border-radius:12px;background:var(--panel);border:1px solid var(--line);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);pointer-events:none;max-width:calc(100vw - 32px)}
+.eyebrow{font:500 10.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-dim)}
+.hole{display:flex;align-items:center;gap:12px}
+.hn{position:relative;display:grid;place-items:center;width:42px;height:42px;border-radius:50%;background:var(--chalk);color:#14261a;font:800 24px/1 var(--display);font-variant-numeric:tabular-nums}
+.hn::after{content:"";position:absolute;right:-5px;top:-3px;width:12px;height:9px;background:var(--flag);clip-path:polygon(0 0,100% 50%,0 100%)}
+.hname{font:800 22px/1 var(--display);letter-spacing:-.01em;text-wrap:balance}
+.sub{margin-top:4px;font:400 11px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--chalk-dim)}
+.stats{display:grid;grid-template-columns:repeat(3,auto);gap:4px 18px;border-top:1px solid var(--line);padding-top:9px}
+.stats span{display:block;font:500 9.5px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-dim)}
+.stats b{display:flex;align-items:center;gap:6px;font:600 20px/1.15 var(--display);font-variant-numeric:tabular-nums}
+#grainArrow{width:16px;height:16px;transition:transform .25s cubic-bezier(.2,.9,.3,1)}
+#grainTxt{font:500 12px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase}
+
+/* ---------- bottom bar ---------- */
+#bar{position:fixed;z-index:4;left:16px;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);display:flex;justify-content:space-between;align-items:center;gap:8px;pointer-events:none}
+#bar .tools{display:flex;gap:8px}
+.btn{pointer-events:auto;display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--chalk);font:500 12px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;cursor:pointer;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);transition:border-color .2s,transform .2s cubic-bezier(.2,.9,.3,1)}
+.btn:hover{border-color:var(--chalk-dim)}
+.btn:active{transform:scale(.96)}
+.btn kbd{font:inherit;opacity:.5}
+.btn:focus-visible,.close:focus-visible,a:focus-visible{outline:2px solid var(--flag);outline-offset:2px}
+@media (max-width:520px){.btn kbd{display:none}.btn{padding:10px 12px}}
+#hint{position:fixed;z-index:3;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 70px);transform:translateX(-50%);width:max-content;max-width:calc(100vw - 32px);padding:8px 14px;border-radius:999px;background:rgba(12,24,15,.62);font:400 12px/1.35 var(--mono);letter-spacing:.04em;color:var(--chalk);text-align:center;pointer-events:none;transition:opacity .3s}
+#hint b{color:var(--flag);font-weight:500}
+
+/* ---------- about sheet ---------- */
+#info{position:fixed;z-index:8;left:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);width:min(440px,calc(100vw - 32px));max-height:calc(100% - 32px - env(safe-area-inset-bottom,0px) - env(safe-area-inset-top,0px));overflow:auto;padding:22px;border-radius:14px;background:#13221a;border:1px solid var(--line);box-shadow:0 24px 60px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:14px;font-size:14.5px;line-height:1.55;user-select:text;-webkit-user-select:text;animation:rise .3s cubic-bezier(.2,.9,.3,1)}
+@keyframes rise{from{transform:translateY(16px);opacity:0}}
+#info h3{font:800 34px/.95 var(--display);margin:0;letter-spacing:-.015em;padding-right:36px}
+#info .meta{font:500 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--flag)}
+#info h4{font:500 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-dim);margin:4px 0 6px}
+#info p{margin:0}
+#info ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+#info a{color:var(--flag)}
+#info .close{position:absolute;top:14px;right:14px;width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--chalk);font-size:18px;line-height:1;cursor:pointer}
+#allLabs{font:500 12px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase}
+
+/* ---------- result card ---------- */
+#result{position:fixed;z-index:6;left:50%;top:50%;transform:translate(-50%,-50%);width:min(340px,calc(100vw - 32px));padding:22px 22px 18px;border-radius:16px;background:#f2f0e4;color:#14261a;text-align:center;display:grid;gap:6px;box-shadow:0 30px 70px rgba(0,0,0,.45);animation:card .5s cubic-bezier(.2,1.2,.3,1)}
+@keyframes card{from{transform:translate(-50%,-44%) scale(.94);opacity:0}}
+#result .k{font:500 10.5px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:#4d6150}
+#result .big{font:800 54px/.95 var(--display);letter-spacing:-.025em;text-wrap:balance}
+#result .line{font:400 13px/1.4 var(--mono);color:#34473a}
+#result .go{margin-top:10px;justify-self:center;padding:12px 18px;border-radius:999px;border:0;background:#14261a;color:#f2f0e4;font:500 12px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;cursor:pointer}
+#result .go:focus-visible{outline:2px solid var(--flag);outline-offset:3px}
+@media (prefers-reduced-motion:reduce){#info,#result{animation:none}#grainArrow{transition:none}}
+</style>
+
+<canvas id="green" aria-label="Putting green. Drag on the grass to brush the grain, drag back from the ball to putt."></canvas>
+
+<div id="score" aria-live="polite">
+  <div class="eyebrow">Lab #03 · Creative Coding</div>
+  <div class="hole">
+    <span class="hn" id="holeN">1</span>
+    <div><div class="hname" id="holeName">The Lean</div><div class="sub" id="holeSub">Hole 1 of 3 · Par 2</div></div>
+  </div>
+  <div class="stats">
+    <div><span>Putts</span><b id="putts">0</b></div>
+    <div><span>Round</span><b id="total">E</b></div>
+    <div><span>Grain at ball</span><b><svg id="grainArrow" viewBox="-8 -8 16 16" aria-hidden="true"><path d="M-6 0H5M1-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span id="grainTxt">Strong</span></b></div>
+  </div>
+</div>
+
+<div id="hint">Brush the grass, then <b>pull back</b> to putt.</div>
+
+<div id="bar">
+  <button id="infoBtn" class="btn" type="button" aria-expanded="false" aria-controls="info">About this lab</button>
+  <div class="tools">
+    <button id="mowBtn" class="btn" type="button">Re-mow <kbd>M</kbd></button>
+    <button id="resetBtn" class="btn" type="button">Reset ball <kbd>R</kbd></button>
+  </div>
+</div>
+
+<aside id="info" hidden aria-label="About this lab">
+  <button class="close" type="button" aria-label="Close">×</button>
+  <div class="meta">Lab #03 · Creative Coding · 6 Oct 2026</div>
+  <h3>Against the Grain</h3>
+  <div><h4>Idea</h4><p>What if you could groom the green before you putt? Real greens have grain: the grass leans one way, putts run faster with it and drift towards it. Here you are the greenkeeper. Brush a line into the turf and the ball follows what you combed. With the grain the grass reads light, against it reads dark.</p></div>
+  <div><h4>Controls</h4><ul>
+    <li>Drag anywhere on the grass to brush it. A fast stroke lays it harder.</li>
+    <li>Drag back from the ball and release to putt. The dots preview the first second of the roll.</li>
+    <li>Sand kills the roll. Water costs a stroke.</li>
+    <li>The ball flattens the grass it rolls over, so every putt leaves a track.</li>
+    <li>Re-mow (M) restores the original stripes. Reset (R) puts the ball back.</li>
+  </ul></div>
+  <div><h4>Inspired by</h4><ul>
+    <li><a href="https://x.com/N1njaCodex" target="_blank" rel="noopener">"Plush Frog" by @N1njaCodex</a>: a plush toy whose velvet darkens when you brush it the wrong way. Only the principle came along: a material that reads and behaves differently depending on the direction of your stroke.</li>
+    <li>Reading grain on real putting greens: shiny with the grain, dull against it, and the ball breaks towards where the grass grows.</li>
+    <li>Ōkami's Celestial Brush, where you paint on the world to change how it works.</li>
+  </ul></div>
+  <div><h4>For game UI</h4><p>Let players edit the field, not only the shot. A surface with direction (wind, current, conveyor, grain) turns aiming into planning. Shade that direction, light with it and dark against it, and the rule becomes readable without arrows or tooltips. It fits flow puzzles, river levels and tower defense paths.</p></div>
+  <a id="allLabs" href="https://claude.ai/artifact/CDYy2LnuZN3Tdb1A9BSHrG" target="_blank" rel="noopener">← All labs</a>
+  <script>if (/github\.io$/.test(location.hostname)) { const a = document.getElementById('allLabs'); a.href = '../'; a.removeAttribute('target'); }</script>
+</aside>
+
+<div id="result" hidden role="dialog" aria-labelledby="resBig">
+  <div class="k" id="resK">Hole 1 · Par 2</div>
+  <div class="big" id="resBig">Birdie</div>
+  <div class="line" id="resLine">1 putt</div>
+  <button class="go" id="resGo" type="button">Next hole →</button>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const cv = $('green'), ctx = cv.getContext('2d');
+  const grassC = document.createElement('canvas'), gctx = grassC.getContext('2d');
+  const shadeC = document.createElement('canvas'), sctx = shadeC.getContext('2d');
+  const mq = matchMedia('(prefers-reduced-motion: reduce)');
+  let RM = mq.matches; mq.addEventListener?.('change', e => RM = e.matches);
+
+  // ---------- holes (level space: u across, v from cup end 0 to tee end 1) ----------
+  const band = (x, n) => (Math.floor(x * n) % 2) ? 1 : -1;
+  const HOLES = [
+    { name: 'The Lean', par: 2, tee: [.5, .84], cup: [.5, .17], obs: [],
+      field: (u, v) => [.8, band(v, 10) * .36] },
+    { name: 'The Pond', par: 2, tee: [.24, .86], cup: [.72, .15], obs: [{ t: 'water', u: .48, v: .5, r: .21 }],
+      field: (u, v) => [(u < .48 ? 1 : -1) * .72, band(u, 8) * .34 + .1] },
+    { name: 'Sand Trap', par: 3, tee: [.5, .87], cup: [.5, .18], obs: [{ t: 'sand', u: .5, v: .42, r: .15 }, { t: 'sand', u: .2, v: .27, r: .11 }, { t: 'sand', u: .8, v: .27, r: .11 }],
+      field: (u, v) => [band(v, 11) * .42, .62] },
+  ];
+
+  // ---------- state ----------
+  let W, H, dpr, U, rect, land, cs, cols, rows, gx, gy, bx, by, bend, jit;
+  let holeI = 0, putts = 0, round = [], obs = [], tee, cup, cupR, ballR;
+  const ball = { x: 0, y: 0, vx: 0, vy: 0, moving: false, sinking: 0, rest: [0, 0], lu: 0, lv: 0 };
+  let dBox = null, shadeImg, shadeArr, intro = 1, introStart = 0, combed = false, putted = false;
+  let mode = null, ptr = { x: -999, y: -999, on: false, type: 'mouse' }, last = null, combDir = [1, 0], aim = null, preview = [];
+  let fx = [];
+  const L = (() => { const x = .34, y = -.94, m = Math.hypot(x, y); return [x / m, y / m]; })();
+
+  const toS = (u, v) => land ? [rect.x + (1 - v) * rect.w, rect.y + u * rect.h] : [rect.x + u * rect.w, rect.y + v * rect.h];
+  const toL = (x, y) => land ? [(y - rect.y) / rect.h, 1 - (x - rect.x) / rect.w] : [(x - rect.x) / rect.w, (y - rect.y) / rect.h];
+  const vecS = (a, b) => land ? [-b, a] : [a, b];
+
+  function layout(){
+    dpr = Math.min(2, devicePixelRatio || 1); W = innerWidth; H = innerHeight;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    grassC.width = cv.width; grassC.height = cv.height;
+    land = W > H * 1.05;
+    const top = $('score').getBoundingClientRect().bottom + 12;
+    const bot = H - $('bar').getBoundingClientRect().top + 52;
+    rect = land ? { x: 28, y: Math.max(24, top * .55), w: W - 56, h: 0 } : { x: 16, y: top, w: W - 32, h: H - top - bot };
+    if (land) rect.h = H - rect.y - bot;
+    U = Math.min(rect.w, rect.h);
+    cs = Math.max(6, Math.round(Math.min(W, H) / 82));
+    cols = Math.ceil(W / cs) + 1; rows = Math.ceil((H + 100) / cs) + 1;
+    const n = cols * rows;
+    gx = new Float32Array(n); gy = new Float32Array(n); bx = new Float32Array(n); by = new Float32Array(n);
+    bend = new Float32Array(n); jit = new Float32Array(n * 3);
+    for (let i = 0; i < n * 3; i++) jit[i] = Math.random() * 2 - 1;
+    shadeC.width = cols; shadeC.height = rows; shadeImg = sctx.createImageData(cols, rows); shadeArr = new Float32Array(n);
+    ballR = Math.max(7, U * .019); cupR = ballR * 2.3;
+    loadHole(false);
+  }
+
+  function loadHole(keepScore){
+    const h = HOLES[holeI];
+    for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+      const k = j * cols + i, [u, v] = toL(i * cs + cs / 2, j * cs + cs / 2);
+      const [a, b] = h.field(u, v), [sx, sy] = vecS(a, b);
+      const m = Math.hypot(sx, sy), c = m > 1 ? 1 / m : 1;
+      bx[k] = sx * c; by[k] = sy * c;
+    }
+    obs = h.obs.map(o => { const [x, y] = toS(o.u, o.v); return { t: o.t, x, y, r: o.r * U, seed: Math.random() * 1000 }; });
+    tee = toS(...h.tee); cup = toS(...h.cup);
+    if (!keepScore) { putts = 0; }
+    mow(true);
+    placeBall(ball.lu && keepScore === 'ball' ? toS(ball.lu, ball.lv) : tee);
+    hud();
+  }
+  function mow(animate){
+    gx.set(bx); gy.set(by); bend.fill(0);
+    if (animate && !RM) { intro = 0; introStart = performance.now(); gx.fill(0); gy.fill(0); } else intro = 1;
+    markAll();
+  }
+  function placeBall(p){
+    ball.x = p[0]; ball.y = p[1]; ball.vx = ball.vy = 0; ball.moving = false; ball.sinking = 0; ball.rest = [p[0], p[1]];
+    [ball.lu, ball.lv] = toL(p[0], p[1]);
+  }
+
+  function markAll(){ dBox = { i0: 0, j0: 0, i1: cols - 1, j1: rows - 1 }; }
+  function mark(i0, j0, i1, j1){
+    if (!dBox) dBox = { i0, j0, i1, j1 };
+    else { dBox.i0 = Math.min(dBox.i0, i0); dBox.j0 = Math.min(dBox.j0, j0); dBox.i1 = Math.max(dBox.i1, i1); dBox.j1 = Math.max(dBox.j1, j1); }
+  }
+
+  // ---------- grain field ----------
+  function sample(x, y){
+    const fx_ = x / cs - .5, fy = y / cs - .5;
+    const i = Math.max(0, Math.min(cols - 2, Math.floor(fx_))), j = Math.max(0, Math.min(rows - 2, Math.floor(fy)));
+    const tx = Math.max(0, Math.min(1, fx_ - i)), ty = Math.max(0, Math.min(1, fy - j));
+    const k = j * cols + i;
+    const a = gx[k] + (gx[k + 1] - gx[k]) * tx, b = gx[k + cols] + (gx[k + cols + 1] - gx[k + cols]) * tx;
+    const c = gy[k] + (gy[k + 1] - gy[k]) * tx, d = gy[k + cols] + (gy[k + cols + 1] - gy[k + cols]) * tx;
+    return [a + (b - a) * ty, c + (d - c) * ty];
+  }
+  function surface(x, y){
+    for (const o of obs) if ((x - o.x) ** 2 + (y - o.y) ** 2 < o.r * o.r) return o.t;
+    return 'grass';
+  }
+  function brush(x, y, dx, dy, R, k){
+    const i0 = Math.max(0, Math.floor((x - R) / cs)), i1 = Math.min(cols - 1, Math.ceil((x + R) / cs));
+    const j0 = Math.max(0, Math.floor((y - R) / cs)), j1 = Math.min(rows - 1, Math.ceil((y + R) / cs));
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const cx = i * cs + cs / 2, cy = j * cs + cs / 2, d = Math.hypot(cx - x, cy - y);
+      if (d >= R) continue;
+      let w = 1 - d / R; w = w * w * (3 - 2 * w) * k;
+      const q = j * cols + i;
+      gx[q] += (dx - gx[q]) * w; gy[q] += (dy - gy[q]) * w;
+      const m = Math.hypot(gx[q], gy[q]); if (m > 1) { gx[q] /= m; gy[q] /= m; }
+      if (!RM) bend[q] = Math.max(bend[q], Math.min(1, w * 2.2));
+    }
+    mark(i0, j0, i1, j1);
+  }
+  function comb(a, b){
+    const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy);
+    if (len < .5) return;
+    const ux = dx / len, uy = dy / len; combDir = [ux, uy];
+    const R = Math.max(26, U * .09);
+    const k = Math.max(.45, Math.min(1, len / (R * .4))) * .85;
+    const steps = Math.ceil(len / (R * .25));
+    for (let s = 1; s <= steps; s++) brush(a[0] + dx * s / steps, a[1] + dy * s / steps, ux, uy, R, k / Math.sqrt(steps));
+    combed = true;
+  }
+
+  // ---------- render the turf into an offscreen layer ----------
+  const DEEP = [26, 56, 33], LIT = [146, 192, 98];
+  function renderGrass(box){
+    const i0 = Math.max(0, box.i0 - 2), j0 = Math.max(0, box.j0 - 2), i1 = Math.min(cols - 1, box.i1 + 2), j1 = Math.min(rows - 1, box.j1 + 2);
+    const px = shadeImg.data, shade = shadeArr, Lx = land ? -L[1] : L[0], Ly = land ? L[0] : L[1];
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const k = j * cols + i;
+      const sh = gx[k] * Lx + gy[k] * Ly;
+      let t = .46 + .4 * sh + bend[k] * .1 + jit[k * 3] * .035;
+      t = Math.max(0, Math.min(1, t)); shade[k] = t;
+      px[k * 4] = DEEP[0] + (LIT[0] - DEEP[0]) * t; px[k * 4 + 1] = DEEP[1] + (LIT[1] - DEEP[1]) * t; px[k * 4 + 2] = DEEP[2] + (LIT[2] - DEEP[2]) * t; px[k * 4 + 3] = 255;
+    }
+    sctx.putImageData(shadeImg, 0, 0, i0, j0, i1 - i0 + 1, j1 - j0 + 1);
+    gctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    gctx.save();
+    const cx0 = (i0 + 1) * cs, cy0 = (j0 + 1) * cs, cx1 = i1 * cs, cy1 = j1 * cs;
+    gctx.beginPath(); gctx.rect(box.i0 <= 0 ? 0 : cx0, box.j0 <= 0 ? 0 : cy0, (box.i1 >= cols - 1 ? cols * cs : cx1) - (box.i0 <= 0 ? 0 : cx0), (box.j1 >= rows - 1 ? rows * cs : cy1) - (box.j0 <= 0 ? 0 : cy0)); gctx.clip();
+    gctx.imageSmoothingEnabled = true; gctx.imageSmoothingQuality = 'high';
+    gctx.drawImage(shadeC, 0, 0, cols, rows, 0, 0, cols * cs, rows * cs);
+
+    // blades, batched by brightness bucket
+    const B = 5, paths = Array.from({ length: B }, () => new Path2D());
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const k = j * cols + i;
+      let ax = gx[k], ay = gy[k]; const m = Math.hypot(ax, ay);
+      if (m < .08) { ax = jit[k * 3 + 1] * .3; ay = jit[k * 3 + 2] * .3; }
+      const len = cs * (.55 + .7 * Math.min(1, m) + bend[k] * .45);
+      const nx = ax / (m || .3), ny = ay / (m || .3);
+      const ox = i * cs + cs / 2 + jit[k * 3 + 1] * cs * .35, oy = j * cs + cs / 2 + jit[k * 3 + 2] * cs * .35;
+      const p = paths[Math.min(B - 1, Math.floor(shade[k] * B))];
+      p.moveTo(ox - nx * len * .3, oy - ny * len * .3); p.lineTo(ox + nx * len * .7, oy + ny * len * .7);
+    }
+    gctx.lineCap = 'round'; gctx.lineWidth = Math.max(1, cs * .17);
+    for (let b = 0; b < B; b++) {
+      const t = Math.min(1, (b + .5) / B + .16);
+      gctx.strokeStyle = `rgba(${DEEP[0] + (LIT[0] - DEEP[0]) * t | 0},${DEEP[1] + (LIT[1] - DEEP[1]) * t | 0},${DEEP[2] + (LIT[2] - DEEP[2]) * t | 0},.75)`;
+      gctx.stroke(paths[b]);
+    }
+
+    // hazards
+    for (const o of obs) {
+      gctx.save();
+      if (o.t === 'sand') {
+        gctx.beginPath(); gctx.arc(o.x, o.y, o.r + 3, 0, 7); gctx.fillStyle = 'rgba(10,22,12,.45)'; gctx.fill();
+        const g = gctx.createRadialGradient(o.x - o.r * .3, o.y - o.r * .3, o.r * .1, o.x, o.y, o.r);
+        g.addColorStop(0, '#ead3a0'); g.addColorStop(1, '#c4a46c');
+        gctx.beginPath(); gctx.arc(o.x, o.y, o.r, 0, 7); gctx.fillStyle = g; gctx.fill();
+        gctx.clip();
+        gctx.strokeStyle = 'rgba(120,92,48,.22)'; gctx.lineWidth = 1.2;
+        for (let r = o.r * .2; r < o.r * 1.6; r += 6) { gctx.beginPath(); gctx.arc(o.x + o.r * .9, o.y + o.r * .9, r, 0, 7); gctx.stroke(); }
+      } else {
+        gctx.beginPath(); gctx.arc(o.x, o.y, o.r + 4, 0, 7); gctx.fillStyle = 'rgba(10,22,12,.55)'; gctx.fill();
+        const g = gctx.createRadialGradient(o.x + o.r * .25, o.y + o.r * .3, o.r * .1, o.x, o.y, o.r);
+        g.addColorStop(0, '#2f6b76'); g.addColorStop(1, '#173a46');
+        gctx.beginPath(); gctx.arc(o.x, o.y, o.r, 0, 7); gctx.fillStyle = g; gctx.fill();
+        gctx.strokeStyle = 'rgba(200,240,235,.18)'; gctx.lineWidth = 2;
+        gctx.beginPath(); gctx.arc(o.x, o.y, o.r - 3, Math.PI * 1.05, Math.PI * 1.6); gctx.stroke();
+      }
+      gctx.restore();
+    }
+    // vignette
+    const vg = gctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .35, W / 2, H / 2, Math.hypot(W, H) * .62);
+    vg.addColorStop(0, 'rgba(8,18,10,0)'); vg.addColorStop(1, 'rgba(8,18,10,.55)');
+    gctx.fillStyle = vg; gctx.fillRect(0, 0, W, H);
+    gctx.restore();
+  }
+
+  // ---------- ball physics ----------
+  function step(b, dt, real){
+    const s = Math.hypot(b.vx, b.vy);
+    if (s < 1e-3) return 'rest';
+    const surf = surface(b.x, b.y);
+    if (surf === 'water') return 'water';
+    const ux = b.vx / s, uy = b.vy / s;
+    const [g0, g1] = sample(b.x, b.y);
+    const along = g0 * ux + g1 * uy;
+    // grain steers the roll: running with it, the ball turns to follow the lay of the grass;
+    // running against it, the grass shoves it sideways and drags harder
+    if (surf === 'grass') {
+      const gm = Math.hypot(g0, g1);
+      if (gm > .05 && along > -.25 * gm) {
+        const cross = ux * g1 - uy * g0, dot = ux * g0 + uy * g1;
+        const diff = Math.atan2(cross, dot), turn = Math.sign(diff) * Math.min(Math.abs(diff), 5.2 * gm * dt);
+        const c = Math.cos(turn), si = Math.sin(turn), vx = b.vx * c - b.vy * si;
+        b.vy = b.vx * si + b.vy * c; b.vx = vx;
+      } else {
+        const kp = U * .9 * Math.min(1, s / (U * .18));
+        b.vx += (g0 - along * ux) * kp * dt; b.vy += (g1 - along * uy) * kp * dt;
+      }
+    }
+    const dec = surf === 'sand' ? U * 3 : U * .5 * (1 - .5 * along);
+    let ns = Math.max(0, s - dec * dt);
+    // cup
+    const dxC = cup[0] - b.x, dyC = cup[1] - b.y, dC = Math.hypot(dxC, dyC);
+    if (dC < cupR) { if (s < U * .8) return 'sunk'; const side = (ux * dyC - uy * dxC) > 0 ? 1 : -1, a = .45 * side; const c = Math.cos(a), si = Math.sin(a); const vx = b.vx * c - b.vy * si; b.vy = b.vx * si + b.vy * c; b.vx = vx; ns *= .62; }
+    else if (dC < cupR * 2.4) { const pull = U * .4 * (1 - dC / (cupR * 2.4)) * dt; b.vx += dxC / dC * pull; b.vy += dyC / dC * pull; }
+    const cur = Math.hypot(b.vx, b.vy) || 1; b.vx *= ns / cur; b.vy *= ns / cur;
+    b.x += b.vx * dt; b.y += b.vy * dt;
+    const m = ballR + 4;
+    if (b.x < m) { b.x = m; b.vx = Math.abs(b.vx) * .45; } if (b.x > W - m) { b.x = W - m; b.vx = -Math.abs(b.vx) * .45; }
+    if (b.y < m) { b.y = m; b.vy = Math.abs(b.vy) * .45; } if (b.y > H - m) { b.y = H - m; b.vy = -Math.abs(b.vy) * .45; }
+    if (real && ns > U * .12 && surf === 'grass') brush(b.x, b.y, ux, uy, ballR * 1.8, .05);
+    if (ns < U * .012) { b.vx = b.vy = 0; return 'rest'; }
+    return 'roll';
+  }
+  const maxPull = () => Math.max(90, U * .32);
+  function shotVel(){ const p = Math.min(1, aim.d / maxPull()); return [aim.ux * p * U * 1.25, aim.uy * p * U * 1.25, p]; }
+  function simPreview(){
+    const [vx, vy] = shotVel(), b = { x: ball.x, y: ball.y, vx, vy }; preview = [];
+    for (let i = 0; i < 120; i++) { const r = step(b, 1 / 120, false); if (i % 4 === 0) preview.push([b.x, b.y]); if (r !== 'roll') break; }
+  }
+
+  // ---------- input ----------
+  const pos = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  cv.addEventListener('pointerdown', e => {
+    if (!$('result').hidden) return;
+    if (!$('info').hidden) setInfo(false);
+    const p = pos(e); ptr = { x: p[0], y: p[1], on: true, type: e.pointerType };
+    if (intro < 1) { intro = 1; gx.set(bx); gy.set(by); markAll(); }
+    cv.setPointerCapture(e.pointerId);
+    const nearBall = Math.hypot(p[0] - ball.x, p[1] - ball.y) < Math.max(34, ballR * 3.2);
+    if (nearBall && !ball.moving && !ball.sinking) { mode = 'aim'; aim = { ux: 0, uy: -1, d: 0 }; }
+    else { mode = 'comb'; last = p; }
+    hint(); e.preventDefault();
+  });
+  cv.addEventListener('pointermove', e => {
+    const p = pos(e); ptr.x = p[0]; ptr.y = p[1]; ptr.type = e.pointerType;
+    if (e.pointerType === 'mouse') ptr.on = true;
+    if (mode === 'comb') { comb(last, p); last = p; }
+    else if (mode === 'aim') {
+      const dx = ball.x - p[0], dy = ball.y - p[1], d = Math.hypot(dx, dy);
+      aim.d = d; if (d > 2) { aim.ux = dx / d; aim.uy = dy / d; }
+      simPreview();
+    }
+  });
+  const up = e => {
+    if (mode === 'aim' && aim && aim.d / maxPull() > .08) {
+      const [vx, vy] = shotVel(); ball.rest = [ball.x, ball.y];
+      ball.vx = vx; ball.vy = vy; ball.moving = true; putts++; putted = true; hud();
+    }
+    mode = null; aim = null; preview = [];
+    if (e.pointerType !== 'mouse') ptr.on = false;
+    hint();
+  };
+  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  cv.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse' && !mode) ptr.on = false; });
+
+  $('mowBtn').onclick = () => { mow(true); hint('Freshly mown. The stripes are back.'); };
+  $('resetBtn').onclick = resetBall;
+  function resetBall(){ if (ball.sinking) return; placeBall(tee); putts = 0; hud(); hint('Ball back on the tee. Putt count reset.'); }
+  addEventListener('keydown', e => {
+    if (e.target.closest && e.target.closest('button,a') && (e.key === ' ' || e.key === 'Enter')) return;
+    if (e.key === 'Escape' && !$('info').hidden) setInfo(false);
+    if (!$('result').hidden) return;
+    if (e.key === 'r' || e.key === 'R') resetBall();
+    if (e.key === 'm' || e.key === 'M') { mow(true); hint('Freshly mown. The stripes are back.'); }
+  });
+
+  // ---------- about sheet ----------
+  const info = $('info'), btn = $('infoBtn');
+  function setInfo(open){ info.hidden = !open; btn.hidden = open; btn.setAttribute('aria-expanded', open); if (open) info.querySelector('.close').focus(); else btn.focus({ preventScroll: true }); }
+  btn.onclick = () => setInfo(true);
+  info.querySelector('.close').onclick = () => setInfo(false);
+
+  // ---------- HUD + hint ----------
+  const relTxt = n => n === 0 ? 'E' : (n > 0 ? '+' + n : '−' + -n);
+  function hud(){
+    const h = HOLES[holeI];
+    $('holeN').textContent = holeI + 1; $('holeName').textContent = h.name;
+    $('holeSub').textContent = `Hole ${holeI + 1} of ${HOLES.length} · Par ${h.par}`;
+    $('putts').textContent = putts;
+    $('total').textContent = relTxt(round.reduce((a, r) => a + r, 0));
+  }
+  let hintT = 0;
+  function hint(msg){
+    const el = $('hint');
+    if (msg) { el.innerHTML = msg; hintT = performance.now() + 2600; return; }
+    if (performance.now() < hintT) return;
+    if (mode === 'comb') el.innerHTML = '<b>Against</b> the grain, the turf reads dark.';
+    else if (mode === 'aim') el.innerHTML = 'Release. The grain will <b>bend</b> the roll.';
+    else if (!combed && !putted) el.innerHTML = 'Brush the grass, then <b>pull back</b> to putt.';
+    else if (!putted) el.innerHTML = '<b>Pull back</b> from the ball to putt.';
+    else el.innerHTML = 'Comb a new line or putt again.';
+  }
+  let lastGrainUpdate = 0;
+  function grainHud(now){
+    if (now - lastGrainUpdate < 120) return; lastGrainUpdate = now;
+    const [a, b] = sample(ball.x, ball.y), m = Math.hypot(a, b);
+    $('grainArrow').style.transform = `rotate(${Math.atan2(b, a)}rad)`;
+    $('grainTxt').textContent = m < .25 ? 'Flat' : m < .6 ? 'Light' : 'Strong';
+  }
+
+  // ---------- result ----------
+  const NAMES = { '-3': 'Albatross', '-2': 'Eagle', '-1': 'Birdie', '0': 'Par', '1': 'Bogey', '2': 'Double bogey' };
+  function holed(){
+    const h = HOLES[holeI], diff = putts - h.par; round.push(diff); hud();
+    $('resK').textContent = `Hole ${holeI + 1} · ${h.name} · Par ${h.par}`;
+    $('resBig').textContent = putts === 1 ? 'Hole in one' : (NAMES[diff] ?? (diff > 0 ? '+' + diff : diff));
+    const last = holeI === HOLES.length - 1;
+    $('resLine').textContent = `${putts} putt${putts === 1 ? '' : 's'}` + (last ? ` · Round ${relTxt(round.reduce((a, r) => a + r, 0))}` : '');
+    $('resGo').textContent = last ? 'Play again' : 'Next hole →';
+    $('result').hidden = false; $('resGo').focus({ preventScroll: true });
+  }
+  $('resGo').onclick = () => {
+    $('result').hidden = true;
+    if (holeI === HOLES.length - 1) { holeI = 0; round = []; } else holeI++;
+    combed = false; putted = false; loadHole(false); hint();
+  };
+
+  // ---------- frame ----------
+  let prev = performance.now(), acc = 0;
+  function frame(now){
+    const dt = Math.min(.05, (now - prev) / 1000); prev = now;
+
+    // mower intro: stripes sweep in from the tee end
+    if (intro < 1) {
+      intro = Math.min(1, (now - introStart) / 1300);
+      const e = 1 - Math.pow(1 - intro, 3);
+      for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+        const k = j * cols + i, v = toL(i * cs + cs / 2, j * cs + cs / 2)[1];
+        const t = Math.max(0, Math.min(1, ((e * 1.25) - (1.1 - v)) / .15));
+        gx[k] = bx[k] * t; gy[k] = by[k] * t;
+      }
+      markAll();
+    }
+    // blades spring back after the brush passes
+    const decay = Math.exp(-dt * 3.2);
+    for (let k = 0; k < bend.length; k++) if (bend[k] > 0) {
+      bend[k] = bend[k] < .02 ? 0 : bend[k] * decay;
+      const i = k % cols, j = (k - i) / cols; mark(i, j, i, j);
+    }
+
+    // ball
+    if (ball.moving) {
+      acc += dt;
+      while (acc >= 1 / 120 && ball.moving) {
+        acc -= 1 / 120;
+        const r = step(ball, 1 / 120, true);
+        if (r === 'rest') { ball.moving = false; ball.rest = [ball.x, ball.y]; [ball.lu, ball.lv] = toL(ball.x, ball.y); hint(); }
+        else if (r === 'water') {
+          ball.moving = false; fx.push({ t: 'splash', x: ball.x, y: ball.y, a: 0 });
+          putts++; hud(); placeBall(ball.rest); hint('Splash. <b>+1 stroke</b>.');
+        } else if (r === 'sunk') { ball.moving = false; ball.sinking = RM ? 1 : .001; ball.vx = ball.vy = 0; fx.push({ t: 'ring', x: cup[0], y: cup[1], a: 0 }); if (RM) holed(); }
+      }
+    } else acc = 0;
+    if (ball.sinking > 0 && ball.sinking < 1) {
+      ball.sinking = Math.min(1, ball.sinking + dt / .38);
+      ball.x += (cup[0] - ball.x) * Math.min(1, dt * 14); ball.y += (cup[1] - ball.y) * Math.min(1, dt * 14);
+      if (ball.sinking >= 1) setTimeout(holed, 260);
+    }
+
+    if (dBox) { const b = dBox; dBox = null; renderGrass(b); }
+    draw(now, dt);
+    grainHud(now);
+    requestAnimationFrame(frame);
+  }
+
+  function draw(now, dt){
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.drawImage(grassC, 0, 0, W, H);
+
+    // tee marker
+    ctx.fillStyle = 'rgba(242,240,228,.5)';
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(tee[0] + s * ballR * 2.6 * (land ? 0 : 1), tee[1] + s * ballR * 2.6 * (land ? 1 : 0), 2.5, 0, 7); ctx.fill(); }
+
+    // cup
+    ctx.beginPath(); ctx.arc(cup[0], cup[1], cupR + 1.5, 0, 7); ctx.fillStyle = 'rgba(242,240,228,.85)'; ctx.fill();
+    const cg = ctx.createRadialGradient(cup[0] - cupR * .3, cup[1] - cupR * .3, 0, cup[0], cup[1], cupR);
+    cg.addColorStop(0, '#020403'); cg.addColorStop(1, '#0f1a12');
+    ctx.beginPath(); ctx.arc(cup[0], cup[1], cupR, 0, 7); ctx.fillStyle = cg; ctx.fill();
+
+    // pin shadow + flag (seen from above, sun upper left)
+    const wave = RM ? 0 : Math.sin(now / 420) * .12;
+    const fl = Math.max(26, U * .07);
+    ctx.save(); ctx.translate(cup[0], cup[1]);
+    ctx.strokeStyle = 'rgba(6,14,8,.32)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(fl * 1.7, fl * 1.2); ctx.stroke();
+    ctx.fillStyle = 'rgba(6,14,8,.26)';
+    ctx.beginPath(); ctx.moveTo(fl * 1.7, fl * 1.2); ctx.lineTo(fl * 1.7 + fl * .9, fl * 1.2 + fl * (.12 + wave)); ctx.lineTo(fl * 1.45, fl * 1.05 + fl * .3); ctx.fill();
+    ctx.fillStyle = '#e8e3d2'; ctx.beginPath(); ctx.arc(0, 0, 2.6, 0, 7); ctx.fill();
+    ctx.rotate(-.5 + wave);
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--flag');
+    ctx.beginPath(); ctx.moveTo(0, -1.5); ctx.quadraticCurveTo(fl * .45, -fl * .08 + wave * 8, fl * .82, fl * .02); ctx.lineTo(0, fl * .32); ctx.closePath(); ctx.fill();
+    ctx.restore();
+
+    // aim preview
+    if (mode === 'aim' && aim && aim.d > 4) {
+      const [, , p] = shotVel();
+      ctx.save();
+      ctx.setLineDash([3, 5]); ctx.strokeStyle = 'rgba(242,240,228,.35)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(ball.x, ball.y); ctx.lineTo(ptr.x, ptr.y); ctx.stroke(); ctx.setLineDash([]);
+      preview.forEach((q, i) => { const t = 1 - i / preview.length; ctx.fillStyle = `rgba(242,240,228,${.85 * t})`; ctx.beginPath(); ctx.arc(q[0], q[1], 1.6 + 2.2 * t, 0, 7); ctx.fill(); });
+      ctx.strokeStyle = p > .85 ? '#ff6a3d' : 'rgba(242,240,228,.9)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      const a0 = Math.atan2(aim.uy, aim.ux);
+      ctx.beginPath(); ctx.arc(ball.x, ball.y, ballR + 9, a0 - p * Math.PI, a0 + p * Math.PI); ctx.stroke();
+      ctx.restore();
+    }
+
+    // ball
+    if (ball.sinking < 1) {
+      const sc = 1 - ball.sinking * .55;
+      ctx.fillStyle = 'rgba(6,14,8,.35)';
+      ctx.beginPath(); ctx.ellipse(ball.x + ballR * .45, ball.y + ballR * .55, ballR * sc, ballR * .8 * sc, .6, 0, 7); ctx.fill();
+      const bg = ctx.createRadialGradient(ball.x - ballR * .35, ball.y - ballR * .4, ballR * .1, ball.x, ball.y, ballR * sc);
+      bg.addColorStop(0, '#ffffff'); bg.addColorStop(1, '#cfcdc0');
+      ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(ball.x, ball.y, ballR * sc, 0, 7); ctx.fill();
+      if (!ball.moving && !ball.sinking && !mode && !RM) {
+        const pulse = (now / 1400) % 1;
+        ctx.strokeStyle = `rgba(242,240,228,${.45 * (1 - pulse)})`; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(ball.x, ball.y, ballR + 4 + pulse * 14, 0, 7); ctx.stroke();
+      }
+    }
+
+    // effects
+    fx = fx.filter(f => (f.a += dt) < 1.1);
+    for (const f of fx) {
+      const t = f.a / 1.1;
+      ctx.strokeStyle = f.t === 'splash' ? `rgba(200,240,235,${.7 * (1 - t)})` : `rgba(242,240,228,${.8 * (1 - t)})`;
+      ctx.lineWidth = 2;
+      for (let r = 0; r < (f.t === 'splash' ? 3 : 2); r++) { ctx.beginPath(); ctx.arc(f.x, f.y, (ballR * 1.5 + t * U * .12) * (1 - r * .3), 0, 7); ctx.stroke(); }
+    }
+
+    // groomer brush cursor
+    if (ptr.on && mode !== 'aim') {
+      const R = Math.max(26, U * .09), near = Math.hypot(ptr.x - ball.x, ptr.y - ball.y) < Math.max(34, ballR * 3.2) && !ball.moving;
+      ctx.save(); ctx.translate(ptr.x, ptr.y);
+      if (near && !mode) {
+        ctx.strokeStyle = 'rgba(242,240,228,.9)'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(0, 0, 6, 0, 7); ctx.stroke();
+      } else {
+        ctx.strokeStyle = mode === 'comb' ? 'rgba(242,240,228,.55)' : 'rgba(242,240,228,.32)'; ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.arc(0, 0, R, 0, 7); ctx.stroke();
+        ctx.rotate(Math.atan2(combDir[1], combDir[0]));
+        ctx.strokeStyle = 'rgba(242,240,228,.9)'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(0, -R * .7); ctx.lineTo(0, R * .7); ctx.stroke();
+        ctx.lineWidth = 1.2;
+        for (let t = -3; t <= 3; t++) { ctx.beginPath(); ctx.moveTo(0, t * R * .2); ctx.lineTo(-R * .22, t * R * .2); ctx.stroke(); }
+      }
+      ctx.restore();
+    }
+  }
+
+  // ---------- boot ----------
+  let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (Math.abs(innerWidth - W) > 2 || Math.abs(innerHeight - H) > 90) layout(); else { W = innerWidth; H = innerHeight; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); grassC.width = cv.width; grassC.height = cv.height; markAll(); } }, 150); });
+  layout(); hint();
+  requestAnimationFrame(frame);
+})();
+</script>
