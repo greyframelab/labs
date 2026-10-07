@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Lab #04 — Sap Points</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gloock&family=Figtree:wght@400;500;600;700&family=Martian+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one-screen botanical plate. The tree is the stage; title top-left, build ledger top-right, the hotbar planted in the soil it feeds. Single light look by design. */
+:root{
+  --paper:#eef1ea;      /* plate ground, faint sage bias */
+  --paper-2:#e3e9e0;
+  --soil:#d8d2c3;
+  --soil-2:#c4bba6;
+  --ink:#22302a;        /* bark and type */
+  --muted:#5d6b64;
+  --leaf:#8fb096;
+  --sap:#e3a018;        /* the resource: skill points as sap */
+  --blade:#c23b3b;
+  --arcane:#1f7f9e;
+  --shadow:#6b3fa0;
+  --line:rgba(34,48,42,.16);
+  --display:"Gloock",Georgia,"Times New Roman",serif;
+  --body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"Martian Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+html,body{height:100%;overflow:hidden;overscroll-behavior:none}
+body{background:var(--paper);color:var(--ink);font-family:var(--body);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
+
+/* ---------- HUD ---------- */
+.hud{position:fixed;z-index:3;left:16px;right:16px;top:calc(env(safe-area-inset-top,0px) + 16px);display:flex;justify-content:space-between;align-items:flex-start;gap:12px;pointer-events:none}
+.top{display:flex;flex-direction:column;gap:6px;min-width:0}
+.eyebrow{font:500 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+h1{font:400 clamp(42px,6.4vw,84px)/.9 var(--display);margin:2px 0 0;letter-spacing:-.015em;text-wrap:balance}
+h1 em{font-style:normal;color:var(--sap)}
+.lede{margin:0;font:600 17px/1.3 var(--body);max-width:30ch}
+.sub{margin:0;font:400 14px/1.45 var(--body);color:var(--muted);max-width:34ch}
+
+.build{width:220px;padding:14px 16px;border-radius:12px;background:rgba(238,241,234,.88);border:1px solid var(--line);display:flex;flex-direction:column;gap:10px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.k{font:500 9.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.bname{font:400 28px/1 var(--display);transition:color .3s}
+.rows{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.rows li{display:grid;grid-template-columns:10px 1fr auto;align-items:center;gap:8px;font:600 13px/1 var(--body)}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--c)}
+.pips{display:flex;gap:4px}
+.pips i{width:12px;height:6px;border-radius:3px;border:1px solid var(--c);transition:background .3s}
+.pips i.on{background:var(--c)}
+.foot{display:flex;justify-content:space-between;font:400 10px/1 var(--mono);letter-spacing:.06em;color:var(--muted);text-transform:uppercase;padding-top:8px;border-top:1px solid var(--line)}
+.foot b{color:var(--ink);font-weight:500;font-variant-numeric:tabular-nums}
+
+/* ---------- Hotbar ---------- */
+.hint{position:fixed;z-index:2;left:16px;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 100px);text-align:center;font:400 10px/1.4 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:#4b453a;pointer-events:none;text-shadow:0 0 3px var(--soil),0 0 6px var(--soil),0 0 2px var(--soil)}
+.bar{position:fixed;z-index:3;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 16px);display:flex;gap:10px}
+.mv{--c:var(--ink);position:relative;width:clamp(100px,29vw,140px);height:72px;padding:10px 12px 14px;border-radius:14px;border:1.5px solid var(--ink);background:var(--paper);color:var(--ink);display:grid;grid-template-columns:26px 1fr;grid-template-rows:auto auto;column-gap:10px;align-items:center;text-align:left;cursor:pointer;touch-action:none;box-shadow:0 3px 0 var(--ink);transition:transform .08s,box-shadow .08s,background .2s;font-family:var(--body)}
+.mv svg{grid-row:span 2;width:26px;height:26px;color:var(--c)}
+.mv .l{font:700 16px/1 var(--body)}
+.mv .s{font:400 9.5px/1.2 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.mv .key{position:absolute;top:8px;right:8px;width:18px;height:18px;border-radius:5px;border:1px solid var(--line);font:500 10px/16px var(--mono);text-align:center;color:var(--muted)}
+.mv .meter{position:absolute;left:12px;right:12px;bottom:7px;height:3px;border-radius:2px;background:var(--paper-2);overflow:hidden}
+.mv .meter i{display:block;height:100%;width:0;background:var(--sap);transition:width .25s cubic-bezier(.2,.9,.3,1)}
+.mv.down{transform:translateY(3px);box-shadow:0 0 0 var(--ink);background:var(--paper-2)}
+.mv.max .s{color:var(--c)}
+.mv.shake{animation:shake .3s}
+.mv.back{animation:back .5s}
+@keyframes shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+@keyframes back{30%{background:#f6e3b4}}
+.mv:focus-visible,#infoBtn:focus-visible,.close:focus-visible,#tip button:focus-visible,a:focus-visible{outline:2px solid var(--sap);outline-offset:3px}
+@media (hover:none){.mv .key{display:none}}
+@media (max-width:600px){.mv{padding:10px 10px 14px;column-gap:8px;grid-template-columns:22px 1fr}.mv svg{width:22px;height:22px}.mv .s{font-size:9px;letter-spacing:.02em}.mv .meter{left:10px;right:10px}}
+
+/* ---------- Skill card ---------- */
+#tip{position:fixed;z-index:5;width:236px;padding:14px 16px 16px;border-radius:12px;background:var(--paper);border:1.5px solid var(--ink);box-shadow:0 12px 32px rgba(34,48,42,.18);display:flex;flex-direction:column;gap:8px;animation:rise .22s cubic-bezier(.2,.9,.3,1)}
+#tip h3{margin:0;font:400 24px/1 var(--display)}
+#tip p{margin:0;font:400 14px/1.45 var(--body)}
+#tip .st{font:500 10px/1.3 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+#tip button{align-self:flex-start;margin-top:2px;padding:7px 12px;border-radius:999px;border:1px solid var(--ink);background:transparent;color:var(--ink);font:600 13px/1 var(--body);cursor:pointer}
+#tip button:hover{background:var(--paper-2)}
+
+/* ---------- About ---------- */
+#infoBtn{position:fixed;z-index:4;left:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);padding:9px 14px;border-radius:999px;border:1px solid var(--line);background:rgba(238,241,234,.9);color:var(--ink);font:500 10.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
+#infoBtn:hover{border-color:var(--ink)}
+#info{position:fixed;z-index:6;left:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);width:min(430px,calc(100vw - 32px));max-height:calc(100% - 48px);overflow:auto;padding:22px;border-radius:14px;background:var(--paper);border:1.5px solid var(--ink);box-shadow:0 20px 60px rgba(34,48,42,.25);display:flex;flex-direction:column;gap:14px;font-size:15px;line-height:1.5;user-select:text;-webkit-user-select:text;animation:rise .28s cubic-bezier(.2,.9,.3,1)}
+@keyframes rise{from{transform:translateY(12px);opacity:0}}
+#info h3{font:400 36px/.95 var(--display);margin:0}
+#info .meta{font:500 10.5px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+#info h4{font:500 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:4px 0 6px}
+#info p{margin:0}
+#info ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+#info a{color:var(--arcane)}
+#info .close{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--ink);font-size:18px;cursor:pointer}
+#allLabs{font:500 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase}
+
+@media (max-width:899px){
+  #infoBtn{left:auto;right:16px;bottom:auto;top:calc(env(safe-area-inset-top,0px) + 14px)}
+  .hud{flex-direction:column;gap:10px}
+  .top{padding-right:92px}
+  .sub{display:none}
+  .build{width:auto;align-self:stretch;flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 14px;padding:10px 12px}
+  .build .bwrap{display:flex;flex-direction:column;gap:5px}
+  .bname{font-size:22px}
+  .rows{flex-direction:row;gap:10px}
+  .rows li{grid-template-columns:8px auto;gap:5px;font-size:12px}
+  .rows li .nm{display:none}
+  .pips{gap:3px}.pips i{width:8px;height:6px}
+  .foot{display:none}
+}
+@media (max-width:899px) and (max-height:700px){.lede{font-size:15px}h1{font-size:38px}}
+@media (prefers-reduced-motion:reduce){#info,#tip{animation:none}.mv.shake,.mv.back{animation:none}.mv .meter i{transition:none}}
+</style>
+
+<canvas id="c" role="img" aria-label="A tree whose three branches are skill paths: Blade, Arcane and Shadow. Sap flows up from the move buttons into the branches and unlocks skills."></canvas>
+
+<div class="hud" id="hud">
+  <header class="top">
+    <div class="eyebrow">Lab #04 · UI · Skill tree</div>
+    <h1>Sap <em>Points</em></h1>
+    <p class="lede">What if skill points were sap?</p>
+    <p class="sub">Play your way and the tree grows your build. Every move pumps sap into its branch. Prune a branch to respec.</p>
+  </header>
+  <aside class="build" aria-label="Your build">
+    <div class="bwrap"><div class="k">Your build</div><div class="bname" id="bname">Seedling</div></div>
+    <ul class="rows" id="rows"></ul>
+    <div class="foot"><span>Sap in tree <b id="spent">0</b></span><span>Respecs <b id="resp">0</b></span></div>
+  </aside>
+</div>
+
+<div class="hint" id="hint">Hold a move to feed its branch · Swipe across a branch to prune it</div>
+
+<nav class="bar" id="bar" aria-label="Moves">
+  <button class="mv" type="button" id="mv0" style="--c:var(--blade)" aria-describedby="hint">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 3.5 20.5 3.5 20.5 9.5 9 21 3 15Z"/><path d="M6 12l6 6"/></svg>
+    <span class="l">Strike</span><span class="s">Blade</span><span class="key" aria-hidden="true">1</span><span class="meter"><i></i></span>
+  </button>
+  <button class="mv" type="button" id="mv1" style="--c:var(--arcane)" aria-describedby="hint">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5 14 10 21.5 12 14 14 12 21.5 10 14 2.5 12 10 10Z"/></svg>
+    <span class="l">Cast</span><span class="s">Arcane</span><span class="key" aria-hidden="true">2</span><span class="meter"><i></i></span>
+  </button>
+  <button class="mv" type="button" id="mv2" style="--c:var(--shadow)" aria-describedby="hint">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><path d="M4 20 20 4"/></svg>
+    <span class="l">Sneak</span><span class="s">Shadow</span><span class="key" aria-hidden="true">3</span><span class="meter"><i></i></span>
+  </button>
+</nav>
+
+<div id="tip" hidden role="dialog" aria-label="Skill">
+  <div class="st" id="tipK"></div>
+  <h3 id="tipN"></h3>
+  <p id="tipD"></p>
+  <div class="st" id="tipS"></div>
+  <button type="button" id="tipCut">Prune from here</button>
+</div>
+
+<button id="infoBtn" type="button" aria-expanded="false" aria-controls="info">About this lab</button>
+<aside id="info" hidden aria-label="About this lab">
+  <button class="close" type="button" aria-label="Close">×</button>
+  <div class="meta">Lab #04 · UI · 7 Oct 2026</div>
+  <h3>Sap Points</h3>
+  <div><h4>Idea</h4><p>What if skill points were sap? A skill tree taken literally. You don't spend points in a menu: you play, and every move pumps sap from the roots up into its branch. Buds swell and bloom into skills, and the branch grows on to the next one. Pruning is the respec: cut a branch and every drop runs back down.</p></div>
+  <div><h4>Controls</h4><ul>
+    <li>Hold Strike, Cast or Sneak (or keys 1, 2, 3) to feed a branch.</li>
+    <li>Tap a bud or a flower to read the skill.</li>
+    <li>Swipe across a branch to prune it. The sap goes back to the roots.</li>
+    <li>No swipe? Open a skill and press "Prune from here".</li>
+  </ul></div>
+  <div><h4>Inspired by</h4><ul>
+    <li>An "always-on" agent diagram seen on X: a system you can watch working while data flows along its connections. Only that principle was taken.</li>
+    <li>Skyrim's perk constellations: a skill tree drawn as the thing it is named after.</li>
+    <li>Hades' Mirror of Night: a free respec with a full refund invites players to experiment.</li>
+  </ul></div>
+  <div><h4>For game UI</h4><p>Most skill trees hide the link between how you play and what you unlock. Let usage feed progress, show the points travelling to where they land, and lock nothing in for good: a respec that is a visible, reversible gesture with a full refund turns the tree into a place to experiment.</p></div>
+  <a id="allLabs" href="https://claude.ai/artifact/CDYy2LnuZN3Tdb1A9BSHrG" target="_blank" rel="noopener">← All labs</a>
+  <script>if (/github\.io$/.test(location.hostname)) { const a = document.getElementById('allLabs'); a.href = '../'; a.removeAttribute('target'); }</script>
+</aside>
+
+<div id="live" class="sr" aria-live="polite" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)"></div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const cv = $('c'), ctx = cv.getContext('2d');
+  const mq = matchMedia('(prefers-reduced-motion: reduce)');
+  let RM = mq.matches; mq.addEventListener?.('change', e => RM = e.matches);
+  const css = getComputedStyle(document.documentElement), tok = n => css.getPropertyValue(n).trim();
+  const C = { paper: tok('--paper'), paper2: tok('--paper-2'), ink: tok('--ink'), sap: tok('--sap'), soil: tok('--soil'), soil2: tok('--soil-2'), leaf: tok('--leaf'), muted: tok('--muted') };
+  const FONT = tok('--body'), MONO = tok('--mono');
+  const COST = [3, 4, 5, 6];
+  const TIER = ['Tier I', 'Tier II', 'Tier III', 'Tier IV'];
+
+  const BR = [
+    { name: 'Blade', move: 'Strike', col: tok('--blade'),
+      pts: [[.34, .47], [.21, .38], [.13, .25], [.25, .12]], bend: [.16, -.14, .12, -.22],
+      skills: [['Riposte', 'Parry a blow and strike back in the same beat.'], ['Whirl Step', 'Dash through a group, cutting everything you pass.'], ['Iron Rhythm', 'Every third hit in a row lands for double.'], ['Last Stand', 'Below 20% health your attacks never miss.']] },
+    { name: 'Arcane', move: 'Cast', col: tok('--arcane'),
+      pts: [[.53, .43], [.45, .31], [.55, .2], [.49, .075]], bend: [-.1, .14, -.14, .12],
+      skills: [['Spark', 'A quick bolt that jumps to one more target.'], ['Glyph Ward', 'Draw a rune on the floor that stops projectiles.'], ['Echo Cast', 'Your next spell repeats itself for free.'], ['Starfall', 'A slow rain of light over a wide area.']] },
+    { name: 'Shadow', move: 'Sneak', col: tok('--shadow'),
+      pts: [[.66, .47], [.79, .38], [.87, .25], [.75, .12]], bend: [-.16, .14, -.12, .22],
+      skills: [['Soft Steps', 'Walk on any floor without a sound.'], ['Smoke Pouch', 'Drop a cloud that breaks line of sight.'], ['Backstab', 'Hits from behind are always critical.'], ['Vanish', 'Turn invisible for three seconds after a takedown.']] }
+  ];
+  const BUILD = { pure: ['Duelist', 'Sage', 'Stalker'], mix: { '01': 'Spellblade', '12': 'Hexer', '02': 'Nightblade' } };
+  BR.forEach(b => Object.assign(b, { level: 0, fill: 0, carry: 0, grow: [1, 0, 0, 0], growing: [false, false, false, false], growAt: [0, 0, 0, 0], bloomT: [-1e9, -1e9, -1e9, -1e9], pulse: -1e9, warm: 0, segs: [] }));
+
+  // ---------- geometry ----------
+  let W, H, dpr, S, box, ground, B, F, trunk, roots = [], rootlets = [];
+  const withLen = pts => { const cum = [0]; for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1])); return { pts, cum, len: cum[cum.length - 1] }; };
+  function quad(p0, p1, c, n = 24){ const pts = []; for (let i = 0; i <= n; i++) { const t = i / n, u = 1 - t; pts.push([u * u * p0[0] + 2 * u * t * c[0] + t * t * p1[0], u * u * p0[1] + 2 * u * t * c[1] + t * t * p1[1]]); } return pts; }
+  function bent(p0, p1, bend, n){ const mx = (p0[0] + p1[0]) / 2, my = (p0[1] + p1[1]) / 2, dx = p1[0] - p0[0], dy = p1[1] - p0[1]; return quad(p0, p1, [mx - dy * bend, my + dx * bend], n); }
+  function at(path, d){
+    const { pts, cum } = path; if (d <= 0) return pts[0]; if (d >= path.len) return pts[pts.length - 1];
+    let lo = 0, hi = cum.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (cum[m] < d) lo = m; else hi = m; }
+    const t = (d - cum[lo]) / (cum[hi] - cum[lo] || 1); return [pts[lo][0] + (pts[hi][0] - pts[lo][0]) * t, pts[lo][1] + (pts[hi][1] - pts[lo][1]) * t];
+  }
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+  function layout(){
+    dpr = Math.min(2, devicePixelRatio || 1); W = innerWidth; H = innerHeight;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    const hud = $('hud').getBoundingClientRect(), bar = $('bar').getBoundingClientRect();
+    const wide = W >= 900;
+    const top = wide ? 44 : hud.bottom + 22;
+    ground = bar.top - 44;
+    const h = Math.max(160, ground - top), w = Math.min(W - 32, h * 0.98, 840);
+    box = { x: (W - w) / 2, y: top, w, h };
+    S = Math.max(.62, Math.min(1.35, w / 640));
+    // tall phone screens: lower the fork and stretch the crown so the trunk doesn't eat the stage
+    const fy = h / w > 1.25 ? .64 : .56, ky = fy / .56;
+    const P = p => [box.x + p[0] * w, box.y + Math.min(1, p[1] * ky) * h];
+    B = P([.5, 1 / ky]); F = P([.5, .56]);
+    trunk = withLen(bent(B, F, .05, 30));
+    BR.forEach(b => { let prev = F; b.segs = b.pts.map((p, k) => { const q = P(p); const s = withLen(bent(prev, q, b.bend[k], 24)); s.end = q; prev = q; return s; }); });
+    roots = [...document.querySelectorAll('.mv')].map(el => {
+      const r = el.getBoundingClientRect(), s = [r.left + r.width / 2, r.top + 2];
+      return withLen(quad(s, B, [s[0] * .55 + B[0] * .45, ground + (s[1] - ground) * .15], 28));
+    });
+    seed = 11; rootlets = [];
+    for (let i = 0; i < 9; i++) { const a = Math.PI * (.12 + .76 * rnd()), L = (40 + 70 * rnd()) * S, e = [B[0] + Math.cos(a) * L * 1.6, B[1] + Math.sin(a) * L * .55]; rootlets.push(withLen(bent(B, e, (rnd() - .5) * .5, 12))); }
+    for (const d of drops) if (!d.refund) arrive(d);
+    drops.length = 0;
+  }
+
+  // ---------- state ----------
+  let drops = [], debris = [], dust = [], trails = [], queue = [];
+  let respecs = 0, last = performance.now();
+
+  function feedPath(bi){
+    const b = BR[bi], pts = [...roots[bi].pts, ...trunk.pts.slice(1)];
+    for (let s = 0; s <= Math.min(b.level, 3); s++) pts.push(...b.segs[s].pts.slice(1));
+    return withLen(pts);
+  }
+  function emit(bi){
+    const b = BR[bi];
+    if (b.level >= 4) { const el = $('mv' + bi); el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); return; }
+    hideHintSoon();
+    const d = { bi, refund: false, path: feedPath(bi), d: 0, v: 260 * S, born: performance.now() };
+    if (RM) { arrive(d); return; }
+    drops.push(d);
+  }
+  function arrive(d){
+    const b = BR[d.bi]; b.warm = 1;
+    if (d.refund) { const el = $('mv' + d.bi); el.classList.remove('back'); void el.offsetWidth; el.classList.add('back'); return; }
+    const k = b.level;
+    if (k < 4 && b.grow[k] >= 1 && !b.growing[k]) {
+      b.fill++; b.pulse = performance.now();
+      if (b.fill >= COST[k]) bloom(d.bi);
+    } else if (k < 4) b.carry++;
+    ui();
+  }
+  function bloom(bi){
+    const b = BR[bi], k = b.level, now = performance.now(), p = b.segs[k].end;
+    b.bloomT[k] = now; b.level++; b.fill = 0;
+    if (!RM) for (let i = 0; i < 18; i++) { const a = Math.random() * 6.283, v = (40 + Math.random() * 110) * S; dust.push({ x: p[0], y: p[1], vx: Math.cos(a) * v, vy: Math.sin(a) * v - 40 * S, life: 0, max: .6 + Math.random() * .6, r: (1.5 + Math.random() * 2.2) * S, col: Math.random() < .5 ? b.col : C.sap }); }
+    if (b.level < 4) { b.grow[b.level] = 0; b.growing[b.level] = true; b.growAt[b.level] = now + (RM ? 0 : 420); }
+    $('live').textContent = `Unlocked ${b.skills[k][0]}, ${b.name} ${TIER[k]}.`;
+    ui();
+  }
+  function prune(bi, k, j){
+    const b = BR[bi]; if (k > b.level || k > 3) return;
+    const now = performance.now();
+    let refund = b.fill + b.carry; for (let s = k; s < b.level; s++) refund += COST[s];
+    // falling pieces
+    if (!RM) for (let s = k; s <= Math.min(b.level, 3); s++) {
+      const seg = b.segs[s], n = seg.pts.length - 1, vis = Math.round(n * ease(b.grow[s]));
+      const from = s === k ? Math.min(j, vis) : 0; if (vis - from < 1) continue;
+      const pts = seg.pts.slice(from, vis + 1);
+      debris.push({ pts, pv: pts[0], dx: 0, dy: 0, vx: (Math.random() - .5) * 90 * S, vy: -60 * S * Math.random(), rot: 0, vr: (Math.random() - .5) * 3, life: 0, s, bi, flower: s < b.level, w0: segW(s)[0], w1: segW(s)[1] });
+    }
+    const cut = b.segs[k].pts[Math.min(j, b.segs[k].pts.length - 1)];
+    if (!RM) for (let i = 0; i < 10; i++) dust.push({ x: cut[0], y: cut[1], vx: (Math.random() - .5) * 120 * S, vy: (Math.random() - .8) * 120 * S, life: 0, max: .5 + Math.random() * .4, r: 2 * S, col: C.leaf });
+    // reset branch
+    for (let s = k; s < 4; s++) { b.grow[s] = 0; b.growing[s] = false; b.bloomT[s] = -1e9; }
+    b.level = k; b.fill = 0; b.carry = 0;
+    b.grow[k] = RM ? 1 : j / (b.segs[k].pts.length - 1); b.growing[k] = !RM; b.growAt[k] = now + 900;
+    // refund droplets run back down to the move button
+    if (refund > 0) {
+      const pts = b.segs[k].pts.slice(0, j + 1).reverse();
+      for (let s = k - 1; s >= 0; s--) pts.push(...b.segs[s].pts.slice(0, -1).reverse());
+      pts.push(...trunk.pts.slice(0, -1).reverse(), ...roots[bi].pts.slice(0, -1).reverse());
+      const path = withLen(pts);
+      for (let i = 0; i < refund; i++) { const d = { bi, refund: true, path, d: 0, v: 300 * S, born: now }; if (RM) arrive(d); else queue.push({ t: now + i * 70, d }); }
+    }
+    respecs++;
+    $('live').textContent = `Pruned ${b.name} back to ${TIER[k]}. ${refund} sap returned.`;
+    closeTip(); ui();
+  }
+
+  // ---------- UI ----------
+  const rowsEl = $('rows');
+  rowsEl.innerHTML = BR.map((b, i) => `<li style="--c:${b.col}"><i class="dot"></i><span class="nm">${b.name}</span><b class="pips">${'<i></i>'.repeat(4)}</b></li>`).join('');
+  function buildName(){
+    const c = BR.map(b => b.level), tot = c[0] + c[1] + c[2];
+    if (!tot) return ['Seedling', C.ink];
+    const ord = [0, 1, 2].sort((a, b) => c[b] - c[a]);
+    if (c[0] === c[1] && c[1] === c[2]) return ['Wanderer', C.ink];
+    if (c[ord[1]] > 0 && c[ord[0]] - c[ord[1]] <= 1) { const key = [ord[0], ord[1]].sort().join(''); return [BUILD.mix[key], C.ink]; }
+    return [BUILD.pure[ord[0]], BR[ord[0]].col];
+  }
+  function ui(){
+    let tot = 0;
+    BR.forEach((b, i) => {
+      [...rowsEl.children[i].querySelectorAll('.pips i')].forEach((p, k) => p.classList.toggle('on', k < b.level));
+      const el = $('mv' + i); el.classList.toggle('max', b.level >= 4);
+      el.querySelector('.s').textContent = b.level >= 4 ? 'Maxed' : b.name + ' ' + b.fill + '/' + COST[b.level];
+      el.querySelector('.meter i').style.width = (b.level >= 4 ? 100 : b.fill / COST[b.level] * 100) + '%';
+      tot += b.fill; for (let s = 0; s < b.level; s++) tot += COST[s];
+    });
+    const [n, col] = buildName(); const bn = $('bname'); bn.textContent = n; bn.style.color = col;
+    $('spent').textContent = tot; $('resp').textContent = respecs;
+  }
+  function hideHintSoon(){}
+
+  // ---------- holding moves ----------
+  const holds = {};
+  function startHold(i){ if (holds[i]) return; $('mv' + i).classList.add('down'); emit(i); holds[i] = setInterval(() => emit(i), 150); }
+  function stopHold(i){ if (!holds[i]) return; clearInterval(holds[i]); holds[i] = null; $('mv' + i).classList.remove('down'); }
+  [0, 1, 2].forEach(i => {
+    const el = $('mv' + i);
+    el.addEventListener('pointerdown', e => { e.preventDefault(); closeTip(); el.setPointerCapture?.(e.pointerId); startHold(i); });
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(t => el.addEventListener(t, () => stopHold(i)));
+    el.addEventListener('click', e => { if (e.detail === 0) emit(i); });
+    el.addEventListener('contextmenu', e => e.preventDefault());
+  });
+  addEventListener('keydown', e => {
+    const i = ['1', '2', '3'].indexOf(e.key);
+    if (i >= 0 && !e.repeat && !e.metaKey && !e.ctrlKey) startHold(i);
+    if (e.key === 'Escape') { closeTip(); if (!$('info').hidden) setInfo(false); }
+  });
+  addEventListener('keyup', e => { const i = ['1', '2', '3'].indexOf(e.key); if (i >= 0) stopHold(i); });
+  addEventListener('blur', () => [0, 1, 2].forEach(stopHold));
+
+  // ---------- tree pointer: tap a node, swipe to prune ----------
+  function hitNode(x, y){
+    let best = null, bd = 26 * Math.max(1, S);
+    BR.forEach((b, bi) => b.segs.forEach((s, k) => {
+      if (k > b.level || b.grow[k] < 1 || b.growing[k]) return;
+      const dd = Math.hypot(s.end[0] - x, s.end[1] - y); if (dd < bd) { bd = dd; best = { bi, k }; }
+    }));
+    return best;
+  }
+  const cross = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+  const inter = (p1, p2, p3, p4) => { const d1 = cross(p3, p4, p1), d2 = cross(p3, p4, p2), d3 = cross(p1, p2, p3), d4 = cross(p1, p2, p4); return d1 * d2 < 0 && d3 * d4 < 0; };
+  function tryCut(a, b2){
+    BR.forEach((b, bi) => {
+      for (let s = 0; s <= Math.min(b.level, 3); s++) {
+        const seg = b.segs[s], n = seg.pts.length - 1, vis = Math.round(n * ease(b.grow[s]));
+        for (let j = 0; j < vis; j++) if (inter(a, b2, seg.pts[j], seg.pts[j + 1])) { prune(bi, s, Math.max(1, j)); return; }
+      }
+    });
+  }
+  let ptr = null;
+  cv.addEventListener('pointerdown', e => {
+    closeTip(); cv.setPointerCapture(e.pointerId);
+    ptr = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, moved: false, node: hitNode(e.clientX, e.clientY), trail: { pts: [[e.clientX, e.clientY, performance.now()]] } };
+    trails.push(ptr.trail);
+  });
+  cv.addEventListener('pointermove', e => {
+    const x = e.clientX, y = e.clientY;
+    if (!ptr) { cv.style.cursor = hitNode(x, y) ? 'pointer' : 'crosshair'; return; }
+    if (!ptr.moved && Math.hypot(x - ptr.sx, y - ptr.sy) > 8) ptr.moved = true;
+    if (ptr.moved) { tryCut([ptr.x, ptr.y], [x, y]); ptr.trail.pts.push([x, y, performance.now()]); }
+    ptr.x = x; ptr.y = y;
+  });
+  const endPtr = () => { if (ptr && !ptr.moved && ptr.node) openTip(ptr.node); ptr = null; };
+  cv.addEventListener('pointerup', endPtr); cv.addEventListener('pointercancel', () => ptr = null);
+
+  // ---------- skill card ----------
+  const tip = $('tip'); let tipNode = null;
+  function openTip(n){
+    const b = BR[n.bi], k = n.k, [nm, ds] = b.skills[k], open = k < b.level;
+    tipNode = n;
+    $('tipK').textContent = `${b.name} · ${TIER[k]}`; $('tipK').style.color = b.col;
+    $('tipN').textContent = nm; $('tipD').textContent = ds;
+    $('tipS').textContent = open ? `Unlocked · ${COST[k]} sap` : `Bud · ${b.fill}/${COST[k]} sap · hold ${b.move} to feed it`;
+    $('tipCut').hidden = !(open || b.fill > 0);
+    tip.hidden = false;
+    const p = b.segs[k].end, tw = tip.offsetWidth, th = tip.offsetHeight;
+    let x = Math.min(W - tw - 16, Math.max(16, p[0] - tw / 2)), y = p[1] + 26 * S;
+    if (y + th > ground - 8) y = p[1] - th - 26 * S;
+    tip.style.left = x + 'px'; tip.style.top = Math.max(16, y) + 'px';
+  }
+  function closeTip(){ tip.hidden = true; tipNode = null; }
+  $('tipCut').onclick = () => { if (tipNode) prune(tipNode.bi, tipNode.k, 1); };
+
+  // ---------- about ----------
+  const info = $('info'), ibtn = $('infoBtn');
+  function setInfo(open){ info.hidden = !open; ibtn.hidden = open; ibtn.setAttribute('aria-expanded', open); (open ? info.querySelector('.close') : ibtn).focus(); }
+  ibtn.onclick = () => { closeTip(); setInfo(true); };
+  info.querySelector('.close').onclick = () => setInfo(false);
+
+  // ---------- drawing ----------
+  const ease = t => t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t);
+  const back = t => { const c = 1.9; t = Math.min(1, t); return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
+  const segW = s => [[10, 7], [7, 5.2], [5.2, 3.8], [3.8, 2.6]][s].map(v => v * S);
+  function taper(pts, upto, w0, w1, col){
+    ctx.strokeStyle = col; ctx.lineCap = 'round';
+    const n = pts.length - 1;
+    for (let i = 0; i < upto && i < n; i++) { ctx.lineWidth = w0 + (w1 - w0) * (i / n); ctx.beginPath(); ctx.moveTo(pts[i][0], pts[i][1]); ctx.lineTo(pts[i + 1][0], pts[i + 1][1]); ctx.stroke(); }
+  }
+  function line(pts, upto, w, col, dash){
+    if (upto < 1) return; ctx.strokeStyle = col; ctx.lineWidth = w; ctx.lineCap = 'round'; ctx.setLineDash(dash || []);
+    ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i <= upto && i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.stroke(); ctx.setLineDash([]);
+  }
+  function flower(x, y, col, sc, rot){
+    if (sc <= 0) return;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(sc * S, sc * S);
+    ctx.fillStyle = col; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.1;
+    for (let i = 0; i < 5; i++) { ctx.rotate(6.2832 / 5); ctx.beginPath(); ctx.ellipse(0, -9, 5.4, 8.6, 0, 0, 6.2832); ctx.fill(); ctx.stroke(); }
+    ctx.fillStyle = C.sap; ctx.beginPath(); ctx.arc(0, 0, 4.4, 0, 6.2832); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+  function leafPair(seg, k, side, g){
+    if (g < .5) return; const t = Math.min(1, (g - .5) * 2), i = Math.floor(seg.pts.length * .5), p = seg.pts[i], q = seg.pts[i + 1];
+    const a = Math.atan2(q[1] - p[1], q[0] - p[0]) + side * 1.0, L = 15 * S * t;
+    const e = [p[0] + Math.cos(a) * L, p[1] + Math.sin(a) * L];
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 1.3 * S; ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(e[0], e[1]); ctx.stroke();
+    ctx.fillStyle = C.leaf; ctx.strokeStyle = C.ink; ctx.lineWidth = .9 * S;
+    for (const o of [-.6, .5]) { ctx.save(); ctx.translate(e[0], e[1]); ctx.rotate(a + o); ctx.beginPath(); ctx.ellipse(6 * S * t, 0, 6.5 * S * t, 2.8 * S * t, 0, 0, 6.2832); ctx.fill(); ctx.stroke(); ctx.restore(); }
+  }
+  function label(txt, x, y, col, font){
+    ctx.font = font; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.lineWidth = 4; ctx.strokeStyle = C.paper; ctx.lineJoin = 'round'; ctx.strokeText(txt, x, y);
+    ctx.fillStyle = col; ctx.fillText(txt, x, y);
+  }
+
+  function draw(now, dt){
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = C.paper; ctx.fillRect(0, 0, W, H);
+    // soil
+    ctx.fillStyle = C.soil; ctx.beginPath(); ctx.moveTo(0, ground);
+    for (let x = 0; x <= W; x += 24) ctx.lineTo(x, ground + Math.sin(x * .021) * 2.5);
+    ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.fill();
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(0, ground);
+    for (let x = 0; x <= W; x += 24) ctx.lineTo(x, ground + Math.sin(x * .021) * 2.5); ctx.stroke();
+    // roots
+    for (const r of rootlets) taper(r.pts, r.pts.length, 3.2 * S, .8, 'rgba(34,48,42,.4)');
+    const trunkWarm = Math.max(...BR.map(b => b.warm));
+    roots.forEach((r, i) => {
+      const rev = r.pts.slice().reverse(); taper(rev, rev.length, 7 * S, 1.6 * S, 'rgba(34,48,42,.75)');
+      if (BR[i].warm > .02) { ctx.globalAlpha = BR[i].warm; line(r.pts, r.pts.length, 2 * S, C.sap); ctx.globalAlpha = 1; }
+    });
+    // trunk
+    taper(trunk.pts, trunk.pts.length, 22 * S, 13 * S, C.ink);
+    if (trunkWarm > .02) { ctx.globalAlpha = trunkWarm * .9; line(trunk.pts, trunk.pts.length, 2.6 * S, C.sap); ctx.globalAlpha = 1; }
+
+    // branches
+    BR.forEach((b, bi) => {
+      b.segs.forEach((seg, s) => {
+        const n = seg.pts.length - 1;
+        const vis = s <= b.level ? Math.round(n * ease(b.grow[s])) : 0;
+        // ghost of what can still grow
+        if (vis < n) { ctx.globalAlpha = .32; line(seg.pts.slice(vis), n - vis, 1.3 * S, C.ink, [1.5 * S, 5 * S]); ctx.globalAlpha = 1; }
+        if (vis > 0) {
+          const [w0, w1] = segW(s);
+          taper(seg.pts, vis, w0, w1, C.ink);
+          if (b.warm > .02) { ctx.globalAlpha = b.warm; line(seg.pts, vis, Math.max(1.2, w1 * .45), C.sap); ctx.globalAlpha = 1; }
+          leafPair(seg, s, (s + bi) % 2 ? 1 : -1, ease(b.grow[s]));
+        }
+      });
+      // nodes
+      b.segs.forEach((seg, s) => {
+        const [x, y] = seg.end;
+        if (s < b.level) {
+          const t = RM ? 1 : (now - b.bloomT[s]) / 650;
+          const ring = (now - b.bloomT[s]) / 700;
+          if (!RM && ring < 1) { ctx.strokeStyle = b.col; ctx.globalAlpha = 1 - ring; ctx.lineWidth = 2 * S; ctx.beginPath(); ctx.arc(x, y, (12 + 30 * ease(ring)) * S, 0, 6.2832); ctx.stroke(); ctx.globalAlpha = 1; }
+          flower(x, y, b.col, back(Math.max(0, t)), s * .7 + bi);
+          ctx.globalAlpha = Math.min(1, Math.max(0, (t - .3) * 2));
+          label(b.skills[s][0], x, y + 17 * S, C.ink, `600 ${Math.round(12.5 * Math.max(.9, S))}px ${FONT}`);
+          ctx.globalAlpha = 1;
+        } else if (s === b.level && !b.growing[s] && b.grow[s] >= 1) {
+          const pt = RM ? 0 : Math.max(0, 1 - (now - b.pulse) / 260);
+          const r = (8.5 + pt * 3) * S, f = b.fill / COST[s];
+          ctx.fillStyle = C.paper; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5 * S;
+          ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill(); ctx.stroke();
+          ctx.fillStyle = b.col; ctx.globalAlpha = .9; ctx.beginPath(); ctx.arc(x, y, r * .42 * (.6 + f * .6), 0, 6.2832); ctx.fill(); ctx.globalAlpha = 1;
+          if (f > 0) { ctx.strokeStyle = C.sap; ctx.lineWidth = 3.2 * S; ctx.lineCap = 'butt'; ctx.beginPath(); ctx.arc(x, y, r + 3.5 * S, -Math.PI / 2, -Math.PI / 2 + f * 6.2832); ctx.stroke(); }
+          label(`${b.fill}/${COST[s]}`, x, y + 15 * S, b.col, `500 ${Math.round(10 * Math.max(.95, S))}px ${MONO}`);
+        } else {
+          const g = s === b.level ? ease(b.grow[s]) : 0;
+          ctx.globalAlpha = .4 + g * .4; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.2 * S; ctx.setLineDash([2 * S, 3 * S]);
+          ctx.beginPath(); ctx.arc(x, y, (5.5 + g * 3) * S, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+        }
+      });
+    });
+
+    // falling pruned pieces
+    for (const p of debris) {
+      p.life += dt; p.vy += 900 * S * dt; p.dx += p.vx * dt; p.dy += p.vy * dt; p.rot += p.vr * dt;
+      ctx.save(); ctx.globalAlpha = Math.max(0, 1 - p.life / 1.3);
+      ctx.translate(p.pv[0] + p.dx, p.pv[1] + p.dy); ctx.rotate(p.rot); ctx.translate(-p.pv[0], -p.pv[1]);
+      taper(p.pts, p.pts.length, p.w0, p.w1, C.ink);
+      if (p.flower) { const e = p.pts[p.pts.length - 1]; flower(e[0], e[1], BR[p.bi].col, 1, p.s); }
+      ctx.restore();
+    }
+    debris = debris.filter(p => p.life < 1.3);
+
+    // droplets
+    for (const d of drops) {
+      for (let i = 4; i >= 0; i--) {
+        const p = at(d.path, d.d - i * 7 * S), r = (d.refund ? 3.6 : 4.6) * S * (1 - i * .14);
+        ctx.globalAlpha = i ? .22 : 1; ctx.fillStyle = d.refund ? C.soil2 : C.sap;
+        ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, 6.2832); ctx.fill();
+        if (!i) { ctx.strokeStyle = C.ink; ctx.lineWidth = 1; ctx.stroke(); }
+      }
+      ctx.globalAlpha = 1;
+    }
+    // dust
+    for (const p of dust) { p.life += dt; p.vy += 260 * S * dt; p.x += p.vx * dt; p.y += p.vy * dt; ctx.globalAlpha = Math.max(0, 1 - p.life / p.max); ctx.fillStyle = p.col; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.2832); ctx.fill(); }
+    ctx.globalAlpha = 1; dust = dust.filter(p => p.life < p.max);
+    // pruning trails
+    for (const t of trails) {
+      const pts = t.pts.filter(p => now - p[2] < 380); t.pts = pts; if (pts.length < 2) continue;
+      ctx.strokeStyle = C.ink; ctx.lineCap = 'round';
+      for (let i = 1; i < pts.length; i++) { ctx.globalAlpha = 1 - (now - pts[i][2]) / 380; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(pts[i - 1][0], pts[i - 1][1]); ctx.lineTo(pts[i][0], pts[i][1]); ctx.stroke(); }
+      ctx.globalAlpha = 1;
+    }
+    trails = trails.filter(t => t.pts.length > 0 || (ptr && ptr.trail === t));
+  }
+
+  function frame(now){
+    const dt = Math.min(.033, Math.max(.001, (now - last) / 1000)); last = now;
+    // queued refunds
+    while (queue.length && queue[0].t <= now) drops.push(queue.shift().d);
+    // move droplets
+    for (const d of drops) { d.v = Math.min(820 * S, d.v + 1500 * S * dt); d.d += d.v * dt; if (d.d >= d.path.len) { d.done = true; arrive(d); } }
+    drops = drops.filter(d => !d.done);
+    BR.forEach(b => {
+      b.warm = Math.max(0, b.warm - dt * .9);
+      for (let s = 0; s < 4; s++) if (b.growing[s] && now >= b.growAt[s]) {
+        b.grow[s] = RM ? 1 : Math.min(1, b.grow[s] + dt / .8);
+        if (b.grow[s] >= 1) { b.growing[s] = false; b.fill = Math.min(b.carry, COST[s] - 1); b.carry = 0; ui(); }
+      }
+    });
+    draw(now, dt);
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- start: a build already in progress ----------
+  BR[0].level = 1; BR[0].grow[1] = 1; BR[0].fill = 2;
+  BR[1].fill = 1;
+  BR[2].fill = 1;
+  layout(); ui();
+  addEventListener('resize', () => { closeTip(); layout(); });
+  document.fonts?.ready?.then(() => layout());
+  [700, 950, 1200].forEach(t => setTimeout(() => emit(1), t));
+  requestAnimationFrame(frame);
+})();
+</script>
