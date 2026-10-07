@@ -572,7 +572,7 @@ h1 em{font-style:normal;color:var(--sap);text-shadow:0 0 18px rgba(57,255,136,.4
     // soil
     ctx.fillStyle = C.soil; ctx.beginPath(); ctx.moveTo(0, ground);
     for (let x = 0; x <= W; x += 24) ctx.lineTo(x, ground + Math.sin(x * .021) * 2.5);
-    ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.fill();
+    ctx.lineTo(W, ground + Math.sin(W * .021) * 2.5); ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.fill();
     ctx.strokeStyle = 'rgba(236,232,242,.22)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(0, ground);
     for (let x = 0; x <= W; x += 24) ctx.lineTo(x, ground + Math.sin(x * .021) * 2.5); ctx.stroke();
     // roots
