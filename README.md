@@ -6,6 +6,7 @@ Experiments in UI, motion and creative coding for games, apps and interfaces. A 
 
 | # | Lab | Category |
 |---|-----|----------|
+| 05 | [Burst Mode](lab-05-burst-mode/) | Motion |
 | 04 | [Sap Points](lab-04-sap-points/) | UI |
 | 03 | [Against the Grain](lab-03-against-the-grain/) | Creative Coding |
 | 02 | [Ghost Type](lab-02-ghost-type/) | Motion |
