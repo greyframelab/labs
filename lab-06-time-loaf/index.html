@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Lab #06 — Time Loaf</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;600&family=Martian+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one-screen specimen plate. The loaf of time floats in the middle on a cool lab-paper ground; title top-left, a time dock (play, knife timeline, mode) along the bottom. Single light look by design. */
+:root{
+  --paper:#e2e6e9; --paper2:#d3d9de; --ink:#13202b; --muted:#56636f; --dim:#8794a0;
+  --steel:#9fb0bf; --cobalt:#2b3df5; --spike:#c4462c;
+  --panel:rgba(240,243,245,.9); --line:rgba(19,32,43,.14);
+  --display:"Bricolage Grotesque","Arial Narrow",system-ui,sans-serif;
+  --body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"Martian Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+html,body{height:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);overflow:hidden;-webkit-font-smoothing:antialiased;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+#scene{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab;
+  background:radial-gradient(120% 90% at 50% 40%,#eef1f3 0%,var(--paper) 55%,var(--paper2) 100%)}
+#scene.drag{cursor:grabbing}
+#scene:focus-visible{outline:2px solid var(--cobalt);outline-offset:-4px}
+
+.hud{position:fixed;z-index:3;left:32px;top:calc(env(safe-area-inset-top,0px) + 28px);display:flex;flex-direction:column;gap:8px;max-width:420px;pointer-events:none}
+.eyebrow{font:500 10.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.eyebrow b{color:var(--cobalt);font-weight:500}
+h1{margin:0;font:800 clamp(44px,6.4vw,84px)/.86 var(--display);letter-spacing:-.035em;text-wrap:balance}
+h1 span{color:var(--cobalt)}
+.lede{margin:4px 0 0;font-size:17px;line-height:1.4;color:var(--muted);max-width:30ch}
+.hint{margin-top:6px;font:400 10px/1.4 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+
+/* time dock */
+.dock{position:fixed;z-index:3;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 22px);width:min(780px,calc(100vw - 48px));box-sizing:border-box;
+  display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:"play track mode" "play read mode";column-gap:18px;row-gap:8px;align-items:center;
+  padding:14px 16px;border-radius:16px;background:var(--panel);border:1px solid var(--line);box-shadow:0 10px 40px rgba(19,32,43,.12);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+#play{grid-area:play;width:48px;height:48px;border-radius:50%;border:0;background:var(--ink);color:var(--paper);display:grid;place-items:center;cursor:pointer;transition:transform .12s cubic-bezier(.2,.9,.3,1)}
+#play:active{transform:scale(.92)}
+#play svg{width:18px;height:18px}
+#play .pa{display:none}
+#play[aria-pressed="true"] .pl{display:none}
+#play[aria-pressed="true"] .pa{display:block}
+.track{grid-area:track;position:relative;height:46px;touch-action:none;cursor:ew-resize;outline:none}
+.track:focus-visible .rail{box-shadow:0 0 0 2px var(--cobalt)}
+.rail{position:absolute;left:0;right:0;top:12px;height:14px;border-radius:4px;background:repeating-linear-gradient(90deg,transparent 0 calc(var(--step) - 1px),rgba(19,32,43,.22) calc(var(--step) - 1px) var(--step)),var(--paper2);--step:12px}
+.fill{position:absolute;left:0;top:12px;height:14px;border-radius:4px 0 0 4px;background:linear-gradient(90deg,var(--steel),var(--ink));opacity:.85;width:50%}
+.phases{position:absolute;left:0;right:0;top:32px;height:12px}
+.phases span{position:absolute;top:0;font:500 9px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--dim);border-left:1px solid var(--line);padding-left:5px;white-space:nowrap;transition:color .2s}
+.phases span.on{color:var(--ink)}
+.knife{position:absolute;top:2px;width:0;height:34px;left:50%;pointer-events:none}
+.knife::before{content:"";position:absolute;left:-1.5px;top:0;width:3px;height:34px;border-radius:2px;background:var(--cobalt)}
+.knife::after{content:"";position:absolute;left:-8px;top:-4px;width:16px;height:10px;border-radius:3px 3px 8px 8px;background:var(--cobalt);box-shadow:0 2px 6px rgba(43,61,245,.35)}
+.read{grid-area:read;display:flex;gap:14px;flex-wrap:wrap;font:400 10px/1 var(--mono);letter-spacing:.06em;color:var(--muted);font-variant-numeric:tabular-nums;text-transform:uppercase}
+.read b{color:var(--ink);font-weight:500}
+.mode{grid-area:mode;display:flex;flex-direction:column;gap:6px}
+.seg{display:flex;padding:3px;border-radius:10px;background:var(--paper2);border:1px solid var(--line)}
+.seg button{flex:1;border:0;background:transparent;padding:8px 12px;border-radius:7px;font:600 13px/1 var(--body);color:var(--muted);cursor:pointer;transition:background .2s,color .2s}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.small{display:flex;gap:6px}
+.small button{flex:1;border:1px solid var(--line);background:transparent;border-radius:7px;padding:6px 8px;font:500 9.5px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink);cursor:pointer}
+.small button:hover,.seg button:hover{color:var(--ink)}
+.seg button[aria-pressed="true"]:hover{color:var(--paper)}
+button:focus-visible{outline:2px solid var(--cobalt);outline-offset:2px}
+
+/* about */
+#infoBtn{position:fixed;z-index:4;right:28px;top:calc(env(safe-area-inset-top,0px) + 28px);padding:10px 15px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:500 10px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
+#infoBtn:hover{border-color:var(--ink)}
+#info{box-sizing:border-box;position:fixed;z-index:6;right:28px;top:calc(env(safe-area-inset-top,0px) + 28px);width:min(440px,calc(100vw - 32px));max-height:calc(100% - 56px);overflow:auto;padding:24px;border-radius:16px;background:#f3f5f6;border:1px solid var(--line);box-shadow:0 24px 70px rgba(19,32,43,.25);display:flex;flex-direction:column;gap:14px;font-size:15px;line-height:1.55;user-select:text;-webkit-user-select:text;animation:rise .28s cubic-bezier(.2,.9,.3,1)}
+@keyframes rise{from{transform:translateY(-10px);opacity:0}}
+#info h3{font:800 36px/1 var(--display);letter-spacing:-.03em;margin:0}
+#info .meta{font:500 10px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+#info h4{font:500 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:4px 0 6px}
+#info p{margin:0}
+#info ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+#info a{color:var(--cobalt)}
+#info .close{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--ink);font-size:18px;cursor:pointer}
+#allLabs{font:500 10.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase}
+
+@media (max-width:760px){
+  .hud{left:16px;top:calc(env(safe-area-inset-top,0px) + 18px);max-width:calc(100vw - 140px)}
+  .lede{font-size:15px}
+  .eyebrow .cat{display:none}
+  #infoBtn{right:16px;top:calc(env(safe-area-inset-top,0px) + 18px)}
+  #info{right:16px;top:calc(env(safe-area-inset-top,0px) + 16px)}
+  .dock{width:auto;left:16px;right:16px;transform:none;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);padding:12px;column-gap:12px;
+    grid-template-columns:auto 1fr;grid-template-areas:"play mode" "track track" "read read"}
+  #play{width:44px;height:44px}
+  .mode{flex-direction:row;align-items:center;gap:8px}
+  .seg{flex:1}
+  .small{flex:0 0 auto}
+  .small #reset{display:none}
+}
+@media (max-height:560px){.lede,.hint{display:none}}
+@media (prefers-reduced-motion:reduce){#info{animation:none}#play,.seg button,.phases span{transition:none}}
+</style>
+
+<canvas id="scene" tabindex="0" aria-label="A platformer double jump drawn as a point cloud. Drag to orbit the view. Arrow keys step through time."></canvas>
+
+<header class="hud">
+  <div class="eyebrow"><b>Greyframe Labs</b> · #06<span class="cat"> · Creative Coding</span></div>
+  <h1>Time <span>Loaf</span></h1>
+  <p class="lede">One double jump, baked into a solid. Orbit it, then slice it.</p>
+  <div class="hint">Drag the scene to orbit · drag the knife to slice</div>
+</header>
+
+<section class="dock" aria-label="Time controls">
+  <button id="play" type="button" aria-pressed="true" aria-label="Play"><svg class="pl" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg><svg class="pa" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="5.5" y="4.5" width="4.5" height="15" rx="1"/><rect x="14" y="4.5" width="4.5" height="15" rx="1"/></svg></button>
+  <div class="track" id="track" role="slider" tabindex="0" aria-label="Knife position in time" aria-valuemin="0" aria-valuemax="2.6" aria-valuenow="0" aria-valuetext="0 seconds">
+    <div class="rail" id="rail"></div>
+    <div class="fill" id="fill"></div>
+    <div class="phases" id="phases"></div>
+    <div class="knife" id="knife"></div>
+  </div>
+  <div class="read" aria-live="off"><span>T <b id="rt">0.00 s</b></span><span>Frame <b id="rf">1 / 56</b></span><span id="rp"><b>Run</b></span></div>
+  <div class="mode">
+    <div class="seg" role="group" aria-label="View">
+      <button type="button" id="mMoment" aria-pressed="false">Moment</button>
+      <button type="button" id="mLoaf" aria-pressed="true">Loaf</button>
+    </div>
+    <div class="small">
+      <button type="button" id="speed" aria-label="Playback speed">½×</button>
+      <button type="button" id="reset">Reset view</button>
+    </div>
+  </div>
+</section>
+
+<button id="infoBtn" type="button" aria-expanded="false" aria-controls="info">About this lab</button>
+<aside id="info" hidden aria-label="About this lab">
+  <button class="close" type="button" aria-label="Close">×</button>
+  <div class="meta">Lab #06 · Creative Coding · 9 Oct 2026</div>
+  <h3>Time Loaf</h3>
+  <div><h4>Idea</h4><p>What if a jump was a loaf of time? One platformer double jump is baked into a single solid: every frame of the move is stacked behind the one before, so the whole action becomes an object you can walk around. The hero is drawn as rings of points, and each ring traces a tube through time. Drag the knife along the timeline to slice the loaf and see the exact instant, or switch to Moment to watch the jump play the normal way.</p></div>
+  <div><h4>Controls</h4><ul>
+    <li>Drag the scene to orbit. Scroll or pinch to zoom.</li>
+    <li>Drag the blue knife on the timeline to slice through time. The part already sliced is solid, the rest stays as a pale ghost.</li>
+    <li>Loaf stacks every frame in depth. Moment collapses it back to a single figure.</li>
+    <li>Space plays or pauses, the arrow keys step one frame, L switches the view, R resets the camera.</li>
+  </ul></div>
+  <div><h4>Inspired by</h4><ul>
+    <li>"Battle of points" by @aicreataro on X, an action scene turned into a point cloud. Only the principle of freezing an action as points to study it was taken.</li>
+    <li>Étienne-Jules Marey's chronophotography (1880s), which recorded one movement as a run of positions on a single plate.</li>
+    <li>Umberto Boccioni's sculpture "Unique Forms of Continuity in Space" (1913), a body in motion shown as one solid form.</li>
+  </ul></div>
+  <div><h4>For game UI</h4><p>A jump is judged by its arc, its hang time and how readable the landing is, and none of that fits in a single frame. A space-time view turns the whole move into one shape you can read at a glance: where it clears the gap, where it hangs, where the landing arrives late. It works for replay scrubbers, photo and kill-cam modes, and in-editor tools for animators and level designers.</p></div>
+  <a id="allLabs" href="https://claude.ai/artifact/CDYy2LnuZN3Tdb1A9BSHrG" target="_blank" rel="noopener">← All labs</a>
+  <script>if (/github\.io$/.test(location.hostname)) { const a = document.getElementById('allLabs'); a.href = '../'; a.removeAttribute('target'); }</script>
+</aside>
+<div id="live" aria-live="polite" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)"></div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const RM = matchMedia('(prefers-reduced-motion: reduce)');
+  const TAU = Math.PI * 2, DUR = 2.6, DEPTH = 7.2;
+  const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  const eout = t => 1 - Math.pow(1 - t, 3);
+  const sm = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+
+  // ---------- poses ----------
+  const KEYS = ['tL','kL','tR','kR','aL','eL','aR','eR','lean','drop'];
+  const P = (tL,kL,tR,kR,aL,eL,aR,eR,lean,drop) => ({tL,kL,tR,kR,aL,eL,aR,eR,lean,drop});
+  const TAKEOFF = P(1.35,1.7,-.45,.25,-.5,.9,2.5,.4,.15,0);
+  const TUCK = P(1.9,2.4,1.7,2.3,.9,1.7,1.1,1.6,.55,0);
+  const KICK = P(.55,.35,-.35,.5,2.7,.3,2.3,.5,.05,0);
+  const LAND = P(1.45,2.2,1.25,2.0,1.2,.6,1.0,.7,.75,.52);
+  const STAND = P(.05,.08,-.05,.08,.12,.25,-.08,.3,.04,0);
+  function run(p){
+    const c = p * TAU, s = Math.sin(c), co = Math.cos(c);
+    return P(.75*s, .3 + 1.2*Math.max(0, co), -.75*s, .3 + 1.2*Math.max(0, -co), -.7*s, 1.4, .7*s, 1.4, .28, .05*Math.abs(co));
+  }
+  function mix(a, b, t){ const o = {}; for (const k of KEYS) o[k] = lerp(a[k], b[k], t); return o; }
+  const PHASES = [['Run', 0], ['Jump', .30], ['Double jump', .55], ['Land', .80]];
+  function phaseOf(u){ let n = PHASES[0][0]; for (const [name, s] of PHASES) if (u >= s) n = name; return n; }
+
+  // u in [0,1] -> {x, y, phi, pose}
+  function state(u){
+    let x, y, phi = 0, pose;
+    if (u < .30){
+      const s = u / .30; x = -3.3 + s * 1.9; pose = run(s * 1.5); y = .95;
+    } else if (u < .55){
+      const s = (u - .30) / .25; x = -1.4 + s * 1.5;
+      const r = run(1.5);
+      pose = s < .2 ? mix(r, TAKEOFF, ease(s / .2)) : mix(TAKEOFF, TUCK, ease(clamp((s - .3) / .7, 0, 1)));
+      y = .95 + 2.4 * s - 1.7 * s * s;
+    } else if (u < .80){
+      const s = (u - .55) / .25; x = .1 + s * 1.8;
+      if (s < .15) pose = mix(TUCK, KICK, ease(s / .15));
+      else if (s < .32) pose = mix(KICK, TUCK, ease((s - .15) / .17));
+      else if (s < .74) pose = TUCK;
+      else pose = mix(TUCK, LAND, ease((s - .74) / .26));
+      phi = TAU * ease(clamp((s - .2) / .62, 0, 1));
+      y = 1.65 + 3.0 * s - 3.2 * s * s;
+    } else if (u < .90){
+      const s = (u - .80) / .10; x = 1.9 + .3 * eout(s); pose = LAND; y = 1.45;
+    } else {
+      const s = (u - .90) / .10; x = 2.2 + .1 * s; pose = mix(LAND, STAND, ease(s)); y = 1.45;
+    }
+    return { x, y: y - pose.drop, phi, pose };
+  }
+
+  // ---------- skeleton ----------
+  const dir = a => [Math.sin(a), -Math.cos(a)];
+  function joints(u){
+    const { x, y, phi, pose: p } = state(u);
+    const c = Math.cos(phi), s = Math.sin(phi);
+    const W = (lx, ly, z) => [x + lx * c + ly * s, y - lx * s + ly * c, z];
+    const sp = [Math.sin(p.lean), Math.cos(p.lean)];
+    const J = {};
+    J.pelvis = W(0, 0, 0);
+    J.chest = W(sp[0] * .52, sp[1] * .52, 0);
+    J.head = W(sp[0] * .77, sp[1] * .77, 0);
+    J.spine = [sp[0] * c + sp[1] * s, -sp[0] * s + sp[1] * c];
+    for (const side of ['L', 'R']){
+      const z = side === 'L' ? 1 : -1;
+      const sh = [sp[0] * .5, sp[1] * .5];
+      const ua = p['a' + side] + p.lean * .3, fa = ua + p['e' + side];
+      const el = [sh[0] + dir(ua)[0] * .29, sh[1] + dir(ua)[1] * .29];
+      const wr = [el[0] + dir(fa)[0] * .27, el[1] + dir(fa)[1] * .27];
+      J['sh' + side] = W(sh[0], sh[1], .2 * z);
+      J['el' + side] = W(el[0], el[1], .22 * z);
+      J['wr' + side] = W(wr[0], wr[1], .2 * z);
+      const th = p['t' + side], shn = th - p['k' + side];
+      const kn = [dir(th)[0] * .44, dir(th)[1] * .44];
+      const an = [kn[0] + dir(shn)[0] * .43, kn[1] + dir(shn)[1] * .43];
+      const to = [an[0] + dir(shn + Math.PI / 2)[0] * .17, an[1] + dir(shn + Math.PI / 2)[1] * .17];
+      J['hp' + side] = W(0, 0, .11 * z);
+      J['kn' + side] = W(kn[0], kn[1], .12 * z);
+      J['an' + side] = W(an[0], an[1], .12 * z);
+      J['to' + side] = W(to[0], to[1], .12 * z);
+    }
+    return J;
+  }
+
+  // point template: rings of points along each bone
+  const BONES = [
+    ['pelvis', 'chest', .17, 1.35, 9, 12],
+    ['shL', 'elL', .055, 1, 4, 6], ['elL', 'wrL', .045, 1, 4, 6],
+    ['shR', 'elR', .055, 1, 4, 6], ['elR', 'wrR', .045, 1, 4, 6],
+    ['hpL', 'knL', .08, 1, 6, 7], ['knL', 'anL', .06, 1, 6, 6], ['anL', 'toL', .04, 1, 3, 5],
+    ['hpR', 'knR', .08, 1, 6, 7], ['knR', 'anR', .06, 1, 6, 6], ['anR', 'toR', .04, 1, 3, 5]
+  ];
+  const TPL = [];
+  BONES.forEach(([a, b, r, zs, rings, around], bi) => {
+    for (let i = 0; i < rings; i++){
+      const t = rings === 1 ? .5 : i / (rings - 1);
+      const rr = bi === 0 ? r * (0.82 + .18 * Math.sin(Math.PI * t)) : r;
+      for (let k = 0; k < around; k++){
+        const th = (k + (i % 2) * .5) / around * TAU;
+        TPL.push([bi, t, Math.cos(th) * rr * zs, Math.sin(th) * rr]);
+      }
+    }
+  });
+  const HEAD = [];
+  for (let i = 1; i < 6; i++){
+    const la = -Math.PI / 2 + i / 6 * Math.PI, n = Math.round(10 * Math.cos(la)) + 2;
+    for (let k = 0; k < n; k++){ const th = (k + i * .3) / n * TAU; HEAD.push([Math.cos(la) * Math.cos(th), Math.sin(la), Math.cos(la) * Math.sin(th)]); }
+  }
+  HEAD.push([0, 1, 0], [0, -1, 0]);
+  const NP = TPL.length + HEAD.length;
+
+  function sample(u, out){
+    const J = joints(u); let o = 0;
+    for (const [bi, t, cz, cp] of TPL){
+      const [an, bn] = BONES[bi], A = J[an], B = J[bn];
+      const dx = B[0] - A[0], dy = B[1] - A[1], L = Math.hypot(dx, dy) || 1;
+      const nx = dy / L, ny = -dx / L;
+      out[o++] = A[0] + dx * t + nx * cp; out[o++] = A[1] + dy * t + ny * cp; out[o++] = A[2] + (B[2] - A[2]) * t + cz;
+    }
+    const H = J.head, s = J.spine, r = .135;
+    for (const [a, b, c] of HEAD){
+      out[o++] = H[0] + r * (b * s[0] + a * s[1]); out[o++] = H[1] + r * (b * s[1] - a * s[0]); out[o++] = H[2] + r * c * 1.05;
+    }
+    return { pelvis: J.pelvis };
+  }
+
+  // ---------- frames ----------
+  let NF = 56, frames = [], pel = [];
+  function bake(){
+    const small = Math.min(innerWidth, innerHeight) < 560 || (navigator.hardwareConcurrency || 8) <= 4;
+    NF = small ? 30 : 40;
+    frames = []; pel = [];
+    for (let i = 0; i < NF; i++){
+      const u = i / (NF - 1), a = new Float32Array(NP * 3);
+      const { pelvis } = sample(u, a);
+      frames.push({ u, a }); pel.push(pelvis);
+    }
+    $('rail').style.setProperty('--step', (100 / (NF - 1)) + '%');
+  }
+  const live = new Float32Array(NP * 3);
+
+  // ---------- camera ----------
+  const cv = $('scene'), ctx = cv.getContext('2d');
+  let W = 0, H = 0, DPR = 1, F = 600, CX = 0, CY = 0;
+  const DIST = 13;
+  const HOME = { yaw: -.5, pitch: .22, zoom: 1 };
+  const cam = { yaw: HOME.yaw, pitch: HOME.pitch, zoom: 1, vy: 0, vp: 0 };
+  const VIEWS = { loaf: [-.5, .22], moment: [-.08, .06] };
+  let camGoal = null;
+  const TGT = [0, 1.05, 0];
+  let cy_ = 1, sy_ = 0, cp_ = 1, sp_ = 0;
+  function setCam(){ cy_ = Math.cos(cam.yaw); sy_ = Math.sin(cam.yaw); cp_ = Math.cos(cam.pitch); sp_ = Math.sin(cam.pitch); }
+  // returns [sx, sy, depth]
+  const PR = [0, 0, 0];
+  function proj(x, y, z){
+    x -= TGT[0]; y -= TGT[1]; z -= TGT[2];
+    const x1 = x * cy_ - z * sy_, z1 = x * sy_ + z * cy_;
+    const y2 = y * cp_ - z1 * sp_, z2 = y * sp_ + z1 * cp_;
+    const d = DIST - z2;
+    PR[0] = CX + F * x1 / d; PR[1] = CY - F * y2 / d; PR[2] = d;
+    return PR;
+  }
+  function layout(){
+    DPR = Math.min(devicePixelRatio || 1, 2);
+    W = innerWidth; H = innerHeight;
+    cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+    const portrait = H > W * 1.15;
+    F = Math.min(W * (portrait ? 1.05 : .78), H * 1.05) * DIST / 10.5 * cam.zoom;
+    CX = W / 2; CY = H * (portrait ? .48 : .5);
+  }
+
+  // ---------- state ----------
+  let t = .62, playing = !RM.matches, speed = .5, spread = 1, spreadT = 1, lastInput = -1e9, dragging = false;
+  const speeds = [[.5, '½×'], [.25, '¼×'], [1, '1×']];
+  let si = 0;
+
+  // ---------- draw ----------
+  const STEEL = [159, 176, 191], INK = [19, 32, 43];
+  function rgba(c, a){ return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a.toFixed(3)})`; }
+  const zOf = u => spread * (u - .5) * DEPTH;
+
+  function drawWorld(){
+    const half = lerp(.9, DEPTH / 2 + .7, spread);
+    const s = DPR;
+    // platforms: dot grid tops + edges
+    const plats = [[-3.9, -1.2, 0], [1.3, 3.5, .5]];
+    ctx.fillStyle = 'rgba(19,32,43,.28)';
+    for (const [x0, x1, yt] of plats){
+      for (let x = x0; x <= x1 + 1e-6; x += .26){
+        for (let z = -half; z <= half + 1e-6; z += .42){
+          const p = proj(x, yt, z), r = 1.1 * s * DIST / p[2];
+          ctx.fillRect(p[0] * s - r / 2, p[1] * s - r / 2, r, r);
+        }
+      }
+    }
+    ctx.lineWidth = 1 * s; ctx.strokeStyle = 'rgba(19,32,43,.35)';
+    ctx.beginPath();
+    for (const [x0, x1, yt] of plats){
+      for (const z of [-half, half]){
+        let p = proj(x0, yt, z); ctx.moveTo(p[0] * s, p[1] * s); p = proj(x1, yt, z); ctx.lineTo(p[0] * s, p[1] * s);
+        p = proj(x1, yt - .9, z); ctx.lineTo(p[0] * s, p[1] * s);
+      }
+      for (const x of [x0, x1]){ let p = proj(x, yt, -half); ctx.moveTo(p[0] * s, p[1] * s); p = proj(x, yt, half); ctx.lineTo(p[0] * s, p[1] * s); }
+      let p = proj(x1, yt - .9, -half); ctx.moveTo(p[0] * s, p[1] * s); p = proj(x1, yt - .9, half); ctx.lineTo(p[0] * s, p[1] * s);
+    }
+    ctx.stroke();
+    // spike pit
+    ctx.strokeStyle = 'rgba(196,70,44,.4)'; ctx.beginPath();
+    const zstep = (2 * half) / Math.max(1, Math.round(2 * half / 1.1));
+    for (let z = -half; z <= half + 1e-6; z += zstep){
+      for (let x = -1.05; x < 1.2; x += .28){
+        let p = proj(x, -.75, z); ctx.moveTo(p[0] * s, p[1] * s);
+        p = proj(x + .14, -.42, z); ctx.lineTo(p[0] * s, p[1] * s);
+        p = proj(x + .28, -.75, z); ctx.lineTo(p[0] * s, p[1] * s);
+      }
+    }
+    ctx.stroke();
+  }
+
+  function drawFrame(arr, zoff, col, alpha, size, zs = 1){
+    const s = DPR;
+    ctx.fillStyle = rgba(col, alpha);
+    for (let i = 0; i < arr.length; i += 3){
+      const p = proj(arr[i], arr[i + 1], arr[i + 2] * zs + zoff);
+      const r = size * s * DIST / p[2];
+      ctx.fillRect(p[0] * s - r / 2, p[1] * s - r / 2, r, r);
+    }
+  }
+
+  function render(){
+    setCam();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    drawWorld();
+    const s = DPR;
+    // ghost and baked frames, back to front
+    const order = frames.map((f, i) => { const p = pel[i]; proj(p[0], p[1], p[2] + zOf(f.u)); return [PR[2], i]; }).sort((a, b) => b[0] - a[0]);
+    const vis = Math.pow(spread, 1.4), zsBaked = lerp(1, .22, spread);
+    const pz = proj(0, 0, zOf(t))[2];
+    let knifeDrawn = false;
+    const cur = sample(t, live);
+    const drawKnife = () => {
+      if (vis < .02) return;
+      const z = zOf(t), q = [[-4.1, -.2], [3.7, -.2], [3.7, 3.1], [-4.1, 3.1]].map(([x, y]) => { const p = proj(x, y, z); return [p[0] * s, p[1] * s]; });
+      ctx.beginPath(); q.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath();
+      ctx.fillStyle = `rgba(43,61,245,${(.045 * vis).toFixed(3)})`; ctx.fill();
+      ctx.strokeStyle = `rgba(43,61,245,${(.55 * vis).toFixed(3)})`; ctx.lineWidth = 1.2 * s; ctx.stroke();
+    };
+    for (const [d, i] of order){
+      if (!knifeDrawn && d < pz){ drawKnife(); knifeDrawn = true; }
+      if (vis < .01) continue;
+      const f = frames[i], fog = clamp(1.25 - (d - DIST) / 9, .35, 1);
+      if (f.u <= t + 1e-4){
+        const k = f.u / Math.max(t, .001), c = STEEL.map((v, j) => lerp(v, INK[j], Math.pow(k, 1.6)));
+        drawFrame(f.a, zOf(f.u), c, .85 * vis * fog, 1.5, zsBaked);
+      } else {
+        drawFrame(f.a, zOf(f.u), STEEL, .14 * vis * fog, 1.2, zsBaked);
+      }
+    }
+    if (!knifeDrawn) drawKnife();
+    // jump arc
+    if (vis > .02){
+      ctx.lineWidth = 1.3 * s; ctx.setLineDash([4 * s, 5 * s]); ctx.strokeStyle = `rgba(43,61,245,${(.45 * vis).toFixed(3)})`;
+      ctx.beginPath();
+      for (let i = 0; i <= 120; i++){ const u = i / 120, st = state(u); const p = proj(st.x, st.y, zOf(u)); i ? ctx.lineTo(p[0] * s, p[1] * s) : ctx.moveTo(p[0] * s, p[1] * s); }
+      ctx.stroke(); ctx.setLineDash([]);
+    }
+    // the live slice
+    if (vis < .99){ // moment trail
+      for (let k = 4; k >= 1; k--){
+        const u = t - k * .012; if (u < 0) continue;
+        const a = new Float32Array(NP * 3); sample(u, a);
+        drawFrame(a, zOf(u), STEEL, .12 * (1 - vis) * (1 - k / 5), 1.4);
+      }
+    }
+    drawFrame(live, zOf(t), [43, 61, 245], 1, 2.1, lerp(1, .5, spread));
+    // pelvis marker on slice
+    const pp = proj(cur.pelvis[0], cur.pelvis[1], cur.pelvis[2] + zOf(t));
+    ctx.fillStyle = '#2b3df5'; ctx.beginPath(); ctx.arc(pp[0] * s, pp[1] * s, 3.2 * s, 0, TAU); ctx.fill();
+  }
+
+  // ---------- UI ----------
+  const track = $('track'), knife = $('knife'), fill = $('fill');
+  $('phases').innerHTML = PHASES.map(([n, s]) => `<span style="left:${s * 100}%">${n === 'Double jump' ? 'Double' : n}</span>`).join('');
+  const phEls = [...$('phases').children];
+  let lastPhase = '';
+  function syncUI(){
+    knife.style.left = (t * 100) + '%'; fill.style.width = (t * 100) + '%';
+    fill.style.opacity = (.15 + .7 * spread).toFixed(2);
+    $('rt').textContent = (t * DUR).toFixed(2) + ' s';
+    $('rf').textContent = (Math.round(t * (NF - 1)) + 1) + ' / ' + NF;
+    const ph = phaseOf(t);
+    if (ph !== lastPhase){ $('rp').innerHTML = '<b>' + ph + '</b>'; phEls.forEach((el, i) => el.classList.toggle('on', PHASES[i][0] === ph)); lastPhase = ph; }
+    track.setAttribute('aria-valuenow', (t * DUR).toFixed(2));
+    track.setAttribute('aria-valuetext', (t * DUR).toFixed(2) + ' seconds, ' + ph);
+  }
+  function setPlaying(v){ playing = v; $('play').setAttribute('aria-pressed', v); $('play').setAttribute('aria-label', v ? 'Pause' : 'Play'); }
+  function setMode(loaf){
+    spreadT = loaf ? 1 : 0; if (RM.matches) spread = spreadT;
+    camGoal = VIEWS[loaf ? 'loaf' : 'moment']; cam.vy = cam.vp = 0;
+    if (RM.matches){ cam.yaw = camGoal[0]; cam.pitch = camGoal[1]; camGoal = null; }
+    $('mLoaf').setAttribute('aria-pressed', loaf); $('mMoment').setAttribute('aria-pressed', !loaf);
+    say(loaf ? 'Loaf view: every frame stacked in depth.' : 'Moment view: a single figure.');
+  }
+  function say(s){ $('live').textContent = s; }
+  const touch = () => { lastInput = performance.now(); };
+
+  $('play').onclick = () => { touch(); if (!playing && t >= .999) t = 0; setPlaying(!playing); };
+  $('mLoaf').onclick = () => { touch(); setMode(true); };
+  $('mMoment').onclick = () => { touch(); setMode(false); };
+  $('speed').onclick = () => { si = (si + 1) % speeds.length; speed = speeds[si][0]; $('speed').textContent = speeds[si][1]; };
+  $('reset').onclick = () => { const v = VIEWS[spreadT > .5 ? 'loaf' : 'moment']; cam.zoom = 1; cam.vy = cam.vp = 0; if (RM.matches){ cam.yaw = v[0]; cam.pitch = v[1]; } else camGoal = v; layout(); };
+
+  // scrub
+  let scrubbing = false, wasPlaying = false;
+  function scrubTo(e){ const r = track.getBoundingClientRect(); t = clamp((e.clientX - r.left) / r.width, 0, 1); syncUI(); }
+  track.addEventListener('pointerdown', e => { scrubbing = true; wasPlaying = playing; setPlaying(false); track.setPointerCapture(e.pointerId); scrubTo(e); touch(); });
+  track.addEventListener('pointermove', e => { if (scrubbing) scrubTo(e); });
+  const endScrub = () => { if (scrubbing){ scrubbing = false; } };
+  track.addEventListener('pointerup', endScrub); track.addEventListener('pointercancel', endScrub);
+  track.addEventListener('keydown', e => {
+    const step = 1 / (NF - 1);
+    if (e.key === 'ArrowRight' || e.key === 'ArrowUp'){ t = clamp(t + step, 0, 1); }
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown'){ t = clamp(t - step, 0, 1); }
+    else if (e.key === 'Home') t = 0; else if (e.key === 'End') t = 1; else return;
+    e.preventDefault(); e.stopPropagation(); setPlaying(false); syncUI(); touch();
+  });
+
+  // orbit
+  const ptrs = new Map(); let pinch0 = 0, zoom0 = 1, px = 0, py = 0, lt = 0;
+  cv.addEventListener('pointerdown', e => {
+    cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+    if (ptrs.size === 2){ const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); zoom0 = cam.zoom; }
+    px = e.clientX; py = e.clientY; lt = performance.now(); dragging = true; camGoal = null; cv.classList.add('drag'); cam.vy = cam.vp = 0; touch();
+  });
+  cv.addEventListener('pointermove', e => {
+    if (!ptrs.has(e.pointerId)) return;
+    ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+    if (ptrs.size === 2){ const [a, b] = [...ptrs.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); cam.zoom = clamp(zoom0 * d / (pinch0 || d), .55, 2.4); layout(); return; }
+    const dx = e.clientX - px, dy = e.clientY - py, now = performance.now(), dt = Math.max(8, now - lt);
+    cam.yaw += dx * .0065; cam.pitch = clamp(cam.pitch + dy * .005, -.35, 1.25);
+    cam.vy = dx * .0065 / dt * 16; cam.vp = dy * .005 / dt * 16;
+    px = e.clientX; py = e.clientY; lt = now; touch();
+  });
+  const up = e => { ptrs.delete(e.pointerId); if (!ptrs.size){ dragging = false; cv.classList.remove('drag'); if (RM.matches){ cam.vy = cam.vp = 0; } } };
+  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  cv.addEventListener('wheel', e => { e.preventDefault(); cam.zoom = clamp(cam.zoom * Math.exp(-e.deltaY * .0012), .55, 2.4); layout(); touch(); }, { passive: false });
+
+  addEventListener('keydown', e => {
+    if (e.target.closest && e.target.closest('#info')) { if (e.key === 'Escape') setInfo(false); return; }
+    const k = e.key.toLowerCase();
+    if (k === ' ' && e.target.tagName !== 'BUTTON'){ e.preventDefault(); $('play').click(); }
+    else if (k === 'l') setMode(spreadT < .5);
+    else if (k === 'r') $('reset').click();
+    else if ((k === 'arrowright' || k === 'arrowleft') && e.target === cv){ const step = 1 / (NF - 1); t = clamp(t + (k === 'arrowright' ? step : -step), 0, 1); setPlaying(false); syncUI(); }
+    else if (k === 'escape' && !info.hidden) setInfo(false);
+  });
+
+  // about
+  const info = $('info'), ibtn = $('infoBtn');
+  function setInfo(open){ info.hidden = !open; ibtn.hidden = open; ibtn.setAttribute('aria-expanded', open); (open ? info.querySelector('.close') : ibtn).focus(); }
+  ibtn.onclick = () => setInfo(true);
+  info.querySelector('.close').onclick = () => setInfo(false);
+
+  // ---------- loop ----------
+  let last = performance.now(), clock = 0;
+  function frame(now){
+    const dt = Math.min(.05, (now - last) / 1000); last = now; clock += dt;
+    if (playing && !scrubbing){ t += dt * speed / DUR; if (t > 1) t -= 1; syncUI(); }
+    spread = RM.matches ? spreadT : spread + (spreadT - spread) * (1 - Math.exp(-dt * 5));
+    if (Math.abs(spread - spreadT) < .001) spread = spreadT;
+    if (camGoal){
+      const k = 1 - Math.exp(-dt * 4);
+      cam.yaw += (camGoal[0] - cam.yaw) * k; cam.pitch += (camGoal[1] - cam.pitch) * k;
+      if (Math.abs(camGoal[0] - cam.yaw) + Math.abs(camGoal[1] - cam.pitch) < .002) camGoal = null;
+    } else if (!dragging){
+      if (!RM.matches && (Math.abs(cam.vy) > 1e-4 || Math.abs(cam.vp) > 1e-4)){
+        cam.yaw += cam.vy; cam.pitch = clamp(cam.pitch + cam.vp, -.35, 1.25); cam.vy *= .92; cam.vp *= .92;
+      } else if (!RM.matches && now - lastInput > 5000){
+        cam.yaw += Math.sin(clock * .35) * .0009;
+      }
+    }
+    if (document.visibilityState === 'visible') render();
+    requestAnimationFrame(frame);
+  }
+  addEventListener('resize', () => { layout(); });
+  bake(); layout(); syncUI(); setPlaying(playing);
+  requestAnimationFrame(n => { last = n; frame(n); });
+  window.__lab = { setT: v => { t = v; syncUI(); }, setMode, setPlaying, cam, layout, get t(){ return t; } };
+})();
+</script>
