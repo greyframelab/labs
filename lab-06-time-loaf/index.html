@@ -298,9 +298,9 @@ button:focus-visible{outline:2px solid var(--cobalt);outline-offset:2px}
   const cv = $('scene'), ctx = cv.getContext('2d');
   let W = 0, H = 0, DPR = 1, F = 600, CX = 0, CY = 0;
   const DIST = 13;
-  const HOME = { yaw: -.5, pitch: .22, zoom: 1 };
+  const HOME = { yaw: -.9, pitch: .28, zoom: 1 };
   const cam = { yaw: HOME.yaw, pitch: HOME.pitch, zoom: 1, vy: 0, vp: 0 };
-  const VIEWS = { loaf: [-.5, .22], moment: [-.08, .06] };
+  const VIEWS = { loaf: [-.9, .28], moment: [-.08, .06] };
   let camGoal = null;
   const TGT = [0, 1.05, 0];
   let cy_ = 1, sy_ = 0, cp_ = 1, sp_ = 0;
@@ -320,7 +320,7 @@ button:focus-visible{outline:2px solid var(--cobalt);outline-offset:2px}
     W = innerWidth; H = innerHeight;
     cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
     const portrait = H > W * 1.15;
-    F = Math.min(W * (portrait ? 1.05 : .78), H * 1.05) * DIST / 10.5 * cam.zoom;
+    F = Math.min(W * (portrait ? .82 : .78), H * 1.05) * DIST / 10.5 * cam.zoom;
     CX = W / 2; CY = H * (portrait ? .48 : .5);
   }
 
