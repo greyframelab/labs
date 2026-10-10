@@ -1,0 +1,624 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Lab #07 — Pacemaker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one-screen level editor. An isometric dungeon floats in the upper stage; a monitor dock along the bottom holds the pacing curve you draw and the runner's heart monitor. Single dark "night ward" look by design. */
+:root{
+  --ground:#15131b; --ground2:#1d1a26; --panel:rgba(30,26,39,.94); --line:rgba(239,230,216,.12);
+  --bone:#efe6d8; --muted:#aaa2b5; --dim:#6f6879;
+  --calm:#7fd8c3; --pulse:#ff5b4a; --warn:#f2b544;
+  --display:"Big Shoulders Display","Arial Narrow",Impact,sans-serif;
+  --body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{margin:0;background:var(--ground);color:var(--bone);font-family:var(--body);overflow:hidden;-webkit-font-smoothing:antialiased;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+#stage{position:fixed;inset:0;width:100%;height:100%;display:block;background:radial-gradient(110% 80% at 50% 35%,#221e2d 0%,var(--ground) 62%)}
+
+.hud{position:fixed;z-index:3;left:32px;top:calc(env(safe-area-inset-top,0px) + 28px);display:flex;flex-direction:column;gap:6px;max-width:440px;pointer-events:none}
+.eyebrow{font:500 10.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.eyebrow b{color:var(--calm);font-weight:500}
+h1{margin:0;font:800 64px/.9 var(--display);letter-spacing:.01em;text-transform:uppercase}
+h1 span{color:var(--pulse)}
+.lede{margin:4px 0 0;font-size:16px;line-height:1.45;color:var(--muted);max-width:36ch;text-wrap:balance}
+
+.dock{position:fixed;z-index:3;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 22px);width:min(1180px,calc(100vw - 64px));box-sizing:border-box;
+  display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;padding:16px;border-radius:18px;background:var(--panel);border:1px solid var(--line);box-shadow:0 30px 80px rgba(0,0,0,.45);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.lbl{font:500 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.editor{display:flex;flex-direction:column;gap:10px;min-width:0}
+.edhead{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.hint{font:400 12px/1 var(--body);color:var(--dim)}
+#curve{display:block;width:100%;height:150px;border-radius:10px;background:#18151f;touch-action:none;cursor:crosshair}
+#curve:focus-visible{outline:2px solid var(--calm);outline-offset:2px}
+.row{display:flex;gap:10px;align-items:center}
+#play{flex:0 0 auto;display:flex;align-items:center;gap:8px;height:38px;padding:0 14px 0 12px;border-radius:10px;border:1px solid var(--line);background:var(--bone);color:var(--ground);font:700 14px/1 var(--body);cursor:pointer}
+#play svg{width:14px;height:14px}
+#play .pl{display:none}#play[aria-pressed="false"] .pl{display:block}#play[aria-pressed="false"] .pa{display:none}
+.presets{flex:1;display:flex;gap:6px;min-width:0}
+.presets button{flex:1;min-width:0;height:38px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--bone);font:400 14px/1 var(--body);cursor:pointer;white-space:nowrap;transition:background .2s,border-color .2s}
+.presets button:hover{border-color:rgba(239,230,216,.4)}
+.presets button[aria-pressed="true"]{background:rgba(239,230,216,.1);border-color:rgba(239,230,216,.55)}
+button:focus-visible{outline:2px solid var(--calm);outline-offset:2px}
+
+.monitor{display:grid;grid-template-columns:auto 1fr;grid-template-areas:"top top" "bpm bpm" "ecg ecg" "status status";gap:8px 12px;align-content:start;padding-left:18px;border-left:1px solid var(--line);min-width:0}
+.mtop{grid-area:top;display:flex;justify-content:space-between;gap:8px}
+.room{font:500 10px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--bone)}
+.bpm{grid-area:bpm;display:flex;align-items:baseline;gap:8px}
+.bpm b{font:800 56px/.85 var(--display);font-variant-numeric:tabular-nums;color:var(--calm);min-width:2.4ch;transition:color .3s}
+.bpm span{font:500 11px/1 var(--mono);letter-spacing:.12em;color:var(--muted)}
+.bpm.flat b{color:var(--pulse)}
+#ecg{grid-area:ecg;display:block;width:100%;height:54px}
+.status{grid-area:status;display:flex;flex-direction:column;gap:6px;min-width:0}
+.chip{align-self:flex-start;display:inline-flex;align-items:center;gap:7px;padding:5px 9px 5px 8px;border-radius:999px;font:500 11px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;background:rgba(127,216,195,.14);color:var(--calm)}
+.chip::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.chip.warn{background:rgba(242,181,68,.14);color:var(--warn)}
+.chip.crit{background:rgba(255,91,74,.16);color:var(--pulse)}
+.chip.crit::before{border-radius:1px}
+#note{margin:0;font-size:13px;line-height:1.4;color:var(--muted)}
+
+/* about */
+#infoBtn{position:fixed;z-index:4;right:28px;top:calc(env(safe-area-inset-top,0px) + 28px);padding:10px 15px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--bone);font:500 10px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
+#infoBtn:hover{border-color:rgba(239,230,216,.5)}
+#info{box-sizing:border-box;position:fixed;z-index:6;right:28px;top:calc(env(safe-area-inset-top,0px) + 28px);width:min(440px,calc(100vw - 32px));max-height:calc(100% - 56px);overflow:auto;padding:24px;border-radius:16px;background:#221e2b;border:1px solid var(--line);box-shadow:0 24px 70px rgba(0,0,0,.55);display:flex;flex-direction:column;gap:14px;font-size:15px;line-height:1.55;user-select:text;-webkit-user-select:text;animation:rise .28s cubic-bezier(.2,.9,.3,1)}
+@keyframes rise{from{transform:translateY(-10px);opacity:0}}
+#info h3{font:800 40px/1 var(--display);text-transform:uppercase;margin:0}
+#info .meta{font:500 10px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+#info h4{font:500 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:4px 0 6px}
+#info p{margin:0}
+#info ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+#info a{color:var(--calm)}
+#info .close{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--bone);font-size:18px;cursor:pointer}
+#allLabs{font:500 10.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase}
+
+@media (max-width:760px){
+  .hud{left:16px;top:calc(env(safe-area-inset-top,0px) + 18px);max-width:calc(100vw - 150px)}
+  h1{font-size:46px}
+  .lede{font-size:14px}
+  .eyebrow .cat{display:none}
+  #infoBtn{right:16px;top:calc(env(safe-area-inset-top,0px) + 18px)}
+  #info{right:16px;top:calc(env(safe-area-inset-top,0px) + 16px)}
+  .dock{left:12px;right:12px;width:auto;transform:none;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);grid-template-columns:minmax(0,1fr);gap:12px;padding:12px}
+  .monitor{order:-1;padding-left:0;border-left:0;padding-bottom:12px;border-bottom:1px solid var(--line);grid-template-columns:auto minmax(0,1fr);grid-template-areas:"top top" "bpm ecg" "status status"}
+  .bpm b{font-size:44px}
+  #ecg{height:44px;align-self:center}
+  .status{flex-direction:row;align-items:center;gap:10px}
+  .chip{flex:0 0 auto}
+  #note{font-size:12px;line-height:1.3;min-width:0}
+  #curve{height:118px}
+  .hint{display:none}
+  #play{width:38px;padding:0;justify-content:center}
+  #play .t{display:none}
+  .presets button{font-size:13px}
+}
+@media (max-height:640px) and (min-width:761px){.lede{display:none}#curve{height:110px}}
+@media (prefers-reduced-motion:reduce){#info{animation:none}.presets button,.bpm b{transition:none}}
+</style>
+
+<canvas id="stage" aria-hidden="true"></canvas>
+
+<header class="hud">
+  <div class="eyebrow"><b>Greyframe Labs</b> · #07<span class="cat"> · UI</span></div>
+  <h1>Pace<span>maker</span></h1>
+  <p class="lede">Draw the tension curve. The level rebuilds around it, and the runner's heart follows.</p>
+</header>
+
+<section class="dock" id="dock" aria-label="Pacing controls">
+  <div class="editor">
+    <div class="edhead"><span class="lbl">Pacing curve · 16 rooms</span><span class="hint">Drag across the curve to redraw it</span></div>
+    <canvas id="curve" tabindex="0" aria-label="Pacing curve editor. Drag across it to redraw the tension. With the keyboard, left and right pick a point, up and down change its tension."></canvas>
+    <div class="row">
+      <button id="play" type="button" aria-pressed="true" aria-label="Pause the runner"><svg class="pl" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg><svg class="pa" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="5.5" y="4.5" width="4.5" height="15" rx="1"/><rect x="14" y="4.5" width="4.5" height="15" rx="1"/></svg><span class="t">Pause</span></button>
+      <div class="presets" role="group" aria-label="Curve presets">
+        <button type="button" data-p="slow" id="pSlow">Slow burn</button>
+        <button type="button" data-p="waves" id="pWaves">Waves</button>
+        <button type="button" data-p="action" id="pAction">All action</button>
+        <button type="button" data-p="flat" id="pFlat">Flat</button>
+      </div>
+    </div>
+  </div>
+  <div class="monitor" aria-label="Runner heart monitor">
+    <div class="mtop"><span class="lbl">Runner heart rate</span><span class="room" id="roomRead">Room 01 · Calm</span></div>
+    <div class="bpm" id="bpmBox"><b id="bpm">64</b><span>BPM</span></div>
+    <canvas id="ecg" aria-hidden="true"></canvas>
+    <div class="status"><span class="chip" id="chip">Healthy pacing</span><p id="note">Build-up, breathers and a clear peak.</p></div>
+  </div>
+</section>
+
+<button id="infoBtn" type="button" aria-expanded="false" aria-controls="info">About this lab</button>
+<aside id="info" hidden aria-label="About this lab">
+  <button class="close" type="button" aria-label="Close">×</button>
+  <div class="meta">Lab #07 · UI · 10 Oct 2026</div>
+  <h3>Pacemaker</h3>
+  <div><h4>Idea</h4><p>What if the pacing curve built the level? Level designers sketch tension as a line: build-up, a peak, a breather, the next peak. Here that line is the level. Each stretch of the curve becomes a room: calm stretches turn into wide, warm rooms, tense ones get narrow, dark and crowded, every dip becomes a save room and the highest peak becomes the boss arena. A runner plays through it and its heart rate follows the tension. Flatten the curve and the monitor flatlines.</p></div>
+  <div><h4>Controls</h4><ul>
+    <li>Press and drag across the pacing curve to redraw it. The dungeon rebuilds as you draw.</li>
+    <li>Slow burn, Waves, All action and Flat load example curves. The chip under the heart rate checks the pacing and names the rooms with a problem.</li>
+    <li>Pause stops the runner. On the curve, the left and right arrows pick a point and up and down change its tension. Space pauses.</li>
+  </ul></div>
+  <div><h4>Inspired by</h4><ul>
+    <li>The "Elevation Lab" of a game pipeline tool shown on X, where dragging a curve reshapes a world in real time. Only the principle of a curve that rebuilds a world live was taken.</li>
+    <li>Gustav Freytag's pyramid (1863): rising action, climax and falling action as one drawn shape.</li>
+    <li>The interest curve from Jesse Schell's book The Art of Game Design (2008), which plots how engaging an experience is moment by moment.</li>
+  </ul></div>
+  <div><h4>For game UI</h4><p>Pacing usually lives in a design doc while the level lives in the editor. Putting the curve inside the tool closes that gap: rooms can tag themselves as breathers or peaks, and simple checks catch a long stretch with no save room or a flat section before a playtest does. The same pattern fits a wave planner for a tower defense game, a difficulty ramp for a puzzle game or the beat sheet of a narrative scene.</p></div>
+  <a id="allLabs" href="https://claude.ai/artifact/CDYy2LnuZN3Tdb1A9BSHrG" target="_blank" rel="noopener">← All labs</a>
+  <script>if (/github\.io$/.test(location.hostname)) { const a = document.getElementById('allLabs'); a.href = '../'; a.removeAttribute('target'); }</script>
+</aside>
+<div id="live" aria-live="polite" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)"></div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const RM = matchMedia('(prefers-reduced-motion: reduce)');
+  const N = 8, R = 16, COLS = 4, LOOP = 15;
+  const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  const smooth = t => t * t * (3 - 2 * t);
+
+  const PRESETS = {
+    slow:   [.05, .1, .16, .24, .34, .48, .68, .97],
+    waves:  [.06, .4, .2, .6, .32, .78, .92, .3],
+    action: [.72, .86, .76, .92, .8, .97, .84, .9],
+    flat:   [.43, .45, .44, .46, .44, .45, .44, .43]
+  };
+  let pts = PRESETS.waves.slice();
+  let anim = null;
+  let preset = 'waves';
+
+  // ---------- curve model ----------
+  function curveAt(x){
+    const f = clamp(x, 0, 1) * (N - 1), i = Math.min(N - 2, Math.floor(f)), u = f - i;
+    const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(N - 1, i + 2)];
+    const u2 = u * u, u3 = u2 * u;
+    return clamp(.5 * ((2 * p1) + (-p0 + p2) * u + (2 * p0 - 5 * p1 + 4 * p2 - p3) * u2 + (-p0 + 3 * p1 - 3 * p2 + p3) * u3), 0, 1);
+  }
+  const tv = new Float32Array(R), dv = new Float32Array(R);
+  let saves = new Set(), boss = -1, check = null;
+  function rebuild(){
+    for (let r = 0; r < R; r++) tv[r] = curveAt(r / (R - 1));
+    saves = new Set();
+    for (let r = 1; r < R - 1; r++) if (tv[r] < .45 && tv[r] <= tv[r - 1] && tv[r] <= tv[r + 1] && (tv[r - 1] - tv[r] > .03 || tv[r + 1] - tv[r] > .03)) saves.add(r);
+    let mx = 0; boss = -1;
+    for (let r = 0; r < R; r++) if (tv[r] > mx){ mx = tv[r]; boss = r; }
+    if (mx < .62) boss = -1;
+    check = runCheck();
+    renderStatus();
+  }
+  const rn = r => String(r + 1).padStart(2, '0');
+  function runCheck(){
+    let mn = 1, mx = 0;
+    for (let r = 0; r < R; r++){ mn = Math.min(mn, tv[r]); mx = Math.max(mx, tv[r]); }
+    if (mx - mn < .12) return { lv: 'crit', title: 'Flatline', note: 'Nothing changes from room to room, so nothing feels like anything.' };
+    let run = 0, start = 0;
+    for (let r = 0; r <= R; r++){
+      if (r < R && tv[r] > .6 && !saves.has(r)){ if (!run) start = r; run++; }
+      else { if (run >= 5) return { lv: 'warn', title: 'No breather', note: `Rooms ${rn(start)}–${rn(start + run - 1)} stay tense with no place to rest.` }; run = 0; }
+    }
+    for (let r = 0; r < R - 1; r++) if (tv[r + 1] - tv[r] > .34) return { lv: 'warn', title: 'Spike', note: `Tension jumps too fast from room ${rn(r)} to ${rn(r + 1)}.` };
+    if (mx < .62) return { lv: 'warn', title: 'No climax', note: 'The level never peaks, so there is no boss arena.' };
+    return { lv: 'ok', title: 'Healthy pacing', note: saves.size ? `Build-up, ${saves.size} save room${saves.size > 1 ? 's' : ''} and a peak in room ${rn(boss)}.` : `A steady climb to a peak in room ${rn(boss)}.` };
+  }
+  let lastStatus = '';
+  function renderStatus(){
+    const key = check.lv + check.title + check.note;
+    if (key === lastStatus) return; lastStatus = key;
+    const chip = $('chip'); chip.className = 'chip' + (check.lv === 'ok' ? '' : ' ' + check.lv);
+    chip.textContent = check.title; $('note').textContent = check.note;
+  }
+  function announce(){ $('live').textContent = check.title + '. ' + check.note; }
+
+  // ---------- grid ----------
+  function cell(r){ const row = Math.floor(r / COLS), c = r % COLS; return [row % 2 ? COLS - 1 - c : c, row]; }
+  const CELLS = Array.from({ length: R }, (_, r) => cell(r));
+  const ORDER = Array.from({ length: R }, (_, r) => r).sort((a, b) => (CELLS[a][0] + CELLS[a][1]) - (CELLS[b][0] + CELLS[b][1]) || CELLS[a][0] - CELLS[b][0]);
+
+  // ---------- colour ----------
+  const STOPS = [[0, [233, 222, 205]], [.42, [214, 170, 132]], [.72, [184, 78, 72]], [1, [116, 30, 50]]];
+  function tcol(t){
+    for (let i = 1; i < STOPS.length; i++) if (t <= STOPS[i][0]){
+      const a = STOPS[i - 1], b = STOPS[i], k = (t - a[0]) / (b[0] - a[0]);
+      return [lerp(a[1][0], b[1][0], k), lerp(a[1][1], b[1][1], k), lerp(a[1][2], b[1][2], k)];
+    }
+    return STOPS[STOPS.length - 1][1];
+  }
+  const rgb = (c, k = 1, a = 1) => `rgba(${c[0] * k | 0},${c[1] * k | 0},${c[2] * k | 0},${a})`;
+  const hash = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
+
+  // ---------- stage ----------
+  const cv = $('stage'), ctx = cv.getContext('2d');
+  const cc = $('curve'), cx2 = cc.getContext('2d');
+  const ec = $('ecg'), ex = ec.getContext('2d');
+  let W = 0, H = 0, DPR = 1, S = 40, OX = 0, OY = 0;
+  let CW = 0, CH = 0, EW = 0, EH = 0;
+  function resize(){
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = innerWidth; H = innerHeight;
+    cv.width = W * DPR; cv.height = H * DPR;
+    const cr = cc.getBoundingClientRect(); CW = cr.width; CH = cr.height; cc.width = CW * DPR; cc.height = CH * DPR;
+    const er = ec.getBoundingClientRect(); EW = er.width; EH = er.height; ec.width = EW * DPR; ec.height = EH * DPR;
+    ecgBuf = new Float32Array(Math.max(1, Math.ceil(EW))); ecgX = 0;
+    layout();
+  }
+  let area = null;
+  function layout(){
+    const dock = $('dock').getBoundingClientRect();
+    const hud = document.querySelector('.hud').getBoundingClientRect();
+    const narrow = W <= 760;
+    const top = area && area.forceTop != null ? area.forceTop : (narrow ? hud.bottom + 8 : 70);
+    const bot = area && area.forceBot != null ? area.forceBot : dock.top - 10;
+    const aw = W - (W <= 760 ? 16 : 32), ah = Math.max(120, bot - top);
+    S = Math.min(aw * .94 / 8, ah * .92 / 4.9, 120);
+    OX = W / 2; OY = top + ah / 2 - 2 * S + .42 * S;
+  }
+  const P = (wx, wy, wz = 0) => [OX + (wx - wy) * S, OY + (wx + wy) * .5 * S - wz * S];
+  function poly(ptsArr){ ctx.beginPath(); ptsArr.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath(); }
+  function quad(a, b, h){ return [P(a[0], a[1], 0), P(b[0], b[1], 0), P(b[0], b[1], h), P(a[0], a[1], h)]; }
+
+  function drawPlate(){
+    const m = .12;
+    poly([P(-m, -m), P(4 + m, -m), P(4 + m, 4 + m), P(-m, 4 + m)]);
+    ctx.fillStyle = 'rgba(239,230,216,.035)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(239,230,216,.07)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i <= 8; i++){ const v = i / 2; let a = P(v, -m), b = P(v, 4 + m); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); a = P(-m, v); b = P(4 + m, v); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); }
+    ctx.stroke();
+  }
+  function roomGeom(r){
+    const t = dv[r], [gx, gy] = CELLS[r];
+    const isBoss = r === boss;
+    const hs = isBoss ? lerp(.44, .47, t) : lerp(.41, .27, smooth(t));
+    const wh = lerp(.1, .52, t);
+    return { t, gx, gy, cx: gx + .5, cy: gy + .5, hs, wh, isBoss };
+  }
+  function drawCorridors(){
+    for (let r = 0; r < R - 1; r++){
+      const a = CELLS[r], b = CELLS[r + 1], w = .075;
+      const ax = a[0] + .5, ay = a[1] + .5, bx = b[0] + .5, by = b[1] + .5;
+      let q;
+      if (ax !== bx) q = [P(Math.min(ax, bx), ay - w), P(Math.max(ax, bx), ay - w), P(Math.max(ax, bx), ay + w), P(Math.min(ax, bx), ay + w)];
+      else q = [P(ax - w, Math.min(ay, by)), P(ax + w, Math.min(ay, by)), P(ax + w, Math.max(ay, by)), P(ax - w, Math.max(ay, by))];
+      poly(q); ctx.fillStyle = '#2c2735'; ctx.fill();
+      ctx.strokeStyle = 'rgba(239,230,216,.08)'; ctx.lineWidth = 1; ctx.stroke();
+    }
+  }
+  let clock = 0;
+  const tags = [];
+  function drawRoom(r, cur){
+    const g = roomGeom(r), t = g.t, c = tcol(t);
+    const x0 = g.cx - g.hs, x1 = g.cx + g.hs, y0 = g.cy - g.hs, y1 = g.cy + g.hs;
+    // floor
+    const fl = [P(x0, y0), P(x1, y0), P(x1, y1), P(x0, y1)];
+    poly(fl); ctx.fillStyle = rgb(c, .62); ctx.fill();
+    ctx.save(); poly(fl); ctx.clip();
+    const cen = P(g.cx, g.cy), rad = g.hs * 2.1 * S;
+    const flick = RM.matches ? 1 : (t > .6 ? .82 + .18 * Math.sin(clock * 11 + r * 3) * Math.sin(clock * 4.3 + r) : 1);
+    const lg = ctx.createRadialGradient(cen[0], cen[1] - S * .05, 0, cen[0], cen[1], rad);
+    if (t < .55){ lg.addColorStop(0, `rgba(255,236,196,${.55 - t * .6})`); lg.addColorStop(1, 'rgba(255,236,196,0)'); }
+    else { lg.addColorStop(0, `rgba(255,90,70,${(.18 + (t - .55) * .5) * flick})`); lg.addColorStop(1, 'rgba(255,90,70,0)'); }
+    ctx.fillStyle = lg; ctx.fillRect(cen[0] - rad, cen[1] - rad, rad * 2, rad * 2);
+    ctx.strokeStyle = 'rgba(20,16,26,.12)'; ctx.lineWidth = 1; ctx.beginPath();
+    for (let i = 1; i < 4; i++){ const v = i / 4; let a = P(lerp(x0, x1, v), y0), b = P(lerp(x0, x1, v), y1); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); a = P(x0, lerp(y0, y1, v)); b = P(x1, lerp(y0, y1, v)); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); }
+    ctx.stroke(); ctx.restore();
+    // doors: neighbours behind this room get a doorway in the back walls
+    const doors = [];
+    [r - 1, r + 1].forEach(n => { if (n < 0 || n >= R) return; const d = [CELLS[n][0] - g.gx, CELLS[n][1] - g.gy]; doors.push(d); });
+    // back walls
+    const wl = quad([x0, y1], [x0, y0], g.wh); poly(wl); ctx.fillStyle = rgb(c, .5); ctx.fill();
+    const wr = quad([x0, y0], [x1, y0], g.wh); poly(wr); ctx.fillStyle = rgb(c, .74); ctx.fill();
+    const dh = Math.min(g.wh * .82, .2), dw = .085;
+    doors.forEach(d => {
+      if (d[0] === -1){ poly(quad([x0, g.cy + dw], [x0, g.cy - dw], dh)); ctx.fillStyle = '#17131d'; ctx.fill(); }
+      if (d[1] === -1){ poly(quad([g.cx - dw, y0], [g.cx + dw, y0], dh)); ctx.fillStyle = '#1b1722'; ctx.fill(); }
+    });
+    // wall tops
+    ctx.strokeStyle = rgb(c, 1.12 > 1 ? 1 : 1, .9); ctx.lineWidth = Math.max(1, S * .018);
+    ctx.beginPath(); let a = P(x0, y1, g.wh), b = P(x0, y0, g.wh), e = P(x1, y0, g.wh); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(e[0], e[1]); ctx.stroke();
+    // contents
+    if (r === boss) drawBoss(g, r);
+    else drawEnemies(g, r);
+    if (saves.has(r)) drawSave(g, r);
+    if (cur) { poly(fl); ctx.strokeStyle = 'rgba(127,216,195,.95)'; ctx.lineWidth = Math.max(1.5, S * .025); ctx.stroke(); }
+    // front lips (cutaway walls)
+    const lip = .035;
+    const lipSeg = (pa, pb, gapAxis) => {
+      const segs = [];
+      if (gapAxis === 'x'){ segs.push([[x1, y0], [x1, g.cy - dw]], [[x1, g.cy + dw], [x1, y1]]); }
+      else if (gapAxis === 'y'){ segs.push([[x0, y1], [g.cx - dw, y1]], [[g.cx + dw, y1], [x1, y1]]); }
+      else segs.push([pa, pb]);
+      segs.forEach(s => { poly(quad(s[0], s[1], lip)); ctx.fillStyle = rgb(c, .9); ctx.fill(); });
+    };
+    lipSeg([x1, y0], [x1, y1], doors.some(d => d[0] === 1) ? 'x' : null);
+    lipSeg([x0, y1], [x1, y1], doors.some(d => d[1] === 1) ? 'y' : null);
+    // tags
+    const tp = P(g.cx, g.cy, g.wh + .32);
+    if (r === boss) tags.push([tp, 'Boss', '#ff5b4a', '#2a0c12']);
+    else if (saves.has(r)) tags.push([tp, 'Save', '#7fd8c3', '#0f2420']);
+    else if (r === 0) tags.push([tp, 'Start', '#efe6d8', '#1d1a26']);
+    else if (r === R - 1) tags.push([tp, 'Exit', '#efe6d8', '#1d1a26']);
+  }
+  function blob(wx, wy, z, rad, col, eyes){
+    const sh = P(wx, wy, 0);
+    ctx.fillStyle = 'rgba(10,6,14,.35)'; ctx.beginPath(); ctx.ellipse(sh[0], sh[1], rad * S * 1.1, rad * S * .55, 0, 0, Math.PI * 2); ctx.fill();
+    const p = P(wx, wy, z + rad);
+    ctx.fillStyle = col; ctx.beginPath(); ctx.arc(p[0], p[1], rad * S, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.22)'; ctx.beginPath(); ctx.arc(p[0] - rad * S * .35, p[1] - rad * S * .35, rad * S * .35, 0, Math.PI * 2); ctx.fill();
+    if (eyes){ ctx.fillStyle = '#1a0a10'; const ew = rad * S * .5, eh = Math.max(1, rad * S * .16); ctx.fillRect(p[0] - ew * .9, p[1] - eh, ew * .7, eh * 1.4); ctx.fillRect(p[0] + ew * .2, p[1] - eh, ew * .7, eh * 1.4); }
+  }
+  function drawEnemies(g, r){
+    if (g.t < .36) return;
+    const n = Math.min(5, 1 + Math.floor((g.t - .36) / .64 * 5));
+    const items = [];
+    for (let i = 0; i < n; i++){
+      const a = hash(r, i) * Math.PI * 2, d = .25 + hash(i, r + 7) * .5;
+      items.push([g.cx + Math.cos(a) * g.hs * .7 * d, g.cy + Math.sin(a) * g.hs * .7 * d, i]);
+    }
+    items.sort((p, q) => (p[0] + p[1]) - (q[0] + q[1]));
+    items.forEach(([x, y, i]) => {
+      const bob = RM.matches ? 0 : Math.abs(Math.sin(clock * (3 + g.t * 4) + i * 1.7 + r)) * .05 * g.t;
+      blob(x, y, bob, .045, '#ff5b4a', true);
+    });
+  }
+  function drawBoss(g, r){
+    const cen = P(g.cx, g.cy), pul = RM.matches ? 0 : (Math.sin(clock * 3) + 1) / 2;
+    const rr = g.hs * .78;
+    ctx.strokeStyle = `rgba(255,91,74,${.45 + pul * .4})`; ctx.lineWidth = Math.max(1.5, S * .03);
+    ctx.beginPath(); ctx.ellipse(cen[0], cen[1], rr * S * Math.SQRT2, rr * S * Math.SQRT2 / 2, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([S * .05, S * .05]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.ellipse(cen[0], cen[1], rr * .62 * S * Math.SQRT2, rr * .62 * S * Math.SQRT2 / 2, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    const bob = RM.matches ? 0 : Math.abs(Math.sin(clock * 2.2)) * .04;
+    blob(g.cx, g.cy, bob, .12, '#e8473a', true);
+  }
+  function drawSave(g, r){
+    const bob = RM.matches ? 0 : Math.sin(clock * 2 + r) * .03;
+    const base = P(g.cx, g.cy, 0);
+    const gl = ctx.createRadialGradient(base[0], base[1], 0, base[0], base[1], S * .32);
+    gl.addColorStop(0, 'rgba(127,216,195,.55)'); gl.addColorStop(1, 'rgba(127,216,195,0)');
+    ctx.fillStyle = gl; ctx.beginPath(); ctx.ellipse(base[0], base[1], S * .32, S * .16, 0, 0, Math.PI * 2); ctx.fill();
+    const c = P(g.cx, g.cy, .2 + bob), h = S * .13, w = S * .075;
+    const spin = RM.matches ? .5 : (Math.sin(clock * 1.6 + r) + 1) / 2;
+    ctx.fillStyle = '#bff3e6'; ctx.beginPath(); ctx.moveTo(c[0], c[1] - h); ctx.lineTo(c[0] - w, c[1]); ctx.lineTo(c[0], c[1] + h); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#5fbfa9'; ctx.beginPath(); ctx.moveTo(c[0], c[1] - h); ctx.lineTo(c[0] + w, c[1]); ctx.lineTo(c[0], c[1] + h); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = `rgba(255,255,255,${.25 + spin * .4})`; ctx.beginPath(); ctx.moveTo(c[0], c[1] - h); ctx.lineTo(c[0] - w * .45, c[1] - h * .2); ctx.lineTo(c[0], c[1]); ctx.closePath(); ctx.fill();
+  }
+  function drawTags(){
+    const fs = clamp(S * .13, 9, 14);
+    ctx.font = `500 ${fs}px "JetBrains Mono", ui-monospace, monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    tags.forEach(([p, txt, fg, bg]) => {
+      const tw = ctx.measureText(txt.toUpperCase()).width + fs * 1.2, th = fs * 1.75;
+      ctx.fillStyle = bg; ctx.strokeStyle = fg; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(p[0] - tw / 2, p[1] - th / 2, tw, th, th / 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = fg; ctx.fillText(txt.toUpperCase(), p[0], p[1] + .5);
+    });
+    tags.length = 0;
+  }
+  // runner
+  let p = 0, playing = !RM.matches;
+  function runnerPos(){
+    const f = clamp(p, 0, 1) * (R - 1), i = clamp(Math.floor(f), 0, R - 2), u = smooth(smooth(f - i));
+    const a = CELLS[i], b = CELLS[i + 1];
+    return { x: lerp(a[0], b[0], u) + .5, y: lerp(a[1], b[1], u) + .5, room: u < .5 ? i : i + 1, f: i + u };
+  }
+  function drawRunner(rp){
+    const hop = RM.matches ? 0 : Math.abs(Math.sin(clock * 9)) * .05 * (playing ? 1 : 0);
+    const sh = P(rp.x, rp.y, 0);
+    const gl = ctx.createRadialGradient(sh[0], sh[1], 0, sh[0], sh[1], S * .22);
+    gl.addColorStop(0, 'rgba(127,216,195,.45)'); gl.addColorStop(1, 'rgba(127,216,195,0)');
+    ctx.fillStyle = gl; ctx.beginPath(); ctx.ellipse(sh[0], sh[1], S * .22, S * .11, 0, 0, Math.PI * 2); ctx.fill();
+    blob(rp.x, rp.y, hop + .02, .055, '#efe6d8', false);
+    const hp = P(rp.x, rp.y, hop + .02 + .11);
+    ctx.strokeStyle = '#7fd8c3'; ctx.lineWidth = Math.max(1.5, S * .02); ctx.beginPath(); ctx.arc(hp[0], hp[1], S * .055, 0, Math.PI * 2); ctx.stroke();
+  }
+
+  function render(){
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    drawPlate(); drawCorridors();
+    const rp = runnerPos();
+    ORDER.forEach(r => { drawRoom(r, r === rp.room); if (r === rp.room) drawRunner(rp); });
+    drawTags();
+    drawCurve(rp);
+    drawEcg();
+  }
+
+  // ---------- curve editor ----------
+  const PAD = { l: 50, r: 14, t: 14, b: 24 };
+  const CX = x => PAD.l + x * (CW - PAD.l - PAD.r);
+  const CY = v => PAD.t + (1 - v) * (CH - PAD.t - PAD.b);
+  let sel = -1, painting = false;
+  function drawCurve(rp){
+    const c = cx2; c.setTransform(DPR, 0, 0, DPR, 0, 0); c.clearRect(0, 0, CW, CH);
+    c.fillStyle = 'rgba(255,91,74,.05)'; c.fillRect(PAD.l, CY(1), CW - PAD.l - PAD.r, CY(.6) - CY(1));
+    c.strokeStyle = 'rgba(239,230,216,.07)'; c.lineWidth = 1; c.beginPath();
+    for (let i = 0; i <= 4; i++){ const y = Math.round(CY(i / 4)) + .5; c.moveTo(PAD.l, y); c.lineTo(CW - PAD.r, y); }
+    for (let r = 0; r < R; r++){ const x = Math.round(CX(r / (R - 1))) + .5; c.moveTo(x, CY(1)); c.lineTo(x, CY(0)); }
+    c.stroke();
+    c.font = '500 9.5px "JetBrains Mono", ui-monospace, monospace'; c.textBaseline = 'middle'; c.textAlign = 'left';
+    c.fillStyle = '#ff8a7c'; c.fillText('TENSE', 8, CY(1) + 4);
+    c.fillStyle = '#7fd8c3'; c.fillText('CALM', 8, CY(0) - 4);
+    c.textAlign = 'center'; c.fillStyle = '#6f6879';
+    const every = (CW - PAD.l) / R > 26 ? 1 : 3;
+    for (let r = 0; r < R; r++) if (r % every === 0 || r === R - 1) c.fillText(rn(r), CX(r / (R - 1)), CH - 10);
+    const grad = c.createLinearGradient(0, CY(1), 0, CY(0));
+    grad.addColorStop(0, '#ff5b4a'); grad.addColorStop(.45, '#e9a77f'); grad.addColorStop(1, '#7fd8c3');
+    const gradA = c.createLinearGradient(0, CY(1), 0, CY(0));
+    gradA.addColorStop(0, 'rgba(255,91,74,.22)'); gradA.addColorStop(1, 'rgba(127,216,195,.05)');
+    c.beginPath();
+    for (let i = 0; i <= 120; i++){ const x = i / 120, y = curveAt(x); i ? c.lineTo(CX(x), CY(y)) : c.moveTo(CX(x), CY(y)); }
+    c.lineTo(CX(1), CY(0)); c.lineTo(CX(0), CY(0)); c.closePath(); c.fillStyle = gradA; c.fill();
+    c.beginPath();
+    for (let i = 0; i <= 120; i++){ const x = i / 120, y = curveAt(x); i ? c.lineTo(CX(x), CY(y)) : c.moveTo(CX(x), CY(y)); }
+    c.strokeStyle = grad; c.lineWidth = 3; c.lineJoin = 'round'; c.stroke();
+    // room markers
+    for (let r = 0; r < R; r++){
+      const x = CX(r / (R - 1)), y = CY(tv[r]);
+      if (r === boss){ c.fillStyle = '#ff5b4a'; c.beginPath(); c.arc(x, y, 5.5, 0, Math.PI * 2); c.fill(); }
+      else if (saves.has(r)){ c.strokeStyle = '#7fd8c3'; c.lineWidth = 2; c.beginPath(); c.arc(x, y, 5, 0, Math.PI * 2); c.stroke(); }
+    }
+    // playhead
+    const px = CX(rp.f / (R - 1));
+    c.strokeStyle = 'rgba(239,230,216,.4)'; c.lineWidth = 1; c.beginPath(); c.moveTo(px, CY(1)); c.lineTo(px, CY(0)); c.stroke();
+    c.fillStyle = '#efe6d8'; c.beginPath(); c.arc(px, CY(curveAt(rp.f / (R - 1))), 3.5, 0, Math.PI * 2); c.fill();
+    // handles
+    for (let i = 0; i < N; i++){
+      const x = CX(i / (N - 1)), y = CY(pts[i]), on = i === sel;
+      c.fillStyle = on ? '#efe6d8' : '#18151f'; c.strokeStyle = '#efe6d8'; c.lineWidth = 2;
+      c.beginPath(); c.arc(x, y, on ? 8 : 6, 0, Math.PI * 2); c.fill(); c.stroke();
+    }
+  }
+  let lastI = -1, lastV = 0;
+  function paintAt(nx, ny, start){
+    const i = Math.round(clamp(nx, 0, 1) * (N - 1)), v = clamp(ny, 0, 1);
+    anim = null; setPreset(null);
+    if (start || lastI < 0){ pts[i] = v; }
+    else {
+      const a = Math.min(lastI, i), b = Math.max(lastI, i);
+      for (let k = a; k <= b; k++){ const u = b === a ? 1 : (k - lastI) / (i - lastI); pts[k] = lerp(lastV, v, clamp(u, 0, 1)); }
+    }
+    lastI = i; lastV = v; sel = i; rebuild();
+  }
+  function evNorm(e){ const r = cc.getBoundingClientRect(); return [(e.clientX - r.left - PAD.l) / (r.width - PAD.l - PAD.r), 1 - (e.clientY - r.top - PAD.t) / (r.height - PAD.t - PAD.b)]; }
+  cc.addEventListener('pointerdown', e => { painting = true; cc.setPointerCapture(e.pointerId); const [x, y] = evNorm(e); paintAt(x, y, true); });
+  cc.addEventListener('pointermove', e => { if (!painting) return; const [x, y] = evNorm(e); paintAt(x, y, false); });
+  const endPaint = () => { if (!painting) return; painting = false; lastI = -1; sel = -1; announce(); };
+  cc.addEventListener('pointerup', endPaint); cc.addEventListener('pointercancel', endPaint);
+  cc.addEventListener('keydown', e => {
+    const k = e.key;
+    if (k === 'ArrowLeft' || k === 'ArrowRight'){ e.preventDefault(); sel = clamp((sel < 0 ? 0 : sel) + (k === 'ArrowRight' ? 1 : -1), 0, N - 1); }
+    else if (k === 'ArrowUp' || k === 'ArrowDown'){ e.preventDefault(); if (sel < 0) sel = 0; anim = null; setPreset(null); pts[sel] = clamp(pts[sel] + (k === 'ArrowUp' ? 1 : -1) * (e.shiftKey ? .15 : .05), 0, 1); rebuild(); announce(); }
+  });
+  cc.addEventListener('blur', () => { if (!painting) sel = -1; });
+
+  // ---------- presets ----------
+  function setPreset(name){
+    preset = name;
+    document.querySelectorAll('.presets button').forEach(b => b.setAttribute('aria-pressed', b.dataset.p === name));
+  }
+  function goPreset(name, ms = 700){
+    setPreset(name);
+    const to = PRESETS[name].slice();
+    if (RM.matches || ms <= 0){ pts = to; anim = null; rebuild(); announce(); return; }
+    anim = { from: pts.slice(), to, t0: performance.now(), dur: ms };
+  }
+  document.querySelectorAll('.presets button').forEach(b => b.onclick = () => goPreset(b.dataset.p));
+
+  // ---------- play ----------
+  function setPlaying(v){
+    playing = v; const b = $('play');
+    b.setAttribute('aria-pressed', v); b.setAttribute('aria-label', v ? 'Pause the runner' : 'Play the runner');
+    b.querySelector('.t').textContent = v ? 'Pause' : 'Play';
+  }
+  $('play').onclick = () => setPlaying(!playing);
+
+  // ---------- heart monitor ----------
+  let ecgBuf = new Float32Array(1), ecgX = 0, phase = 0, bpmShown = 64, flatAmt = 0;
+  function wave(ph){
+    const g = (c, w, a) => a * Math.exp(-((ph - c) * (ph - c)) / (2 * w * w));
+    return g(.12, .025, .12) + g(.235, .008, -.12) + g(.26, .01, 1) + g(.285, .01, -.28) + g(.47, .045, .3);
+  }
+  function stepEcg(dt, bpm){
+    const speed = 80; let px = dt * speed;
+    const flatT = check && check.lv === 'crit' ? 1 : 0;
+    flatAmt += (flatT - flatAmt) * (1 - Math.exp(-dt * 6));
+    while (px > 0){
+      const step = Math.min(1, px); px -= step;
+      phase += bpm / 60 * step / speed;
+      const v = wave(phase % 1) * (1 - flatAmt) + (Math.random() - .5) * .015;
+      ecgX = (ecgX + step) % ecgBuf.length;
+      ecgBuf[Math.floor(ecgX)] = v;
+    }
+  }
+  function drawEcg(){
+    const c = ex; c.setTransform(DPR, 0, 0, DPR, 0, 0); c.clearRect(0, 0, EW, EH);
+    c.strokeStyle = 'rgba(239,230,216,.06)'; c.lineWidth = 1; c.beginPath();
+    for (let x = 0; x < EW; x += 12){ c.moveTo(x + .5, 0); c.lineTo(x + .5, EH); }
+    for (let y = 0; y < EH; y += 12){ c.moveTo(0, y + .5); c.lineTo(EW, y + .5); }
+    c.stroke();
+    const base = EH * .66, amp = EH * .58, n = ecgBuf.length, head = Math.floor(ecgX), gap = 16;
+    const col = flatAmt > .5 ? '#ff5b4a' : '#7fd8c3';
+    c.strokeStyle = col; c.lineWidth = 2; c.lineJoin = 'round'; c.shadowColor = col; c.shadowBlur = 6;
+    c.beginPath(); let pen = false;
+    for (let x = 0; x < n; x++){
+      const d = (x - head + n) % n;
+      if (d > 0 && d < gap){ pen = false; continue; }
+      const y = base - ecgBuf[x] * amp;
+      pen ? c.lineTo(x, y) : c.moveTo(x, y); pen = true;
+    }
+    c.stroke(); c.shadowBlur = 0;
+    c.fillStyle = col; c.beginPath(); c.arc(head, base - ecgBuf[head] * amp, 2.5, 0, Math.PI * 2); c.fill();
+  }
+  const words = t => t < .25 ? 'Calm' : t < .5 ? 'Uneasy' : t < .75 ? 'Tense' : 'Panic';
+  let lastRoomTxt = '';
+  function updateReadout(rp, dt){
+    const h = curveAt(rp.f / (R - 1));
+    const target = 62 + h * 106;
+    bpmShown += (target - bpmShown) * (1 - Math.exp(-dt * 3));
+    const flat = check.lv === 'crit';
+    $('bpm').textContent = flat ? '00' : Math.round(bpmShown);
+    $('bpmBox').classList.toggle('flat', flat);
+    const tag = rp.room === boss ? 'Boss arena' : saves.has(rp.room) ? 'Save room' : words(tv[rp.room]);
+    const txt = `Room ${rn(rp.room)} · ${tag}`;
+    if (txt !== lastRoomTxt){ $('roomRead').textContent = txt; lastRoomTxt = txt; }
+    return target;
+  }
+
+  // ---------- about ----------
+  const info = $('info'), ibtn = $('infoBtn');
+  function setInfo(open){ info.hidden = !open; ibtn.hidden = open; ibtn.setAttribute('aria-expanded', open); (open ? info.querySelector('.close') : ibtn).focus(); }
+  ibtn.onclick = () => setInfo(true);
+  info.querySelector('.close').onclick = () => setInfo(false);
+  addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !info.hidden){ setInfo(false); return; }
+    if (e.target.closest && e.target.closest('#info')) return;
+    if (e.key === ' ' && e.target.tagName !== 'BUTTON'){ e.preventDefault(); setPlaying(!playing); }
+  });
+
+  // ---------- loop ----------
+  let last = performance.now();
+  function frame(now){
+    const dt = clamp((now - last) / 1000, 0, .05); last = now; clock += dt;
+    if (anim){
+      const k = clamp((now - anim.t0) / anim.dur, 0, 1), e = ease(k);
+      for (let i = 0; i < N; i++) pts[i] = lerp(anim.from[i], anim.to[i], e);
+      rebuild();
+      if (k >= 1){ anim = null; announce(); }
+    }
+    const kk = RM.matches ? 1 : 1 - Math.exp(-dt * 9);
+    for (let r = 0; r < R; r++) dv[r] += (tv[r] - dv[r]) * kk;
+    if (playing){ p += dt / LOOP; if (p >= 1) p -= 1; }
+    const rp = runnerPos();
+    const bpm = updateReadout(rp, dt);
+    stepEcg(dt, bpm);
+    if (document.visibilityState === 'visible') render();
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- hooks for captures ----------
+  window.__lab = {
+    setPoints(a, ms = 0){ if (ms > 0){ setPreset(null); anim = { from: pts.slice(), to: a.slice(), t0: performance.now(), dur: ms }; } else { pts = a.slice(); anim = null; setPreset(null); rebuild(); } },
+    preset: (n, ms = 700) => goPreset(n, ms),
+    setTime(t){ p = clamp(t, 0, .9999); },
+    play: v => setPlaying(!!v),
+    paintAt, endPaint(){ lastI = -1; sel = -1; },
+    snap(){ for (let r = 0; r < R; r++) dv[r] = tv[r]; },
+    setArea(top, bot){ area = { forceTop: top, forceBot: bot }; layout(); },
+    curveRect: () => { const r = cc.getBoundingClientRect(); return { x: r.left + PAD.l, y: r.top + PAD.t, w: r.width - PAD.l - PAD.r, h: r.height - PAD.t - PAD.b }; },
+    roomScreen(r){ const g = CELLS[r]; return P(g[0] + .5, g[1] + .5, 0); },
+    state: () => ({ pts: pts.slice(), check, boss, saves: [...saves], S })
+  };
+
+  addEventListener('resize', resize);
+  setPreset('waves'); rebuild(); dv.set(tv);
+  resize(); setPlaying(playing);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(resize);
+  requestAnimationFrame(frame);
+})();
+</script>
