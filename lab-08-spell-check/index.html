@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Lab #08 — Spell Check</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;1,9..144,500&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: the spell owns the screen; its source code sits in a grimoire panel below it (left on desktop). One dark, deliberate look. */
+:root{
+  --ink:#100d19;          /* night page */
+  --ink-2:#1a1626;        /* panel */
+  --vellum:#efe6d2;       /* text */
+  --dust:#9a91a8;         /* muted text */
+  --ember:#ffb347;        /* runes / accent */
+  --flare:#ff6a3d;        /* outer sparks, warnings */
+  --line:rgba(239,230,210,.12);
+  --display:"Fraunces",Georgia,"Times New Roman",serif;
+  --body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--ink);color:var(--vellum);font-family:var(--body);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;overflow:hidden}
+#spell{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.brand{position:fixed;z-index:3;left:16px;top:calc(env(safe-area-inset-top,0px) + 14px);display:flex;flex-direction:column;gap:2px;pointer-events:none}
+.brand .eyebrow{font:600 11px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--dust)}
+.brand .eyebrow b{color:var(--ember);font-weight:600}
+.brand h1{margin:0;font:600 clamp(34px,5vw,64px)/1 var(--display);letter-spacing:-.01em}
+.brand h1 i{font-weight:500;color:var(--ember)}
+.brand p{margin:4px 0 0;max-width:30ch;color:var(--dust);font-size:14px}
+@media (min-width:900px){.brand{left:40px;top:36px}}
+@media (max-width:480px){.brand .cat{display:none}}
+
+/* grimoire panel */
+.book{box-sizing:border-box;position:fixed;z-index:4;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);display:flex;flex-direction:column;gap:12px;padding:14px;border-radius:14px;background:rgba(26,22,38,.86);border:1px solid var(--line);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+@media (min-width:900px){.book{left:40px;right:auto;bottom:36px;width:440px;padding:18px;gap:14px}}
+.code-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dust)}
+.code{margin:0;font:400 12.5px/1.65 var(--mono);color:#c9c0d6;word-break:break-all;white-space:pre-wrap;min-width:0}
+@media (min-width:900px){.code{font-size:13.5px}}
+.code .k{color:var(--dust)}
+.rune{color:var(--ember);font-weight:600;cursor:ew-resize;border-bottom:1px dashed rgba(255,179,71,.55);padding:0 1px;border-radius:2px;touch-action:none;user-select:none;-webkit-user-select:none;transition:background-color .35s}
+.rune.hot{background:rgba(255,179,71,.22)}
+.rune:focus-visible{outline:2px solid var(--ember);outline-offset:1px}
+.mana{display:flex;align-items:center;gap:10px;font:600 11px/1 var(--mono);letter-spacing:.08em;color:var(--dust);font-variant-numeric:tabular-nums}
+.mana .bar{flex:1;height:6px;border-radius:3px;background:rgba(239,230,210,.08);overflow:hidden}
+.mana .fill{height:100%;width:50%;background:linear-gradient(90deg,var(--ember),var(--flare));border-radius:3px;transition:width .3s cubic-bezier(.2,.8,.2,1)}
+.mana b{color:var(--vellum);font-weight:600}
+.sliders{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px}
+.sl{display:flex;flex-direction:column;gap:2px;min-width:0}
+.sl label{display:flex;justify-content:space-between;font:500 12px/1.2 var(--body);color:var(--vellum)}
+.sl label span{font:600 12px/1.2 var(--mono);color:var(--ember);font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;margin:0;height:24px;accent-color:var(--ember);background:transparent}
+.row{display:flex;gap:8px;align-items:stretch;flex-wrap:wrap}
+.chip{flex:1;min-width:0;padding:9px 6px;border-radius:9px;border:1px solid var(--line);background:transparent;color:var(--vellum);font:500 13px/1 var(--body);cursor:pointer;transition:border-color .2s,background-color .2s}
+.chip:hover{border-color:rgba(255,179,71,.6)}
+.chip[aria-pressed=true]{background:rgba(255,179,71,.14);border-color:var(--ember);color:var(--ember)}
+.cast{flex:1.3;padding:9px 12px;border-radius:9px;border:0;background:var(--ember);color:#1b1206;font:600 14px/1 var(--body);letter-spacing:.02em;cursor:pointer;transition:transform .15s cubic-bezier(.2,.8,.2,1),filter .2s}
+.cast:hover{filter:brightness(1.08)}
+.cast:active{transform:scale(.97)}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--ember);outline-offset:2px}
+
+/* about */
+#infoBtn{position:fixed;z-index:5;right:16px;top:calc(env(safe-area-inset-top,0px) + 14px);padding:8px 12px;border-radius:999px;border:1px solid var(--line);background:rgba(26,22,38,.8);color:var(--vellum);font:600 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
+@media (min-width:900px){#infoBtn{right:40px;top:36px}}
+#infoBtn:hover{border-color:var(--ember)}
+#info{box-sizing:border-box;position:fixed;z-index:6;right:12px;top:calc(env(safe-area-inset-top,0px) + 12px);width:min(420px,calc(100vw - 24px));max-height:calc(100% - 24px);overflow:auto;padding:22px;border-radius:14px;background:#17131f;border:1px solid var(--line);box-shadow:0 24px 70px rgba(0,0,0,.55);display:flex;flex-direction:column;gap:14px;font-size:15px;animation:rise .3s cubic-bezier(.2,.9,.3,1)}
+@media (min-width:900px){#info{right:40px;top:36px}}
+@keyframes rise{from{transform:translateY(-10px);opacity:0}}
+#info .meta{font:600 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ember)}
+#info h3{margin:0;font:600 34px/1 var(--display)}
+#info h4{margin:2px 0 6px;font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dust)}
+#info p{margin:0}
+#info ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+#info a{color:var(--ember)}
+#info .close{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--vellum);font-size:18px;cursor:pointer}
+#allLabs{font:600 12px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase}
+@media (prefers-reduced-motion:reduce){#info{animation:none}.mana .fill,.rune,.chip{transition:none}}
+</style>
+
+<canvas id="spell" aria-label="Spell effect drawn by the formula below" role="img"></canvas>
+
+<div class="brand">
+  <div class="eyebrow"><b>Greyframe Labs</b> · #08<span class="cat"> · Motion</span></div>
+  <h1>Spell <i>Check</i></h1>
+  <p>A spell drawn by its own incantation: one formula, shorter than a post.</p>
+</div>
+
+<button id="infoBtn" type="button" aria-expanded="false" aria-controls="info">About this lab</button>
+<aside id="info" hidden aria-label="About this lab">
+  <button class="close" type="button" aria-label="Close">×</button>
+  <div class="meta">Lab #08 · Motion · 11 Oct 2026</div>
+  <h3>Spell Check</h3>
+  <div><h4>Idea</h4><p>What if a spell's incantation was its own source code? The effect on screen is drawn by the formula in the panel, short enough to fit in a 280-character post. Every amber number is a rune: change it and the spell reshapes while you watch the code change.</p></div>
+  <div><h4>Controls</h4><ul>
+    <li>Drag any amber number in the code left or right to change it. The sliders do the same.</li>
+    <li>Pick a spell (Ward, Vortex, Nova). Its numbers tween in, and so does the shape.</li>
+    <li>Cast (or press Space) charges the spell and releases it.</li>
+    <li>The mana bar is the length of the spell: characters used out of 280.</li>
+  </ul></div>
+  <div><h4>Inspired by</h4><ul>
+    <li>#つぶやきProcessing tweet-sized sketches, such as @yuruyurau's, where the code is posted as part of the piece.</li>
+    <li>Bret Victor's "Inventing on Principle": numbers you scrub in place, with instant feedback.</li>
+    <li>Vogel's sunflower model: points spaced by the golden angle fill a disc evenly.</li>
+  </ul></div>
+  <div><h4>For game UI</h4><p>Give VFX a small set of named, tunable parameters and show them right next to the effect. States like charge, cast and cooldown can be the same effect with different numbers, tweened with easing, which keeps them coherent and cheap to iterate.</p></div>
+  <a id="allLabs" href="https://claude.ai/artifact/CDYy2LnuZN3Tdb1A9BSHrG" target="_blank" rel="noopener">← All labs</a>
+  <script>if (/github\.io$/.test(location.hostname)) { const a = document.getElementById('allLabs'); a.href = '../'; a.removeAttribute('target'); }</script>
+</aside>
+
+<section class="book" aria-label="Spell source">
+  <div class="code-head"><span>Incantation · JS</span><span id="fits">✓ fits in a post</span></div>
+  <p class="code" id="code"></p>
+  <div class="mana" aria-live="off"><span>MANA</span><div class="bar"><div class="fill" id="manaFill"></div></div><span><b id="manaN">0</b>/280</span></div>
+  <div class="sliders">
+    <div class="sl"><label for="sP">Petals <span id="vP"></span></label><input id="sP" type="range" min="1" max="12" step="1"></div>
+    <div class="sl"><label for="sB">Bloom <span id="vB"></span></label><input id="sB" type="range" min="0" max="0.9" step="0.01"></div>
+    <div class="sl"><label for="sT">Twist <span id="vT"></span></label><input id="sT" type="range" min="-12" max="12" step="0.1"></div>
+    <div class="sl"><label for="sS">Pulse <span id="vS"></span></label><input id="sS" type="range" min="0" max="4" step="0.1"></div>
+  </div>
+  <div class="row">
+    <button class="chip" type="button" data-p="ward" aria-pressed="true">Ward</button>
+    <button class="chip" type="button" data-p="vortex" aria-pressed="false">Vortex</button>
+    <button class="chip" type="button" data-p="nova" aria-pressed="false">Nova</button>
+    <button class="cast" id="cast" type="button">Cast</button>
+  </div>
+</section>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const cv = $('spell'), ctx = cv.getContext('2d');
+  const mq = matchMedia('(prefers-reduced-motion: reduce)');
+  let RM = mq.matches; mq.addEventListener?.('change', e => RM = e.matches);
+
+  // ---------- spell parameters ----------
+  const DEF = {
+    P: { min: 1, max: 12, step: 1, fmt: v => Math.abs(v - Math.round(v)) < 1e-3 ? String(Math.round(v)) : v.toFixed(1) },
+    B: { min: 0, max: .9, step: .01, fmt: v => v.toFixed(2).replace(/^0/, '') },
+    T: { min: -12, max: 12, step: .1, fmt: v => { const s = v.toFixed(1); return s === '-0.0' ? '0.0' : s; } },
+    S: { min: 0, max: 4, step: .1, fmt: v => v.toFixed(1) }
+  };
+  const PRESETS = {
+    ward:   { P: 6, B: .18, T: 0,  S: 1 },
+    vortex: { P: 3, B: .42, T: 8.5, S: 2.2 },
+    nova:   { P: 5, B: .58, T: -6, S: 1.4 }
+  };
+  const par = { ...PRESETS.ward };
+  // the incantation. Numbers come from par, everything else is literal.
+  const parts = ['for(i=0;i<n;i++){a=i*2.4;q=(i/n)**.5;r=q*(1+', 'B', '*S(', 'P', '*a+t*', 'S', '));r*=1+.05*S(q*40-t*', 'S', '*5);w=a+', 'T', '*q*q+t/8;L(r*C(w),r*S(w),q)}'];
+  const source = () => parts.map((p, i) => i % 2 ? DEF[p].fmt(par[p]) : p).join('');
+  let fn = null, lastSrc = '';
+  const codeEl = $('code');
+  // build code DOM once, keep rune spans
+  const runeEls = [];
+  parts.forEach((p, i) => {
+    if (i % 2) {
+      const s = document.createElement('span'); s.className = 'rune'; s.dataset.k = p; s.tabIndex = 0;
+      s.setAttribute('role', 'slider'); s.setAttribute('aria-label', { P: 'Petals', B: 'Bloom', T: 'Twist', S: 'Pulse' }[p]);
+      codeEl.appendChild(s); runeEls.push(s);
+    } else codeEl.appendChild(document.createTextNode(p));
+  });
+  const flash = new Map();
+  function sync(changed){
+    const src = source();
+    if (src !== lastSrc) {
+      lastSrc = src;
+      try { fn = new Function('n', 't', 'S', 'C', 'L', src); } catch (e) { /* keep last */ }
+      $('manaN').textContent = src.length;
+      $('manaFill').style.width = (src.length / 280 * 100).toFixed(1) + '%';
+      $('fits').textContent = src.length <= 280 ? '✓ fits in a post' : '✗ too long to post';
+    }
+    for (const s of runeEls) {
+      const k = s.dataset.k, txt = DEF[k].fmt(par[k]);
+      if (s.textContent !== txt) { s.textContent = txt; if (changed !== false) { s.classList.add('hot'); clearTimeout(flash.get(s)); flash.set(s, setTimeout(() => s.classList.remove('hot'), 420)); } }
+      s.setAttribute('aria-valuenow', txt);
+    }
+    for (const k of 'PBTS') { $('v' + k).textContent = DEF[k].fmt(par[k]); const inp = $('s' + k); if (document.activeElement !== inp) inp.value = par[k]; }
+  }
+
+  // ---------- canvas ----------
+  let W = 0, H = 0, dpr = 1, cx = 0, cy = 0, R = 100, N = 7000;
+  let px = null, py = null, has = null;
+  function layout(){
+    dpr = Math.min(2, devicePixelRatio || 1);
+    W = innerWidth; H = innerHeight;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    const book = document.querySelector('.book').getBoundingClientRect();
+    if (W >= 900) { const left = book.right + 20; cx = (left + W) / 2; cy = H * .5; R = Math.min(W - left - 60, H - 100) * .48; }
+    else { const top = 120, bottom = book.top - 12; cx = W / 2; cy = (top + bottom) / 2; R = Math.min(W - 24, bottom - top) * .5; }
+    R = Math.max(60, R);
+    if (!lockN) N = (W < 700 ? 5000 : 9000);
+    alloc();
+    ctx.fillStyle = '#100d19'; ctx.fillRect(0, 0, cv.width, cv.height);
+  }
+  function alloc(){ px = new Float32Array(N); py = new Float32Array(N); has = new Uint8Array(N); }
+  addEventListener('resize', layout);
+
+  // ---------- cast ----------
+  const ease = {
+    inOut: x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2,
+    in3: x => x * x * x,
+    outBack: x => { const c1 = 2.2, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); }
+  };
+  let castT = -1, rings = [];
+  const CHARGE = .5, RELEASE = 1.1;
+  function cast(){ castT = 0; $('cast').textContent = 'Casting…'; }
+  function castState(dt){
+    if (castT < 0) return { k: 1, glow: 0, spin: 0 };
+    castT += dt;
+    if (RM) { if (castT > .6) { castT = -1; $('cast').textContent = 'Cast'; } return { k: 1, glow: castT < .6 ? .6 : 0, spin: 0 }; }
+    if (castT < CHARGE) { const x = castT / CHARGE; return { k: 1 - .68 * ease.in3(x), glow: x, spin: ease.in3(x) * 2.5 }; }
+    const x = Math.min(1, (castT - CHARGE) / RELEASE);
+    if (!castState.fired) { castState.fired = true; rings.push({ r: .3, a: 1 }); rings.push({ r: .15, a: .7, d: .12 }); }
+    if (x >= 1) { castT = -1; castState.fired = false; $('cast').textContent = 'Cast'; return { k: 1, glow: 0, spin: 0 }; }
+    return { k: .32 + .68 * ease.outBack(x), glow: 1 - x, spin: 0 };
+  }
+
+  // ---------- tween between presets ----------
+  let tw = null;
+  function preset(name, instant){
+    const to = PRESETS[name]; if (!to) return;
+    document.querySelectorAll('.chip').forEach(b => b.setAttribute('aria-pressed', b.dataset.p === name));
+    if (instant || RM) { Object.assign(par, to); sync(); return; }
+    tw = { from: { ...par }, to, t: 0, d: .9 };
+  }
+
+  // ---------- draw ----------
+  const COLS = ['rgba(255,244,214,', 'rgba(255,205,120,', 'rgba(255,160,70,', 'rgba(255,106,61,'];
+  let t = 0, last = performance.now(), paused = false, spinAcc = 0, slow = 0;
+  const bx = [[], [], [], []];
+  let ft = 16, ftN = 0, lockN = false, manual = false;
+  function frame(now){
+    const raw = now - last;
+    const dt = Math.min(.05, raw / 1000); last = now;
+    // adaptive density: drop points if frames run slow for a while
+    if (!document.hidden && raw < 200) { ft += (raw - ft) * .05; if (++ftN > 90 && ft > 24 && N > 2500 && !lockN) { N = Math.round(N * .75); alloc(); ftN = 0; } }
+    if (!manual) step(dt);
+    requestAnimationFrame(frame);
+  }
+  function step(dt){
+    if (tw) {
+      tw.t += dt; const x = Math.min(1, tw.t / tw.d), e = ease.inOut(x);
+      for (const k of 'PBTS') par[k] = tw.from[k] + (tw.to[k] - tw.from[k]) * e;
+      if (x >= 1) { Object.assign(par, tw.to); tw = null; }
+      sync();
+    }
+    const cs = castState(dt);
+    if (!paused) t += dt * (RM ? .25 : 1);
+    spinAcc += cs.spin * dt;
+    render(cs, dt);
+  }
+  function render(cs, dt){
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = RM ? 'rgb(16,13,25)' : 'rgba(16,13,25,.30)';
+    ctx.fillRect(0, 0, W, H);
+    // floor glow
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 1.5);
+    g.addColorStop(0, `rgba(255,150,60,${.05 + .12 * cs.glow})`); g.addColorStop(1, 'rgba(255,150,60,0)');
+    ctx.fillStyle = g; ctx.fillRect(cx - R * 1.6, cy - R * 1.6, R * 3.2, R * 3.2);
+
+    for (const b of bx) b.length = 0;
+    const scale = R * cs.k / ((1 + par.B) * 1.05), rot = spinAcc;
+    const cr = Math.cos(rot), sr = Math.sin(rot);
+    let i = 0;
+    const S = Math.sin, C = Math.cos;
+    const L = (x, y, q) => {
+      const X = cx + (x * cr - y * sr) * scale, Y = cy + (x * sr + y * cr) * scale;
+      if (has[i] && !RM) { const dx = X - px[i], dy = Y - py[i]; if (dx * dx + dy * dy < 900) { const c = q < .35 ? 0 : q < .65 ? 1 : q < .88 ? 2 : 3; bx[c].push(px[i], py[i], X, Y); } }
+      else { const c = q < .35 ? 0 : q < .65 ? 1 : q < .88 ? 2 : 3; bx[c].push(X - .6, Y, X + .6, Y); }
+      px[i] = X; py[i] = Y; has[i] = 1; i++;
+    };
+    try { fn && fn(N, t, S, C, L); } catch (e) {}
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineCap = 'round';
+    ctx.lineWidth = W < 700 ? 1.3 : 1.5;
+    const alpha = .42 + .35 * cs.glow;
+    for (let c = 0; c < 4; c++) {
+      const a = bx[c]; if (!a.length) continue;
+      ctx.beginPath();
+      for (let j = 0; j < a.length; j += 4) { ctx.moveTo(a[j], a[j + 1]); ctx.lineTo(a[j + 2], a[j + 3]); }
+      ctx.strokeStyle = COLS[c] + alpha + ')'; ctx.stroke();
+    }
+    // shock rings on release
+    for (const r of rings) {
+      if (r.d > 0) { r.d -= dt; continue; }
+      r.r += dt * 2.2; r.a -= dt * 1.1;
+      if (r.a <= 0) continue;
+      ctx.beginPath(); ctx.arc(cx, cy, r.r * R, 0, 6.2832);
+      ctx.strokeStyle = `rgba(255,190,110,${r.a * .8})`; ctx.lineWidth = 2 + 6 * r.a; ctx.stroke();
+    }
+    rings = rings.filter(r => r.a > 0);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  // ---------- input: sliders ----------
+  for (const k of 'PBTS') {
+    const inp = $('s' + k);
+    inp.addEventListener('input', () => { tw = null; par[k] = +inp.value; clearPreset(); sync(); });
+  }
+  function clearPreset(){ document.querySelectorAll('.chip').forEach(b => b.setAttribute('aria-pressed', 'false')); }
+  // ---------- input: scrub runes ----------
+  const clamp = (k, v) => { const d = DEF[k]; v = Math.round(v / d.step) * d.step; return Math.min(d.max, Math.max(d.min, +v.toFixed(3))); };
+  for (const s of runeEls) {
+    let sx = 0, sv = 0, on = false;
+    const k = s.dataset.k, range = DEF[k].max - DEF[k].min;
+    s.addEventListener('pointerdown', e => { on = true; sx = e.clientX; sv = par[k]; tw = null; s.setPointerCapture(e.pointerId); e.preventDefault(); });
+    s.addEventListener('pointermove', e => { if (!on) return; par[k] = clamp(k, sv + (e.clientX - sx) / 220 * range); clearPreset(); sync(); });
+    const up = () => on = false; s.addEventListener('pointerup', up); s.addEventListener('pointercancel', up);
+    s.addEventListener('keydown', e => {
+      const d = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key];
+      if (d) { tw = null; par[k] = clamp(k, par[k] + d * DEF[k].step * (k === 'P' ? 1 : 5)); clearPreset(); sync(); e.preventDefault(); }
+    });
+  }
+  document.querySelectorAll('.chip').forEach(b => b.onclick = () => preset(b.dataset.p));
+  $('cast').onclick = cast;
+  addEventListener('keydown', e => {
+    if (e.code === 'Space' && !/INPUT|BUTTON/.test(document.activeElement?.tagName || '')) { cast(); e.preventDefault(); }
+    if (e.key === 'Escape' && !info.hidden) setInfo(false);
+  });
+  // tap on the spell itself also casts
+  cv.addEventListener('pointerdown', e => { if (Math.hypot(e.clientX - cx, e.clientY - cy) < R * 1.2) cast(); });
+
+  // ---------- about ----------
+  const info = $('info'), btn = $('infoBtn');
+  const setInfo = open => { info.hidden = !open; btn.hidden = open; btn.setAttribute('aria-expanded', open); if (open) info.querySelector('.close').focus(); else btn.focus(); };
+  btn.onclick = () => setInfo(true);
+  info.querySelector('.close').onclick = () => setInfo(false);
+
+  // ---------- hooks for capture ----------
+  window.__lab = {
+    set(p){ tw = null; Object.assign(par, p); sync(); },
+    get: () => ({ ...par, src: source(), len: source().length }),
+    preset, cast,
+    pause(v = true){ paused = v; },
+    setTime(v){ t = v; },
+    step(dt = 1 / 60){ step(dt); },
+    get center(){ return { cx, cy, R }; },
+    layout,
+    setN(v){ N = v; lockN = true; alloc(); },
+    setView(x, y, r){ cx = x; cy = y; R = r; },
+    manual(v = true){ manual = v; }
+  };
+
+  layout(); sync(false);
+  requestAnimationFrame(frame);
+})();
+</script>
