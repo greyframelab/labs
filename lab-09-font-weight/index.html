@@ -1,0 +1,744 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Lab #09 — Font Weight</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@100..900&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: a night harbour owns the screen. Your word floats as a raft in the middle; the loading deck sits bottom-left (bottom on phones). One deliberate dark look. */
+:root{
+  --night:#0c1820;        /* sky */
+  --deck:#12232d;         /* panels */
+  --bone:#efe6d4;         /* text, rope, cargo */
+  --mist:#8fa3ad;         /* muted text */
+  --signal:#ff6b2c;       /* raft paint, accent */
+  --alarm:#ff4655;        /* sinking, overload */
+  --kelp:#7ed6a6;         /* afloat */
+  --line:rgba(239,230,212,.13);
+  --display:"Roboto Slab",Rockwell,Georgia,serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--night);color:var(--bone);font-family:var(--body);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;overflow:hidden}
+#sea{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
+#sea:focus-visible{outline:2px solid var(--signal);outline-offset:-4px}
+.brand{position:fixed;z-index:3;left:16px;top:calc(env(safe-area-inset-top,0px) + 14px);display:flex;flex-direction:column;gap:3px;pointer-events:none}
+.brand .eyebrow{font:600 11px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--mist)}
+.brand .eyebrow b{color:var(--signal);font-weight:600}
+.brand h1{margin:0;font:200 clamp(34px,5vw,64px)/1 var(--display);letter-spacing:-.01em}
+.brand h1 b{font-weight:900;color:var(--signal)}
+.brand p{margin:2px 0 0;max-width:32ch;color:var(--mist);font-size:15px}
+@media (min-width:900px){.brand{left:40px;top:36px}}
+@media (max-width:480px){.brand .cat{display:none}.brand p{font-size:14px}}
+
+.toast{position:fixed;z-index:3;left:50%;top:calc(env(safe-area-inset-top,0px) + 132px);transform:translate(-50%,0);padding:8px 14px;border-radius:999px;background:rgba(12,24,32,.82);border:1px solid var(--line);font:600 14px/1.2 var(--body);white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .3s,transform .4s cubic-bezier(.2,.9,.3,1)}
+.toast.on{opacity:1;transform:translate(-50%,6px)}
+.toast.bad{border-color:rgba(255,70,85,.6);color:#ffd5d8}
+@media (min-width:900px){.toast{top:48px}}
+
+/* loading deck */
+.deckp{box-sizing:border-box;position:fixed;z-index:4;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);display:flex;flex-direction:column;gap:12px;padding:14px;border-radius:14px;background:rgba(18,35,45,.86);border:1px solid var(--line);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+@media (min-width:900px){.deckp{left:40px;right:auto;bottom:36px;width:400px;padding:18px;gap:14px}}
+.top{display:flex;gap:10px;align-items:flex-end}
+.word{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.lbl{font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--mist)}
+#word{box-sizing:border-box;width:100%;padding:7px 10px;border-radius:9px;border:1px solid var(--line);background:rgba(12,24,32,.7);color:var(--bone);font:700 20px/1.1 var(--display);letter-spacing:.02em;text-transform:none}
+#word:focus{border-color:var(--signal);outline:none}
+.pill{flex:none;display:inline-flex;align-items:center;gap:7px;padding:8px 11px;border-radius:999px;font:600 12px/1 var(--body);letter-spacing:.03em;background:rgba(126,214,166,.12);color:var(--kelp);white-space:nowrap}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.pill.warn{background:rgba(255,107,44,.14);color:var(--signal)}
+.pill.bad{background:rgba(255,70,85,.16);color:var(--alarm)}
+.gauge{display:flex;flex-direction:column;gap:6px}
+.gauge .row1{display:flex;justify-content:space-between;align-items:baseline;font:500 12px/1 var(--mono);color:var(--mist);font-variant-numeric:tabular-nums}
+.gauge .row1 b{color:var(--bone);font-weight:600;font-size:14px}
+.bar{position:relative;height:8px;border-radius:4px;background:rgba(239,230,212,.08)}
+.bar .fill{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:4px;background:var(--signal);transition:width .45s cubic-bezier(.2,.8,.2,1),background-color .3s}
+.bar .fill.over{background:var(--alarm)}
+.bar .mark{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--bone);left:85%;border-radius:1px}
+.gauge .row2{display:flex;justify-content:space-between;font:500 11px/1 var(--mono);color:var(--mist);font-variant-numeric:tabular-nums}
+.gauge .row2 b{color:var(--bone);font-weight:600}
+.sliders{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px}
+.sl{display:flex;flex-direction:column;gap:2px;min-width:0}
+.sl label{display:flex;justify-content:space-between;gap:6px;font:500 13px/1.2 var(--body);color:var(--bone)}
+.sl label span{font:600 12px/1.2 var(--mono);color:var(--signal);white-space:nowrap}
+input[type=range]{width:100%;margin:0;height:24px;accent-color:var(--signal);background:transparent}
+.row{display:flex;gap:8px}
+.drop{flex:1;min-width:0;padding:11px 12px;border-radius:9px;border:0;background:var(--signal);color:#1d0d04;font:700 15px/1 var(--body);letter-spacing:.01em;cursor:pointer;transition:transform .15s cubic-bezier(.2,.8,.2,1),filter .2s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.drop:hover{filter:brightness(1.08)}
+.drop:active{transform:scale(.97)}
+.drop:disabled{opacity:.5;cursor:default}
+.ghost{flex:none;padding:11px 14px;border-radius:9px;border:1px solid var(--line);background:transparent;color:var(--bone);font:600 14px/1 var(--body);cursor:pointer}
+.ghost:hover{border-color:rgba(255,107,44,.6)}
+.hint{margin:-4px 0 0;font-size:13px;color:var(--mist)}
+.best{font:500 11px/1.3 var(--mono);color:var(--mist);letter-spacing:.04em}
+.best b{color:var(--bone);font-weight:600}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+
+/* about */
+#infoBtn{position:fixed;z-index:5;right:16px;top:calc(env(safe-area-inset-top,0px) + 14px);padding:8px 12px;border-radius:999px;border:1px solid var(--line);background:rgba(18,35,45,.8);color:var(--bone);font:600 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
+@media (min-width:900px){#infoBtn{right:40px;top:36px}}
+#infoBtn:hover{border-color:var(--signal)}
+#info{box-sizing:border-box;position:fixed;z-index:6;right:12px;top:calc(env(safe-area-inset-top,0px) + 12px);width:min(420px,calc(100vw - 24px));max-height:calc(100% - 24px);overflow:auto;padding:22px;border-radius:14px;background:#10202a;border:1px solid var(--line);box-shadow:0 24px 70px rgba(0,0,0,.55);display:flex;flex-direction:column;gap:14px;font-size:15px;animation:rise .3s cubic-bezier(.2,.9,.3,1)}
+@media (min-width:900px){#info{right:40px;top:36px}}
+@keyframes rise{from{transform:translateY(-10px);opacity:0}}
+#info .meta{font:600 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--signal)}
+#info h3{margin:0;font:700 34px/1 var(--display)}
+#info h4{margin:2px 0 6px;font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--mist)}
+#info p{margin:0}
+#info ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+#info a{color:var(--signal)}
+#info .close{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--bone);font-size:18px;cursor:pointer}
+#allLabs{font:600 12px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase}
+@media (prefers-reduced-motion:reduce){#info{animation:none}.bar .fill,.toast{transition:none}}
+</style>
+
+<canvas id="sea" tabindex="0" aria-label="Your word floating as a raft. Click or tap above it to drop the next cargo there. Arrow keys move the hook, Enter drops."></canvas>
+
+<div class="brand">
+  <div class="eyebrow"><b>Greyframe Labs</b> · #09<span class="cat"> · Creative Coding</span></div>
+  <h1>Font <b>Weight</b></h1>
+  <p>Type a word and it becomes a raft. Bolder letters carry more.</p>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<button id="infoBtn" type="button" aria-expanded="false" aria-controls="info">About this lab</button>
+<aside id="info" hidden aria-label="About this lab">
+  <button class="close" type="button" aria-label="Close">×</button>
+  <div class="meta">Lab #09 · Creative Coding · 12 Oct 2026</div>
+  <h3>Font Weight</h3>
+  <div><h4>Idea</h4><p>What if your word had to float? The letters you type become a raft, lashed together with rope. Font weight is literal here: bolder letters have more area, so they float higher and carry more cargo. Each letter's real shape decides where the raft is buoyant and where it tips. Load it until something gives.</p></div>
+  <div><h4>Controls</h4><ul>
+    <li>Type a word (up to 10 letters). The raft rebuilds with the cargo still on board.</li>
+    <li>Weight goes from Thin to Black. Thin a loaded raft and watch it sink.</li>
+    <li>Click or tap the sky to drop the next cargo right there, or press Drop. Arrow keys move the hook and Enter drops.</li>
+    <li>Swell adds waves. Off-centre loads tilt the raft, and past a point cargo slides overboard.</li>
+    <li>The white dashed line painted on the letters is the load line. Water above it means trouble.</li>
+  </ul></div>
+  <div><h4>Inspired by</h4><ul>
+    <li>ことば橋 by @yorimichi: a typed word becomes a bridge, tested by heavier and heavier vehicles.</li>
+    <li>The Plimsoll line, the load mark painted on ship hulls since the 1870s to show how deep a ship may safely sit.</li>
+    <li>Scribblenauts, where the words you write become objects with real behaviour.</li>
+  </ul></div>
+  <div><h4>For game UI</h4><p>When players type something (a ship name, a guild banner, a spell), let it carry real stats and show the result in the world. Put the limit in the scene too, like a load line on the hull, so players read the risk before they fail. And make failure readable and funny, so testing the limit is the fun part.</p></div>
+  <a id="allLabs" href="https://claude.ai/artifact/CDYy2LnuZN3Tdb1A9BSHrG" target="_blank" rel="noopener">← All labs</a>
+  <script>if (/github\.io$/.test(location.hostname)) { const a = document.getElementById('allLabs'); a.href = '../'; a.removeAttribute('target'); }</script>
+</aside>
+
+<section class="deckp" id="deckp" aria-label="Loading deck">
+  <div class="top">
+    <div class="word"><label class="lbl" for="word">Your word</label><input id="word" type="text" value="AHOY" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false"></div>
+    <span class="pill" id="pill">Afloat</span>
+  </div>
+  <div class="gauge">
+    <div class="row1"><span>CARGO <b id="loadKg">0</b> kg</span><span>LOAD LINE <b id="capKg">0</b> kg</span></div>
+    <div class="bar"><div class="fill" id="fill"></div><div class="mark" id="mark"></div></div>
+    <div class="row2"><span>0</span><span>sinks at <b id="sinkKg">0</b> kg</span></div>
+  </div>
+  <div class="sliders">
+    <div class="sl"><label for="sW">Weight <span id="vW">Bold</span></label><input id="sW" type="range" min="100" max="900" step="100" value="700"></div>
+    <div class="sl"><label for="sS">Swell <span id="vS">Calm</span></label><input id="sS" type="range" min="0" max="1" step="0.01" value="0.18"></div>
+  </div>
+  <div class="row">
+    <button class="drop" id="drop" type="button">Drop the Treasure chest</button>
+    <button class="ghost" id="unload" type="button">Unload</button>
+  </div>
+  <p class="hint">Tap above the raft to drop it right there.</p>
+  <div class="best" id="best">Best afloat: <b>—</b></div>
+</section>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const cv = $('sea'), ctx = cv.getContext('2d');
+  const mq = matchMedia('(prefers-reduced-motion: reduce)');
+  let RM = mq.matches; mq.addEventListener?.('change', e => RM = e.matches);
+  const FONT = '"Roboto Slab", Rockwell, Georgia, serif';
+  const FS = 200;            // font size in world units
+  const STEP = 5;            // sampling cell in world units
+  const RHO = 0.05;          // kg per square unit of water
+  const WOOD = 0.42;         // raft density relative to water
+  const G = 640;             // gravity, units/s²
+  const WEIGHTS = { 100: 'Thin', 200: 'ExtraLight', 300: 'Light', 400: 'Regular', 500: 'Medium', 600: 'SemiBold', 700: 'Bold', 800: 'ExtraBold', 900: 'Black' };
+  const CARGO = [
+    { id: 'parrot', name: 'Parrot', kg: 2, w: 34, h: 42 },
+    { id: 'crate', name: 'Crate', kg: 30, w: 58, h: 54 },
+    { id: 'barrel', name: 'Barrel', kg: 80, w: 50, h: 68 },
+    { id: 'chest', name: 'Treasure chest', kg: 150, w: 84, h: 62 },
+    { id: 'cannon', name: 'Cannon', kg: 280, w: 112, h: 60 },
+    { id: 'anchor', name: 'Anchor', kg: 450, w: 84, h: 104 },
+    { id: 'piano', name: 'Grand piano', kg: 700, w: 150, h: 92 },
+    { id: 'walrus', name: 'Walrus', kg: 1100, w: 150, h: 84 },
+    { id: 'lighthouse', name: 'Lighthouse', kg: 2500, w: 90, h: 240 }
+  ];
+  const fmtKg = n => Math.round(n).toLocaleString('en-US');
+
+  // ---------- state ----------
+  const S = {
+    word: 'AHOY', weight: 700, swell: RM ? 0 : .18,
+    raft: null,                 // geometry
+    cargo: [],                  // attached: {c, lx, ly} local centre
+    loose: [],                  // free bodies (falling, overboard)
+    next: 0,
+    X: 0, Y: -40, th: 0, vx: 0, vy: 0, om: 0, // body: local-origin world pos + rotation
+    t: 0, hookX: 0, hookTX: 0, hookV: 0, sway: 0, swayV: 0,
+    sub: 0, capsized: false, best: null, stableT: 0, lastState: ''
+  };
+  try { const b = JSON.parse(localStorage.getItem('gf-lab09-best') || 'null'); if (b && b.kg) S.best = b; } catch (e) {}
+
+  // ---------- raft geometry from the glyphs ----------
+  const off = document.createElement('canvas'), octx = off.getContext('2d', { willReadFrequently: true });
+  function buildRaft(word, weight) {
+    octx.font = `${weight} ${FS}px ${FONT}`;
+    const tw = Math.ceil(octx.measureText(word).width);
+    const W = tw + 60, H = 300, bx = 30, by = 215;
+    off.width = W; off.height = H;
+    octx.font = `${weight} ${FS}px ${FONT}`;
+    octx.textBaseline = 'alphabetic'; octx.textAlign = 'left';
+    octx.fillStyle = '#fff'; octx.fillText(word, bx, by);
+    const d = octx.getImageData(0, 0, W, H).data;
+    const pts = [];
+    let minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9, A = 0;
+    for (let y = 0; y < H; y += STEP) for (let x = 0; x < W; x += STEP) {
+      let s = 0;
+      for (let j = 0; j < STEP; j++) for (let i = 0; i < STEP; i++) { const yy = y + j, xx = x + i; if (yy < H && xx < W) s += d[(yy * W + xx) * 4 + 3]; }
+      if (s > 0) {
+        const a = s / 255; A += a;
+        pts.push({ x: x + STEP / 2, y: y + STEP / 2, a });
+        if (x < minX) minX = x; if (x + STEP > maxX) maxX = x + STEP; if (y < minY) minY = y; if (y + STEP > maxY) maxY = y + STEP;
+      }
+    }
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    for (const p of pts) { p.x -= cx; p.y -= cy; }
+    // column tops (local), for landing cargo
+    const x0 = minX - cx, cols = Math.ceil((maxX - minX) / STEP), top = new Array(cols).fill(Infinity);
+    for (const p of pts) { const c = Math.floor((p.x - x0) / STEP); if (c >= 0 && c < cols && p.y - STEP / 2 < top[c] && p.a > STEP * STEP * .3) top[c] = p.y - STEP / 2; }
+    // letter edges for lashings
+    const edges = [];
+    for (let i = 1; i < word.length; i++) edges.push(bx + octx.measureText(word.slice(0, i)).width - cx);
+    // area below each local y (for the load line)
+    const rows = [...pts].sort((a, b) => b.y - a.y);
+    const raftKg = WOOD * RHO * A, capKg = (1 - WOOD) * RHO * A;
+    const SAFE = .76;                              // the load line: 76% of the raft under water
+    const safeKg = (SAFE - WOOD) * RHO * A;
+    const target = SAFE * A;
+    let acc = 0, loadY = minY - cy;
+    for (const p of rows) { acc += p.a; if (acc >= target) { loadY = p.y; break; } }
+    return { word, weight, pts, A, raftKg, capKg, safeKg, w: maxX - minX, h: maxY - minY, x0, cols, top, edges, bx: bx - cx, by: by - cy, loadY, minY: minY - cy, maxY: maxY - cy, sprite: null };
+  }
+
+  // ---------- mass properties ----------
+  let M = 1, I = 1, CX = 0, CY = 0; // total mass, inertia about COM, COM in local frame
+  function massProps() {
+    const r = S.raft; const mr = WOOD * RHO;
+    let m = 0, sx = 0, sy = 0;
+    for (const p of r.pts) { const mm = mr * p.a; m += mm; sx += mm * p.x; sy += mm * p.y; }
+    for (const k of S.cargo) { m += k.c.kg; sx += k.c.kg * k.lx; sy += k.c.kg * k.ly; }
+    const nx = sx / m, ny = sy / m;
+    let ii = 0;
+    for (const p of r.pts) { const mm = mr * p.a; ii += mm * ((p.x - nx) ** 2 + (p.y - ny) ** 2); }
+    for (const k of S.cargo) ii += k.c.kg * ((k.lx - nx) ** 2 + (k.ly - ny) ** 2 + (k.c.w ** 2 + k.c.h ** 2) / 12);
+    M = m; I = ii; CX = nx; CY = ny;
+  }
+  // body state is stored at the local origin; physics runs at the COM
+  const rot = (x, y, th) => { const c = Math.cos(th), s = Math.sin(th); return [x * c - y * s, x * s + y * c]; };
+  function toWorld(lx, ly) { const [x, y] = rot(lx, ly, S.th); return [S.X + x, S.Y + y]; }
+  function toLocal(wx, wy) { return rot(wx - S.X, wy - S.Y, -S.th); }
+
+  function surfaceAt(lx, half, skip) {
+    const r = S.raft; let best = Infinity;
+    const c0 = Math.max(0, Math.floor((lx - half - r.x0) / STEP)), c1 = Math.min(r.cols - 1, Math.floor((lx + half - r.x0) / STEP));
+    for (let c = c0; c <= c1; c++) if (r.top[c] < best) best = r.top[c];
+    for (const k of S.cargo) { if (k === skip) continue; if (Math.abs(k.lx - lx) < (k.c.w / 2 + half) * .9) best = Math.min(best, k.ly - k.c.h / 2); }
+    return best;
+  }
+  function onRaft(lx) { const r = S.raft; return lx > r.x0 + 4 && lx < r.x0 + r.w - 4; }
+
+  // ---------- water ----------
+  const waveA = () => 2 + S.swell * 34;
+  function waterY(x, t) {
+    const a = waveA();
+    return a * (Math.sin(x * .011 + t * 1.25) * .55 + Math.sin(x * .026 - t * 1.8) * .25 + Math.sin(x * .0047 + t * .6) * .45);
+  }
+  let BED = 640;
+
+  // ---------- rebuild (word / weight change keeps the cargo) ----------
+  let fontReady = Promise.resolve();
+  async function rebuild(keep = true) {
+    const word = S.word, weight = S.weight;
+    try { await document.fonts.load(`${weight} ${FS}px "Roboto Slab"`, word); } catch (e) {}
+    if (word !== S.word || weight !== S.weight) return; // a newer request superseded us
+    const old = S.raft;
+    const comOld = old ? toWorld(CX, CY) : null;
+    S.raft = buildRaft(word, weight);
+    if (keep && old) {
+      const ratio = S.raft.w / old.w; const list = S.cargo; S.cargo = [];
+      for (const k of list) {
+        let lx = k.lx * ratio; lx = Math.max(S.raft.x0 + 10, Math.min(S.raft.x0 + S.raft.w - 10, lx));
+        const k2 = { c: k.c, lx, ly: 0 }; k2.ly = surfaceAt(lx, k.c.w / 2 * .7) - k.c.h / 2; S.cargo.push(k2);
+      }
+    }
+    massProps();
+    if (comOld) { const [ox, oy] = rot(CX, CY, S.th); S.X = comOld[0] - ox; S.Y = comOld[1] - oy; }
+    S.raft.sprite = null; layout(); ui();
+  }
+
+  // ---------- view ----------
+  let DPR = 1, VW = 0, VH = 0, sc = 1, scT = 1, ax = 0, ay = 0, sceneTop = 0;
+  function layout() {
+    DPR = Math.min(2, devicePixelRatio || 1); VW = innerWidth; VH = innerHeight;
+    cv.width = Math.round(VW * DPR); cv.height = Math.round(VH * DPR);
+    const deck = $('deckp').getBoundingClientRect(), brand = document.querySelector('.brand').getBoundingClientRect();
+    const wide = VW >= 900;
+    const V = window.__labView; // optional framing override, used to compose captures
+    sceneTop = V ? V.top : brand.bottom + 10;
+    const sceneBot = V ? V.bottom : wide ? VH - 20 : deck.top - 6;
+    const left = !V && wide ? deck.right + 20 : 0, right = VW;
+    ax = (left + right) / 2;
+    ay = V && V.water ? V.water : sceneTop + (sceneBot - sceneTop) * (wide ? .6 : .64);
+    if (!S.raft) return;
+    const bedLater = sceneBot - 14;
+    const rw = Math.max(S.raft.w, 420) + (VW < 600 ? 170 : 120);
+    const above = ay - sceneTop;
+    scT = Math.min((right - left - 24) / rw, above / (S.raft.h * .45 + 300), 1.6);
+    if (V && V.scale) scT = V.scale;
+    if (!sc || sc === 1) sc = scT;
+    BED = Math.max(S.raft.h * .8, (bedLater - ay) / scT);
+    S.raft.sprite = null;
+  }
+  const W2S = (x, y) => [ax + x * sc, ay + y * sc];
+  const S2W = (x, y) => [(x - ax) / sc, (y - ay) / sc];
+
+  // raft sprite: paint, planks, load line, Plimsoll disc, lashings
+  function makeSprite() {
+    const r = S.raft, k = Math.min(3, Math.max(.6, sc * DPR));
+    const pad = 20, W = Math.ceil((r.w + pad * 2) * k), H = Math.ceil((r.h + pad * 2 + 40) * k);
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const g = c.getContext('2d');
+    const ox = -r.x0 + pad, oy = -r.minY + pad; // local → sprite units
+    g.scale(k, k); g.translate(ox, oy);
+    g.font = `${r.weight} ${FS}px ${FONT}`; g.textBaseline = 'alphabetic';
+    g.fillStyle = '#ff6b2c'; g.fillText(r.word, r.bx, r.by);
+    g.globalCompositeOperation = 'source-atop';
+    // shading: darker toward the keel
+    const gr = g.createLinearGradient(0, r.minY, 0, r.maxY); gr.addColorStop(0, 'rgba(255,214,170,.28)'); gr.addColorStop(.18, 'rgba(255,255,255,0)'); gr.addColorStop(1, 'rgba(70,10,0,.38)');
+    g.fillStyle = gr; g.fillRect(r.x0 - 10, r.minY - 10, r.w + 20, r.h + 20);
+    // planks
+    g.strokeStyle = 'rgba(60,14,0,.32)'; g.lineWidth = 1.6;
+    for (let y = r.minY + 15; y < r.maxY; y += 17) { g.beginPath(); g.moveTo(r.x0 - 10, y); g.lineTo(r.x0 + r.w + 10, y); g.stroke(); }
+    g.strokeStyle = 'rgba(60,14,0,.18)'; g.lineWidth = 1;
+    for (let y = r.minY + 15, n = 0; y < r.maxY; y += 17, n++) for (let x = r.x0 + (n % 2) * 40; x < r.x0 + r.w; x += 80) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 17); g.stroke(); }
+    // load line
+    g.strokeStyle = 'rgba(239,230,212,.95)'; g.lineWidth = 3.2; g.setLineDash([10, 7]);
+    g.beginPath(); g.moveTo(r.x0 - 10, r.loadY); g.lineTo(r.x0 + r.w + 10, r.loadY); g.stroke(); g.setLineDash([]);
+    // Plimsoll disc on the first letter
+    const fx = r.bx + (r.edges[0] !== undefined ? (r.edges[0] - r.bx) / 2 : r.w / 2);
+    g.lineWidth = 3.2; g.beginPath(); g.arc(fx, r.loadY, 15, 0, Math.PI * 2); g.stroke();
+    g.beginPath(); g.moveTo(fx - 24, r.loadY); g.lineTo(fx + 24, r.loadY); g.stroke();
+    g.globalCompositeOperation = 'source-over';
+    // lashings between letters
+    g.strokeStyle = '#d9c9a6'; g.lineWidth = 3.4; g.lineCap = 'round';
+    const ly = r.by - FS * .2, ly2 = r.by - FS * .5;
+    for (const ex of r.edges) for (const yy of [ly, ly2]) {
+      g.beginPath(); for (const o of [-8, 0, 8]) { g.moveTo(ex - 11, yy + o + 5); g.lineTo(ex + 11, yy + o - 5); } g.stroke();
+    }
+    r.sprite = { c, k, ox, oy };
+  }
+
+  // ---------- cargo drawings (world units, centred) ----------
+  const INK = '#0c1820', BONE = '#efe6d4', TAN = '#c9a46b', DARK = '#3a4a52';
+  function drawCargo(g, c, t) {
+    const w = c.w, h = c.h; g.lineJoin = 'round'; g.lineWidth = 3; g.strokeStyle = INK;
+    const box = (x, y, ww, hh, f) => { g.fillStyle = f; g.beginPath(); g.rect(x, y, ww, hh); g.fill(); g.stroke(); };
+    switch (c.id) {
+      case 'parrot': {
+        g.fillStyle = '#5fd18b'; g.beginPath(); g.ellipse(0, 4, 12, 16, -.2, 0, 7); g.fill(); g.stroke();
+        g.fillStyle = '#ff4655'; g.beginPath(); g.ellipse(-1, -12, 10, 9, 0, 0, 7); g.fill(); g.stroke();
+        g.fillStyle = '#ffd34d'; g.beginPath(); g.moveTo(-9, -12); g.lineTo(-18, -8); g.lineTo(-9, -6); g.closePath(); g.fill(); g.stroke();
+        g.fillStyle = INK; g.beginPath(); g.arc(-3, -14, 2, 0, 7); g.fill();
+        g.fillStyle = '#2e8fd6'; g.beginPath(); g.moveTo(6, 10); g.lineTo(14, 21); g.lineTo(2, 18); g.closePath(); g.fill(); g.stroke();
+        break; }
+      case 'crate':
+        box(-w / 2, -h / 2, w, h, TAN);
+        g.beginPath(); g.moveTo(-w / 2, -h / 2); g.lineTo(w / 2, h / 2); g.moveTo(-w / 2 + 6, -h / 2 + 6); g.lineTo(w / 2 - 6, -h / 2 + 6); g.lineTo(w / 2 - 6, h / 2 - 6); g.lineTo(-w / 2 + 6, h / 2 - 6); g.closePath(); g.stroke(); break;
+      case 'barrel':
+        g.fillStyle = '#a8743e'; g.beginPath(); g.moveTo(-w / 2 + 6, -h / 2); g.quadraticCurveTo(-w / 2 - 4, 0, -w / 2 + 6, h / 2); g.lineTo(w / 2 - 6, h / 2); g.quadraticCurveTo(w / 2 + 4, 0, w / 2 - 6, -h / 2); g.closePath(); g.fill(); g.stroke();
+        g.strokeStyle = DARK; g.lineWidth = 4; for (const yy of [-h * .28, h * .28]) { g.beginPath(); g.moveTo(-w / 2 + 1, yy); g.lineTo(w / 2 - 1, yy); g.stroke(); } break;
+      case 'chest':
+        box(-w / 2, -h / 2 + 18, w, h - 18, '#8a5a2b');
+        g.fillStyle = '#9c6a35'; g.beginPath(); g.moveTo(-w / 2, -h / 2 + 18); g.quadraticCurveTo(-w / 2, -h / 2, 0, -h / 2); g.quadraticCurveTo(w / 2, -h / 2, w / 2, -h / 2 + 18); g.closePath(); g.fill(); g.stroke();
+        g.fillStyle = '#ffd34d'; g.fillRect(-7, -h / 2 + 12, 14, 16); g.strokeRect(-7, -h / 2 + 12, 14, 16);
+        g.strokeStyle = '#ffd34d'; g.lineWidth = 4; g.beginPath(); g.moveTo(-w / 2 + 14, -h / 2 + 6); g.lineTo(-w / 2 + 14, h / 2 - 2); g.moveTo(w / 2 - 14, -h / 2 + 6); g.lineTo(w / 2 - 14, h / 2 - 2); g.stroke(); break;
+      case 'cannon':
+        g.fillStyle = '#2b363d'; g.save(); g.translate(-6, -6); g.rotate(-.18);
+        g.beginPath(); g.moveTo(-46, -13); g.lineTo(50, -9); g.lineTo(50, 9); g.lineTo(-46, 15); g.quadraticCurveTo(-58, 1, -46, -13); g.fill(); g.stroke(); g.restore();
+        g.fillStyle = '#8a5a2b'; g.beginPath(); g.rect(-34, 6, 60, 16); g.fill(); g.stroke();
+        g.fillStyle = TAN; for (const xx of [-24, 16]) { g.beginPath(); g.arc(xx, 20, 10, 0, 7); g.fill(); g.stroke(); } break;
+      case 'anchor':
+        g.strokeStyle = INK; g.lineWidth = 15; g.lineCap = 'round';
+        g.beginPath(); g.moveTo(0, -h / 2 + 22); g.lineTo(0, h / 2 - 8); g.moveTo(-24, -h / 2 + 30); g.lineTo(24, -h / 2 + 30); g.stroke();
+        g.beginPath(); g.arc(0, h / 2 - 40, 34, .25, Math.PI - .25); g.stroke();
+        g.lineWidth = 15; g.beginPath(); g.arc(0, -h / 2 + 11, 9, 0, 7); g.stroke();
+        g.strokeStyle = '#59666e'; g.lineWidth = 9;
+        g.beginPath(); g.moveTo(0, -h / 2 + 22); g.lineTo(0, h / 2 - 8); g.moveTo(-24, -h / 2 + 30); g.lineTo(24, -h / 2 + 30); g.stroke();
+        g.beginPath(); g.arc(0, h / 2 - 40, 34, .25, Math.PI - .25); g.stroke();
+        g.beginPath(); g.arc(0, -h / 2 + 11, 9, 0, 7); g.stroke(); g.lineCap = 'butt'; break;
+      case 'piano':
+        g.fillStyle = '#1e262b'; g.strokeStyle = BONE; g.lineWidth = 2.5;
+        g.beginPath(); g.moveTo(-w / 2, -h / 2 + 22); g.lineTo(w / 2 - 50, -h / 2 + 22); g.quadraticCurveTo(w / 2, -h / 2 + 10, w / 2, h / 2 - 34); g.lineTo(-w / 2, h / 2 - 34); g.closePath(); g.fill(); g.stroke();
+        g.beginPath(); g.moveTo(-w / 2 + 6, -h / 2 + 22); g.lineTo(w / 2 - 70, -h / 2 - 8); g.stroke();
+        g.fillStyle = BONE; g.fillRect(-w / 2, h / 2 - 34, 38, 7);
+        g.fillStyle = '#1e262b'; for (const xx of [-w / 2 + 8, w / 2 - 16]) { g.fillRect(xx, h / 2 - 34, 8, 34); g.strokeRect(xx, h / 2 - 34, 8, 34); } break;
+      case 'walrus':
+        g.fillStyle = '#9b7158'; g.beginPath(); g.moveTo(-w / 2, h / 2); g.quadraticCurveTo(-w / 2 + 6, -h / 2 + 18, -10, -h / 2 + 10); g.quadraticCurveTo(w / 2 - 6, -h / 2 - 6, w / 2, 6); g.quadraticCurveTo(w / 2 + 4, h / 2, w / 2 - 16, h / 2); g.closePath(); g.fill(); g.stroke();
+        g.fillStyle = BONE; for (const xx of [w / 2 - 34, w / 2 - 20]) { g.beginPath(); g.moveTo(xx - 4, 4); g.lineTo(xx, 34); g.lineTo(xx + 4, 4); g.closePath(); g.fill(); g.stroke(); }
+        g.fillStyle = '#c99b7c'; g.beginPath(); g.ellipse(w / 2 - 26, -2, 18, 11, 0, 0, 7); g.fill(); g.stroke();
+        g.fillStyle = INK; const blink = (t % 4) < .14; g.fillRect(w / 2 - 38, -22, 7, blink ? 2 : 7); g.fillRect(w / 2 - 20, -24, 7, blink ? 2 : 7); break;
+      case 'lighthouse': {
+        g.fillStyle = BONE; g.beginPath(); g.moveTo(-w / 2, h / 2); g.lineTo(-w / 2 + 18, -h / 2 + 56); g.lineTo(w / 2 - 18, -h / 2 + 56); g.lineTo(w / 2, h / 2); g.closePath(); g.fill(); g.stroke();
+        g.save(); g.clip(); g.fillStyle = '#ff4655'; for (let y = -h / 2 + 76; y < h / 2; y += 60) g.fillRect(-w, y, 2 * w, 28); g.restore();
+        g.beginPath(); g.moveTo(-w / 2, h / 2); g.lineTo(-w / 2 + 18, -h / 2 + 56); g.lineTo(w / 2 - 18, -h / 2 + 56); g.lineTo(w / 2, h / 2); g.closePath(); g.stroke();
+        g.fillStyle = '#ffd34d'; g.fillRect(-20, -h / 2 + 22, 40, 34); g.strokeRect(-20, -h / 2 + 22, 40, 34);
+        g.fillStyle = INK; g.beginPath(); g.moveTo(-26, -h / 2 + 22); g.lineTo(0, -h / 2); g.lineTo(26, -h / 2 + 22); g.closePath(); g.fill();
+        break; }
+    }
+  }
+
+  // ---------- particles ----------
+  const parts = [];
+  function splash(x, y, n, power) {
+    if (RM) n = Math.min(n, 6);
+    for (let i = 0; i < n; i++) { const a = -Math.PI / 2 + (Math.random() - .5) * 1.8; const v = power * (.35 + Math.random() * .65); parts.push({ x: x + (Math.random() - .5) * 30, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 1, r: 2 + Math.random() * 4 }); }
+  }
+
+  // ---------- toast ----------
+  let toastT = 0;
+  function toast(msg, bad) { const el = $('toast'); el.textContent = msg; el.classList.toggle('bad', !!bad); el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), 2600); }
+
+  // ---------- drop ----------
+  let pending = null; // item falling toward raft
+  function canDrop() { return S.raft && !pending && S.next < CARGO.length; }
+  function drop() {
+    if (!canDrop()) return;
+    const c = CARGO[S.next];
+    const hy = hookY();
+    pending = { c, x: S.hookX, y: hy + 24 + c.h / 2, vx: S.swayV * 20, vy: 0, a: S.sway, va: 0, falling: true };
+    ui();
+  }
+  function hookY() { return S2W(0, sceneTop + 70)[1]; }
+
+  function attach(p, lx) {
+    const c = p.c;
+    const ly = surfaceAt(lx, c.w / 2 * .7) - c.h / 2;
+    // momentum: body velocity at COM, then add the item
+    const comW = toWorld(CX, CY);
+    const pxw = p.x, pyw = p.y;
+    const Pm = M * S.vx + c.kg * p.vx, Pn = M * S.vy + c.kg * p.vy;
+    const L = I * S.om + c.kg * ((pxw - comW[0]) * p.vy - (pyw - comW[1]) * p.vx);
+    S.cargo.push({ c, lx, ly });
+    massProps();
+    const nc = toWorld(CX, CY);
+    S.vx = Pm / M; S.vy = Pn / M;
+    S.om = (L - M * ((nc[0] - comW[0]) * S.vy - (nc[1] - comW[1]) * S.vx)) / I;
+    S.next++;
+    const [wx, wy] = toWorld(lx, ly + c.h / 2);
+    splash(wx, wy, 6 + Math.min(18, c.kg / 40), 120 + Math.min(260, c.kg / 3));
+    ui();
+  }
+  function overboard(k, why) {
+    const i = S.cargo.indexOf(k); if (i < 0) return;
+    S.cargo.splice(i, 1);
+    const comW = toWorld(CX, CY);
+    const [wx, wy] = toWorld(k.lx, k.ly);
+    const rx = wx - comW[0], ry = wy - comW[1];
+    S.loose.push({ c: k.c, x: wx, y: wy, vx: S.vx - S.om * ry + Math.sin(S.th) * 60, vy: S.vy + S.om * rx, a: S.th, va: S.om * .6 + (Math.random() - .5), wet: false });
+    // keep COM continuous
+    const comBefore = comW; massProps(); const nc = toWorld(CX, CY);
+    S.vx += 0; S.vy += 0; void comBefore; void nc;
+    if (why) toast(why, true);
+    ui();
+  }
+
+  // ---------- simulation ----------
+  function step(dt) {
+    const r = S.raft; if (!r) return;
+    S.t += dt;
+    const t = RM ? 0 : S.t;
+    const comL = [CX, CY];
+    const [cwx, cwy] = toWorld(comL[0], comL[1]);
+    let Fx = 0, Fy = M * G, T = 0, subA = 0;
+    const c = Math.cos(S.th), s = Math.sin(S.th);
+    const drag = RM ? 3 : 1.8;
+    for (const p of r.pts) {
+      const lx = p.x - comL[0], ly = p.y - comL[1];
+      const rx = lx * c - ly * s, ry = lx * s + ly * c;
+      const wx = cwx + rx, wy = cwy + ry;
+      const d = wy - waterY(wx, t);
+      let f = (d + STEP / 2) / STEP; if (f <= 0) continue; if (f > 1) f = 1;
+      subA += p.a * f;
+      const base = RHO * p.a * f;
+      const vx = S.vx - S.om * ry, vy = S.vy + S.om * rx;
+      let fx = -drag * base * vx, fy = -base * G - drag * base * vy;
+      if (wy > BED) { fy -= (wy - BED) * base * 60 + base * 40 * vy; fx -= base * 30 * vx; }
+      Fx += fx; Fy += fy; T += rx * fy - ry * fx;
+    }
+    // light air drag, keep it near the middle
+    Fx += -M * .9 * S.vx - M * .6 * cwx;
+    // a little keel: rafts in games forgive more than rafts in physics
+    const tl = Math.atan2(Math.sin(S.th), Math.cos(S.th));
+    T += -I * (.4 + 2.5 * S.sub) * S.om - Math.sin(tl) * M * G * r.h * (S.sub > .97 ? .9 : .22);
+    if (Math.abs(tl) > .75) T -= Math.sign(tl) * (Math.abs(tl) - .75) * M * G * r.h * 3;
+    S.sub = subA / r.A; S.subS = (S.subS ?? S.sub) + (S.sub - (S.subS ?? S.sub)) * Math.min(1, dt * 2);
+    S.vx += Fx / M * dt; S.vy += Fy / M * dt; S.om += T / I * dt;
+    // integrate at COM, then restore origin
+    let nx = cwx + S.vx * dt, ny = cwy + S.vy * dt; S.th += S.om * dt;
+    const [ox, oy] = rot(CX, CY, S.th); S.X = nx - ox; S.Y = ny - oy;
+
+    // cargo slides when the deck tilts too far
+    const tilt = Math.atan2(Math.sin(S.th), Math.cos(S.th));
+    S.tiltT = Math.abs(tilt) > .62 && S.sub < .95 ? (S.tiltT || 0) + dt : 0;
+    if (S.tiltT > .25 && S.cargo.length && !S.slideCool) {
+      // the highest, outermost item on the low side goes first
+      let pick = null, bestScore = -1e9;
+      for (const k of S.cargo) { const sc2 = -k.ly * .5 + k.lx * Math.sign(tilt); if (sc2 > bestScore) { bestScore = sc2; pick = k; } }
+      if (pick) { overboard(pick, `The ${pick.c.name} slid overboard.`); S.slideCool = .35; }
+    }
+    if (S.slideCool) { S.slideCool -= dt; if (S.slideCool <= 0) S.slideCool = 0; }
+    S.capsized = Math.abs(tilt) > 1.6;
+
+    // pending drop
+    if (pending) {
+      const p = pending; p.vy += G * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= .99; p.a *= .96;
+      const [lx, ly] = toLocal(p.x, p.y + p.c.h / 2);
+      if (onRaft(lx) && !S.capsized) {
+        const sY = surfaceAt(lx, p.c.w / 2 * .7);
+        if (ly >= sY) { attach(p, lx); pending = null; }
+      }
+      if (pending && p.y - p.c.h / 2 > waterY(p.x, t)) {
+        S.loose.push({ c: p.c, x: p.x, y: p.y, vx: p.vx, vy: p.vy, a: p.a, va: (Math.random() - .5) * 2, wet: true });
+        splash(p.x, waterY(p.x, t), 14, 220); pending = null;
+        toast('Missed the raft. Tap right above it.', true); ui();
+      }
+    }
+    // loose bodies
+    for (let i = S.loose.length - 1; i >= 0; i--) {
+      const b = S.loose[i]; const wl = waterY(b.x, t);
+      if (b.c.id === 'parrot') { b.vy -= 900 * dt; b.vx += 120 * dt; b.y += b.vy * dt * .3; b.x += b.vx * dt; b.vy *= .9; if (b.y < -2000 || b.x > 3000) S.loose.splice(i, 1); continue; }
+      const under = b.y > wl;
+      if (under && !b.wet) { b.wet = true; splash(b.x, wl, 10, 180); }
+      const floaty = (b.c.id === 'crate' || b.c.id === 'barrel');
+      let ay2 = G;
+      if (under) { ay2 = floaty ? (G - G * 1.8 * Math.min(1, (b.y - wl) / 30)) : G * .25; b.vx *= .96; b.vy *= floaty ? .94 : .9; b.va *= .95; }
+      b.vy += ay2 * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.a += b.va * dt;
+      if (b.y > BED + 400) S.loose.splice(i, 1);
+    }
+    // particles
+    for (let i = parts.length - 1; i >= 0; i--) { const q = parts[i]; q.vy += G * .9 * dt; q.x += q.vx * dt; q.y += q.vy * dt; q.life -= dt * 1.4; if (q.life <= 0 || q.y > waterY(q.x, t) + 10) parts.splice(i, 1); }
+    // hook easing + sway
+    const prev = S.hookX;
+    S.hookX += (S.hookTX - S.hookX) * Math.min(1, dt * 7);
+    S.hookV = (S.hookX - prev) / dt;
+    S.swayV += (-S.sway * 18 - S.hookV * .004 - S.swayV * 2.2) * dt; S.sway += S.swayV * dt;
+    if (RM) { S.sway = 0; S.swayV = 0; }
+  }
+
+  // ---------- status & UI ----------
+  function state() {
+    if (!S.raft) return '';
+    if (S.capsized) return 'Capsized';
+    if (S.subS > .993) return 'Sunk';
+    const load = S.cargo.reduce((a, k) => a + k.c.kg, 0);
+    if (load > S.raft.safeKg || S.subS > .8) return 'Over the line';
+    return 'Afloat';
+  }
+  function ui() {
+    if (!S.raft) return;
+    const load = S.cargo.reduce((a, k) => a + k.c.kg, 0), cap = S.raft.capKg, safe = S.raft.safeKg;
+    $('loadKg').textContent = fmtKg(load); $('capKg').textContent = fmtKg(safe); $('sinkKg').textContent = fmtKg(cap);
+    $('mark').style.left = (safe / cap * 100) + '%';
+    const f = $('fill'); f.style.width = Math.min(100, load / cap * 100) + '%'; f.classList.toggle('over', load > safe);
+    const st = state(), pill = $('pill');
+    pill.textContent = st; pill.className = 'pill' + (st === 'Afloat' ? '' : st === 'Over the line' ? ' warn' : ' bad');
+    const b = $('drop');
+    if (S.next >= CARGO.length) { b.textContent = 'Nothing left to load'; b.disabled = true; }
+    else { const c = CARGO[S.next]; b.textContent = `Drop the ${c.name} · ${fmtKg(c.kg)} kg`; b.disabled = !!pending; }
+    $('vW').textContent = WEIGHTS[S.weight];
+    $('vS').textContent = S.swell < .15 ? 'Calm' : S.swell < .5 ? 'Choppy' : S.swell < .8 ? 'Rough' : 'Storm';
+    $('best').innerHTML = S.best ? `Best afloat: <b>${fmtKg(S.best.kg)} kg</b> on ${esc(S.best.word)} · ${WEIGHTS[S.best.weight]}` : 'Best afloat: <b>—</b>';
+  }
+  const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  function watch(dt) {
+    const st = state();
+    if (st !== S.lastState) {
+      if (st === 'Sunk' && S.lastState) { const last = S.cargo[S.cargo.length - 1]; toast(last ? `Sunk by the ${last.c.name}.` : 'Sunk.', true); }
+      if (S.lastState === 'Sunk' && st !== 'Sunk') toast('Back afloat.');
+      S.lastState = st; ui();
+    }
+    if (st === 'Afloat' || st === 'Over the line') {
+      S.stableT += dt;
+      const load = S.cargo.reduce((a, k) => a + k.c.kg, 0);
+      if (S.stableT > 1.5 && load > 0 && (!S.best || load > S.best.kg)) {
+        S.best = { kg: load, word: S.word, weight: S.weight };
+        try { localStorage.setItem('gf-lab09-best', JSON.stringify(S.best)); } catch (e) {}
+        ui();
+      }
+    } else S.stableT = 0;
+  }
+
+  // ---------- render ----------
+  function render() {
+    const g = ctx; g.setTransform(DPR, 0, 0, DPR, 0, 0);
+    const t = RM ? 0 : S.t;
+    // sky
+    const sky = g.createLinearGradient(0, 0, 0, ay); sky.addColorStop(0, '#0a141b'); sky.addColorStop(1, '#173341');
+    g.fillStyle = sky; g.fillRect(0, 0, VW, VH);
+    // stars
+    g.fillStyle = 'rgba(239,230,212,.55)';
+    for (let i = 0; i < 46; i++) { const x = (i * 263) % VW, y = ((i * 131) % 100) / 100 * (ay - 40); const tw = RM ? .6 : .4 + .4 * Math.sin(S.t * 1.3 + i); g.globalAlpha = tw * .6; g.fillRect(x, y, 1.6, 1.6); }
+    g.globalAlpha = 1;
+    // distant buoy
+    { const bx = VW * .88, [, by] = W2S(0, waterY(S2W(bx, 0)[0], t) * .4); g.fillStyle = '#2a4553'; g.fillRect(bx - 3, by - 26, 6, 24); const on = RM || (S.t % 2.4) < .35; g.fillStyle = on ? '#ff4655' : '#5a2a30'; g.beginPath(); g.arc(bx, by - 30, 4, 0, 7); g.fill(); if (on && !RM) { g.fillStyle = 'rgba(255,70,85,.18)'; g.beginPath(); g.arc(bx, by - 30, 14, 0, 7); g.fill(); } }
+
+    g.save(); g.translate(ax, ay); g.scale(sc, sc);
+    // hook, rope, next cargo
+    const hy = hookY();
+    g.strokeStyle = 'rgba(239,230,212,.7)'; g.lineWidth = 2 / sc;
+    const ty = (sceneTop - ay) / sc;
+    g.beginPath(); g.moveTo(S.hookX, ty); g.lineTo(S.hookX, hy); g.stroke();
+    g.fillStyle = '#2a4553'; g.strokeStyle = 'rgba(239,230,212,.5)'; g.lineWidth = 2; g.beginPath(); g.rect(S.hookX - 18, ty - 6, 36, 14); g.fill(); g.stroke();
+    g.strokeStyle = 'rgba(239,230,212,.18)'; g.beginPath(); g.moveTo((0 - ax) / sc - 50, ty - 6); g.lineTo((VW - ax) / sc + 50, ty - 6); g.stroke();
+    g.strokeStyle = '#efe6d4'; g.lineWidth = 4; g.beginPath(); g.arc(S.hookX, hy + 10, 9, -Math.PI * .1, Math.PI * 1.15); g.stroke();
+    if (!pending && S.next < CARGO.length) {
+      const c = CARGO[S.next]; g.save(); g.translate(S.hookX, hy + 20); g.rotate(S.sway);
+      g.strokeStyle = 'rgba(239,230,212,.7)'; g.lineWidth = 2; g.beginPath(); g.moveTo(0, 0); g.lineTo(-c.w * .35, 6 + 10); g.moveTo(0, 0); g.lineTo(c.w * .35, 16); g.stroke();
+      g.translate(0, 16 + c.h / 2); drawCargo(g, c, S.t); g.restore();
+      // aim guide down to the water
+      g.strokeStyle = 'rgba(255,107,44,.35)'; g.setLineDash([6, 10]); g.lineWidth = 2;
+      g.beginPath(); g.moveTo(S.hookX, hy + 40 + c.h); g.lineTo(S.hookX, waterY(S.hookX, t) - 4); g.stroke(); g.setLineDash([]);
+    }
+    if (pending) { g.save(); g.translate(pending.x, pending.y); g.rotate(pending.a); drawCargo(g, pending.c, S.t); g.restore(); }
+
+    // loose bodies behind water
+    for (const b of S.loose) { g.save(); g.translate(b.x, b.y); g.rotate(b.a); drawCargo(g, b.c, S.t); g.restore(); }
+
+    // raft + cargo
+    const r = S.raft;
+    if (r) {
+      if (!r.sprite) makeSprite();
+      g.save(); g.translate(S.X, S.Y); g.rotate(S.th);
+      const sp = r.sprite; g.drawImage(sp.c, -sp.ox, -sp.oy, sp.c.width / sp.k, sp.c.height / sp.k);
+      for (const k of S.cargo) { g.save(); g.translate(k.lx, k.ly); drawCargo(g, k.c, S.t); g.restore(); }
+      g.restore();
+    }
+
+    // water body (translucent, so what's under it shows)
+    const L = S2W(0, 0)[0] - 20, R = S2W(VW, 0)[0] + 20, B = S2W(0, VH)[1] + 20;
+    g.beginPath(); g.moveTo(L, B);
+    for (let x = L; x <= R; x += 14) g.lineTo(x, waterY(x, t));
+    g.lineTo(R, B); g.closePath();
+    const wg = g.createLinearGradient(0, 0, 0, 520); wg.addColorStop(0, 'rgba(18,92,110,.62)'); wg.addColorStop(.5, 'rgba(8,44,58,.86)'); wg.addColorStop(1, 'rgba(4,16,22,.97)');
+    g.fillStyle = wg; g.fill();
+    // foam line
+    g.beginPath(); for (let x = L; x <= R; x += 14) { const y = waterY(x, t); x === L ? g.moveTo(x, y) : g.lineTo(x, y); }
+    g.strokeStyle = 'rgba(190,240,240,.55)'; g.lineWidth = 2.4 / Math.max(.5, sc); g.stroke();
+    // particles
+    g.fillStyle = 'rgba(210,245,245,.9)';
+    for (const q of parts) { g.globalAlpha = Math.max(0, q.life); g.beginPath(); g.arc(q.x, q.y, q.r, 0, 7); g.fill(); }
+    g.globalAlpha = 1;
+    g.restore();
+    // smooth scale toward target
+    if (Math.abs(sc - scT) > .001) { sc += (scT - sc) * .12; if (S.raft) S.raft.sprite = null; }
+  }
+
+  // ---------- loop ----------
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    let dt = Math.min(.05, (now - last) / 1000); last = now;
+    acc += dt; const h = 1 / 240; let n = 0;
+    while (acc >= h && n < 16) { step(h); acc -= h; n++; }
+    watch(dt); render(); requestAnimationFrame(frame);
+  }
+
+  // ---------- input ----------
+  function aimAt(clientX) { const [wx] = S2W(clientX, 0); S.hookTX = wx; }
+  let downAt = null;
+  cv.addEventListener('pointermove', e => { if (e.pointerType === 'mouse') aimAt(e.clientX); });
+  cv.addEventListener('pointerdown', e => { downAt = { x: e.clientX, y: e.clientY, t: performance.now() }; aimAt(e.clientX); });
+  cv.addEventListener('pointerup', e => {
+    if (!downAt) return; const d = Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y); downAt = null;
+    if (d > 24) return;
+    aimAt(e.clientX);
+    if (e.pointerType === 'mouse') drop(); else { S.hookX = S.hookTX; setTimeout(drop, 120); }
+  });
+  cv.addEventListener('keydown', e => {
+    const stepX = 30;
+    if (e.key === 'ArrowLeft') { S.hookTX -= stepX; e.preventDefault(); }
+    else if (e.key === 'ArrowRight') { S.hookTX += stepX; e.preventDefault(); }
+    else if (e.key === 'Enter' || e.key === ' ') { drop(); e.preventDefault(); }
+  });
+  $('drop').addEventListener('click', drop);
+  $('unload').addEventListener('click', () => { unload(); });
+  function unload() {
+    S.cargo = []; S.loose = []; pending = null; S.next = 0; S.th = 0; S.om = 0; S.vx = 0; S.vy = 0; S.X = 0; S.Y = -180; S.capsized = false; S.lastState = '';
+    massProps(); ui();
+  }
+  let wordT = 0;
+  $('word').addEventListener('input', e => {
+    clearTimeout(wordT);
+    wordT = setTimeout(() => {
+      const v = e.target.value.replace(/[^\p{L}\p{N}&!?]/gu, '').slice(0, 10);
+      if (!v || v === S.word) return; S.word = v; rebuild(true);
+    }, 160);
+  });
+  $('sW').addEventListener('input', e => { S.weight = +e.target.value; $('vW').textContent = WEIGHTS[S.weight]; rebuild(true); });
+  $('sS').addEventListener('input', e => { S.swell = +e.target.value; ui(); });
+  $('sS').value = S.swell;
+  addEventListener('resize', () => { layout(); });
+
+  // about
+  const info = $('info'), ib = $('infoBtn');
+  const setInfo = o => { info.hidden = !o; ib.setAttribute('aria-expanded', String(o)); ib.hidden = o; if (o) info.querySelector('.close').focus(); else ib.focus(); };
+  ib.addEventListener('click', () => setInfo(true));
+  info.querySelector('.close').addEventListener('click', () => setInfo(false));
+  addEventListener('keydown', e => { if (e.key === 'Escape' && !info.hidden) setInfo(false); });
+
+  // ---------- boot: a raft already carrying a few things ----------
+  async function boot() {
+    await rebuild(false);
+    massProps();
+    const r = S.raft;
+    const preset = [[0, -.55], [1, .12], [2, .58]];
+    for (const [ci, u] of preset) { const c = CARGO[ci]; const lx = r.x0 + r.w / 2 + u * r.w / 2 * .8; S.cargo.push({ c, lx, ly: surfaceAt(lx, c.w / 2 * .7) - c.h / 2 }); }
+    S.next = 3; massProps();
+    // settle near equilibrium quickly
+    S.Y = 0; for (let i = 0; i < 240 * 4; i++) step(1 / 240);
+    S.t = 0; parts.length = 0;
+    S.hookX = S.hookTX = r.w * .05;
+    ui(); requestAnimationFrame(t => { last = t; frame(t); });
+  }
+  layout(); boot();
+
+  // ---------- hooks for capture ----------
+  window.__lab = {
+    setWord: w => { $('word').value = w; S.word = w; return rebuild(true); },
+    setWeight: w => { $('sW').value = w; S.weight = w; return rebuild(true); },
+    setSwell: v => { $('sS').value = v; S.swell = v; ui(); },
+    aim: u => { const r = S.raft; S.hookTX = (S.X + (r.x0 + r.w / 2 + u * r.w / 2)); },
+    aimNow: u => { const r = S.raft; S.hookX = S.hookTX = (S.X + (r.x0 + r.w / 2 + u * r.w / 2)); },
+    drop, unload,
+    setNext: i => { S.next = i; ui(); },
+    preload: (list) => { S.cargo = []; for (const [ci, u] of list) { const r = S.raft, c = CARGO[ci]; const lx = r.x0 + r.w / 2 + u * r.w / 2 * .8; S.cargo.push({ c, lx, ly: surfaceAt(lx, c.w / 2 * .7) - c.h / 2 }); } massProps(); ui(); },
+    settle: (sec = 3) => { for (let i = 0; i < 240 * sec; i++) step(1 / 240); },
+    state: () => ({ word: S.word, weight: S.weight, cap: S.raft?.capKg, load: S.cargo.reduce((a, k) => a + k.c.kg, 0), sub: S.sub, th: S.th, st: state(), next: S.next }),
+    screen: (lx, ly) => W2S(...toWorld(lx, ly)),
+    raftBox: () => { const r = S.raft; const a = W2S(...toWorld(r.x0, r.minY)), b = W2S(...toWorld(r.x0 + r.w, r.maxY)); return { x0: a[0], y0: a[1], x1: b[0], y1: b[1] }; },
+    hideUI: (h) => { for (const sel of ['.deckp', '.brand', '#infoBtn', '.toast']) document.querySelector(sel).style.visibility = h ? 'hidden' : ''; },
+    relayout: () => layout()
+  };
+})();
+</script>
