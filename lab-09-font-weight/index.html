@@ -295,16 +295,18 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(-
     cv.width = Math.round(VW * DPR); cv.height = Math.round(VH * DPR);
     const deck = $('deckp').getBoundingClientRect(), brand = document.querySelector('.brand').getBoundingClientRect();
     const wide = VW >= 900;
-    sceneTop = brand.bottom + 10;
-    const sceneBot = wide ? VH - 20 : deck.top - 6;
-    const left = wide ? deck.right + 20 : 0, right = VW;
+    const V = window.__labView; // optional framing override, used to compose captures
+    sceneTop = V ? V.top : brand.bottom + 10;
+    const sceneBot = V ? V.bottom : wide ? VH - 20 : deck.top - 6;
+    const left = !V && wide ? deck.right + 20 : 0, right = VW;
     ax = (left + right) / 2;
-    ay = sceneTop + (sceneBot - sceneTop) * (wide ? .6 : .64);
+    ay = V && V.water ? V.water : sceneTop + (sceneBot - sceneTop) * (wide ? .6 : .64);
     if (!S.raft) return;
     const bedLater = sceneBot - 14;
     const rw = Math.max(S.raft.w, 420) + (VW < 600 ? 170 : 120);
     const above = ay - sceneTop;
     scT = Math.min((right - left - 24) / rw, above / (S.raft.h * .45 + 300), 1.6);
+    if (V && V.scale) scT = V.scale;
     if (!sc || sc === 1) sc = scT;
     BED = Math.max(S.raft.h * .8, (bedLater - ay) / scT);
     S.raft.sprite = null;
