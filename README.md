@@ -1,6 +1,6 @@
 # Greyframe Labs
 
-Experiments in UI, motion and creative coding for games, apps and interfaces. A new one every day.
+Experiments in UI, motion and creative coding for games, apps and interfaces.
 
 **Live:** https://greyframelab.github.io/labs/
 
