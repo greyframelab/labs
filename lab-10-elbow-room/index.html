@@ -1,0 +1,767 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Lab #10 — Elbow Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@500;700&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: an open backpack owns the screen. Title top-left, the "found nearby" dock pinned to the bottom. One deliberate dark campsite look. */
+:root{
+  --ground:#121410;       /* night ground */
+  --dock:#1e2218;         /* panels */
+  --bone:#f1e8d4;         /* text, thread */
+  --mist:#a6a28c;         /* muted text */
+  --ink:#1c1a12;          /* icons on fabric */
+  --signal:#ff8a3d;       /* selection, accent */
+  --alarm:#ff5544;        /* overpacked */
+  --ok:#a9cf6a;           /* room to spare */
+  --line:rgba(241,232,212,.13);
+  --display:"Roboto Slab",Rockwell,Georgia,serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--ground);color:var(--bone);font:16px/1.5 var(--body);overflow:hidden;-webkit-font-smoothing:antialiased}
+#cv{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
+#cv:focus-visible{box-shadow:inset 0 0 0 2px var(--signal)}
+
+.brand{position:fixed;z-index:2;left:16px;top:calc(env(safe-area-inset-top,0px) + 16px);max-width:calc(100% - 150px);pointer-events:none;display:flex;flex-direction:column;gap:6px}
+@media (min-width:900px){.brand{left:40px;top:36px;max-width:340px}}
+.eyebrow{font:600 11px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--mist)}
+.eyebrow b{color:var(--signal);font-weight:600}
+.brand h1{margin:0;font:700 clamp(34px,6vw,58px)/.95 var(--display);letter-spacing:-.01em;text-wrap:balance}
+.brand h1 b{color:var(--signal);font-weight:700}
+.brand p{margin:0;font-size:15px;line-height:1.35;color:var(--mist);max-width:30ch}
+
+.toast{position:fixed;z-index:3;left:50%;bottom:220px;transform:translate(-50%,-6px);max-width:min(420px,calc(100% - 32px));box-sizing:border-box;padding:9px 14px;border-radius:10px;background:rgba(18,20,16,.92);border:1px solid var(--line);font:500 14px/1.35 var(--body);text-align:center;opacity:0;pointer-events:none;transition:opacity .25s,transform .35s cubic-bezier(.2,.9,.3,1)}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.toast.bad{border-color:rgba(255,85,68,.6)}
+
+.dock{position:fixed;z-index:2;left:0;right:0;bottom:0;box-sizing:border-box;padding:14px 16px calc(14px + env(safe-area-inset-bottom,0px));background:rgba(30,34,24,.94);border-top:1px solid var(--line);border-radius:16px 16px 0 0;display:flex;flex-direction:column;gap:10px;backdrop-filter:blur(6px)}
+@media (min-width:900px){.dock{left:50%;right:auto;bottom:16px;transform:translateX(-50%);width:min(860px,calc(100% - 80px));border:1px solid var(--line);border-radius:16px;padding:16px 20px}}
+.row{display:flex;align-items:center;gap:12px;min-width:0}
+.meter{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.mlabel{display:flex;align-items:baseline;gap:6px;font:500 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mist);font-variant-numeric:tabular-nums}
+.mlabel b{font:700 18px/1 var(--display);letter-spacing:0;color:var(--bone)}
+.bar{position:relative;height:8px;border-radius:99px;background:rgba(241,232,212,.08);overflow:hidden}
+.bar i{position:absolute;left:0;top:0;bottom:0;border-radius:99px;background:var(--ok);transition:width .45s cubic-bezier(.2,.9,.3,1),background-color .3s}
+.bar .cap{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--bone);opacity:.55}
+.chip{flex:none;font:600 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;padding:7px 9px;border-radius:6px;background:rgba(169,207,106,.14);color:var(--ok);white-space:nowrap}
+.chip.snug{background:rgba(255,138,61,.14);color:var(--signal)}
+.chip.over{background:rgba(255,85,68,.16);color:var(--alarm)}
+.lbl{flex:1;min-width:0;font:600 11px/1.2 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mist)}
+.lbl .hint-w{white-space:nowrap}
+@media (max-width:440px){.lbl .hint-w{display:none}}
+.acts{display:flex;gap:8px;flex:none}
+.ghost{padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--bone);font:600 13px/1 var(--body);cursor:pointer;transition:border-color .2s,background-color .2s}
+.ghost:hover{border-color:rgba(255,138,61,.6)}
+.ghost[aria-pressed="true"]{background:var(--signal);border-color:var(--signal);color:var(--ink)}
+.tray{display:flex;gap:8px;overflow-x:auto;overscroll-behavior-x:contain;touch-action:pan-x;padding-bottom:2px;scrollbar-width:thin;min-height:86px}
+.loot{flex:none;width:74px;height:84px;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-radius:10px;border:1px solid var(--line);background:rgba(241,232,212,.04);color:var(--bone);cursor:pointer;padding:6px 4px;transition:transform .2s cubic-bezier(.2,.9,.3,1),border-color .2s}
+.loot:hover{border-color:rgba(255,138,61,.6);transform:translateY(-2px)}
+.loot:active{transform:scale(.96)}
+.loot canvas{width:40px;height:40px}
+.loot .nm{font:600 12px/1 var(--body)}
+.loot .l{font:500 10px/1 var(--mono);color:var(--mist)}
+.empty{font-size:14px;color:var(--mist);align-self:center}
+button:focus-visible,a:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+
+/* about */
+#infoBtn{position:fixed;z-index:5;right:16px;top:calc(env(safe-area-inset-top,0px) + 14px);padding:8px 12px;border-radius:999px;border:1px solid var(--line);background:rgba(30,34,24,.85);color:var(--bone);font:600 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
+@media (min-width:900px){#infoBtn{right:40px;top:36px}}
+#infoBtn:hover{border-color:var(--signal)}
+#info{box-sizing:border-box;position:fixed;z-index:6;right:12px;top:calc(env(safe-area-inset-top,0px) + 12px);width:min(420px,calc(100vw - 24px));max-height:calc(100% - 24px);overflow:auto;padding:22px;border-radius:14px;background:#1a1e15;border:1px solid var(--line);box-shadow:0 24px 70px rgba(0,0,0,.55);display:flex;flex-direction:column;gap:14px;font-size:15px;animation:rise .3s cubic-bezier(.2,.9,.3,1)}
+@media (min-width:900px){#info{right:40px;top:36px}}
+@keyframes rise{from{transform:translateY(-10px);opacity:0}}
+#info .meta{font:600 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--signal)}
+#info h3{margin:0;font:700 34px/1 var(--display)}
+#info h4{margin:2px 0 6px;font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--mist)}
+#info p{margin:0}
+#info ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+#info a{color:var(--signal)}
+#info .close{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--bone);font-size:18px;cursor:pointer}
+#allLabs{font:600 12px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase}
+@media (prefers-reduced-motion:reduce){#info{animation:none}.bar i,.toast,.loot,.ghost{transition:none}}
+</style>
+
+<canvas id="cv" tabindex="0" aria-label="An open backpack. Each pocket is a cell that resizes to fit what it holds. Arrow keys pick a packed item, Enter unpacks it, S shakes the pack."></canvas>
+
+<div class="brand" id="brand">
+  <div class="eyebrow"><b>Greyframe Labs</b> · #10 · UI</div>
+  <h1>Elbow <b>Room</b></h1>
+  <p>A backpack whose pockets shove over to fit what you find.</p>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<button id="infoBtn" type="button" aria-expanded="false" aria-controls="info">About this lab</button>
+<aside id="info" hidden aria-label="About this lab">
+  <button class="close" type="button" aria-label="Close">×</button>
+  <div class="meta">Lab #10 · UI · 13 Oct 2026</div>
+  <h3>Elbow Room</h3>
+  <div><h4>Idea</h4><p>What if inventory slots made room for each other? Every pocket in this pack is a living cell. Pack something and the cells shove over to fit it: bulky gear muscles in, small things get small pockets, and the free space gathers in the gaps. Push past the limit and a seam pops.</p></div>
+  <div><h4>Controls</h4><ul>
+    <li>Tap anything under Found nearby to pack it. It takes the biggest free pocket and elbows the rest aside.</li>
+    <li>Drag a packed item to move it. The other pockets flow around it.</li>
+    <li>Tap a packed item, or drag it out of the pack, to unpack it.</li>
+    <li>The load bar shows litres used against the pack's 24 L. Overpack it and every pocket feels the squeeze. Go past about 29 L and the last thing you added bursts out.</li>
+    <li>Shake repacks everything from scratch. Fixed slots puts the same gear in twelve equal pockets, for comparison.</li>
+    <li>Keyboard: Tab to the pack, arrow keys pick an item, Enter unpacks it, S shakes.</li>
+  </ul></div>
+  <div><h4>Inspired by</h4><ul>
+    <li>Joanie Lemercier's generative cell networks, which grow around empty space like something alive.</li>
+    <li>Voronoi treemaps (Balzer &amp; Deussen, 2005), where each cell's area is tuned to a value.</li>
+    <li>Grid inventories in survival and action games, where packing is a puzzle of fixed squares.</li>
+  </ul></div>
+  <div><h4>For game UI</h4><p>Let inventory space read like space. When slots size themselves to what they hold, players see bulk at a glance, free room shows up as real gaps, and "full" is something you feel coming instead of a sudden error. Keep the grid when packing is the puzzle. Use living pockets when it isn't.</p></div>
+  <a id="allLabs" href="https://claude.ai/artifact/CDYy2LnuZN3Tdb1A9BSHrG" target="_blank" rel="noopener">← All labs</a>
+  <script>if (/github\.io$/.test(location.hostname)) { const a = document.getElementById('allLabs'); a.href = '../'; a.removeAttribute('target'); }</script>
+</aside>
+
+<section class="dock" id="dock" aria-label="Pack status and found items">
+  <div class="row">
+    <div class="meter">
+      <div class="mlabel"><span>Load</span><b id="load">0</b><span>/ 24 L</span></div>
+      <div class="bar"><i id="fill"></i><span class="cap" id="capMark"></span></div>
+    </div>
+    <span class="chip" id="chip">Room to spare</span>
+  </div>
+  <div class="row">
+    <span class="lbl">Found nearby<span class="hint-w"> · tap to pack</span></span>
+    <div class="acts">
+      <button class="ghost" id="shake" type="button">Shake</button>
+      <button class="ghost" id="fixed" type="button" aria-pressed="false">Fixed slots</button>
+    </div>
+  </div>
+  <div class="tray" id="tray" role="list"></div>
+</section>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const cv = $('cv'), ctx = cv.getContext('2d');
+  const RM = matchMedia('(prefers-reduced-motion: reduce)');
+  let reduced = RM.matches;
+  RM.addEventListener && RM.addEventListener('change', e => { reduced = e.matches; });
+
+  const CAP = 24, SEAM = 28.8, FIXED_SLOTS = 12;
+  const ITEMS = [
+    { id: 'tent', name: 'Tent', L: 8, cat: 'shelter' },
+    { id: 'bedroll', name: 'Bedroll', L: 6, cat: 'shelter' },
+    { id: 'axe', name: 'Axe', L: 3, cat: 'tools' },
+    { id: 'kettle', name: 'Kettle', L: 2.5, cat: 'tools' },
+    { id: 'rope', name: 'Rope', L: 2, cat: 'tools' },
+    { id: 'lantern', name: 'Lantern', L: 2, cat: 'light' },
+    { id: 'fish', name: 'Fish', L: 1.5, cat: 'food' },
+    { id: 'bottle', name: 'Water', L: 1.5, cat: 'food' },
+    { id: 'beans', name: 'Beans', L: 1, cat: 'food' },
+    { id: 'berries', name: 'Berries', L: 1, cat: 'food' },
+    { id: 'flare', name: 'Flare', L: .8, cat: 'light' },
+    { id: 'map', name: 'Map', L: .5, cat: 'nav' },
+    { id: 'compass', name: 'Compass', L: .5, cat: 'nav' },
+    { id: 'matches', name: 'Matches', L: .4, cat: 'light' }
+  ];
+  const BYID = Object.fromEntries(ITEMS.map(i => [i.id, i]));
+  const CAT = { shelter: '#c46d48', tools: '#c9a064', food: '#8f9d52', light: '#e2b24c', nav: '#8ea79c' };
+  const INK = '#1c1a12', BONE = '#f1e8d4', SIGNAL = '#ff8a3d', ALARM = [255, 85, 68];
+
+  // ---------- seeded random ----------
+  let seed = 7;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+
+  // ---------- geometry ----------
+  function clip(poly, ax, ay, b) { // keep points with ax*x + ay*y <= b
+    const out = [], n = poly.length;
+    for (let i = 0; i < n; i++) {
+      const P = poly[i], Q = poly[(i + 1) % n];
+      const fp = ax * P[0] + ay * P[1] - b, fq = ax * Q[0] + ay * Q[1] - b;
+      if (fp <= 0) out.push(P);
+      if ((fp <= 0) !== (fq <= 0)) { const t = fp / (fp - fq); out.push([P[0] + (Q[0] - P[0]) * t, P[1] + (Q[1] - P[1]) * t]); }
+    }
+    return out;
+  }
+  function areaCent(poly) {
+    let A = 0, cx = 0, cy = 0; const n = poly.length;
+    for (let i = 0; i < n; i++) {
+      const a = poly[i], b = poly[(i + 1) % n], c = a[0] * b[1] - b[0] * a[1];
+      A += c; cx += (a[0] + b[0]) * c; cy += (a[1] + b[1]) * c;
+    }
+    A *= .5;
+    if (Math.abs(A) < 1e-6) return { a: 0, cx: poly[0] ? poly[0][0] : 0, cy: poly[0] ? poly[0][1] : 0 };
+    return { a: Math.abs(A), cx: cx / (6 * A), cy: cy / (6 * A) };
+  }
+  function inset(poly, d) {
+    const { cx, cy } = areaCent(poly); let p = poly; const n = poly.length;
+    for (let i = 0; i < n; i++) {
+      const A = poly[i], B = poly[(i + 1) % n];
+      let nx = -(B[1] - A[1]), ny = B[0] - A[0]; const L = Math.hypot(nx, ny);
+      if (L < 1e-6) continue; nx /= L; ny /= L;
+      if (nx * (cx - A[0]) + ny * (cy - A[1]) < 0) { nx = -nx; ny = -ny; }
+      p = clip(p, -nx, -ny, -(nx * A[0] + ny * A[1] + d));
+      if (p.length < 3) return null;
+    }
+    return p;
+  }
+  function inside(poly, x, y) {
+    let sgn = 0; const n = poly.length;
+    for (let i = 0; i < n; i++) {
+      const A = poly[i], B = poly[(i + 1) % n];
+      const c = (B[0] - A[0]) * (y - A[1]) - (B[1] - A[1]) * (x - A[0]);
+      if (Math.abs(c) < 1e-9) continue;
+      const s = c > 0 ? 1 : -1; if (!sgn) sgn = s; else if (s !== sgn) return false;
+    }
+    return true;
+  }
+  function clampIn(poly, x, y) {
+    if (inside(poly, x, y)) return [x, y];
+    let best = null, bd = Infinity; const n = poly.length;
+    for (let i = 0; i < n; i++) {
+      const A = poly[i], B = poly[(i + 1) % n], dx = B[0] - A[0], dy = B[1] - A[1];
+      const t = Math.max(0, Math.min(1, ((x - A[0]) * dx + (y - A[1]) * dy) / (dx * dx + dy * dy || 1)));
+      const px = A[0] + dx * t, py = A[1] + dy * t, d = (px - x) ** 2 + (py - y) ** 2;
+      if (d < bd) { bd = d; best = [px, py]; }
+    }
+    return best;
+  }
+  function inradius(poly, x, y) {
+    let m = Infinity; const n = poly.length;
+    for (let i = 0; i < n; i++) {
+      const A = poly[i], B = poly[(i + 1) % n], dx = B[0] - A[0], dy = B[1] - A[1], L = Math.hypot(dx, dy);
+      if (L < 1e-6) continue;
+      m = Math.min(m, Math.abs((x - A[0]) * dy - (y - A[1]) * dx) / L);
+    }
+    return m;
+  }
+  function spanAt(poly, y) { // width of the polygon along a horizontal line
+    let a = Infinity, b = -Infinity; const n = poly.length;
+    for (let i = 0; i < n; i++) {
+      const P0 = poly[i], P1 = poly[(i + 1) % n];
+      if ((P0[1] - y) * (P1[1] - y) > 0 || P0[1] === P1[1]) continue;
+      const x = P0[0] + (P1[0] - P0[0]) * (y - P0[1]) / (P1[1] - P0[1]);
+      a = Math.min(a, x); b = Math.max(b, x);
+    }
+    return b > a ? b - a : 0;
+  }
+  function roundPath(c, poly, R) {
+    const n = poly.length; c.beginPath();
+    const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    const s0 = mid(poly[n - 1], poly[0]); c.moveTo(s0[0], s0[1]);
+    for (let i = 0; i < n; i++) {
+      const P = poly[(i - 1 + n) % n], V = poly[i], N = poly[(i + 1) % n];
+      const l1 = Math.hypot(V[0] - P[0], V[1] - P[1]), l2 = Math.hypot(N[0] - V[0], N[1] - V[1]);
+      const r = Math.max(0, Math.min(R, l1 * .5, l2 * .5));
+      const m = mid(V, N);
+      c.arcTo(V[0], V[1], m[0], m[1], r);
+    }
+    c.closePath();
+  }
+
+  // ---------- state ----------
+  const S = { sites: [], mode: 'elbow', order: 0, drag: null, hover: null, sel: null, wob: 0, t: 0, flyers: [], popping: false };
+  let W = 0, H = 0, DPR = 1, P = null; // P = pack geometry
+  const bg = document.createElement('canvas');
+
+  function mkSite(kind, it, x, y) {
+    const s = { kind, it, x: x + (rnd() - .5) * 2, y: y + (rnd() - .5) * 2, w: 0, s: 1, sT: 1, base: 1, a: 0, cx: x, cy: y, poly: null, born: -1, order: 0, hideUntil: 0, dying: false };
+    let m = -Infinity;
+    for (const o of S.sites) m = Math.max(m, o.w - ((o.x - s.x) ** 2 + (o.y - s.y) ** 2));
+    s.w = isFinite(m) ? m + 50 : 0;
+    return s;
+  }
+  const live = () => S.sites.filter(s => !s.dying);
+  const packed = () => S.sites.filter(s => s.kind === 'item' && !s.dying);
+  const load = () => packed().reduce((t, s) => t + s.it.L, 0);
+
+  // ---------- layout ----------
+  function roundedTrap(cx, top, bot, wt, wb, rc) {
+    const C = [[cx - wt / 2, top], [cx + wt / 2, top], [cx + wb / 2, bot], [cx - wb / 2, bot]], out = [];
+    for (let i = 0; i < 4; i++) {
+      const Pv = C[(i + 3) % 4], V = C[i], N = C[(i + 1) % 4];
+      const d1 = Math.hypot(V[0] - Pv[0], V[1] - Pv[1]), d2 = Math.hypot(N[0] - V[0], N[1] - V[1]);
+      const a = [V[0] + (Pv[0] - V[0]) / d1 * rc, V[1] + (Pv[1] - V[1]) / d1 * rc];
+      const b = [V[0] + (N[0] - V[0]) / d2 * rc, V[1] + (N[1] - V[1]) / d2 * rc];
+      for (let k = 0; k <= 6; k++) { const t = k / 6, u = 1 - t; out.push([u * u * a[0] + 2 * u * t * V[0] + t * t * b[0], u * u * a[1] + 2 * u * t * V[1] + t * t * b[1]]); }
+    }
+    return out;
+  }
+  function layout() {
+    DPR = Math.min(2, window.devicePixelRatio || 1); W = innerWidth; H = innerHeight;
+    cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+    const bb = $('brand').getBoundingClientRect(), db = $('dock').getBoundingClientRect();
+    const wide = W >= 900;
+    const top = wide ? 70 : bb.bottom + 40, bottom = db.top - 20;
+    const avH = Math.max(160, bottom - top);
+    const w = Math.min(W - 32, avH * .86, 520), h = Math.min(avH, w * 1.25);
+    const cx = W / 2, y0 = top + (avH - h) / 2;
+    const old = P;
+    const outer = roundedTrap(cx, y0, y0 + h, w * .84, w, Math.min(40, w * .11));
+    const inner = inset(outer, 12);
+    const ac = areaCent(inner);
+    P = { outer, inner, area: ac.a, cx: ac.cx, cy: ac.cy, top: y0, bot: y0 + h, w, h, clamp: inset(inner, 8) || inner };
+    if (old) { // keep sites in place relative to the pack
+      const sx = P.w / old.w, sy = P.h / old.h;
+      for (const s of S.sites) { s.x = P.cx + (s.x - old.cx) * sx; s.y = P.cy + (s.y - old.cy) * sy; s.w *= sx * sy; }
+      relax(30);
+    }
+    $('toast').style.bottom = (H - db.top + 12) + 'px';
+    paintBg();
+  }
+  function paintBg() {
+    bg.width = cv.width; bg.height = cv.height;
+    const g = bg.getContext('2d'); g.setTransform(DPR, 0, 0, DPR, 0, 0);
+    g.fillStyle = '#121410'; g.fillRect(0, 0, W, H);
+    // contour lines, like a trail map under the pack
+    let sd = 11; const r = () => { sd = (sd * 16807) % 2147483647; return (sd - 1) / 2147483646; };
+    g.lineWidth = 1;
+    for (let k = 0; k < 5; k++) {
+      const cx = r() * W, cy = r() * H, ph = r() * 6, ph2 = r() * 6;
+      for (let rr = 30; rr < Math.max(W, H) * .5; rr += 26) {
+        g.beginPath();
+        for (let a = 0; a <= 64; a++) {
+          const t = a / 64 * Math.PI * 2, q = rr * (1 + .14 * Math.sin(3 * t + ph + rr * .01) + .07 * Math.sin(5 * t + ph2));
+          const x = cx + Math.cos(t) * q, y = cy + Math.sin(t) * q * .8;
+          a ? g.lineTo(x, y) : g.moveTo(x, y);
+        }
+        g.strokeStyle = 'rgba(241,232,212,' + (rr % 130 < 26 ? .07 : .035) + ')'; g.stroke();
+      }
+    }
+    const v = g.createRadialGradient(W / 2, H * .45, 0, W / 2, H * .45, Math.max(W, H) * .7);
+    v.addColorStop(0, 'rgba(18,20,16,0)'); v.addColorStop(1, 'rgba(10,11,8,.75)');
+    g.fillStyle = v; g.fillRect(0, 0, W, H);
+  }
+  function randomIn() {
+    const b = P.clamp; let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const [x, y] of b) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+    for (let i = 0; i < 60; i++) { const x = x0 + rnd() * (x1 - x0), y = y0 + rnd() * (y1 - y0); if (inside(b, x, y)) return [x, y]; }
+    return [P.cx, P.cy];
+  }
+
+  // ---------- capacity-constrained power diagram ----------
+  function computeCells() {
+    const L = S.sites, n = L.length;
+    for (let i = 0; i < n; i++) {
+      const si = L[i]; let p = P.inner;
+      for (let j = 0; j < n && p.length >= 3; j++) {
+        if (j === i) continue; const sj = L[j];
+        const ax = 2 * (sj.x - si.x), ay = 2 * (sj.y - si.y);
+        if (ax === 0 && ay === 0) continue;
+        p = clip(p, ax, ay, (sj.x * sj.x + sj.y * sj.y) - (si.x * si.x + si.y * si.y) - sj.w + si.w);
+      }
+      si.poly = p.length >= 3 ? p : null;
+      const ac = si.poly ? areaCent(si.poly) : { a: 0, cx: si.x, cy: si.y };
+      si.a = ac.a; si.cx = ac.cx; si.cy = ac.cy;
+    }
+  }
+  function targets() {
+    const raw = S.sites.map(s => Math.max(1e-4, s.base * s.s)), sum = raw.reduce((a, b) => a + b, 0);
+    return raw.map(r => r / sum * P.area);
+  }
+  function relax(iter) {
+    const L = S.sites; if (!L.length) return;
+    const dragged = S.drag && S.drag.moved ? S.drag.s : null;
+    for (let k = 0; k < iter; k++) {
+      computeCells();
+      const T = targets();
+      for (let i = 0; i < L.length; i++) {
+        const s = L[i];
+        if (!s.poly || s.a < 1) {
+          let m = -Infinity;
+          for (let j = 0; j < L.length; j++) if (j !== i) m = Math.max(m, L[j].w - ((L[j].x - s.x) ** 2 + (L[j].y - s.y) ** 2));
+          s.w = (isFinite(m) ? m : 0) + 20; continue;
+        }
+        s.w += .3 * (T[i] - s.a);
+        if (s !== dragged) { s.x += (s.cx - s.x) * .22; s.y += (s.cy - s.y) * .22; }
+      }
+      let mw = 0; for (const s of L) mw += s.w; mw /= L.length; for (const s of L) s.w -= mw;
+    }
+    computeCells();
+  }
+
+  // ---------- pockets ----------
+  function syncPockets() {
+    const items = packed(), ld = load(), free = CAP - ld;
+    let want;
+    if (S.mode === 'fixed') want = Math.max(0, FIXED_SLOTS - items.length);
+    else want = free > .35 ? Math.max(1, Math.min(7, Math.round(free / 1.8))) : 0;
+    const em = S.sites.filter(s => s.kind === 'empty' && !s.dying);
+    em.sort((a, b) => a.a - b.a);
+    while (em.length > want) { const e = em.shift(); e.dying = true; e.sT = 0; if (reduced) e.s = 0; }
+    while (em.length < want) { const [x, y] = randomIn(); const e = mkSite('empty', null, x, y); e.s = reduced ? 1 : .05; em.push(e); S.sites.push(e); }
+    for (const s of S.sites) {
+      if (s.kind === 'item') s.base = S.mode === 'fixed' ? 1 : s.it.L;
+      else s.base = S.mode === 'fixed' ? 1 : Math.max(free, .05) / Math.max(1, want);
+    }
+    if (reduced) { for (const s of S.sites) s.s = s.sT; cull(); relax(80); }
+  }
+  function cull() { S.sites = S.sites.filter(s => !(s.dying && s.s < .02)); }
+
+  // ---------- actions ----------
+  const now = () => performance.now();
+  function packItem(id, from) {
+    const it = BYID[id]; if (!it || packed().some(s => s.it === it)) return;
+    const em = S.sites.filter(s => s.kind === 'empty' && !s.dying).sort((a, b) => b.a - a.a)[0];
+    let s;
+    if (em) { s = em; s.kind = 'item'; s.it = it; s.s = Math.min(s.s, .4); }
+    else { s = mkSite('item', it, P.cx + (rnd() - .5) * 30, P.top + 50); s.s = .08; S.sites.push(s); }
+    s.sT = 1; s.order = ++S.order; s.born = now() + (reduced ? 0 : 320); s.hideUntil = s.born;
+    if (from && !reduced) S.flyers.push({ it, x0: from[0], y0: from[1], tx: s, t0: now(), dur: 320, kind: 'in' });
+    syncPockets(); renderTray(); ui();
+    if (load() > SEAM && !S.popping) {
+      S.popping = true;
+      setTimeout(() => popSeam(), reduced ? 50 : 900);
+    }
+  }
+  function popSeam() {
+    S.popping = false;
+    if (load() <= SEAM) return;
+    const last = packed().sort((a, b) => b.order - a.order)[0]; if (!last) return;
+    const it = last.it;
+    if (!reduced) {
+      const dir = last.cx < P.cx ? -1 : 1;
+      S.flyers.push({ it, x0: last.cx, y0: last.cy, vx: dir * (180 + rnd() * 120), vy: -560, t0: now(), dur: 1300, kind: 'pop', rot: dir * 9 });
+      S.wob = 1;
+    }
+    last.kind = 'empty'; last.it = null; last.s = .2; last.sT = 1;
+    syncPockets(); renderTray(); ui();
+    toast(`Seam popped! The ${it.name.toLowerCase()} burst out. This pack tops out near 29 L.`, true);
+  }
+  function unpack(s) {
+    if (!s || s.kind !== 'item') return;
+    const it = s.it, from = [s.cx, s.cy];
+    s.kind = 'empty'; s.it = null; s.sT = 1;
+    if (S.sel === s) S.sel = null;
+    syncPockets(); renderTray(); ui();
+    if (!reduced) {
+      const b = document.querySelector(`.loot[data-id="${it.id}"]`);
+      if (b) { const r = b.getBoundingClientRect(); b.style.visibility = 'hidden'; S.flyers.push({ it, x0: from[0], y0: from[1], x1: r.left + r.width / 2, y1: r.top + 26, t0: now(), dur: 380, kind: 'out', el: b }); }
+    }
+  }
+  function shake() {
+    for (const s of S.sites) { const [x, y] = randomIn(); s.x = x; s.y = y; s.w = 0; }
+    if (reduced) relax(120); else S.wob = .8;
+    toast('Shaken. Everything finds a new spot.');
+  }
+  function setMode(m) {
+    S.mode = m; $('fixed').setAttribute('aria-pressed', String(m === 'fixed'));
+    syncPockets();
+    toast(m === 'fixed' ? 'Fixed slots: the tent gets the same pocket as the matches.' : 'Elbow room: pockets size themselves to what they hold.');
+  }
+  function setPack(ids) {
+    S.sites = []; S.flyers = []; S.order = 0;
+    for (const id of ids) { const [x, y] = randomIn(); const s = mkSite('item', BYID[id], x, y); s.order = ++S.order; S.sites.push(s); }
+    const saved = reduced; reduced = true; syncPockets(); reduced = saved;
+    relax(260); renderTray(); ui();
+  }
+
+  // ---------- UI ----------
+  let toastT = 0;
+  function toast(msg, bad) {
+    const t = $('toast'); t.textContent = msg; t.classList.toggle('bad', !!bad); t.classList.add('on');
+    clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2800);
+  }
+  function ui() {
+    const ld = load();
+    $('load').textContent = (Math.round(ld * 10) / 10).toString();
+    const f = $('fill'); f.style.width = Math.min(100, ld / SEAM * 100) + '%';
+    f.style.backgroundColor = ld > CAP ? 'var(--alarm)' : ld > CAP - 4 ? 'var(--signal)' : 'var(--ok)';
+    $('capMark').style.left = (CAP / SEAM * 100) + '%';
+    const c = $('chip');
+    c.className = 'chip' + (ld > CAP ? ' over' : ld > CAP - 4 ? ' snug' : '');
+    c.textContent = ld > CAP ? 'Overpacked' : ld > CAP - 4 ? 'Snug' : 'Room to spare';
+  }
+  function renderTray() {
+    const tray = $('tray'), inPack = new Set(packed().map(s => s.it.id));
+    const out = ITEMS.filter(i => !inPack.has(i.id));
+    tray.innerHTML = '';
+    if (!out.length) { const p = document.createElement('p'); p.className = 'empty'; p.textContent = 'Nothing left on the ground. Everything is packed.'; tray.appendChild(p); return; }
+    for (const it of out) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'loot'; b.dataset.id = it.id; b.setAttribute('role', 'listitem');
+      b.setAttribute('aria-label', `Pack the ${it.name.toLowerCase()}, ${it.L} litres`);
+      const c = document.createElement('canvas'); c.width = 80; c.height = 80;
+      const g = c.getContext('2d'); g.scale(2, 2);
+      g.fillStyle = CAT[it.cat]; g.beginPath(); g.arc(20, 20, 19, 0, Math.PI * 2); g.fill();
+      drawIcon(g, it.id, 20, 20, 11, INK);
+      const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = it.name;
+      const l = document.createElement('span'); l.className = 'l'; l.textContent = it.L + ' L';
+      b.append(c, nm, l);
+      b.addEventListener('click', () => { const r = b.getBoundingClientRect(); packItem(it.id, [r.left + r.width / 2, r.top + 26]); });
+      tray.appendChild(b);
+    }
+  }
+
+  // ---------- icons (drawn in a -1..1 box) ----------
+  function drawIcon(c, id, x, y, size, ink) {
+    c.save(); c.translate(x, y); c.scale(size, size);
+    c.lineWidth = Math.max(1.4, Math.min(3.4, size * .1)) / size;
+    c.strokeStyle = ink; c.fillStyle = ink; c.lineCap = 'round'; c.lineJoin = 'round';
+    const B = () => c.beginPath(), St = () => c.stroke(), F = () => c.fill();
+    const circ = (x, y, r) => { B(); c.arc(x, y, r, 0, Math.PI * 2); };
+    switch (id) {
+      case 'tent':
+        B(); c.moveTo(-.9, .7); c.lineTo(0, -.78); c.lineTo(.9, .7); c.closePath(); St();
+        B(); c.moveTo(-.28, .7); c.lineTo(0, .12); c.lineTo(.28, .7); St();
+        B(); c.moveTo(-1, .7); c.lineTo(1, .7); c.moveTo(0, -.78); c.lineTo(.14, -.98); St(); break;
+      case 'bedroll':
+        B(); c.moveTo(.5, -.42); c.lineTo(-.7, -.42); c.quadraticCurveTo(-.9, -.42, -.9, -.22); c.lineTo(-.9, .22); c.quadraticCurveTo(-.9, .42, -.7, .42); c.lineTo(.5, .42); St();
+        circ(.5, 0, .42); St(); circ(.5, 0, .2); St();
+        B(); c.moveTo(-.45, -.42); c.lineTo(-.45, .42); c.moveTo(-.05, -.42); c.lineTo(-.05, .42); St(); break;
+      case 'axe':
+        B(); c.moveTo(-.65, .85); c.lineTo(.3, -.55); St();
+        B(); c.moveTo(.02, -.8); c.quadraticCurveTo(.55, -.98, .88, -.45); c.lineTo(.55, -.18); c.quadraticCurveTo(.35, -.45, .08, -.4); c.closePath(); F(); break;
+      case 'kettle':
+        B(); c.moveTo(-.6, .7); c.lineTo(.6, .7); c.quadraticCurveTo(.78, -.15, .35, -.3); c.lineTo(-.35, -.3); c.quadraticCurveTo(-.78, -.15, -.6, .7); c.closePath(); St();
+        B(); c.moveTo(.62, .25); c.lineTo(.95, -.12); St();
+        B(); c.arc(0, -.3, .45, Math.PI, Math.PI * 2); St(); circ(0, -.36, .09); F(); break;
+      case 'rope':
+        for (const [rx, ry] of [[.85, .55], [.56, .36], [.27, .17]]) { B(); c.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2); St(); }
+        B(); c.moveTo(.85, 0); c.quadraticCurveTo(.98, .6, .55, .88); St(); break;
+      case 'lantern':
+        B(); c.arc(0, -.6, .3, Math.PI, 0); St();
+        B(); c.moveTo(-.4, -.45); c.lineTo(.4, -.45); c.lineTo(.26, -.62); c.lineTo(-.26, -.62); c.closePath(); F();
+        B(); c.rect(-.32, -.45, .64, .95); St();
+        B(); c.moveTo(0, .3); c.quadraticCurveTo(.2, .06, 0, -.24); c.quadraticCurveTo(-.2, .06, 0, .3); F();
+        B(); c.rect(-.44, .5, .88, .2); F(); break;
+      case 'fish':
+        B(); c.moveTo(.75, 0); c.quadraticCurveTo(.15, -.58, -.42, 0); c.quadraticCurveTo(.15, .58, .75, 0); St();
+        B(); c.moveTo(-.42, 0); c.lineTo(-.88, -.36); c.lineTo(-.88, .36); c.closePath(); St();
+        circ(.42, -.08, .07); F(); B(); c.arc(.2, 0, .22, -.9, .9); St(); break;
+      case 'bottle':
+        B(); c.rect(-.16, -.92, .32, .2); F();
+        B(); c.moveTo(-.12, -.72); c.lineTo(-.12, -.58); c.moveTo(.12, -.72); c.lineTo(.12, -.58); St();
+        B(); c.moveTo(-.38, -.4); c.quadraticCurveTo(-.38, -.58, -.2, -.58); c.lineTo(.2, -.58); c.quadraticCurveTo(.38, -.58, .38, -.4); c.lineTo(.38, .72); c.quadraticCurveTo(.38, .88, .22, .88); c.lineTo(-.22, .88); c.quadraticCurveTo(-.38, .88, -.38, .72); c.closePath(); St();
+        B(); c.moveTo(-.38, .1); c.quadraticCurveTo(-.19, -.04, 0, .1); c.quadraticCurveTo(.19, .24, .38, .1); St(); break;
+      case 'beans':
+        B(); c.ellipse(0, -.6, .5, .15, 0, 0, Math.PI * 2); St();
+        B(); c.moveTo(-.5, -.6); c.lineTo(-.5, .68); c.moveTo(.5, -.6); c.lineTo(.5, .68); St();
+        B(); c.ellipse(0, .68, .5, .15, 0, 0, Math.PI); St();
+        B(); c.ellipse(0, -.18, .5, .15, 0, 0, Math.PI); St(); B(); c.ellipse(0, .3, .5, .15, 0, 0, Math.PI); St();
+        B(); c.ellipse(0, .1, .14, .08, -.4, 0, Math.PI * 2); F(); break;
+      case 'berries':
+        circ(-.32, .28, .3); St(); circ(.32, .28, .3); St(); circ(0, -.18, .3); St();
+        B(); c.moveTo(0, -.48); c.quadraticCurveTo(.35, -.95, .65, -.7); c.quadraticCurveTo(.32, -.45, 0, -.48); F(); break;
+      case 'flare':
+        B(); c.rect(-.17, -.18, .34, 1.02); St(); B(); c.rect(-.17, -.36, .34, .18); F();
+        B(); for (const a of [-150, -118, -90, -62, -30]) { const r = a * Math.PI / 180; c.moveTo(Math.cos(r) * .2, -.55 + Math.sin(r) * .2); c.lineTo(Math.cos(r) * .48, -.55 + Math.sin(r) * .42); } St(); break;
+      case 'map':
+        B(); c.moveTo(-.9, -.6); c.lineTo(-.3, -.75); c.lineTo(.3, -.6); c.lineTo(.9, -.75); c.lineTo(.9, .62); c.lineTo(.3, .78); c.lineTo(-.3, .62); c.lineTo(-.9, .78); c.closePath(); St();
+        B(); c.moveTo(-.3, -.75); c.lineTo(-.3, .62); c.moveTo(.3, -.6); c.lineTo(.3, .78); St();
+        c.setLineDash([.1, .1]); B(); c.moveTo(-.68, .42); c.quadraticCurveTo(-.1, .3, .08, -.04); c.quadraticCurveTo(.25, -.32, .5, -.28); St(); c.setLineDash([]);
+        B(); c.moveTo(.52, -.4); c.lineTo(.72, -.2); c.moveTo(.72, -.4); c.lineTo(.52, -.2); St(); break;
+      case 'compass':
+        circ(0, 0, .84); St();
+        B(); c.moveTo(0, -.62); c.lineTo(.18, 0); c.lineTo(-.18, 0); c.closePath(); F();
+        B(); c.moveTo(0, .62); c.lineTo(.18, 0); c.lineTo(-.18, 0); c.closePath(); St(); break;
+      case 'matches':
+        B(); c.rect(-.78, .05, 1.56, .66); St(); B(); c.rect(-.78, .5, 1.56, .21); F();
+        B(); c.moveTo(-.34, .05); c.lineTo(-.55, -.66); c.moveTo(.12, .05); c.lineTo(.28, -.7); St();
+        circ(-.58, -.74, .13); F(); circ(.3, -.79, .13); F(); break;
+    }
+    c.restore();
+  }
+
+  // ---------- drawing ----------
+  const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  const back = t => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+  function drawPack() {
+    // top handle and straps sit behind the body
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#3a4430'; ctx.lineWidth = 10;
+    ctx.beginPath(); ctx.arc(P.cx, P.top + 4, Math.min(46, P.w * .12), Math.PI * 1.05, Math.PI * 1.95); ctx.stroke();
+    // body
+    roundPath(ctx, P.outer, 6); ctx.fillStyle = '#323b27'; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = '#1b2014'; ctx.stroke();
+    const st = inset(P.outer, 5);
+    if (st) { roundPath(ctx, st, 4); ctx.setLineDash([6, 5]); ctx.strokeStyle = 'rgba(241,232,212,.28)'; ctx.lineWidth = 1.3; ctx.stroke(); ctx.setLineDash([]); }
+    // side straps
+    ctx.fillStyle = '#4a5639';
+    for (const f of [.32, .68]) {
+      const y = P.top + P.h * f, half = (P.w * .84 + (P.w - P.w * .84) * f) / 2;
+      for (const sd of [-1, 1]) { const x = P.cx + sd * half; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x - 9, y - 12, 18, 24, 4) : ctx.rect(x - 9, y - 12, 18, 24); ctx.fill(); ctx.fillStyle = '#c9a064'; ctx.fillRect(x - 5, y - 3, 10, 6); ctx.fillStyle = '#4a5639'; }
+    }
+    // lining
+    roundPath(ctx, P.inner, 4); ctx.fillStyle = '#14170f'; ctx.fill();
+  }
+  function drawCell(s, t) {
+    if (!s.poly) return;
+    const ins = inset(s.poly, 3.2); if (!ins) return;
+    const R = 11;
+    const isItem = s.kind === 'item' && t >= s.hideUntil;
+    roundPath(ctx, ins, R);
+    let stress = 0;
+    if (isItem) {
+      ctx.fillStyle = CAT[s.it.cat]; ctx.fill();
+      let y0 = Infinity, y1 = -Infinity; for (const p of ins) { y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); }
+      const g = ctx.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(255,248,230,.18)'); g.addColorStop(1, 'rgba(0,0,0,.14)');
+      ctx.fillStyle = g; ctx.fill();
+      stress = (s.it.L / CAP) / Math.max(1e-6, s.a / P.area);
+    } else {
+      ctx.fillStyle = s.kind === 'item' ? '#262b1e' : '#1f2319'; ctx.fill();
+    }
+    const hot = (S.drag && S.drag.s === s) || S.hover === s || S.sel === s;
+    if (hot && isItem) { ctx.lineWidth = 2.5; ctx.strokeStyle = SIGNAL; ctx.stroke(); }
+    // stitching
+    const st = inset(s.poly, 8.5);
+    if (st) {
+      roundPath(ctx, st, 7); ctx.setLineDash([5, 4]); ctx.lineWidth = 1.3;
+      if (isItem) {
+        const k = Math.max(0, Math.min(1, (stress - 1.08) / .5));
+        ctx.strokeStyle = k > 0 ? `rgba(${ALARM[0]},${ALARM[1]},${ALARM[2]},${.45 + .5 * k})` : 'rgba(28,26,18,.42)';
+        if (k > 0) ctx.lineWidth = 1.3 + 1.2 * k;
+      } else ctx.strokeStyle = 'rgba(241,232,212,.16)';
+      ctx.stroke(); ctx.setLineDash([]);
+    }
+    const r = inradius(ins, s.cx, s.cy);
+    if (isItem) {
+      const e = s.born < 0 ? 1 : Math.max(0, Math.min(1, (t - s.born) / 450));
+      const sc = reduced ? 1 : back(e);
+      let size = Math.max(5, Math.min(r * .58, 44)) * sc;
+      let lab = null;
+      if (r > 30) {
+        ctx.font = '600 11px "IBM Plex Mono", monospace';
+        const sp = spanAt(ins, s.cy + 6 + Math.min(r * .58, 44)), room = sp ? sp - 18 : 0;
+        const full = s.it.name.toUpperCase() + ' · ' + s.it.L + ' L', short = s.it.name.toUpperCase();
+        lab = ctx.measureText(full).width <= room ? full : ctx.measureText(short).width <= room ? short : null;
+      }
+      let ox = 0, oy = lab ? -9 : 0;
+      if (stress < .55 && !reduced) { ox += Math.sin(t * .045 + s.order) * 1.6; oy += Math.cos(t * .052 + s.order * 2) * 1.2; } // loose in a big pocket: it rattles
+      if (stress > 1.3) size *= .92;
+      drawIcon(ctx, s.it.id, s.cx + ox, s.cy + oy, size, INK);
+      if (lab && e > .6) {
+        ctx.fillStyle = 'rgba(28,26,18,.85)'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = '600 11px "IBM Plex Mono", monospace';
+        ctx.fillText(lab, s.cx, s.cy + oy + size + 13);
+      }
+    } else if (s.kind === 'empty' && r > 26 && s.s > .8) {
+      const free = CAP - load(); const em = S.sites.filter(o => o.kind === 'empty' && !o.dying).length || 1;
+      ctx.fillStyle = 'rgba(241,232,212,.32)'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = '500 10px "IBM Plex Mono", monospace';
+      ctx.fillText(S.mode === 'fixed' ? 'EMPTY' : (Math.max(0, free) / em).toFixed(1) + ' L FREE', s.cx, s.cy);
+    }
+  }
+  function drawFlyers(t) {
+    S.flyers = S.flyers.filter(f => {
+      const u = Math.min(1, (t - f.t0) / f.dur);
+      let x, y, rot = 0, size = 18;
+      if (f.kind === 'pop') {
+        const tt = (t - f.t0) / 1000; x = f.x0 + f.vx * tt; y = f.y0 + f.vy * tt + .5 * 1500 * tt * tt; rot = f.rot * tt; size = 24;
+      } else {
+        const x1 = f.kind === 'in' ? f.tx.cx : f.x1, y1 = f.kind === 'in' ? f.tx.cy : f.y1;
+        const e = ease(u); x = f.x0 + (x1 - f.x0) * e; y = f.y0 + (y1 - f.y0) * e - Math.sin(u * Math.PI) * 70;
+        size = f.kind === 'in' ? 18 + 4 * e : 22 - 4 * e;
+      }
+      ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
+      ctx.fillStyle = CAT[f.it.cat]; ctx.beginPath(); ctx.arc(0, 0, size * 1.6, 0, Math.PI * 2); ctx.fill();
+      drawIcon(ctx, f.it.id, 0, 0, size, INK); ctx.restore();
+      if (u >= 1) { if (f.el) f.el.style.visibility = ''; return false; }
+      return true;
+    });
+  }
+  function drawDragGhost() {
+    const d = S.drag; if (!d || !d.moved || !d.out) return;
+    ctx.save(); ctx.globalAlpha = .95;
+    ctx.fillStyle = CAT[d.s.it.cat]; ctx.beginPath(); ctx.arc(d.px, d.py, 30, 0, Math.PI * 2); ctx.fill();
+    drawIcon(ctx, d.s.it.id, d.px, d.py, 18, INK);
+    ctx.fillStyle = BONE; ctx.font = '600 11px "IBM Plex Mono", monospace'; ctx.textAlign = 'center';
+    ctx.fillText('RELEASE TO UNPACK', d.px, d.py - 42);
+    ctx.restore();
+  }
+
+  // ---------- loop ----------
+  let last = 0;
+  function frame(t) {
+    const dt = Math.min(.05, (t - last) / 1000 || .016); last = t; S.t = t;
+    const k = reduced ? 1 : 1 - Math.exp(-dt * 6);
+    for (const s of S.sites) s.s += (s.sT - s.s) * k;
+    cull();
+    relax(2);
+    S.wob = Math.max(0, S.wob - dt * 1.6);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.drawImage(bg, 0, 0, W, H);
+    ctx.save();
+    if (S.wob > 0 && !reduced) { const a = Math.sin(t * .045) * S.wob * 5; ctx.translate(a, 0); ctx.translate(P.cx, P.bot); ctx.rotate(a * .004); ctx.translate(-P.cx, -P.bot); }
+    drawPack();
+    for (const s of S.sites) drawCell(s, t);
+    ctx.restore();
+    drawFlyers(t);
+    drawDragGhost();
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- input ----------
+  function pick(x, y) {
+    if (!inside(P.inner, x, y)) return null;
+    let best = null, bd = Infinity;
+    for (const s of S.sites) { if (s.dying) continue; const d = (s.x - x) ** 2 + (s.y - y) ** 2 - s.w; if (d < bd) { bd = d; best = s; } }
+    return best;
+  }
+  cv.addEventListener('pointerdown', e => {
+    const s = pick(e.clientX, e.clientY);
+    if (!s || s.kind !== 'item') return;
+    cv.setPointerCapture(e.pointerId);
+    S.drag = { s, x0: e.clientX, y0: e.clientY, px: e.clientX, py: e.clientY, moved: false, out: false };
+  });
+  cv.addEventListener('pointermove', e => {
+    const d = S.drag;
+    if (!d) { const s = pick(e.clientX, e.clientY); S.hover = s && s.kind === 'item' ? s : null; cv.style.cursor = S.hover ? 'grab' : 'default'; return; }
+    d.px = e.clientX; d.py = e.clientY;
+    if (!d.moved && Math.hypot(d.px - d.x0, d.py - d.y0) > 6) d.moved = true;
+    if (d.moved) {
+      cv.style.cursor = 'grabbing';
+      const [x, y] = clampIn(P.clamp, d.px, d.py); d.s.x = x; d.s.y = y;
+      d.out = !inside(P.outer, d.px, d.py);
+    }
+  });
+  const end = e => {
+    const d = S.drag; if (!d) return; S.drag = null; cv.style.cursor = 'default';
+    if (e.type === 'pointercancel') return;
+    if (!d.moved || d.out) unpack(d.s);
+  };
+  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  cv.addEventListener('pointerleave', () => { if (!S.drag) S.hover = null; });
+  cv.addEventListener('keydown', e => {
+    const list = packed().sort((a, b) => a.cy - b.cy || a.cx - b.cx);
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault(); if (!list.length) return;
+      const i = list.indexOf(S.sel), dir = (e.key === 'ArrowRight' || e.key === 'ArrowDown') ? 1 : -1;
+      S.sel = list[(i + dir + list.length) % list.length];
+      toast(`${S.sel.it.name}, ${S.sel.it.L} L. Enter unpacks it.`);
+    } else if ((e.key === 'Enter' || e.key === 'Delete' || e.key === 'Backspace') && S.sel) {
+      e.preventDefault(); const n = S.sel.it.name; unpack(S.sel); toast(`${n} unpacked.`);
+    } else if (e.key === 's' || e.key === 'S') shake();
+  });
+  $('shake').addEventListener('click', shake);
+  $('fixed').addEventListener('click', () => setMode(S.mode === 'fixed' ? 'elbow' : 'fixed'));
+  let rz = 0; addEventListener('resize', () => { cancelAnimationFrame(rz); rz = requestAnimationFrame(layout); });
+
+  // about
+  const info = $('info'), ib = $('infoBtn');
+  const setInfo = o => { info.hidden = !o; ib.setAttribute('aria-expanded', String(o)); ib.hidden = o; if (o) info.querySelector('.close').focus(); else ib.focus(); };
+  ib.addEventListener('click', () => setInfo(true));
+  info.querySelector('.close').addEventListener('click', () => setInfo(false));
+  addEventListener('keydown', e => { if (e.key === 'Escape' && !info.hidden) setInfo(false); });
+
+  // ---------- boot: a pack already half full ----------
+  renderTray(); ui();
+  layout();
+  setPack(['tent', 'rope', 'lantern', 'bottle', 'beans', 'map', 'compass']);
+  requestAnimationFrame(t => { last = t; frame(t); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => layout());
+
+  // ---------- hooks for capture ----------
+  const find = id => packed().find(s => s.it.id === id);
+  window.__lab = {
+    add: (id, from) => { const b = document.querySelector(`.loot[data-id="${id}"]`); let f = from; if (!f && b) { const r = b.getBoundingClientRect(); f = [r.left + r.width / 2, r.top + 26]; } packItem(id, f); },
+    remove: id => unpack(find(id)),
+    shake, setMode, setPack, settle: (n = 120) => relax(n),
+    where: id => { const s = find(id); return s ? { x: s.cx, y: s.cy, a: s.a } : null; },
+    pack: () => ({ cx: P.cx, cy: P.cy, top: P.top, bot: P.bot, w: P.w, h: P.h }),
+    state: () => ({ load: load(), mode: S.mode, items: packed().map(s => s.it.id), cells: S.sites.length }),
+    select: id => { S.sel = find(id) || null; }
+  };
+})();
+</script>
