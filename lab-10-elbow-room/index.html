@@ -261,7 +261,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--signal);outline-off
   }
 
   // ---------- state ----------
-  const S = { sites: [], mode: 'elbow', order: 0, drag: null, hover: null, sel: null, wob: 0, t: 0, flyers: [], popping: false };
+  const S = { sites: [], mode: 'elbow', order: 0, drag: null, hover: null, sel: null, wob: 0, t: 0, flyers: [], popping: false, parts: [], flash: 0 };
   let W = 0, H = 0, DPR = 1, P = null; // P = pack geometry
   const bg = document.createElement('canvas');
 
@@ -423,7 +423,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--signal);outline-off
     if (!reduced) {
       const dir = last.cx < P.cx ? -1 : 1;
       S.flyers.push({ it, x0: last.cx, y0: last.cy, vx: dir * (180 + rnd() * 120), vy: -560, t0: now(), dur: 1300, kind: 'pop', rot: dir * 9 });
-      S.wob = 1;
+      S.wob = 1.4; S.flash = 1; threads(26); puff(P.cx, P.top + 10, 14, 'rgba(201,160,100,.9)');
     }
     last.kind = 'empty'; last.it = null; last.s = .2; last.sT = 1;
     syncPockets(); renderTray(); ui();
@@ -567,7 +567,28 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--signal);outline-off
   // ---------- drawing ----------
   const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
   const back = t => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+  const weave = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 8; const g = c.getContext('2d');
+    g.strokeStyle = 'rgba(0,0,0,.09)'; g.lineWidth = 1; g.beginPath(); g.moveTo(0, 8); g.lineTo(8, 0); g.stroke();
+    g.strokeStyle = 'rgba(255,250,235,.07)'; g.beginPath(); g.moveTo(0, 4); g.lineTo(4, 0); g.moveTo(4, 8); g.lineTo(8, 4); g.stroke();
+    return ctx.createPattern(c, 'repeat');
+  })();
+  function puff(x, y, n, col) { if (reduced) return; for (let i = 0; i < n; i++) { const a = rnd() * 6.28, v = 30 + rnd() * 70; S.parts.push({ k: 'dust', x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t0: S.t, life: 500 + rnd() * 300, r: 3 + rnd() * 5, col }); } }
+  function threads(n) { if (reduced) return; for (let i = 0; i < n; i++) { const x = P.cx + (rnd() - .5) * P.w * .6, a = -Math.PI / 2 + (rnd() - .5) * 2.2, v = 220 + rnd() * 380; S.parts.push({ k: 'thread', x, y: P.top + 6, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t0: S.t, life: 900 + rnd() * 500, rot: rnd() * 6, vr: (rnd() - .5) * 14, len: 8 + rnd() * 14 }); } }
+  function drawParts(t, dt) {
+    S.parts = S.parts.filter(p => {
+      const u = (t - p.t0) / p.life; if (u >= 1) return false;
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      if (p.k === 'dust') { p.vx *= .9; p.vy = p.vy * .9 - 8 * dt; ctx.globalAlpha = (1 - u) * .55; ctx.fillStyle = p.col; ctx.beginPath(); ctx.arc(p.x, p.y, p.r * (1 + u * 1.8), 0, 7); ctx.fill(); }
+      else { p.vy += 900 * dt; p.rot += p.vr * dt; ctx.globalAlpha = 1 - u; ctx.strokeStyle = BONE; ctx.lineWidth = 1.6; ctx.beginPath(); const c = Math.cos(p.rot) * p.len / 2, sn = Math.sin(p.rot) * p.len / 2; ctx.moveTo(p.x - c, p.y - sn); ctx.quadraticCurveTo(p.x + sn * .6, p.y - c * .6, p.x + c, p.y + sn); ctx.stroke(); }
+      ctx.globalAlpha = 1; return true;
+    });
+  }
   function drawPack() {
+    // ground shadow
+    const sh = ctx.createRadialGradient(P.cx, P.bot + 6, 0, P.cx, P.bot + 6, P.w * .6);
+    sh.addColorStop(0, 'rgba(0,0,0,.55)'); sh.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.save(); ctx.translate(P.cx, P.bot + 6); ctx.scale(1, .16); ctx.translate(-P.cx, -(P.bot + 6)); ctx.fillStyle = sh; ctx.beginPath(); ctx.arc(P.cx, P.bot + 6, P.w * .6, 0, 7); ctx.fill(); ctx.restore();
     // top handle and straps sit behind the body
     ctx.lineCap = 'round';
     ctx.strokeStyle = '#3a4430'; ctx.lineWidth = 10;
@@ -591,10 +612,14 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--signal);outline-off
     const ins = inset(s.poly, 3.2); if (!ins) return;
     const R = 11;
     const isItem = s.kind === 'item' && t >= s.hideUntil;
+    if (isItem && !s.landed) { s.landed = true; puff(s.cx, s.cy, 12, 'rgba(241,232,212,.9)'); }
+    if (isItem) { ctx.save(); ctx.translate(0, 2.5); roundPath(ctx, ins, R); ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fill(); ctx.restore(); }
     roundPath(ctx, ins, R);
     let stress = 0;
     if (isItem) {
       ctx.fillStyle = CAT[s.it.cat]; ctx.fill();
+      ctx.fillStyle = weave; ctx.fill();
+      if (s.push > .02 && !reduced) { ctx.fillStyle = `rgba(255,246,225,${Math.min(.3, s.push * .3)})`; ctx.fill(); }
       let y0 = Infinity, y1 = -Infinity; for (const p of ins) { y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); }
       const g = ctx.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(255,248,230,.18)'); g.addColorStop(1, 'rgba(0,0,0,.14)');
       ctx.fillStyle = g; ctx.fill();
@@ -630,7 +655,10 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--signal);outline-off
       let ox = 0, oy = lab ? -9 : 0;
       if (stress < .55 && !reduced) { ox += Math.sin(t * .045 + s.order) * 1.6; oy += Math.cos(t * .052 + s.order * 2) * 1.2; } // loose in a big pocket: it rattles
       if (stress > 1.3) size *= .92;
-      drawIcon(ctx, s.it.id, s.cx + ox, s.cy + oy, size, INK);
+      const q = reduced ? 0 : Math.max(-.25, Math.min(.25, s.sq || 0));
+      ctx.save(); ctx.translate(s.cx + ox, s.cy + oy); ctx.scale(1 + q, 1 - q);
+      if (s.it.id === 'lantern' && !reduced) { const gl = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 1.6); gl.addColorStop(0, 'rgba(255,236,170,.75)'); gl.addColorStop(1, 'rgba(255,220,140,0)'); ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(0, 0, size * 1.6, 0, 7); ctx.fill(); }
+      drawIcon(ctx, s.it.id, 0, 0, size, INK); ctx.restore();
       if (lab && e > .6) {
         ctx.fillStyle = 'rgba(28,26,18,.85)'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.font = '600 11px "IBM Plex Mono", monospace';
@@ -679,14 +707,32 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--signal);outline-off
     for (const s of S.sites) s.s += (s.sT - s.s) * k;
     cull();
     relax(2);
-    S.wob = Math.max(0, S.wob - dt * 1.6);
+    for (const s of S.sites) {
+      const pa = s.pa == null ? s.a : s.pa, da = s.a > 1 ? (s.a - pa) / s.a : 0; s.pa = s.a;
+      s.sv = (s.sv || 0) + da * 14; s.sq = s.sq || 0;
+      s.sv += (-s.sq * 220 - s.sv * 13) * dt; s.sq += s.sv * dt;
+      s.push = Math.min(1, (s.push || 0) * Math.exp(-dt * 5) + Math.abs(da) * 10);
+    }
+    S.wob = Math.max(0, S.wob - dt * 1.6); S.flash = Math.max(0, S.flash - dt * 2.5);
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     ctx.drawImage(bg, 0, 0, W, H);
     ctx.save();
     if (S.wob > 0 && !reduced) { const a = Math.sin(t * .045) * S.wob * 5; ctx.translate(a, 0); ctx.translate(P.cx, P.bot); ctx.rotate(a * .004); ctx.translate(-P.cx, -P.bot); }
+    const over = Math.max(0, Math.min(.25, load() / CAP - 1));
+    if (over > 0 && !reduced) { const b = 1 + over * .1 * (1 + .25 * Math.sin(t * .008)); ctx.translate(P.cx, P.cy); ctx.scale(b, 1 + (b - 1) * .6); ctx.translate(-P.cx, -P.cy); }
     drawPack();
     for (const s of S.sites) drawCell(s, t);
+    const lan = packed().find(s => s.it.id === 'lantern');
+    if (lan && !reduced) {
+      ctx.save(); roundPath(ctx, P.inner, 4); ctx.clip(); ctx.globalCompositeOperation = 'lighter';
+      const fl = .16 + .04 * Math.sin(t * .011) + .03 * Math.sin(t * .027);
+      const r = P.w * .55, lg = ctx.createRadialGradient(lan.cx, lan.cy, 0, lan.cx, lan.cy, r);
+      lg.addColorStop(0, `rgba(255,200,110,${fl})`); lg.addColorStop(1, 'rgba(255,190,100,0)');
+      ctx.fillStyle = lg; ctx.fillRect(lan.cx - r, lan.cy - r, r * 2, r * 2); ctx.restore();
+    }
+    if (S.flash > 0) { roundPath(ctx, P.outer, 6); ctx.fillStyle = `rgba(255,120,90,${S.flash * .35})`; ctx.fill(); }
     ctx.restore();
+    drawParts(t, dt);
     drawFlyers(t);
     drawDragGhost();
     requestAnimationFrame(frame);
