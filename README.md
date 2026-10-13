@@ -6,6 +6,7 @@ Experiments in UI, motion and creative coding for games, apps and interfaces. A 
 
 | # | Lab | Category |
 |---|-----|----------|
+| 10 | [Elbow Room](lab-10-elbow-room/) | UI |
 | 09 | [Font Weight](lab-09-font-weight/) | Creative Coding |
 | 08 | [Spell Check](lab-08-spell-check/) | Motion |
 | 07 | [Pacemaker](lab-07-pacemaker/) | UI |
