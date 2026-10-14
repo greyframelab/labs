@@ -1,0 +1,639 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Lab #11 — Train of Thought</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@500;700&family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: the reply is built on rails inside a thought cloud that fills the screen; an RPG dialogue box is pinned to the bottom. One deliberate night-street look. */
+:root{
+  --night:#16151b;        /* ground */
+  --cloud:#1f1d27;        /* thought region */
+  --panel:#211f29;        /* dialogue box */
+  --cream:#f2ece1;        /* text, train */
+  --mist:#9d97a8;         /* muted text */
+  --rail:#3d3a49;         /* unlit rail */
+  --lamp:#ffc04d;         /* lit rail, signal */
+  --mind:#2fd1c5;         /* interactive, your thoughts */
+  --ok:#8fd18a; --warn:#ffb04d; --bad:#ff6b5a;
+  --line:rgba(242,236,225,.12);
+  --display:"Roboto Slab",Rockwell,Georgia,serif;
+  --body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--night);color:var(--cream);font:16px/1.5 var(--body);overflow:hidden;-webkit-font-smoothing:antialiased;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+#cv{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
+.brand{position:fixed;z-index:2;left:max(16px,env(safe-area-inset-left,0px));top:calc(env(safe-area-inset-top,0px) + 14px);display:flex;flex-direction:column;gap:4px;pointer-events:none;max-width:calc(100% - 160px)}
+@media (min-width:900px){.brand{left:40px;top:34px;max-width:520px}}
+.eyebrow{font:600 11px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--mist)}
+.eyebrow b{color:var(--mind);font-weight:600}
+.brand h1{margin:2px 0 0;font:700 30px/1 var(--display);letter-spacing:-.01em;text-wrap:balance}
+.brand h1 b{color:var(--lamp);font-weight:700}
+.brand p{margin:0;color:var(--mist);font-size:14px;max-width:34ch;text-wrap:balance}
+@media (min-width:900px){.brand h1{font-size:44px}.brand p{font-size:16px}}
+
+.box{position:fixed;z-index:2;left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 12px);margin:0 auto;max-width:760px;box-sizing:border-box;padding:14px 16px 14px;border-radius:16px;background:var(--panel);border:1px solid var(--line);box-shadow:0 20px 60px rgba(0,0,0,.45);display:flex;flex-direction:column;gap:10px}
+@media (min-width:900px){.box{bottom:28px;padding:18px 22px}}
+.who{font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--mist);display:flex;align-items:center;gap:8px}
+.line{display:flex;flex-direction:column;gap:5px;min-width:0}
+.say{margin:0;font-size:17px;line-height:1.35;min-height:1.35em}
+@media (min-width:900px){.say{font-size:19px}}
+#guardSay{font-family:var(--display);font-weight:500}
+.chip{font:600 10px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;padding:4px 7px;border-radius:4px;background:rgba(242,236,225,.08);color:var(--mist);transition:opacity .3s}
+.chip[data-k="ok"]{background:rgba(143,209,138,.15);color:var(--ok)}
+.chip[data-k="warn"]{background:rgba(255,176,77,.15);color:var(--warn)}
+.chip[data-k="bad"]{background:rgba(255,107,90,.16);color:var(--bad)}
+.chip:empty{opacity:0}
+.reply{position:relative;padding:10px 12px;border-radius:12px;background:rgba(47,209,197,.07);border:1px solid rgba(47,209,197,.22);transform-origin:20% 0;transition:background-color .3s}
+.reply .who{color:var(--mind)}
+.reply.bloom{animation:bloom .55s cubic-bezier(.2,1.5,.35,1)}
+@keyframes bloom{0%{transform:scale(.94)}100%{transform:scale(1)}}
+#replySay .w{display:inline-block;animation:land .32s cubic-bezier(.2,1.4,.4,1) both}
+@keyframes land{from{transform:translateY(-8px) scale(1.15);opacity:0}}
+#replySay .hint{color:var(--mist);font-size:15px}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.row .tip{flex:1 1 200px;min-width:0;font-size:13px;color:var(--mist)}
+@media (max-width:520px){#guardSay{min-height:2.7em}.eyebrow{font-size:10px;letter-spacing:.1em}.box{padding:12px 14px;gap:8px}.say{font-size:16px}.reply{padding:8px 10px}.row{flex-wrap:nowrap}.row .tip{font-size:12px;line-height:1.3}.btn{padding:10px 14px}.brand h1{font-size:26px}.brand p{font-size:13px}#infoBtn{font-size:10px;padding:7px 10px}}
+.btn{flex:none;padding:10px 18px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--cream);font:700 15px/1 var(--body);cursor:pointer;transition:transform .15s cubic-bezier(.2,.9,.3,1),background-color .2s,border-color .2s,opacity .2s}
+.btn:hover{border-color:rgba(47,209,197,.6)}
+.btn:active{transform:scale(.96)}
+.btn.go{background:var(--mind);border-color:var(--mind);color:#0f1a1a}
+.btn.go:hover{background:#4fe0d5}
+.btn:disabled{opacity:.45;cursor:default;transform:none}
+button:focus-visible,a:focus-visible{outline:2px solid var(--mind);outline-offset:2px}
+
+#infoBtn{position:fixed;z-index:5;right:max(16px,env(safe-area-inset-right,0px));top:calc(env(safe-area-inset-top,0px) + 14px);padding:8px 12px;border-radius:999px;border:1px solid var(--line);background:rgba(33,31,41,.88);color:var(--cream);font:600 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
+@media (min-width:900px){#infoBtn{right:40px;top:36px}}
+#infoBtn:hover{border-color:var(--mind)}
+#info{box-sizing:border-box;position:fixed;z-index:6;right:12px;top:calc(env(safe-area-inset-top,0px) + 12px);width:min(420px,calc(100vw - 24px));max-height:calc(100% - 24px);overflow:auto;padding:22px;border-radius:14px;background:#1c1a23;border:1px solid var(--line);box-shadow:0 24px 70px rgba(0,0,0,.55);display:flex;flex-direction:column;gap:14px;font-size:15px;animation:rise .3s cubic-bezier(.2,.9,.3,1)}
+@media (min-width:900px){#info{right:40px;top:36px}}
+@keyframes rise{from{transform:translateY(-10px);opacity:0}}
+#info .meta{font:600 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mind)}
+#info h3{margin:0;font:700 34px/1 var(--display)}
+#info h4{margin:2px 0 6px;font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--mist)}
+#info p{margin:0}
+#info ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+#info a{color:var(--mind)}
+#info .close{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--cream);font-size:18px;cursor:pointer}
+#allLabs{font:600 12px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase}
+@media (prefers-reduced-motion:reduce){#info,.reply.bloom,#replySay .w{animation:none}.btn,.chip{transition:none}}
+</style>
+
+<canvas id="cv" tabindex="0" aria-label="A rail network inside a thought cloud. Each track carries words. Switches decide which words the train picks up, and the words it collects become your reply. Keys 1, 2 and 3 flip the switches, Space starts the train, R resets."></canvas>
+
+<div class="brand">
+  <div class="eyebrow"><b>Greyframe Labs</b> · #11 · Motion</div>
+  <h1>Train of <b>Thought</b></h1>
+  <p>Your reply rides the rails before you say it.</p>
+</div>
+
+<button id="infoBtn" type="button" aria-expanded="false" aria-controls="info">About this lab</button>
+<aside id="info" hidden aria-label="About this lab">
+  <button class="close" type="button" aria-label="Close">×</button>
+  <div class="meta">Lab #11 · Motion · 14 Oct 2026</div>
+  <h3>Train of Thought</h3>
+  <div><h4>Idea</h4><p>What if a dialogue choice was a train of thought, literally? Your answer is a little train that leaves the question and picks up words at every stop. The switches decide which words it collects, so you can read where each track leads before you commit. Flip a switch while the train is on it and you lose your train of thought.</p></div>
+  <div><h4>Controls</h4><ul>
+    <li>Tap a switch (the round knobs where the track splits) to send the train the other way. The dashed line shows the route it will take.</li>
+    <li>Think starts the train. Each word it reaches hops onto a new carriage.</li>
+    <li>You can still change a switch the train hasn't reached yet. Flip one while the train is crossing it and it derails.</li>
+    <li>At the end of the line the carriages unload into your reply, and the guard answers.</li>
+    <li>Keyboard: 1, 2 and 3 flip the switches, Space thinks, R resets.</li>
+  </ul></div>
+  <div><h4>Inspired by</h4><ul>
+    <li>ama_plaka's circuit-board GIFs, where a signal visibly runs along the traces and something grows out of the board.</li>
+    <li>Branching dialogue wheels and trees in narrative RPGs, where the reply is chosen before it is spoken.</li>
+    <li>Model railway layouts and the switch levers of a signal box.</li>
+  </ul></div>
+  <div><h4>For game UI</h4><p>Show the path, not just the options. When players can see where each choice leads, and see the reply assemble as it travels, a dialogue pick reads as a decision with momentum instead of a list of labels. The same pattern works for crafting chains, quest routes or any branching confirm: a visible route ahead, a point of no return you can feel, and a clear payoff at the end of the line.</p></div>
+  <a id="allLabs" href="https://claude.ai/artifact/CDYy2LnuZN3Tdb1A9BSHrG" target="_blank" rel="noopener">← All labs</a>
+  <script>if (/github\.io$/.test(location.hostname)) { const a = document.getElementById('allLabs'); a.href = '../'; a.removeAttribute('target'); }</script>
+</aside>
+
+<section class="box" id="box" aria-label="Dialogue">
+  <div class="line">
+    <div class="who">Night guard <span class="chip" id="chip"></span></div>
+    <p class="say" id="guardSay" aria-live="polite">Why are you out past curfew?</p>
+  </div>
+  <div class="reply" id="reply">
+    <div class="line">
+      <div class="who">You</div>
+      <p class="say" id="replySay" aria-live="polite"><span class="hint">Your answer will arrive on the rails above.</span></p>
+    </div>
+  </div>
+  <div class="row">
+    <span class="tip" id="tip">Tap a switch to pick a route, then think.</span>
+    <button class="btn" id="resetBtn" type="button">Reset</button>
+    <button class="btn go" id="thinkBtn" type="button">Think</button>
+  </div>
+</section>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const cv = $('cv'), ctx = cv.getContext('2d');
+  const RM = matchMedia('(prefers-reduced-motion: reduce)');
+  const C = { rail:'#3d3a49', tie:'#2c2a35', lamp:'#ffc04d', mind:'#2fd1c5', cream:'#f2ece1', mist:'#9d97a8', cloud:'#1f1d27', night:'#16151b', bad:'#ff6b5a' };
+  let FONT_W = '700 13px "Atkinson Hyperlegible", system-ui, sans-serif';
+  const FONT_T = '600 10px "IBM Plex Mono", ui-monospace, monospace';
+
+  // ---------- the network, in flow space: u = along the thought (0..1), w = across (0..1) ----------
+  const NODES = { D:[0,.5], J1:[.27,.5], A:[.58,.27], B:[.58,.73], T1:[1,.09], T2:[1,.38], T3:[1,.62], T4:[1,.91] };
+  const EDGES = [
+    { a:'D',  b:'J1', stops:[['I',.5]] },
+    { a:'J1', b:'A',  stops:[['was',.6]] },
+    { a:'J1', b:'B',  stops:[['am',.6]] },
+    { a:'A',  b:'T1', stops:[['looking for',.34],['my cat.',.7]], end:0 },
+    { a:'A',  b:'T2', stops:[['lost,',.52],['honestly.',.86]], end:1 },
+    { a:'B',  b:'T3', stops:[['the night',.34],['inspector.',.7]], end:2 },
+    { a:'B',  b:'T4', stops:[['asleep.',.52],['Zzz.',.86]], end:3 }
+  ];
+  // switches: node, [edge if 0, edge if 1]
+  const SW = [ { n:'J1', out:[1,2], key:'1' }, { n:'A', out:[3,4], key:'2' }, { n:'B', out:[5,6], key:'3' } ];
+  const ENDS = [
+    { tag:'Honest', guard:'A cat? Fine. Go find it, then straight home.', chip:'Let go', k:'ok' },
+    { tag:'Vague',  guard:'Lost, huh. Follow the lamps back to Mill Street.', chip:'Warned', k:'warn' },
+    { tag:'Bluff',  guard:'Night inspector. Then you\'ll have a badge.', chip:'Suspicious', k:'warn' },
+    { tag:'Joke',   guard:'Sleepwalkers don\'t narrate. Come with me.', chip:'Caught', k:'bad' }
+  ];
+  const DERAIL = { guard:'Take your time. I\'ve got all night.', chip:'Lost it', k:'' };
+
+  // ---------- state ----------
+  const S = {
+    sw:[0,1,0],            // J1 up/down, A up/down, B up/down
+    phase:'idle',          // idle | run | arrived | derailed
+    route:[], starts:[], len:0,
+    s:0, v:0, cars:[], bodies:[], fly:[], stops:[],
+    shake:0, t:0, end:-1, speed:1
+  };
+  let W = 0, H = 0, DPR = 1, orient = 'h', R = null, G = [];   // G: geometry per edge
+
+  function layout(){
+    DPR = Math.min(2, devicePixelRatio || 1);
+    W = innerWidth; H = innerHeight;
+    cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+    const br = document.querySelector('.brand').getBoundingClientRect();
+    const bx = $('box').getBoundingClientRect();
+    orient = (W > H * 1.05 && W >= 640) ? 'h' : 'v';
+    FONT_W = `700 ${orient === 'h' ? 13 : 12}px "Atkinson Hyperlegible", system-ui, sans-serif`;
+    const top = br.bottom + (orient === 'h' ? 26 : 14), bot = bx.top - (orient === 'h' ? 26 : 14);
+    const side = orient === 'h' ? Math.max(48, W * .05) : Math.max(8, W * .02);
+    R = { x0: side, x1: W - side, y0: top, y1: bot };
+    // flow mapping
+    if (orient === 'h') {
+      R.map = (u, w) => [R.x0 + 34 + u * (R.x1 - R.x0 - 34 - 92), R.y0 + 18 + w * (R.y1 - R.y0 - 36)];
+      R.F = [1, 0];
+    } else {
+      R.map = (u, w) => [R.x0 + 44 + w * (R.x1 - R.x0 - 88), R.y0 + 30 + u * (R.y1 - R.y0 - 70)];
+      R.F = [0, 1];
+    }
+    buildGeometry();
+    rebuildRoute();
+  }
+
+  function buildGeometry(){
+    G = EDGES.map(e => {
+      const p0 = R.map(...NODES[e.a]), p3 = R.map(...NODES[e.b]);
+      const L = Math.abs((p3[0] - p0[0]) * R.F[0] + (p3[1] - p0[1]) * R.F[1]);
+      const k = e.a === 'D' ? 0 : .5;
+      const p1 = [p0[0] + R.F[0] * L * k, p0[1] + R.F[1] * L * k];
+      const p2 = [p3[0] - R.F[0] * L * k, p3[1] - R.F[1] * L * k];
+      const N = 80, pts = [], cum = [0];
+      for (let i = 0; i <= N; i++) {
+        const t = i / N, m = 1 - t;
+        pts.push([m*m*m*p0[0] + 3*m*m*t*p1[0] + 3*m*t*t*p2[0] + t*t*t*p3[0], m*m*m*p0[1] + 3*m*m*t*p1[1] + 3*m*t*t*p2[1] + t*t*t*p3[1]]);
+        if (i) cum.push(cum[i-1] + Math.hypot(pts[i][0] - pts[i-1][0], pts[i][1] - pts[i-1][1]));
+      }
+      return { pts, cum, len: cum[N] };
+    });
+  }
+  function onEdge(ei, d){
+    const g = G[ei]; d = Math.max(0, Math.min(g.len, d));
+    let lo = 0, hi = g.cum.length - 1;
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (g.cum[mid] < d) lo = mid; else hi = mid; }
+    const a = g.pts[lo], b = g.pts[hi], seg = g.cum[hi] - g.cum[lo] || 1, f = (d - g.cum[lo]) / seg;
+    return { x: a[0] + (b[0] - a[0]) * f, y: a[1] + (b[1] - a[1]) * f, ang: Math.atan2(b[1] - a[1], b[0] - a[0]) };
+  }
+  function onRoute(d){
+    if (!S.route.length) return onEdge(0, 0);
+    let i = S.route.length - 1;
+    while (i > 0 && S.starts[i] > d) i--;
+    return onEdge(S.route[i], d - S.starts[i]);
+  }
+  function planned(){
+    // the full route the train would take with the current switches
+    const r = [0]; let n = 'J1';
+    while (true) { const sw = SW.find(q => q.n === n); if (!sw) break; const e = sw.out[S.sw[SW.indexOf(sw)]]; r.push(e); n = EDGES[e].b; }
+    return r;
+  }
+  function appendEdge(ei){
+    S.starts.push(S.len); S.route.push(ei); S.len += G[ei].len;
+    EDGES[ei].stops.forEach(([w, f]) => S.stops.push({ word: w, d: S.starts[S.starts.length - 1] + f * G[ei].len, edge: ei, f, taken: false }));
+  }
+  function rebuildRoute(){
+    // after a resize, re-measure the edges the train has already committed to
+    const keep = S.route.slice(), frac = S.len ? S.s / S.len : 0, old = S.len;
+    S.route = []; S.starts = []; S.len = 0; const taken = new Set(S.stops.filter(s => s.taken).map(s => s.word)); S.stops = [];
+    keep.forEach(appendEdge); S.stops.forEach(s => { if (taken.has(s.word)) s.taken = true; });
+    if (old && S.len) { const k = S.len / old; S.s *= k; S.cars.forEach(c => { c.c *= k; }); }
+    if (!S.route.length) appendEdge(0);
+  }
+
+  // ---------- measuring ----------
+  function wordW(w){ ctx.font = FONT_W; return Math.ceil(ctx.measureText(w).width); }
+  const CAR_H = 26, LOCO = { w: 42, h: 26 };
+  const ext = (wpx) => orient === 'h' ? wpx + 6 : CAR_H + 6;
+  const locoExt = () => orient === 'h' ? LOCO.w + 6 : LOCO.h + 10;
+
+  // ---------- actions ----------
+  function reset(){
+    S.phase = 'idle'; S.route = []; S.starts = []; S.len = 0; S.stops = []; S.cars = []; S.bodies = []; S.fly = [];
+    S.s = 0; S.v = 0; S.end = -1;
+    appendEdge(0);
+    S.s = 0;
+    setGuard('Why are you out past curfew?', '', '');
+    setReply(null);
+    ui();
+  }
+  function think(){
+    if (S.phase === 'arrived' || S.phase === 'derailed') reset();
+    if (S.phase !== 'idle') return;
+    S.phase = 'run'; S.v = 0;
+    ui();
+  }
+  function committedStart(swi){
+    const ei = S.route.findIndex(e => EDGES[e].a === SW[swi].n);
+    return ei < 0 ? null : S.starts[ei];
+  }
+  function flip(i){
+    if (S.phase === 'derailed') return;
+    const sJ = committedStart(i);
+    S.sw[i] ^= 1;
+    if (S.phase === 'run') {
+      const tail = S.cars.length ? S.cars[S.cars.length - 1].c - S.cars[S.cars.length - 1].e / 2 : S.s - locoExt() / 2;
+      const lastE = EDGES[S.route[S.route.length - 1]];
+      // on the points: straddling the switch, or about to roll over it
+      const onIt = sJ !== null ? tail < sJ + 2 : (lastE.b === SW[i].n && S.len - S.s < 34);
+      if (onIt) { derail(); return; }
+    }
+    S.swAnim[i] = 0;
+    ui();
+  }
+  function derail(){
+    S.phase = 'derailed';
+    const list = [{ d: S.s, w: LOCO.w, h: LOCO.h, loco: true }].concat(S.cars.map(c => ({ d: c.c, w: c.w, h: CAR_H, word: c.word })));
+    S.bodies = list.map((b, i) => {
+      const p = onRoute(b.d), sp = S.v * (0.95 - i * .06);
+      const side = (Math.random() < .5 ? -1 : 1) * (40 + Math.random() * 110);
+      return { x: p.x, y: p.y, a: carAngle(p.ang), vx: Math.cos(p.ang) * sp - Math.sin(p.ang) * side, vy: Math.sin(p.ang) * sp + Math.cos(p.ang) * side, va: (Math.random() - .5) * 9, w: b.w, h: b.h, word: b.word, loco: b.loco };
+    });
+    S.cars = []; S.fly = []; S.v = 0; S.shake = RM.matches ? 0 : 1;
+    setReply('Uh… I lost my train of thought.', true);
+    setGuard(DERAIL.guard, DERAIL.chip, DERAIL.k);
+    ui();
+  }
+  function carAngle(a){
+    // cars stay readable: rotate only by how far the track bends from the main flow
+    if (orient === 'v') return 0;
+    const flow = 0;
+    let d = a - flow; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI;
+    return d;
+  }
+
+  // ---------- dialogue box ----------
+  function setGuard(t, chip, k){ $('guardSay').textContent = t; const c = $('chip'); c.textContent = chip || ''; c.dataset.k = k || ''; }
+  function setReply(text, bloom){
+    const el = $('replySay');
+    if (text === null) { el.innerHTML = '<span class="hint">Your answer will arrive on the rails above.</span>'; return; }
+    el.textContent = text;
+    if (bloom) pop();
+  }
+  function addReplyWord(w){
+    const el = $('replySay'); const h = el.querySelector('.hint'); if (h) el.textContent = '';
+    if (el.childNodes.length) el.appendChild(document.createTextNode(' '));
+    const sp = document.createElement('span'); sp.className = 'w'; sp.textContent = w; el.appendChild(sp);
+  }
+  function pop(){ const r = $('reply'); r.classList.remove('bloom'); void r.offsetWidth; r.classList.add('bloom'); }
+  function ui(){
+    const tb = $('thinkBtn');
+    tb.textContent = S.phase === 'run' ? 'Thinking…' : (S.phase === 'idle' ? 'Think' : 'Think again');
+    tb.disabled = S.phase === 'run';
+    $('tip').textContent = S.phase === 'run' ? 'Switches ahead can still change. Not the one under the train.'
+      : S.phase === 'derailed' ? 'You flipped a switch under the train.'
+      : S.phase === 'arrived' ? 'Flip a switch, then think again.'
+      : 'Tap a switch to pick a route, then think.';
+  }
+
+  // ---------- simulation ----------
+  S.swAnim = [1, 1, 1];
+  const VMAX = () => (orient === 'h' ? 300 : 210) * S.speed, ACC = () => 420 * S.speed, BRK = () => 300 * S.speed;
+  function step(dt){
+    S.t += dt;
+    for (let i = 0; i < 3; i++) S.swAnim[i] = Math.min(1, S.swAnim[i] + dt / .28);
+    if (S.shake) S.shake = Math.max(0, S.shake - dt * 2.2);
+    if (S.phase === 'run') {
+      // commit to the next edge when the head reaches a junction
+      while (S.s >= S.len - .01) {
+        const last = EDGES[S.route[S.route.length - 1]];
+        const sw = SW.findIndex(q => q.n === last.b);
+        if (sw < 0) break;
+        appendEdge(SW[sw].out[S.sw[sw]]);
+      }
+      const last = EDGES[S.route[S.route.length - 1]];
+      const terminal = last.end !== undefined;
+      const stopAt = S.len - locoExt() / 2 - 10, rem = terminal ? stopAt - S.s : Infinity;
+      S.v = Math.min(S.v + ACC() * dt, VMAX(), terminal ? Math.sqrt(Math.max(0, 2 * BRK() * rem)) : Infinity);
+      S.s += S.v * dt;
+      if (terminal && rem < .6) { S.s = stopAt; S.v = 0; arrive(last.end); }
+      // pick up words
+      S.stops.forEach(st => {
+        if (!st.taken && S.s >= st.d - 4) {
+          st.taken = true;
+          const w = wordW(st.word) + (orient === 'h' ? 20 : 14), car = { word: st.word, w, e: ext(w), c: 0, cv: 0, fly: RM.matches ? 1 : 0, from: onEdge(st.edge, st.f * G[st.edge].len) };
+          S.cars.push(car);
+          car.c = target(S.cars.length - 1); car.cv = S.v;
+        }
+      });
+    }
+    // carriages follow on a soft coupling
+    const k = 170, damp = 2 * Math.sqrt(k) * .5;
+    S.cars.forEach((c, i) => {
+      const tg = target(i);
+      if (RM.matches) { c.c = tg; } else { const a = k * (tg - c.c) - damp * (c.cv - S.v); c.cv += a * dt; c.c += c.cv * dt; c.c = Math.min(c.c, tg + 8); }
+      if (c.fly < 1) c.fly = Math.min(1, c.fly + dt / .42);
+    });
+    // derail bodies slide and spin
+    S.bodies.forEach(b => { const f = Math.exp(-2.6 * dt); b.vx *= f; b.vy *= f; b.va *= f; b.x += b.vx * dt; b.y += b.vy * dt; b.a += b.va * dt; });
+    // unloading words fly to the reply
+    S.fly.forEach(f => { f.t += dt; });
+    const done = S.fly.filter(f => f.t >= f.delay + f.dur && !f.landed);
+    done.forEach(f => { f.landed = true; addReplyWord(f.word); if (f.lastOne) finish(); });
+  }
+  function target(i){
+    let off = locoExt() / 2;
+    for (let j = 0; j < i; j++) off += S.cars[j].e;
+    return S.s - off - S.cars[i].e / 2;
+  }
+  function arrive(end){
+    S.phase = 'arrived'; S.end = end;
+    const el = $('replySay'); el.textContent = '';
+    const tgt = $('replySay').getBoundingClientRect();
+    S.fly = S.cars.map((c, i) => {
+      const p = onRoute(c.c);
+      return { word: c.word, x0: p.x, y0: p.y, x1: tgt.left + 40 + i * 30, y1: tgt.top + 12, t: 0, delay: RM.matches ? 0 : .25 + i * .12, dur: RM.matches ? 0 : .5, lastOne: i === S.cars.length - 1, landed: false, w: c.w };
+    });
+    S.cars.forEach(c => { c.empty = true; });
+    if (!S.fly.length) finish();
+    ui();
+  }
+  function finish(){
+    const e = ENDS[S.end];
+    pop();
+    setTimeout(() => { if (S.phase === 'arrived') setGuard(e.guard, e.chip, e.k); }, RM.matches ? 0 : 260);
+  }
+
+  // ---------- drawing ----------
+  function rr(x, y, w, h, r){ ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
+  function drawCloud(){
+    const { x0, x1, y0, y1 } = R, pad = 6;
+    ctx.fillStyle = C.cloud;
+    rr(x0 + pad, y0 + pad, x1 - x0 - pad * 2, y1 - y0 - pad * 2, 40); ctx.fill();
+    // bumps along the edge make it a thought cloud
+    const bump = orient === 'h' ? 34 : 24, step = bump * 1.7;
+    const edge = (ax, ay, bx, by) => { const L = Math.hypot(bx - ax, by - ay), n = Math.max(2, Math.round(L / step)); for (let i = 0; i <= n; i++) { const t = i / n; ctx.beginPath(); ctx.arc(ax + (bx - ax) * t, ay + (by - ay) * t, bump * (.85 + .25 * Math.sin(i * 2.3)), 0, 7); ctx.fill(); } };
+    const ix0 = x0 + bump, ix1 = x1 - bump, iy0 = y0 + bump, iy1 = y1 - bump;
+    edge(ix0, iy0, ix1, iy0); edge(ix0, iy1, ix1, iy1); edge(ix0, iy0, ix0, iy1); edge(ix1, iy0, ix1, iy1);
+    // trailing bubbles toward the dialogue box (your head)
+    const bx = $('box').getBoundingClientRect();
+    const tx = orient === 'h' ? bx.left + 70 : x0 + 40;
+    [[0, 13], [1, 9], [2, 6]].forEach(([i, r]) => { ctx.beginPath(); ctx.arc(tx - i * 16, y1 + 4 + i * 11 + (orient === 'h' ? 6 : 2), r, 0, 7); ctx.fill(); });
+  }
+  function strokeEdge(ei, from, to, style, width, dash){
+    const g = G[ei]; from = Math.max(0, from); to = Math.min(g.len, to); if (to <= from) return;
+    ctx.beginPath(); const a = onEdge(ei, from); ctx.moveTo(a.x, a.y);
+    for (let i = 0; i < g.pts.length; i++) if (g.cum[i] > from && g.cum[i] < to) ctx.lineTo(g.pts[i][0], g.pts[i][1]);
+    const b = onEdge(ei, to); ctx.lineTo(b.x, b.y);
+    ctx.strokeStyle = style; ctx.lineWidth = width; ctx.setLineDash(dash || []); ctx.stroke(); ctx.setLineDash([]);
+  }
+  function ties(ei, col, gapAtStart){
+    const g = G[ei], sp = 13;
+    ctx.strokeStyle = col; ctx.lineWidth = 2;
+    for (let d = gapAtStart; d < g.len - 2; d += sp) {
+      const p = onEdge(ei, d), nx = -Math.sin(p.ang) * 7, ny = Math.cos(p.ang) * 7;
+      ctx.beginPath(); ctx.moveTo(p.x - nx, p.y - ny); ctx.lineTo(p.x + nx, p.y + ny); ctx.stroke();
+    }
+  }
+  function drawRails(){
+    const plan = planned();
+    ctx.lineCap = 'round';
+    // which edges are open at each switch
+    const blocked = new Set(); SW.forEach((q, i) => blocked.add(q.out[1 - S.sw[i]]));
+    EDGES.forEach((e, ei) => {
+      const gap = blocked.has(ei) ? 16 : 0;
+      ties(ei, C.tie, 6 + gap);
+      strokeEdge(ei, gap, 1e9, C.rail, 4);
+    });
+    // lit trail behind the train
+    if (S.phase !== 'idle' || S.s > 0) {
+      const head = S.phase === 'derailed' ? S.litTo || S.s : S.s;
+      S.route.forEach((ei, i) => {
+        const st = S.starts[i], upto = head - st;
+        if (upto <= 0) return;
+        strokeEdge(ei, 0, upto, 'rgba(255,192,77,.16)', 14);
+        strokeEdge(ei, 0, upto, S.phase === 'derailed' ? 'rgba(255,192,77,.35)' : C.lamp, 3.4);
+      });
+      if (S.phase === 'run') { // hot glow right behind the head
+        const p = onRoute(S.s); const gr = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, 70);
+        gr.addColorStop(0, 'rgba(255,192,77,.28)'); gr.addColorStop(1, 'rgba(255,192,77,0)'); ctx.fillStyle = gr; ctx.fillRect(p.x - 70, p.y - 70, 140, 140);
+      }
+    }
+    // planned route ahead
+    if (S.phase === 'idle' || S.phase === 'run') {
+      let acc = 0;
+      plan.forEach(ei => {
+        const st = acc; acc += G[ei].len;
+        const from = Math.max(0, S.s + 30 - st);
+        const dashOff = -(S.t * 40) % 16;
+        ctx.lineDashOffset = RM.matches ? 0 : dashOff;
+        strokeEdge(ei, from, 1e9, 'rgba(47,209,197,.55)', 2, [2, 7]);
+        ctx.lineDashOffset = 0;
+      });
+    }
+  }
+  function drawNodes(){
+    // depot: where the question lands
+    const d = R.map(...NODES.D);
+    ctx.fillStyle = C.night; ctx.strokeStyle = C.mist; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(d[0], d[1], 15, 0, 7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C.cream; ctx.font = '700 16px "Roboto Slab", Georgia, serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('?', d[0], d[1] + 1);
+    // terminals
+    EDGES.forEach((e, ei) => {
+      if (e.end === undefined) return;
+      const p = onEdge(ei, G[ei].len), lit = S.phase === 'arrived' && S.end === e.end;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(orient === 'h' ? 0 : Math.PI / 2);
+      ctx.fillStyle = lit ? C.lamp : C.rail; rr(-3, -11, 6, 22, 2); ctx.fill();
+      ctx.restore();
+      ctx.font = FONT_T; ctx.fillStyle = lit ? C.lamp : C.mist;
+      const tag = ENDS[e.end].tag.toUpperCase();
+      if (orient === 'h') { ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(tag, p.x + 12, p.y); }
+      else { ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(tag, p.x, p.y + 14); }
+    });
+    // switches
+    SW.forEach((q, i) => {
+      const n = R.map(...NODES[q.n]);
+      const ahead = committedStart(i) === null && S.phase !== 'derailed' && S.phase !== 'arrived';
+      const target = onEdge(q.out[S.sw[i]], 22), other = onEdge(q.out[1 - S.sw[i]], 22);
+      const t = easeOut(S.swAnim[i]);
+      const ax = other.x + (target.x - other.x) * t, ay = other.y + (target.y - other.y) * t;
+      // blade
+      ctx.strokeStyle = C.mind; ctx.lineWidth = 4; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(n[0], n[1]); ctx.lineTo(ax, ay); ctx.stroke();
+      // knob, with a slow pulse while it can still be changed
+      const pr = ahead && !RM.matches ? 0.5 + 0.5 * Math.sin(S.t * 3.2 + i) : 0;
+      if (ahead) { ctx.strokeStyle = `rgba(47,209,197,${.18 + .22 * pr})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(n[0], n[1], 17 + pr * 4, 0, 7); ctx.stroke(); }
+      ctx.fillStyle = ahead ? C.mind : '#2a3a3c'; ctx.beginPath(); ctx.arc(n[0], n[1], 11, 0, 7); ctx.fill();
+      ctx.fillStyle = ahead ? '#0f1a1a' : C.mist; ctx.font = '600 11px "IBM Plex Mono", monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(q.key, n[0], n[1] + 1);
+    });
+  }
+  function pill(x, y, a, w, word, style){
+    ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+    const h = CAR_H;
+    if (style === 'wait') {
+      ctx.fillStyle = C.night; rr(-w / 2, -h / 2, w, h, 7); ctx.fill();
+      ctx.strokeStyle = 'rgba(242,236,225,.28)'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = C.cream;
+    } else if (style === 'car') {
+      ctx.fillStyle = 'rgba(0,0,0,.35)'; rr(-w / 2 + 2, -h / 2 + 3, w, h, 7); ctx.fill();
+      ctx.fillStyle = C.cream; rr(-w / 2, -h / 2, w, h, 7); ctx.fill();
+      ctx.fillStyle = '#e2d8c6'; ctx.fillRect(-w / 2 + 4, h / 2 - 5, w - 8, 2);
+      ctx.fillStyle = '#1a1820';
+    } else { // empty car
+      ctx.strokeStyle = 'rgba(242,236,225,.3)'; ctx.lineWidth = 1.5; rr(-w / 2, -h / 2, w, h, 7); ctx.stroke();
+      ctx.restore(); return;
+    }
+    ctx.font = FONT_W; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(word, 0, 1);
+    ctx.restore();
+  }
+  function drawLoco(x, y, a, alpha){
+    ctx.save(); ctx.translate(x, y); ctx.rotate(a); ctx.globalAlpha = alpha == null ? 1 : alpha;
+    const fwd = orient === 'h' ? [1, 0] : [0, 1];
+    const w = LOCO.w, h = LOCO.h;
+    // headlight beam
+    if (S.phase === 'run') {
+      const gx = fwd[0] * (w / 2), gy = fwd[1] * (h / 2);
+      const gr = ctx.createRadialGradient(gx, gy, 0, gx, gy, 60);
+      gr.addColorStop(0, 'rgba(47,209,197,.35)'); gr.addColorStop(1, 'rgba(47,209,197,0)');
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.moveTo(gx, gy);
+      if (orient === 'h') { ctx.lineTo(gx + 64, gy - 22); ctx.lineTo(gx + 64, gy + 22); } else { ctx.lineTo(gx - 22, gy + 64); ctx.lineTo(gx + 22, gy + 64); }
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; rr(-w / 2 + 2, -h / 2 + 3, w, h, 9); ctx.fill();
+    ctx.fillStyle = C.mind; rr(-w / 2, -h / 2, w, h, 9); ctx.fill();
+    ctx.fillStyle = '#0f1a1a';
+    if (orient === 'h') { rr(-w / 2 + 6, -h / 2 + 6, 13, h - 12, 3); ctx.fill(); ctx.fillStyle = C.cream; ctx.beginPath(); ctx.arc(w / 2 - 6, 0, 3.2, 0, 7); ctx.fill(); }
+    else { rr(-w / 2 + 6, -h / 2 + 5, w - 12, 8, 3); ctx.fill(); ctx.fillStyle = C.cream; ctx.beginPath(); ctx.arc(0, h / 2 - 5, 3.2, 0, 7); ctx.fill(); }
+    ctx.restore();
+  }
+  const easeOut = t => 1 - Math.pow(1 - t, 3);
+  const easeInOut = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  function drawTrain(){
+    // waiting words
+    S.stops.length;
+    allStops().forEach(st => { if (!st.taken) { const p = onEdge(st.edge, st.f * G[st.edge].len); pill(p.x, p.y, carAngle(p.ang), wordW(st.word) + (orient === 'h' ? 20 : 14), st.word, 'wait'); } });
+    if (S.phase === 'derailed') {
+      S.bodies.forEach(b => { if (b.loco) drawLoco(b.x, b.y, b.a); else pill(b.x, b.y, b.a, b.w, b.word, 'car'); });
+      return;
+    }
+    // carriages back to front so the loco sits on top
+    for (let i = S.cars.length - 1; i >= 0; i--) {
+      const c = S.cars[i], p = onRoute(c.c), a = carAngle(p.ang);
+      if (c.empty) { pill(p.x, p.y, a, c.w, c.word, 'empty'); continue; }
+      if (c.fly < 1) {
+        const t = easeInOut(c.fly), x = c.from.x + (p.x - c.from.x) * t, y = c.from.y + (p.y - c.from.y) * t;
+        const lift = Math.sin(Math.PI * c.fly) * 22, nx = orient === 'h' ? 0 : -lift, ny = orient === 'h' ? -lift : 0;
+        ctx.save(); ctx.globalAlpha = .9; ctx.translate(x + nx, y + ny); const sc = 1 + .12 * Math.sin(Math.PI * c.fly); ctx.scale(sc, sc);
+        pill(0, 0, a * t, c.w, c.word, 'car'); ctx.restore();
+      } else pill(p.x, p.y, a, c.w, c.word, 'car');
+    }
+    const h = onRoute(S.s); drawLoco(h.x, h.y, carAngle(h.ang));
+    // unloading words
+    S.fly.forEach(f => {
+      if (f.landed) return;
+      const raw = (f.t - f.delay) / (f.dur || 1); if (raw < 0) { const p = { x: f.x0, y: f.y0 }; pill(p.x, p.y, 0, f.w, f.word, 'car'); return; }
+      const t = easeInOut(Math.min(1, raw));
+      const cx = (f.x0 + f.x1) / 2, cy = Math.min(f.y0, f.y1) - 60;
+      const x = (1 - t) * (1 - t) * f.x0 + 2 * (1 - t) * t * cx + t * t * f.x1, y = (1 - t) * (1 - t) * f.y0 + 2 * (1 - t) * t * cy + t * t * f.y1;
+      ctx.save(); ctx.globalAlpha = 1 - t * .6; pill(x, y, 0, f.w, f.word, 'car'); ctx.restore();
+    });
+  }
+  function allStops(){
+    // every word on the map: committed ones from the route, the rest from the static edges
+    const out = S.stops.slice(), on = new Set(S.route);
+    EDGES.forEach((e, ei) => { if (!on.has(ei)) e.stops.forEach(([w, f]) => out.push({ word: w, edge: ei, f, taken: false })); });
+    return out;
+  }
+  function draw(){
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.fillStyle = C.night; ctx.fillRect(0, 0, W, H);
+    if (S.shake) { const m = S.shake * S.shake * 7; ctx.translate((Math.random() - .5) * m, (Math.random() - .5) * m); }
+    drawCloud(); drawRails(); drawNodes(); drawTrain();
+  }
+  let last = 0;
+  function frame(t){
+    const dt = Math.min(.05, (t - last) / 1000 || 0); last = t;
+    step(dt); draw();
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- input ----------
+  function hitSwitch(x, y){
+    let best = -1, bd = 30;
+    SW.forEach((q, i) => { const n = R.map(...NODES[q.n]); const d = Math.hypot(n[0] - x, n[1] - y); if (d < bd) { bd = d; best = i; } });
+    return best;
+  }
+  cv.addEventListener('pointerdown', e => { const i = hitSwitch(e.clientX, e.clientY); if (i >= 0) { e.preventDefault(); flip(i); } });
+  cv.addEventListener('pointermove', e => { cv.style.cursor = hitSwitch(e.clientX, e.clientY) >= 0 ? 'pointer' : 'default'; });
+  addEventListener('keydown', e => {
+    if (!$('info').hidden) return;
+    if (e.target.closest && e.target.closest('button') && (e.key === ' ' || e.key === 'Enter')) return;
+    if (e.key === '1' || e.key === '2' || e.key === '3') flip(+e.key - 1);
+    else if (e.key === ' ') { e.preventDefault(); think(); }
+    else if (e.key === 'r' || e.key === 'R') reset();
+  });
+  $('thinkBtn').addEventListener('click', think);
+  $('resetBtn').addEventListener('click', reset);
+  let rz = 0; addEventListener('resize', () => { cancelAnimationFrame(rz); rz = requestAnimationFrame(layout); });
+
+  // about
+  const info = $('info'), ib = $('infoBtn');
+  const setInfo = o => { info.hidden = !o; ib.setAttribute('aria-expanded', String(o)); ib.hidden = o; if (o) info.querySelector('.close').focus(); else ib.focus(); };
+  ib.addEventListener('click', () => setInfo(true));
+  info.querySelector('.close').addEventListener('click', () => setInfo(false));
+  addEventListener('keydown', e => { if (e.key === 'Escape' && !info.hidden) setInfo(false); });
+
+  // ---------- boot ----------
+  layout(); reset();
+  requestAnimationFrame(t => { last = t; frame(t); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => layout());
+
+  // ---------- hooks for capture ----------
+  window.__lab = {
+    think, reset, flip, derail,
+    setSwitches: arr => { S.sw = arr.slice(); S.swAnim = [1, 1, 1]; },
+    setSpeed: m => { S.speed = m; },
+    switchAt: i => { const n = R.map(...NODES[SW[i].n]); return { x: n[0], y: n[1] }; },
+    head: () => { const p = onRoute(S.s); return { x: p.x, y: p.y }; },
+    region: () => ({ ...R, map: undefined, orient }),
+    state: () => ({ phase: S.phase, s: S.s, len: S.len, sw: S.sw.slice(), cars: S.cars.map(c => c.word), end: S.end, reply: $('replySay').textContent, guard: $('guardSay').textContent })
+  };
+})();
+</script>
