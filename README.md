@@ -6,6 +6,7 @@ Experiments in UI, motion and creative coding for games, apps and interfaces.
 
 | # | Lab | Category |
 |---|-----|----------|
+| 11 | [Train of Thought](lab-11-train-of-thought/) | Motion |
 | 10 | [Elbow Room](lab-10-elbow-room/) | UI |
 | 09 | [Font Weight](lab-09-font-weight/) | Creative Coding |
 | 08 | [Spell Check](lab-08-spell-check/) | Motion |
