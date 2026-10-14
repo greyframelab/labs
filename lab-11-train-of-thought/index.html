@@ -110,7 +110,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--mind);outline-offse
   <h3>Train of Thought</h3>
   <div><h4>Idea</h4><p>What if a dialogue choice was a train of thought, literally? Your answer is a little train that leaves the question and picks up words at every stop. The switches decide which words it collects, so you can read where each track leads before you commit. Flip a switch while the train is on it and you lose your train of thought.</p></div>
   <div><h4>Controls</h4><ul>
-    <li>Tap a switch (the round knobs where the track splits) to send the train the other way. The dashed line shows the route it will take.</li>
+    <li>Each fork has a glowing ring marked SWITCH. Its arrow points to the branch the train will take. Tap the ring to send the train the other way. The dashed line shows the whole route ahead.</li>
     <li>Think starts the train and the camera rides along behind it. Each word it reaches hops onto a new carriage, and the engine puffs out letters.</li>
     <li>You can still change a switch the train hasn't reached yet. Flip one while the train is crossing it and it derails.</li>
     <li>At the end of the line the carriages unload into your reply, and the guard answers.</li>
@@ -138,7 +138,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--mind);outline-offse
     </div>
   </div>
   <div class="row">
-    <span class="tip" id="tip">Tap a switch to pick a route, then think.</span>
+    <span class="tip" id="tip">Tap a glowing ring to switch tracks, then think.</span>
     <button class="btn" id="resetBtn" type="button">Reset</button>
     <button class="btn go" id="thinkBtn" type="button">Think</button>
   </div>
@@ -212,6 +212,16 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--mind);outline-offse
   function discTex(txt, bg, fg){
     return canvasTex(128, 128, g => { g.beginPath(); g.arc(64, 64, 58, 0, 7); g.fillStyle = bg; g.fill(); g.font = `700 64px ${FONT_M}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = fg; g.fillText(txt, 64, 68); });
   }
+  function arrowTex(dir){
+    return canvasTex(128, 128, g => {
+      g.beginPath(); g.arc(64, 64, 58, 0, 7); g.fillStyle = COL.mind; g.fill();
+      g.save(); g.translate(64, 64); if (dir < 0) g.scale(-1, 1);
+      g.beginPath(); g.moveTo(-30, -9); g.lineTo(6, -9); g.lineTo(6, -26); g.lineTo(34, 0); g.lineTo(6, 26); g.lineTo(6, 9); g.lineTo(-30, 9); g.closePath();
+      g.fillStyle = '#0f1a1a'; g.fill(); g.restore();
+    });
+  }
+  const ARROW = { r: arrowTex(1), l: arrowTex(-1) };
+  const SWLAB = labelTex('SWITCH', COL.mind, `600 40px ${FONT_M}`);
   const glyphCache = {};
   function glyphTex(ch, mode){
     const k = ch + mode; if (glyphCache[k]) return glyphCache[k];
@@ -368,8 +378,9 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--mind);outline-offse
       const post = new THREE.Mesh(new THREE.CylinderGeometry(.1, .1, 4.2, 8), M.dark); post.position.set(ox, 2.1, oz); post.castShadow = true; track.add(post);
       const foot = new THREE.Mesh(new THREE.CylinderGeometry(.7, .9, .4, 16), M.dark); foot.position.set(ox, .2, oz); track.add(foot);
       const ring = new THREE.Mesh(new THREE.TorusGeometry(1.25, .16, 12, 40), M.tealGlow.clone()); ring.position.set(ox, 4.9, oz); track.add(ring);
-      const num = sprite(discTex(q.key, COL.mind, '#0f1a1a'), { order: 12 }); num.position.set(ox, 4.9, oz); track.add(num);
-      return { blade, ring, num, pos: V3(ox, 4.9, oz), jx: p.x, jz: p.z, screen: { x: -999, y: -999, r: 20 } };
+      const num = sprite(ARROW.r, { order: 12 }); num.position.set(ox, 4.9, oz); track.add(num);
+      const lab = sprite(SWLAB.tex, { order: 12 }); lab.center.set(.5, 2.3); lab.position.set(ox, 4.9, oz); track.add(lab);
+      return { blade, ring, num, lab, pos: V3(ox, 4.9, oz), jx: p.x, jz: p.z, screen: { x: -999, y: -999, r: 20 } };
     });
     // words waiting on the track, each in a column of light
     stopSprites = [];
@@ -594,7 +605,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--mind);outline-offse
     $('tip').textContent = S.phase === 'run' ? 'Switches ahead can still change. Not the one under the train.'
       : S.phase === 'derailed' ? 'You flipped a switch under the train.'
       : S.phase === 'arrived' ? 'Flip a switch, then think again.'
-      : 'Tap a switch to pick a route, then think.';
+      : 'Tap a glowing ring to switch tracks, then think.';
   }
 
   // ---------- camera ----------
@@ -795,8 +806,11 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--mind);outline-offse
       const pulse = ahead && !reduced() ? .5 + .5 * Math.sin(S.t * 3.4 + i) : 0;
       u.ring.material.emissiveIntensity = ahead ? 1.6 + pulse * 2 : .25;
       u.ring.rotation.y = S.t * (ahead && !reduced() ? .9 : .2); u.ring.scale.setScalar(1 + pulse * .08);
-      u.num.material.opacity = ahead ? 1 : .45;
-      const d = pxScale(u.num, 1, 26);
+      const cur = onEdge(q.out[S.sw[i]], 8), map = cur.x < u.jx ? ARROW.r : ARROW.l;
+      if (u.num.material.map !== map) u.num.material.map = map;
+      u.num.material.opacity = ahead ? 1 : .45; u.lab.material.opacity = ahead ? 1 : .35;
+      pxScale(u.lab, SWLAB.aspect, 17);
+      const d = pxScale(u.num, 1, 30);
       const p = u.pos.clone().project(camera);
       u.screen = { x: (p.x + 1) / 2 * W, y: (1 - p.y) / 2 * H, r: Math.max(26, 1.6 * 2 * H / (2 * d * Math.tan(camera.fov * Math.PI / 360))) , behind: p.z > 1 };
     });
