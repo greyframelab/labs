@@ -6,6 +6,7 @@ Experiments in UI, motion and creative coding for games, apps and interfaces.
 
 | # | Lab | Category |
 |---|-----|----------|
+| 13 | [Brand New](lab-13-brand-new/) | UI |
 | 12 | [Pin Code](lab-12-pin-code/) | Creative Coding |
 | 11 | [Train of Thought](lab-11-train-of-thought/) | Motion |
 | 10 | [Elbow Room](lab-10-elbow-room/) | UI |
