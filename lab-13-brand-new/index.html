@@ -1,0 +1,845 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Lab #13 — Brand New</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: a smithy at night. An oak plank fills the middle of the screen, the branding iron hangs over it, and the forge controls dock at the bottom. Single dark look by design. */
+:root{
+  --soot:#0e0b0a;        /* background */
+  --dock:#16110f;        /* dock glass */
+  --bone:#f2e8dc;        /* text */
+  --ash:#a89c90;         /* muted text */
+  --dim:#6b6058;
+  --accent:#2fd1c5;      /* Greyframe turquoise: focus, the Brand button */
+  --ember:#ff7a2e;       /* hot metal */
+  --gold:#ffcf5a;        /* perfect */
+  --line:rgba(242,232,220,.12);
+  --display:"Big Shoulders Display","Arial Narrow",Impact,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--soot);color:var(--bone);font:16px/1.5 var(--body);overflow:hidden;-webkit-font-smoothing:antialiased;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+#cv{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none;cursor:pointer;-webkit-user-select:none;user-select:none}
+#cv:focus-visible{box-shadow:inset 0 0 0 2px var(--accent)}
+
+.brand{position:fixed;z-index:3;left:max(16px,env(safe-area-inset-left,0px));top:calc(env(safe-area-inset-top,0px) + 14px);display:flex;flex-direction:column;gap:3px;pointer-events:none;max-width:calc(100% - 160px)}
+@media (min-width:900px){.brand{left:40px;top:30px;max-width:460px}}
+.eyebrow{font:600 11px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ash)}
+.eyebrow b{color:var(--accent);font-weight:600}
+.brand h1{margin:3px 0 0;font:900 40px/.9 var(--display);letter-spacing:.01em;text-transform:uppercase}
+.brand h1 i{font-style:normal;color:var(--ember);text-shadow:0 0 18px rgba(255,122,46,.55)}
+.brand p{margin:2px 0 0;color:var(--ash);font-size:14px;line-height:1.35;max-width:34ch;text-wrap:balance}
+@media (min-width:900px){.brand h1{font-size:60px}.brand p{font-size:16px}}
+
+.topbtns{position:fixed;z-index:5;right:max(16px,env(safe-area-inset-right,0px));top:calc(env(safe-area-inset-top,0px) + 14px)}
+@media (min-width:900px){.topbtns{right:40px;top:34px}}
+#infoBtn,#soundBtn{padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:rgba(22,17,15,.85);color:var(--bone);font:600 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
+#infoBtn:hover,#soundBtn:hover{border-color:var(--accent)}
+.topbtns{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+#soundBtn[aria-pressed="false"]{color:var(--ash)}
+@media (min-width:900px){.topbtns{flex-direction:row}}
+
+#info{box-sizing:border-box;position:fixed;z-index:6;right:12px;top:calc(env(safe-area-inset-top,0px) + 12px);width:min(430px,calc(100vw - 24px));max-height:calc(100% - 24px);overflow:auto;padding:22px;border-radius:14px;background:#120e0c;border:1px solid var(--line);box-shadow:0 24px 70px rgba(0,0,0,.65);display:flex;flex-direction:column;gap:14px;font-size:15px;animation:rise .3s cubic-bezier(.2,.9,.3,1)}
+@media (min-width:900px){#info{right:40px;top:34px}}
+@keyframes rise{from{transform:translateY(-10px);opacity:0}}
+#info .meta{font:600 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+#info h3{margin:0;font:900 42px/1 var(--display);text-transform:uppercase}
+#info h4{margin:2px 0 6px;font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ash)}
+#info p{margin:0}
+#info ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+#info a{color:var(--accent)}
+#info .close{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--bone);font-size:18px;cursor:pointer}
+#allLabs{font:600 12px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase}
+
+#verdict{position:fixed;z-index:2;left:50%;top:40%;transform:translate(-50%,0);pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:2px;opacity:0;text-align:center}
+#verdict b{font:900 64px/.9 var(--display);letter-spacing:.04em;text-transform:uppercase;color:var(--q,var(--bone));text-shadow:0 2px 0 rgba(0,0,0,.6),0 0 28px rgba(0,0,0,.6)}
+#verdict span{font:600 12px/1.2 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--bone);background:rgba(14,11,10,.72);padding:5px 8px;border-radius:5px}
+#verdict.show{animation:stamp 2.6s cubic-bezier(.2,.9,.3,1) forwards}
+@keyframes stamp{0%{opacity:0;transform:translate(-50%,0) scale(1.7) rotate(-8deg)}9%{opacity:1;transform:translate(-50%,0) scale(.94) rotate(-4deg)}16%{transform:translate(-50%,0) scale(1) rotate(-4deg)}80%{opacity:1;transform:translate(-50%,0) scale(1) rotate(-4deg)}100%{opacity:0;transform:translate(-50%,-8px) scale(1) rotate(-4deg)}}
+@media (min-width:900px){#verdict b{font-size:96px}}
+
+.dock{position:fixed;z-index:3;left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 12px);margin:0 auto;max-width:1040px;box-sizing:border-box;padding:12px 14px;border-radius:16px;background:rgba(22,17,15,.84);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border:1px solid var(--line);box-shadow:0 20px 60px rgba(0,0,0,.6);display:grid;grid-template-columns:1fr;gap:10px}
+@media (min-width:900px){.dock{bottom:24px;padding:16px 20px;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);grid-template-areas:'name gauge' 'ctrls foot';gap:14px 28px;align-items:center}.namerow{grid-area:name}.gauge{grid-area:gauge}.ctrls{grid-area:ctrls}.foot{grid-area:foot}}
+.lbl{display:flex;justify-content:space-between;gap:8px;font:600 10px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ash);margin-bottom:6px}
+.lbl em{font-style:normal;color:var(--dim);letter-spacing:.08em}
+.namerow{display:flex;gap:10px;align-items:flex-end;min-width:0}
+.field{flex:1 1 auto;min-width:0}
+#name{box-sizing:border-box;width:100%;padding:4px 2px 6px;border:0;border-bottom:2px solid var(--line);background:transparent;color:var(--bone);font:800 30px/1.1 var(--display);letter-spacing:.06em;text-transform:uppercase;outline:none;border-radius:0;caret-color:var(--ember);transition:border-color .2s}
+#name:focus{border-bottom-color:var(--accent)}
+#name::placeholder{color:var(--dim)}
+
+.gauge{position:relative;min-width:0}
+.bar{position:relative;height:16px;border-radius:5px;background:linear-gradient(90deg,#3b3735 0%,#45302a 31%,#5e1a10 41%,#8a1d0e 49%,#b8240f 57%,#e2401a 65%,#ff6e1e 73%,#ffa63c 80%,#ffd977 88%,#fff7e6 100%);box-shadow:inset 0 0 0 1px rgba(0,0,0,.5)}
+.zone{position:absolute;top:-3px;bottom:-3px;border-radius:4px}
+.zone.perfect{border:2px solid var(--gold);box-shadow:0 0 12px rgba(255,207,90,.45)}
+.zone.clean{border:1px dashed rgba(242,232,220,.55)}
+.needle{position:absolute;top:-7px;bottom:-7px;width:4px;margin-left:-2px;border-radius:2px;background:var(--bone);box-shadow:0 0 0 2px rgba(14,11,10,.9),0 0 10px rgba(255,255,255,.5)}
+.scale{display:flex;justify-content:space-between;margin-top:6px;font:500 10px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.scale .p{color:var(--gold)}
+#readout{color:var(--bone);font-variant-numeric:tabular-nums;letter-spacing:.06em}
+#readout b{font-weight:600}
+
+.ctrls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{height:42px;padding:0 15px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--bone);font:700 15px/1 var(--body);cursor:pointer;transition:transform .15s cubic-bezier(.2,.9,.3,1),background-color .2s,border-color .2s,color .2s;-webkit-user-select:none;user-select:none;touch-action:none}
+.btn:hover{border-color:var(--accent)}
+.btn:active{transform:scale(.96)}
+.btn.heat{background:linear-gradient(180deg,#ff8a3a,#e2401a);border-color:#ff8a3a;color:#1d0a03;min-width:128px}
+.btn.heat[aria-pressed="true"]{background:linear-gradient(180deg,#ffe08a,#ffa63c);border-color:#ffe08a;box-shadow:0 0 22px rgba(255,166,60,.6)}
+.btn.main{background:var(--accent);border-color:var(--accent);color:#03201d;min-width:104px}
+.btn.small{height:36px;padding:0 11px;font-size:14px;font-weight:600}
+.btn[aria-pressed="false"].tog{color:var(--ash)}
+button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.spacer{flex:1 1 auto}
+
+.foot{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline;justify-content:space-between;min-width:0}
+.status{margin:0;font-size:14px;line-height:1.35;min-width:0;flex:1 1 280px;text-wrap:balance}
+.status b{color:var(--ember);font-weight:700}
+.code{font:500 11px/1.3 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ash);font-variant-numeric:tabular-nums;white-space:nowrap}
+.code b{color:var(--gold);font-weight:600}
+@media (max-width:560px){
+  .dock{padding:10px 12px;gap:9px}
+  #name{font-size:26px}
+  .btn{height:40px;padding:0 12px;font-size:14px}
+  .btn.heat{min-width:112px}.btn.main{min-width:88px}
+  .btn.small{height:34px;padding:0 9px;font-size:13px}
+  .status{font-size:13px}
+  .brand h1{font-size:34px}.brand p{font-size:13px}
+  .code{white-space:normal}
+  #verdict b{font-size:52px}
+}
+@media (prefers-reduced-motion:reduce){#info{animation:none}#verdict.show{animation:fade 2.6s linear forwards}.btn{transition:none}}
+@keyframes fade{0%,85%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,0)}}
+</style>
+
+<canvas id="cv" tabindex="0" aria-label="An oak plank with a branding iron hanging over it. The iron is forged from the brand name: every letter welds one more ring onto it. Hold to heat the iron, tap to press it into the wood."></canvas>
+
+<div class="brand">
+  <div class="eyebrow"><b>Greyframe Labs</b> · #13 · UI</div>
+  <h1>Brand <i>New</i></h1>
+  <p>Your guild name, forged into a branding iron. Heat it, then burn it in.</p>
+</div>
+
+<div id="verdict" aria-hidden="true"><b></b><span></span></div>
+
+<div class="topbtns"><button id="soundBtn" class="tog" type="button" aria-pressed="true">Sound on</button><button id="infoBtn" type="button" aria-expanded="false" aria-controls="info">About this lab</button></div>
+<aside id="info" hidden aria-label="About this lab">
+  <button class="close" type="button" aria-label="Close">×</button>
+  <div class="meta">Lab #13 · UI · 17 Oct 2026</div>
+  <h3>Brand New</h3>
+  <div><h4>Idea</h4><p>What if your guild name was forged into a branding iron? Every letter you type welds one more ring onto the iron, and the first letter sets how many times the pattern repeats. The same name always forges the same iron. Then you heat it and burn your mark into a plank: press too early and the mark comes out faint, wait too long and it scorches.</p></div>
+  <div><h4>Controls</h4><ul>
+    <li>Type in "Brand name" (letters, numbers and spaces, up to 14). Each letter welds a new ring onto the iron: arcs, spokes, chevrons, studs, leaves or spikes. A space adds a plain border.</li>
+    <li>Hold Heat, hold anywhere on the scene, or hold Space to heat the iron. The gauge follows a blacksmith's heat colours, from black heat to white heat.</li>
+    <li>Brand, a quick tap on the scene, or Enter presses the iron into the wood. Press while the needle is in the gold band for a perfect mark.</li>
+    <li>New plank brings fresh wood. Random name forges another guild's iron. Sound turns the forge sounds on or off.</li>
+  </ul></div>
+  <div><h4>Inspired by</h4><ul>
+    <li>SIGILIZERSIXHUNDRED by niftymonkee: a word that turns into a sigil, letter by letter.</li>
+    <li>Blacksmith heat-colour charts, which read the temperature of steel from its glow, from dull red to white heat.</li>
+    <li>Leather and livestock branding irons: one welded symbol, pressed hot, readable for decades.</li>
+  </ul></div>
+  <div><h4>For game UI</h4><p>Crest editors usually hand players a grid of icons and colours. Here the name the player already picked becomes the art, so every guild gets a unique emblem that any client can rebuild from the text, with no image to store or sync. Turning the reveal into a short skill check (heat, wait, press) makes creating the emblem a moment players remember and share, and the mark quality gives them a reason to try again. The same pattern fits weapon engravings, ship liveries, ranch brands in a farming sim or the wax seal on a quest letter.</p></div>
+  <a id="allLabs" href="https://claude.ai/artifact/CDYy2LnuZN3Tdb1A9BSHrG" target="_blank" rel="noopener">← All labs</a>
+  <script>if (/github\.io$/.test(location.hostname)) { const a = document.getElementById('allLabs'); a.href = '../'; a.removeAttribute('target'); }</script>
+</aside>
+
+<section class="dock" aria-label="Forge a brand">
+  <div class="namerow">
+    <label class="field" for="name"><span class="lbl">Brand name <em id="count">0/14</em></span><input id="name" type="text" maxlength="14" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Type a name" enterkeyhint="go"></label>
+    <button class="btn small" id="randBtn" type="button">Random</button>
+  </div>
+  <div class="gauge">
+    <div class="lbl"><span>Iron heat</span><span id="readout">20 °C · <b>Black heat</b></span></div>
+    <div class="bar" id="bar" role="meter" aria-label="Iron heat" aria-valuemin="20" aria-valuemax="1300" aria-valuenow="20"><div class="needle" id="needle"></div></div>
+    <div class="scale" aria-hidden="true"><span>Cold</span><span>Faint</span><span class="p">Perfect</span><span>Scorched</span></div>
+  </div>
+  <div class="ctrls">
+    <button class="btn heat" id="heatBtn" type="button" aria-pressed="false">Hold to heat</button>
+    <button class="btn main" id="brandBtn" type="button">Brand</button>
+    <span class="spacer"></span>
+    <button class="btn small" id="plankBtn" type="button">New plank</button>
+  </div>
+  <div class="foot">
+    <p class="status" id="status" aria-live="polite"></p>
+    <div class="code" id="code"></div>
+  </div>
+</section>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const cv = $('cv'), ctx = cv.getContext('2d');
+  const RM = matchMedia('(prefers-reduced-motion: reduce)');
+  const reduced = () => RM.matches;
+  const TAU = Math.PI * 2;
+  const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const eout = t => 1 - Math.pow(1 - t, 3);
+  const ein = t => t * t * t;
+  const eio = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  const hash = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+  const mulberry = a => () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const rnd = Math.random;
+
+  // ---------- heat: a blacksmith's colour chart ----------
+  const TMIN = 20, TMAX = 1300;
+  const tempOf = T => TMIN + T * (TMAX - TMIN);
+  const Tof = temp => (temp - TMIN) / (TMAX - TMIN);
+  const hx = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const STOPS = [[20, '#47423f'], [420, '#4a3a33'], [550, '#5e1a10'], [650, '#8a1d0e'], [750, '#b8240f'], [850, '#e2401a'], [950, '#ff6e1e'], [1050, '#ffa63c'], [1150, '#ffd977'], [1300, '#fff7e6']].map(([t, c]) => [t, hx(c)]);
+  function heatRGB(temp) {
+    if (temp <= STOPS[0][0]) return STOPS[0][1];
+    for (let i = 1; i < STOPS.length; i++) if (temp <= STOPS[i][0]) { const [t0, c0] = STOPS[i - 1], [t1, c1] = STOPS[i], k = (temp - t0) / (t1 - t0); return c0.map((v, j) => v + (c1[j] - v) * k); }
+    return STOPS[STOPS.length - 1][1];
+  }
+  const rgba = (c, a = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+  const mixc = (c, d, t) => c.map((v, i) => v + (d[i] - v) * t);
+  const BLACK = [8, 5, 4], WHITE = [255, 250, 240];
+  const glowOf = temp => clamp((temp - 480) / 720, 0, 1);
+  const COLOR_NAMES = [[480, 'Black heat'], [650, 'Dull red'], [750, 'Cherry red'], [850, 'Bright cherry'], [950, 'Orange'], [1100, 'Yellow'], [1e9, 'White heat']];
+  const colorName = t => COLOR_NAMES.find(c => t < c[0])[1];
+  const ZONES = [{ to: 450, id: 'cold', name: 'Too cold' }, { to: 650, id: 'faint', name: 'Faint' }, { to: 790, id: 'clean', name: 'Clean' }, { to: 880, id: 'perfect', name: 'Perfect' }, { to: 960, id: 'clean', name: 'Clean' }, { to: 1e9, id: 'scorched', name: 'Scorched' }];
+  const zoneOf = t => ZONES.find(z => t < z.to);
+  const QCOL = { cold: '#8e9aa3', faint: '#c9b8a6', clean: '#f2e8dc', perfect: '#ffcf5a', scorched: '#ff5a2a' };
+
+  // ---------- the iron: one ring per letter ----------
+  const R0 = 1.55, STEP = .6, W = .26, HUB = 1.0;
+  const SYMS = [3, 4, 5, 6, 8];
+  const TYPES = ['arcs', 'spokes', 'chevrons', 'studs', 'leaves', 'spikes'];
+  const TYPE_TEXT = { arcs: 'a ring of arcs', spokes: 'a set of spokes', chevrons: 'a ring of chevrons', studs: 'a ring of studs', leaves: 'a set of leaves', spikes: 'a crown of spikes', border: 'a plain border' };
+  const sanitize = v => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9 ]/g, '').replace(/^ +/, '').replace(/ {2,}/g, ' ').slice(0, 14);
+  const keyOf = ch => { const c = ch.charCodeAt(0); return c <= 57 ? 26 + (c - 48) : c - 65; };
+  const symOf = name => { const m = name.match(/[A-Z0-9]/); return m ? SYMS[keyOf(m[0]) % 5] : 6; };
+  const P = (r, a) => [r * Math.cos(a), r * Math.sin(a)];
+
+  function shape() { return { p: new Path2D(), f: new Path2D(), hasFill: false, pts: [] }; }
+  function lineXY(g, x1, y1, x2, y2) {
+    g.p.moveTo(x1, y1); g.p.lineTo(x2, y2);
+    const n = Math.max(2, Math.ceil(Math.hypot(x2 - x1, y2 - y1) / .25));
+    for (let i = 0; i <= n; i++) g.pts.push([lerp(x1, x2, i / n), lerp(y1, y2, i / n)]);
+  }
+  function lineP(g, r1, a1, r2, a2) { const [x1, y1] = P(r1, a1), [x2, y2] = P(r2, a2); lineXY(g, x1, y1, x2, y2); }
+  function arcR(g, r, a0, a1) {
+    const [x, y] = P(r, a0); g.p.moveTo(x, y); g.p.arc(0, 0, r, a0, a1);
+    const n = Math.max(3, Math.ceil(r * Math.abs(a1 - a0) / .25));
+    for (let i = 0; i <= n; i++) g.pts.push(P(r, lerp(a0, a1, i / n)));
+  }
+  function dot(g, r, a, rad) { const [x, y] = P(r, a); g.f.moveTo(x + rad, y); g.f.arc(x, y, rad, 0, TAU); g.hasFill = true; g.pts.push([x, y], [x + rad * .6, y], [x - rad * .6, y]); }
+  function poly(g, list, closed) {
+    list.forEach(([r, a], i) => { const [x, y] = P(r, a); i ? g.p.lineTo(x, y) : g.p.moveTo(x, y); });
+    if (closed) g.p.closePath();
+    const L = closed ? [...list, list[0]] : list;
+    for (let i = 1; i < L.length; i++) { const [x1, y1] = P(...L[i - 1]), [x2, y2] = P(...L[i]); const n = Math.max(2, Math.ceil(Math.hypot(x2 - x1, y2 - y1) / .25)); for (let j = 0; j < n; j++) g.pts.push([lerp(x1, x2, j / n), lerp(y1, y2, j / n)]); }
+  }
+  function lens(g, r1, r2, a, b, filled) {
+    const [x1, y1] = P(r1, a), [x2, y2] = P(r2, a), m = (r1 + r2) / 2, tx = -Math.sin(a), ty = Math.cos(a);
+    const [mx, my] = P(m, a), c1 = [mx + tx * b * 2, my + ty * b * 2], c2 = [mx - tx * b * 2, my - ty * b * 2];
+    const path = filled ? g.f : g.p; if (filled) g.hasFill = true;
+    path.moveTo(x1, y1); path.quadraticCurveTo(c1[0], c1[1], x2, y2); path.quadraticCurveTo(c2[0], c2[1], x1, y1);
+    for (let i = 0; i <= 8; i++) { const t = i / 8, u = 1 - t; g.pts.push([u * u * x1 + 2 * u * t * c1[0] + t * t * x2, u * u * y1 + 2 * u * t * c1[1] + t * t * y2], [u * u * x1 + 2 * u * t * c2[0] + t * t * x2, u * u * y1 + 2 * u * t * c2[1] + t * t * y2]); }
+  }
+  function buildHub() { const g = shape(); arcR(g, HUB, 0, TAU); dot(g, 0, 0, .42); g.type = 'hub'; g.ch = ''; g.i = -1; g.born = -99; return g; }
+  function buildItem(ch, i, k) {
+    const g = shape(); g.ch = ch; g.i = i; g.born = -99;
+    const r = R0 + i * STEP, rp = i === 0 ? HUB : r - STEP;
+    if (ch === ' ') { arcR(g, r, 0, TAU); g.type = 'border'; return g; }
+    const v = keyOf(ch), type = TYPES[v % 6], p = Math.floor(v / 6), step = TAU / k, off = -Math.PI / 2 + p * step / 6, vv = v % 3;
+    g.type = type;
+    for (let j = 0; j < k; j++) {
+      const a = off + j * step;
+      if (type === 'arcs') { const sp = step * (.42 + .12 * vv); arcR(g, r, a - sp / 2, a + sp / 2); }
+      else if (type === 'spokes') { lineP(g, rp + .12, a, r + .28, a); if (p % 2) { const [x, y] = P(r, a), tx = -Math.sin(a), ty = Math.cos(a); lineXY(g, x - tx * .38, y - ty * .38, x + tx * .38, y + ty * .38); } }
+      else if (type === 'chevrons') { const d = Math.min(step * .32, .7 / r); poly(g, [[r - .28, a - d], [r + .3, a], [r - .28, a + d]], false); }
+      else if (type === 'studs') { const n = p >= 3 ? 2 : 1; for (let q = 0; q < n; q++) { const aa = a + q * step / 2; dot(g, r, aa, .2 + .04 * vv); if (p % 2 === 0) lineP(g, rp + .1, aa, r - .12, aa); } }
+      else if (type === 'leaves') lens(g, rp + .1, r + .32, a, Math.min(.38, step * r * .22), p % 2 === 1);
+    }
+    if (type === 'spikes') { const teeth = k * (1 + (p % 2)), L = []; for (let t = 0; t < teeth * 2; t++) L.push([t % 2 ? r - .18 : r + .36, off + t * TAU / (teeth * 2)]); poly(g, L, true); }
+    return g;
+  }
+  const extentOf = n => n ? Math.max(2.4, R0 + (n - 1) * STEP + .6) : 2.4;
+
+  // ---------- state ----------
+  const S = {
+    name: '', k: 6, items: [], hub: buildHub(), ghosts: [], fit: 60, fitT: 60,
+    T: 0, holds: 0, auto: null, h: 1, slam: null, mark: null, streak: 0, best: '',
+    t: 0, away: 0, awayT: 0, shake: 0, flash: 0, sound: true, demo: true, typing: null, seed: 7
+  };
+  const sparks = [], fire = [], smoke = [];
+
+  // ---------- canvases ----------
+  const mk = () => { const c = document.createElement('canvas'); return { c, x: c.getContext('2d') }; };
+  const BG = mk(), G1 = mk(), G2 = mk(), SH = mk();
+  let wood = mk(), burn = mk(), oldWood = null, oldBurn = null, plankAnim = 1;
+  let dpr = 1, VW = 0, VH = 0, BX = 0, BY = 0, BS = 300, RI = 100;
+  const sprite = (inner, outer, size = 64) => { const s = mk(); s.c.width = s.c.height = size; const g = s.x.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2); g.addColorStop(0, inner); g.addColorStop(.35, outer); g.addColorStop(1, 'rgba(0,0,0,0)'); s.x.fillStyle = g; s.x.fillRect(0, 0, size, size); return s.c; };
+  const FIRE = [sprite('rgba(255,250,220,1)', 'rgba(255,200,90,.55)'), sprite('rgba(255,190,90,1)', 'rgba(255,110,30,.5)'), sprite('rgba(255,110,40,.9)', 'rgba(170,30,10,.4)')];
+  const SMOKE = sprite('rgba(70,62,58,.55)', 'rgba(52,46,43,.28)', 96);
+
+  function genWood(seed, size) {
+    const w = mk(), r = mulberry(seed), px = Math.round(size * dpr);
+    w.c.width = w.c.height = px; const x = w.x; x.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const rad = Math.max(6, size * .02);
+    x.beginPath(); x.roundRect ? x.roundRect(0, 0, size, size, rad) : x.rect(0, 0, size, size); x.clip();
+    const hue = r();
+    const base = mixc([196, 154, 108], [182, 128, 84], hue), dark = mixc(base, [60, 34, 16], .55);
+    x.fillStyle = rgba(base); x.fillRect(0, 0, size, size);
+    const N = 5, ph = size / N;
+    for (let i = 0; i < N; i++) {
+      const y0 = i * ph, tone = (r() - .5) * .16;
+      x.fillStyle = tone > 0 ? `rgba(255,236,205,${tone})` : `rgba(70,38,16,${-tone})`; x.fillRect(0, y0, size, ph);
+      const lg = x.createLinearGradient(0, y0, 0, y0 + ph); lg.addColorStop(0, 'rgba(255,240,215,.1)'); lg.addColorStop(.5, 'rgba(0,0,0,0)'); lg.addColorStop(1, 'rgba(60,30,12,.16)'); x.fillStyle = lg; x.fillRect(0, y0, size, ph);
+      // grain
+      const lines = 26 + (r() * 14 | 0), f1 = (2 + r() * 3) / size * TAU, f2 = (7 + r() * 6) / size * TAU, p1 = r() * TAU, p2 = r() * TAU;
+      for (let l = 0; l < lines; l++) {
+        const yy = y0 + r() * ph, A = ph * (.04 + r() * .1), A2 = ph * .02 * r();
+        x.beginPath();
+        for (let xx = -4; xx <= size + 4; xx += 6) { const y = yy + A * Math.sin(xx * f1 + p1 + l * .2) + A2 * Math.sin(xx * f2 + p2); xx < 0 ? x.moveTo(xx, y) : x.lineTo(xx, y); }
+        x.strokeStyle = rgba(dark, .07 + r() * .16); x.lineWidth = .5 + r() * 1.4; x.stroke();
+      }
+      // knot
+      if (r() < .45) {
+        const kx = size * (.15 + r() * .7), ky = y0 + ph * (.3 + r() * .4), kr = ph * (.1 + r() * .1);
+        for (let q = 5; q >= 1; q--) { x.beginPath(); x.ellipse(kx, ky, kr * q * .7 * 2.2, kr * q * .7, 0, 0, TAU); x.strokeStyle = rgba(dark, .12); x.lineWidth = 1; x.stroke(); }
+        x.beginPath(); x.ellipse(kx, ky, kr * .9, kr * .55, 0, 0, TAU); x.fillStyle = rgba(dark, .6); x.fill();
+      }
+      // seam + nails
+      if (i) { x.fillStyle = 'rgba(38,20,9,.75)'; x.fillRect(0, y0 - 1, size, 2.2); x.fillStyle = 'rgba(255,232,200,.16)'; x.fillRect(0, y0 + 1.2, size, 1); }
+      for (const nx of [size * .045, size * .955]) {
+        const ny = y0 + ph / 2; x.beginPath(); x.arc(nx, ny, Math.max(2.2, size * .007), 0, TAU); x.fillStyle = '#2b211c'; x.fill();
+        x.beginPath(); x.arc(nx - .6, ny - .6, Math.max(1, size * .003), 0, TAU); x.fillStyle = 'rgba(255,240,220,.35)'; x.fill();
+        x.beginPath(); x.arc(nx, ny + 1, Math.max(4, size * .013), 0, TAU); x.fillStyle = 'rgba(60,30,12,.12)'; x.fill();
+      }
+    }
+    // speckle
+    for (let i = 0; i < size * 3; i++) { x.fillStyle = r() < .5 ? 'rgba(60,32,14,.12)' : 'rgba(255,240,215,.08)'; x.fillRect(r() * size, r() * size, 1 + r() * 1.5, 1); }
+    const v = x.createRadialGradient(size / 2, size / 2, size * .3, size / 2, size / 2, size * .75); v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(40,20,8,.38)'); x.fillStyle = v; x.fillRect(0, 0, size, size);
+    x.strokeStyle = 'rgba(255,236,205,.18)'; x.lineWidth = 1.5; x.strokeRect(.75, .75, size - 1.5, size - 1.5);
+    return w;
+  }
+  function newBurn(size) { const b = mk(); b.c.width = b.c.height = Math.round(size * dpr); return b; }
+
+  function drawBG() {
+    BG.c.width = Math.round(VW * dpr); BG.c.height = Math.round(VH * dpr);
+    const x = BG.x; x.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const g = x.createRadialGradient(BX, BY, BS * .2, BX, BY, Math.hypot(VW, VH) * .7);
+    g.addColorStop(0, '#2a1c15'); g.addColorStop(.45, '#170f0c'); g.addColorStop(1, '#090706');
+    x.fillStyle = g; x.fillRect(0, 0, VW, VH);
+    const r = mulberry(99);
+    for (let i = 0; i < VW * VH / 900; i++) { x.fillStyle = r() < .5 ? 'rgba(255,220,190,.025)' : 'rgba(0,0,0,.2)'; x.fillRect(r() * VW, r() * VH, 2, 2); }
+    x.save(); x.shadowColor = 'rgba(0,0,0,.75)'; x.shadowBlur = 40; x.shadowOffsetY = 18;
+    x.fillStyle = '#1a120e'; x.fillRect(BX - BS / 2 + 6, BY - BS / 2 + 6, BS - 12, BS - 12); x.restore();
+  }
+
+  function layout() {
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    VW = innerWidth; VH = innerHeight;
+    cv.width = Math.round(VW * dpr); cv.height = Math.round(VH * dpr);
+    const top = document.querySelector('.brand').getBoundingClientRect().bottom + 12;
+    const bot = document.querySelector('.dock').getBoundingClientRect().top - 12;
+    const prev = BS;
+    BS = Math.max(160, Math.min(VW - 32, bot - top, 760));
+    BX = VW / 2; BY = top + (bot - top) / 2;
+    RI = BS * .4;
+    for (const [b, s] of [[G1, 4], [SH, 4], [G2, 16]]) { b.c.width = Math.ceil(VW * dpr / s); b.c.height = Math.ceil(VH * dpr / s); }
+    const nb = newBurn(BS); if (burn.c.width) nb.x.drawImage(burn.c, 0, 0, nb.c.width, nb.c.height); burn = nb;
+    wood = genWood(S.seed, BS); oldWood = oldBurn = null; plankAnim = 1;
+    S.fitT = RI / extentOf(S.items.length); if (Math.abs(prev - BS) > 1 || !S.fit) S.fit = S.fitT;
+    if (S.mark) S.mark.fit *= BS / prev;
+    drawBG();
+    const v = $('verdict'); v.style.top = Math.round(BY - BS / 2 + BS * .06) + 'px';
+  }
+
+  // ---------- name -> iron ----------
+  function setName(raw, opts = {}) {
+    const name = sanitize(raw);
+    const input = $('name'); if (input.value !== name) input.value = name;
+    $('count').textContent = `${name.length}/14`;
+    if (name === S.name && !opts.force) return;
+    const k = symOf(name), oldK = S.k, old = S.items;
+    S.name = name; S.k = k; if (!opts.quiet) S.awayT = 0;
+    const items = [...name].map((ch, i) => buildItem(ch, i, k));
+    const fresh = [];
+    items.forEach((g, i) => { const o = old[i]; if (o && o.ch === g.ch && oldK === k) g.born = o.born; else { g.born = opts.quiet ? -99 : S.t; if (!opts.quiet && (!o || o.ch !== g.ch)) fresh.push(g); } });
+    old.forEach((o, i) => { if (!items[i] || items[i].ch !== o.ch || oldK !== k) S.ghosts.push({ g: o, t: S.t, k: oldK }); });
+    S.items = items;
+    S.fitT = RI / extentOf(items.length);
+    if (opts.quiet) S.fit = S.fitT;
+    renderCode();
+    if (opts.quiet) { $('status').innerHTML = hint(); return; }
+    const last = fresh[fresh.length - 1];
+    if (last) {
+      weldFX(last);
+      const first = items.findIndex(q => q.ch !== ' ');
+      $('status').innerHTML = `<b>${last.ch === ' ' ? 'Space' : last.ch}</b> welds ${TYPE_TEXT[last.type]}` + (last.i === first || oldK !== k ? `, and as the first letter it sets a <b>${k}-fold</b> pattern.` : '.');
+    } else $('status').innerHTML = name ? hint() : 'Type a name. Every letter welds one more ring onto the iron.';
+  }
+  const hint = () => S.name ? `<b>${S.name.trim()}</b> forges a ${S.k}-fold iron. Hold Heat, then press Brand while the needle is in the gold band.` : 'Type a name. Every letter welds one more ring onto the iron.';
+  function renderCode() {
+    const id = (hash(S.name.trim() + '|13') & 0xffff).toString(16).toUpperCase().padStart(4, '0');
+    $('code').innerHTML = `Iron <b>${S.name.trim() ? id : '----'}</b> · ${S.k}-fold · ${S.items.length} rings` + (S.streak > 1 ? ` · Perfect streak <b>×${S.streak}</b>` : '');
+  }
+
+  // ---------- geometry helpers ----------
+  function ironView() {
+    const h = S.h, a = eio(clamp(S.away, 0, 1)), sc = S.fit * (1 + .13 * h + .1 * a);
+    return { x: BX + h * RI * .02 + a * RI * 1.6, y: BY - h * RI * .06 - a * RI * .3, sc, h: h + a * .6 };
+  }
+  const toScreen = (v, p) => [v.x + p[0] * v.sc, v.y + p[1] * v.sc];
+  function samplePt(list) {
+    const g = list[(rnd() * list.length) | 0]; if (!g || !g.pts.length) return null;
+    return g.pts[(rnd() * g.pts.length) | 0];
+  }
+  const allParts = () => [S.hub, ...S.items];
+
+  // ---------- effects ----------
+  function weldFX(g) {
+    tick();
+    if (reduced()) return;
+    const v = ironView();
+    for (let i = 0; i < 22; i++) {
+      const p = g.pts[(rnd() * g.pts.length) | 0]; if (!p) break;
+      const [x, y] = toScreen(v, p), a = rnd() * TAU, s = 120 + rnd() * 320;
+      sparks.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 80, t: 0, life: .25 + rnd() * .4, w: 1.2 });
+    }
+  }
+  function burst(q) {
+    const N = { cold: 8, faint: 50, clean: 110, perfect: 180, scorched: 220 }[q] * (reduced() ? .15 : 1);
+    const v = ironView(), parts = allParts();
+    for (let i = 0; i < N; i++) {
+      const p = samplePt(parts); if (!p) break;
+      const [x, y] = toScreen(v, p), d = Math.hypot(p[0], p[1]) || 1, a = Math.atan2(p[1], p[0]) + (rnd() - .5) * 1.2, s = (160 + rnd() * 620) * (q === 'cold' ? .4 : 1);
+      sparks.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: .35 + rnd() * .8, w: 1 + rnd() * 1.6 });
+    }
+    const M = { cold: 3, faint: 26, clean: 50, perfect: 60, scorched: 100 }[q] * (reduced() ? .2 : 1);
+    for (let i = 0; i < M; i++) puff(v, parts, 1);
+  }
+  function puff(v, parts, k) {
+    const p = samplePt(parts); if (!p) return;
+    const [x, y] = toScreen(v, p), d = Math.hypot(p[0], p[1]) || 1;
+    smoke.push({ x, y, vx: p[0] / d * (10 + rnd() * 40) + (rnd() - .5) * 20, vy: p[1] / d * (10 + rnd() * 30) - 30 - rnd() * 40, t: 0, life: 1.6 + rnd() * 1.6, s: RI * (.14 + rnd() * .16) * k, rot: rnd() * TAU, vr: (rnd() - .5) * .8 });
+  }
+
+  // ---------- burning the mark ----------
+  const QPAR = {
+    cold: { halo: [], core: [.7, .16], dash: [.3, .55], glow: 0 },
+    faint: { halo: [[1.7, .1]], core: [.9, .5], dash: [1.1, .28], glow: .35 },
+    clean: { halo: [[2.2, .1], [1.6, .16]], core: [1, .88], glow: .7 },
+    perfect: { halo: [[2.3, .1], [1.6, .18]], core: [1.06, .96], inner: true, glow: 1 },
+    scorched: { halo: [[4.2, .12], [3, .18], [2.1, .28]], core: [1.55, .97], blot: true, glow: 1.25 }
+  };
+  function strokePart(x, g, w, col) {
+    x.lineWidth = w; x.strokeStyle = col; x.stroke(g.p);
+    if (g.hasFill) { x.fillStyle = col; x.fill(g.f); if (w > W) { x.lineWidth = w - W; x.stroke(g.f); } }
+  }
+  function burnMark(q) {
+    const x = burn.x, Q = QPAR[q], parts = allParts();
+    x.setTransform(dpr * S.fit, 0, 0, dpr * S.fit, BS / 2 * dpr, BS / 2 * dpr);
+    x.lineCap = 'round'; x.lineJoin = 'round';
+    for (const [m, a] of Q.halo) for (const g of parts) strokePart(x, g, W * m, `rgba(78,40,16,${a})`);
+    if (Q.dash) x.setLineDash(Q.dash);
+    for (const g of parts) strokePart(x, g, W * Q.core[0], `rgba(24,12,6,${Q.core[1]})`);
+    x.setLineDash([]);
+    if (Q.inner) for (const g of parts) strokePart(x, g, W * .45, 'rgba(48,22,10,.7)');
+    if (Q.blot) { for (let i = 0; i < 70; i++) { const p = samplePt(parts); if (!p) break; x.beginPath(); x.arc(p[0] + (rnd() - .5) * .5, p[1] + (rnd() - .5) * .5, .15 + rnd() * .5, 0, TAU); x.fillStyle = `rgba(20,10,5,${.15 + rnd() * .3})`; x.fill(); } }
+    x.setTransform(1, 0, 0, 1, 0, 0);
+    S.mark = { parts, fit: S.fit, glow: Q.glow, t0: S.t, q };
+  }
+
+  // ---------- actions ----------
+  function brand() {
+    if (S.slam) return;
+    if (!S.name.trim()) { $('status').innerHTML = 'Type a name first. The iron needs at least one letter.'; $('name').focus(); return; }
+    S.slam = { t: 0, hit: false }; S.awayT = 0;
+  }
+  function impact() {
+    const temp = tempOf(S.T), z = zoneOf(temp), q = z.id;
+    burnMark(q); burst(q);
+    if (!reduced()) { S.shake = { cold: 2, faint: 6, clean: 10, perfect: 13, scorched: 16 }[q]; S.flash = { cold: .05, faint: .2, clean: .32, perfect: .45, scorched: .55 }[q]; }
+    sizzle(q, temp);
+    S.streak = q === 'perfect' ? S.streak + 1 : 0;
+    S.T = Math.max(0, S.T * .74);
+    const vd = $('verdict'); vd.style.setProperty('--q', QCOL[q]);
+    vd.querySelector('b').textContent = z.name;
+    vd.querySelector('span').textContent = `${Math.round(temp)} °C · ${colorName(temp)}`;
+    vd.classList.remove('show'); void vd.offsetWidth; vd.classList.add('show');
+    const MSG = {
+      cold: `Too cold at <b>${Math.round(temp)} °C</b>. The iron barely scuffed the wood. Heat it to cherry red first.`,
+      faint: `Faint mark at <b>${Math.round(temp)} °C</b>. Readable up close, but heat it a little longer.`,
+      clean: `Clean mark at <b>${Math.round(temp)} °C</b>. Aim for the gold band for a perfect one.`,
+      perfect: `Perfect at <b>${Math.round(temp)} °C</b>. Crisp edges, deep char.` + (S.streak > 1 ? ` That is ${S.streak} in a row.` : ''),
+      scorched: `Scorched at <b>${Math.round(temp)} °C</b>. Too hot: the char bled into the grain. Let it cool a little next time.`
+    };
+    $('status').innerHTML = MSG[q];
+    renderCode();
+  }
+  function newPlank(instant) {
+    oldWood = wood; oldBurn = burn; S.seed = (S.seed * 16807 + 11) % 2147483647;
+    wood = genWood(S.seed, BS); burn = newBurn(BS); S.mark = null; smoke.length = 0;
+    plankAnim = instant || reduced() ? 1 : 0;
+    if (plankAnim === 1) oldWood = oldBurn = null;
+  }
+  function typeName(str, ms = 110) {
+    if (S.typing) clearTimeout(S.typing);
+    const target = sanitize(str);
+    if (reduced()) { setName(target); return Promise.resolve(); }
+    return new Promise(res => {
+      const step = () => {
+        if (!target.startsWith(S.name)) { setName(S.name.slice(0, -1)); S.typing = setTimeout(step, ms * .4); return; }
+        if (S.name.length < target.length) { setName(target.slice(0, S.name.length + 1)); S.typing = setTimeout(step, ms); return; }
+        S.typing = null; res();
+      };
+      step();
+    });
+  }
+
+  // ---------- sound ----------
+  let AC = null, master = null, roarG = null, noiseBuf = null;
+  function audioInit() {
+    if (AC || !S.sound) return;
+    try {
+      AC = new (window.AudioContext || window.webkitAudioContext)();
+      master = AC.createGain(); master.gain.value = .55; master.connect(AC.destination);
+      noiseBuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      const src = AC.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+      const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420;
+      roarG = AC.createGain(); roarG.gain.value = 0; src.connect(lp); lp.connect(roarG); roarG.connect(master); src.start();
+    } catch (e) { AC = null; }
+  }
+  function noiseShot(dur, type, f, q, gain, delay = 0) {
+    if (!AC || !S.sound) return;
+    const t = AC.currentTime + delay, s = AC.createBufferSource(); s.buffer = noiseBuf;
+    const fl = AC.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q;
+    const g = AC.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t + .012); g.gain.exponentialRampToValueAtTime(.0008, t + dur);
+    s.connect(fl); fl.connect(g); g.connect(master); s.start(t, Math.random()); s.stop(t + dur + .05);
+  }
+  function tone(f0, f1, dur, gain, type = 'sine') {
+    if (!AC || !S.sound) return;
+    const t = AC.currentTime, o = AC.createOscillator(), g = AC.createGain(); o.type = type;
+    o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(.0008, t + dur);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + .05);
+  }
+  function tick() { noiseShot(.05, 'bandpass', 5200, 2, .12); tone(2400, 1300, .06, .05, 'triangle'); }
+  function sizzle(q, temp) {
+    const k = clamp(glowOf(temp) + .15, .15, 1.2);
+    tone(110, 38, .25, .55);
+    noiseShot(.12, 'lowpass', 900, .7, .35);
+    if (q !== 'cold') { noiseShot(1.6 * k, 'bandpass', 3600, .8, .32 * k, .03); noiseShot(1.1 * k, 'highpass', 6500, .5, .12 * k, .05); for (let i = 0; i < 8 * k; i++) noiseShot(.03, 'bandpass', 2000 + Math.random() * 3000, 3, .15, .05 + Math.random() * .9 * k); }
+  }
+
+  // ---------- drawing ----------
+  function partTemp(g, base) {
+    const age = S.t - g.born; if (age < 0 || age > .9) return base;
+    return Math.max(base, 1250 * Math.pow(1 - age / .9, 1.4));
+  }
+  function drawIronParts(x, v, temp, alphaMul = 1) {
+    x.lineCap = 'round'; x.lineJoin = 'round';
+    const list = [];
+    for (const gh of S.ghosts) { const a = 1 - (S.t - gh.t) / .35; if (a > 0) list.push([gh.g, a, temp]); }
+    for (const g of allParts()) list.push([g, 1, partTemp(g, temp)]);
+    for (const [g, a, tp] of list) {
+      const col = heatRGB(tp), pop = reduced() ? 1 : 1 + .25 * Math.pow(clamp(1 - (S.t - g.born) / .3, 0, 1), 2);
+      x.save(); x.globalAlpha = a * alphaMul;
+      if (pop !== 1) x.scale(pop, pop);
+      strokePart(x, g, W * 1.3, rgba(mixc(col, BLACK, tp > 700 ? .45 : .6)));
+      strokePart(x, g, W, rgba(col));
+      x.translate(-.035, -.045);
+      strokePart(x, g, W * .32, rgba(mixc(col, WHITE, tp > 900 ? .6 : .32), .6));
+      x.restore();
+    }
+  }
+  function drawRod(x, v, temp, mode) {
+    const A = -1.02, ca = Math.cos(A), sa = Math.sin(A), L = Math.hypot(VW, VH) * 1.2;
+    const rw = clamp(RI * .075, 7, 20), x0 = v.x, y0 = v.y, x1 = x0 + ca * L, y1 = y0 + sa * L;
+    const hs = RI * 2.3;
+    x.lineCap = 'round';
+    if (mode === 'shadow') { x.lineWidth = rw * 1.1; x.strokeStyle = '#000'; x.beginPath(); x.moveTo(x0, y0); x.lineTo(x1, y1); x.stroke(); return; }
+    const col = heatRGB(temp * .9), steel = [74, 70, 68];
+    if (mode === 'glow') { x.lineWidth = rw * 3; const g = x.createLinearGradient(x0, y0, x0 + ca * RI * 1.2, y0 + sa * RI * 1.2); g.addColorStop(0, rgba(col, glowOf(temp * .9))); g.addColorStop(1, rgba(col, 0)); x.strokeStyle = g; x.beginPath(); x.moveTo(x0, y0); x.lineTo(x0 + ca * RI * 1.2, y0 + sa * RI * 1.2); x.stroke(); return; }
+    const g = x.createLinearGradient(x0, y0, x0 + ca * RI * 1.6, y0 + sa * RI * 1.6);
+    g.addColorStop(0, rgba(col)); g.addColorStop(.55, rgba(mixc(col, steel, .7))); g.addColorStop(1, rgba(steel));
+    x.lineWidth = rw * 1.25; x.strokeStyle = '#14100e'; x.beginPath(); x.moveTo(x0, y0); x.lineTo(x0 + ca * hs, y0 + sa * hs); x.stroke();
+    x.lineWidth = rw; x.strokeStyle = g; x.stroke();
+    x.lineWidth = rw * .25; x.strokeStyle = 'rgba(255,245,230,.28)'; x.beginPath(); x.moveTo(x0 - sa * rw * .22, y0 + ca * rw * .22); x.lineTo(x0 + ca * hs - sa * rw * .22, y0 + sa * hs + ca * rw * .22); x.stroke();
+    // wooden handle
+    const hw = rw * 2.3, hx0 = x0 + ca * hs, hy0 = y0 + sa * hs;
+    x.lineWidth = hw + 3; x.strokeStyle = '#120c09'; x.beginPath(); x.moveTo(hx0, hy0); x.lineTo(x1, y1); x.stroke();
+    x.lineWidth = hw; x.strokeStyle = '#6b3f22'; x.stroke();
+    x.lineWidth = hw * .3; x.strokeStyle = 'rgba(255,210,160,.22)'; x.beginPath(); x.moveTo(hx0 - sa * hw * .2, hy0 + ca * hw * .2); x.lineTo(x1 - sa * hw * .2, y1 + ca * hw * .2); x.stroke();
+    x.lineWidth = hw * 1.15; x.strokeStyle = '#2d2724'; x.lineCap = 'butt'; x.beginPath(); x.moveTo(hx0, hy0); x.lineTo(hx0 + ca * rw * 1.6, hy0 + sa * rw * 1.6); x.stroke();
+    // collar on the hub
+    x.beginPath(); x.arc(x0, y0, rw * .85, 0, TAU); x.fillStyle = rgba(mixc(col, BLACK, .2)); x.fill();
+    x.beginPath(); x.arc(x0 - rw * .2, y0 - rw * .25, rw * .35, 0, TAU); x.fillStyle = rgba(mixc(col, WHITE, .35), .5); x.fill();
+  }
+
+  function draw(dt) {
+    const temp = tempOf(S.T), v = ironView(), gI = glowOf(temp);
+    let sx = 0, sy = 0;
+    if (S.shake > .1) { sx = (rnd() - .5) * S.shake * 2; sy = (rnd() - .5) * S.shake * 2; }
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+    ctx.drawImage(BG.c, 0, 0);
+    ctx.setTransform(dpr, 0, 0, dpr, sx * dpr, sy * dpr);
+
+    // planks (a new one slides in from the right)
+    const bx = BX - BS / 2, by = BY - BS / 2;
+    if (oldWood && plankAnim < 1) {
+      const e = eio(plankAnim), off = -e * (VW / 2 + BS), off2 = (1 - e) * (VW / 2 + BS);
+      ctx.drawImage(oldWood.c, bx + off, by, BS, BS); ctx.drawImage(oldBurn.c, bx + off, by, BS, BS);
+      ctx.drawImage(wood.c, bx + off2, by, BS, BS);
+    } else { ctx.drawImage(wood.c, bx, by, BS, BS); ctx.drawImage(burn.c, bx, by, BS, BS); }
+
+    // the fresh mark keeps glowing in the char
+    let mg = 0;
+    if (S.mark && plankAnim >= 1) {
+      const age = S.t - S.mark.t0;
+      mg = S.mark.glow * Math.exp(-age / 2.8) * (S.mark.q === 'scorched' ? .85 + .15 * Math.sin(S.t * 13) : 1);
+      if (mg > .01) {
+        ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.translate(BX, BY); ctx.scale(S.mark.fit, S.mark.fit); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        const ec = heatRGB(650 + mg * 350);
+        for (const g of S.mark.parts) strokePart(ctx, g, W * .5, rgba(ec, Math.min(1, mg * .75)));
+        ctx.restore();
+        if (rnd() < mg * dt * 30) puff({ x: BX, y: BY, sc: S.mark.fit }, S.mark.parts, .7);
+      }
+    }
+
+    // shadow of the iron
+    if (v.h > .01) {
+      const x = SH.x; x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, SH.c.width, SH.c.height);
+      x.setTransform(dpr / 4, 0, 0, dpr / 4, 0, 0); drawRod(x, v, temp, 'shadow');
+      x.translate(v.x, v.y); x.scale(v.sc, v.sc); x.lineCap = 'round'; x.lineJoin = 'round';
+      for (const g of allParts()) strokePart(x, g, W * 1.5, '#000');
+      ctx.save(); ctx.globalAlpha = .55 * clamp(v.h, 0, 1) / (1 + .4 * Math.max(0, v.h - 1)); ctx.setTransform(1, 0, 0, 1, (sx + v.h * RI * .12) * dpr, (sy + v.h * RI * .2) * dpr);
+      ctx.drawImage(SH.c, 0, 0, cv.width, cv.height); ctx.restore();
+    }
+
+    // warm light from the iron on the wood
+    if (gI > .01) {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      const rr = RI * (1.7 + v.h * .4), g = ctx.createRadialGradient(v.x, v.y, 0, v.x, v.y, rr), c = heatRGB(temp);
+      g.addColorStop(0, rgba(c, .3 * gI * (1 - .35 * Math.min(1, v.h)))); g.addColorStop(.5, rgba(c, .1 * gI)); g.addColorStop(1, rgba(c, 0));
+      ctx.fillStyle = g; ctx.fillRect(v.x - rr, v.y - rr, rr * 2, rr * 2); ctx.restore();
+    }
+
+    // the iron
+    drawRod(ctx, v, temp, 'body');
+    ctx.save(); ctx.translate(v.x, v.y); ctx.scale(v.sc, v.sc); drawIronParts(ctx, v, temp); ctx.restore();
+
+    // bloom: cheap two-step blur from low-res buffers
+    {
+      const x = G1.x; x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, G1.c.width, G1.c.height);
+      x.setTransform(dpr / 4, 0, 0, dpr / 4, sx * dpr / 4, sy * dpr / 4); x.lineCap = 'round'; x.lineJoin = 'round';
+      let any = false;
+      if (gI > .01) { drawRod(x, v, temp, 'glow'); any = true; }
+      x.save(); x.translate(v.x, v.y); x.scale(v.sc, v.sc);
+      for (const g of allParts()) { const tp = partTemp(g, temp), gi = glowOf(tp); if (gi > .01) { strokePart(x, g, W * 3.2, rgba(heatRGB(tp), gi)); any = true; } }
+      x.restore();
+      if (mg > .01) { x.save(); x.translate(BX, BY); x.scale(S.mark.fit, S.mark.fit); for (const g of S.mark.parts) strokePart(x, g, W * 2.6, rgba(heatRGB(600 + mg * 300), Math.min(1, mg * .8))); x.restore(); any = true; }
+      if (any) {
+        G2.x.setTransform(1, 0, 0, 1, 0, 0); G2.x.clearRect(0, 0, G2.c.width, G2.c.height); G2.x.drawImage(G1.c, 0, 0, G2.c.width, G2.c.height);
+        ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = .85; ctx.drawImage(G2.c, 0, 0, cv.width, cv.height);
+        ctx.globalAlpha = .38; ctx.drawImage(G1.c, 0, 0, cv.width, cv.height); ctx.restore();
+      }
+    }
+
+    // particles
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (let i = fire.length - 1; i >= 0; i--) {
+      const p = fire[i]; p.t += dt; if (p.t > p.life) { fire.splice(i, 1); continue; }
+      const k = p.t / p.life; p.vx += (rnd() - .5) * 300 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy -= 60 * dt;
+      const s = p.s * (1 - k * .6), spr = FIRE[k < .3 ? 0 : k < .65 ? 1 : 2];
+      ctx.globalAlpha = (1 - k) * p.a; ctx.drawImage(spr, p.x - s, p.y - s, s * 2, s * 2);
+    }
+    ctx.lineCap = 'round';
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const p = sparks[i]; p.t += dt; if (p.t > p.life) { sparks.splice(i, 1); continue; }
+      const k = p.t / p.life, fr = Math.exp(-dt * 2.4); p.vx *= fr; p.vy = p.vy * fr + 220 * dt;
+      const px = p.x, py = p.y; p.x += p.vx * dt; p.y += p.vy * dt;
+      const c = heatRGB(1300 - k * 700);
+      ctx.globalAlpha = 1 - k * k; ctx.strokeStyle = rgba(c); ctx.lineWidth = p.w * (1 - k * .5);
+      ctx.beginPath(); ctx.moveTo(px - p.vx * .018, py - p.vy * .018); ctx.lineTo(p.x, p.y); ctx.stroke();
+    }
+    ctx.restore();
+    ctx.save();
+    for (let i = smoke.length - 1; i >= 0; i--) {
+      const p = smoke[i]; p.t += dt; if (p.t > p.life) { smoke.splice(i, 1); continue; }
+      const k = p.t / p.life; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= Math.exp(-dt * .6); p.vy -= 8 * dt; p.rot += p.vr * dt;
+      const s = p.s * (1 + k * 2.2);
+      ctx.globalAlpha = Math.min(1, k * 6) * (1 - k) * .75; ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.drawImage(SMOKE, -s, -s, s * 2, s * 2); ctx.rotate(-p.rot); ctx.translate(-p.x, -p.y);
+    }
+    ctx.restore();
+
+    if (S.flash > .005) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(255,190,120,${S.flash})`; ctx.fillRect(0, 0, cv.width, cv.height); ctx.restore(); }
+  }
+
+  // ---------- update ----------
+  function update(dt) {
+    S.t += dt;
+    const heating = S.holds > 0 || (S.auto !== null);
+    if (S.auto !== null && S.T >= S.auto) S.auto = null;
+    const pressed = S.slam && S.slam.hit && S.slam.t < .85;
+    if (heating && !pressed) S.T = Math.min(1, S.T + dt * .36 * (1 - .3 * S.T));
+    else S.T = Math.max(0, S.T - dt * (pressed ? .12 : .025 + .035 * S.T));
+    const temp = tempOf(S.T);
+    // fire while heating, a few embers while hot
+    const v = ironView();
+    const rate = heating && !S.slam ? (reduced() ? 18 : 110) : temp > 650 && !reduced() ? 10 : 0;
+    let n = rate * dt + (rnd() < (rate * dt) % 1 ? 1 : 0);
+    while (n-- >= 1 && fire.length < 360) {
+      const p = samplePt(allParts()); if (!p) break;
+      const [x, y] = toScreen(v, p);
+      fire.push({ x, y, vx: (rnd() - .5) * 40, vy: -30 - rnd() * 70, t: 0, life: .45 + rnd() * .5, s: RI * (.06 + rnd() * .07) * (heating ? 1 : .5), a: heating ? .85 : .4 });
+    }
+    // slam
+    if (S.slam) {
+      const s = S.slam; if (!s.hit && S.away > .04 && !reduced()) { /* swing back over the plank first */ } else s.t += dt;
+      if (reduced()) {
+        S.h = s.t < .6 ? 0 : 1;
+        if (!s.hit) { s.hit = true; impact(); S.awayT = 1; }
+        if (s.t > .6) S.slam = null;
+      } else {
+        const t = s.t;
+        if (t < .16) S.h = 1 + .14 * eout(t / .16);
+        else if (t < .26) S.h = 1.14 * (1 - ein((t - .16) / .1));
+        else if (t < .85) S.h = 0;
+        else if (t < 1.4) S.h = eio((t - .85) / .55);
+        else { S.h = 1; S.slam = null; }
+        if (t >= .26 && !s.hit) { s.hit = true; S.h = 0; impact(); S.awayT = 1; }
+        if (s.hit && t < .85 && rnd() < dt * 40) puff(ironView(), S.items.length ? S.items.slice(-2) : [S.hub], .8);
+      }
+    }
+    if (heating) S.awayT = 0;
+    S.away += (S.awayT - S.away) * (1 - Math.exp(-dt * (reduced() ? 60 : (S.slam && !S.slam.hit ? 9 : S.awayT ? 3.2 : 6))));
+    if (S.slam && S.slam.hit && S.slam.t < .85) S.away = 0;
+    S.fit += (S.fitT - S.fit) * (1 - Math.exp(-dt * (reduced() ? 60 : 7)));
+    S.shake *= Math.exp(-dt * 14); S.flash *= Math.exp(-dt * 16);
+    S.ghosts = S.ghosts.filter(g => S.t - g.t < .35);
+    if (plankAnim < 1) { plankAnim = Math.min(1, plankAnim + dt / .75); if (plankAnim >= 1) oldWood = oldBurn = null; }
+    if (AC && roarG) roarG.gain.setTargetAtTime(S.sound && heating && !S.slam ? .1 + S.T * .22 : 0, AC.currentTime, .08);
+    // gauge
+    $('needle').style.left = (S.T * 100).toFixed(2) + '%';
+    const z = zoneOf(temp);
+    $('readout').innerHTML = `${Math.round(temp)} °C · <b style="color:${temp < 480 ? 'var(--ash)' : rgba(heatRGB(Math.max(temp, 720)))}">${colorName(temp)}</b>`;
+    if (S.t - (S.lastAria || 0) > .3) { $('bar').setAttribute('aria-valuenow', Math.round(temp)); $('bar').setAttribute('aria-valuetext', `${Math.round(temp)} degrees, ${colorName(temp)}, ${z.name}`); S.lastAria = S.t; }
+    $('heatBtn').setAttribute('aria-pressed', String(heating));
+  }
+
+  // ---------- gauge zones ----------
+  (() => {
+    const bar = $('bar');
+    let prev = TMIN;
+    ZONES.forEach(z => {
+      const to = Math.min(z.to, TMAX);
+      if (z.id === 'perfect' || (z.id === 'clean')) { const d = document.createElement('div'); d.className = 'zone ' + z.id; d.style.left = (Tof(prev) * 100) + '%'; d.style.width = ((Tof(to) - Tof(prev)) * 100) + '%'; bar.insertBefore(d, $('needle')); }
+      prev = to;
+    });
+    const sc = document.querySelector('.scale'), spans = sc.children, mids = [235, 550, 835, 1130];
+    sc.style.position = 'relative'; sc.style.height = '12px';
+    [...spans].forEach((s, i) => { s.style.position = 'absolute'; s.style.left = (Tof(mids[i]) * 100) + '%'; s.style.transform = 'translateX(-50%)'; });
+  })();
+
+  // ---------- input ----------
+  const stopDemo = () => { if (!S.demo) return; S.demo = false; clearTimeout(S.demoTimer); if (S.typing) { clearTimeout(S.typing); S.typing = null; } S.auto = null; };
+  const user = () => { audioInit(); stopDemo(); };
+  const nameEl = $('name');
+  nameEl.addEventListener('input', () => { user(); setName(nameEl.value); });
+  nameEl.addEventListener('focus', () => { stopDemo(); });
+  nameEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); user(); brand(); } });
+
+  const heatBtn = $('heatBtn');
+  let btnHold = null;
+  heatBtn.addEventListener('pointerdown', e => { user(); if (btnHold !== null) return; btnHold = e.pointerId; heatBtn.setPointerCapture(e.pointerId); S.holds++; e.preventDefault(); });
+  const btnUp = e => { if (btnHold === e.pointerId) { btnHold = null; S.holds = Math.max(0, S.holds - 1); } };
+  heatBtn.addEventListener('pointerup', btnUp); heatBtn.addEventListener('pointercancel', btnUp); heatBtn.addEventListener('lostpointercapture', btnUp);
+  heatBtn.addEventListener('contextmenu', e => e.preventDefault());
+  let keyHold = false;
+  heatBtn.addEventListener('keydown', e => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); user(); if (!keyHold) { keyHold = true; S.holds++; } } });
+  heatBtn.addEventListener('keyup', e => { if ((e.key === ' ' || e.key === 'Enter') && keyHold) { keyHold = false; S.holds = Math.max(0, S.holds - 1); } });
+  heatBtn.addEventListener('blur', () => { if (keyHold) { keyHold = false; S.holds = Math.max(0, S.holds - 1); } });
+  $('brandBtn').addEventListener('click', () => { user(); brand(); });
+  $('plankBtn').addEventListener('click', () => { user(); newPlank(); $('status').innerHTML = 'Fresh plank. ' + hint(); });
+  const NAMES = ['Iron Owls', 'Salt Wolves', 'Ember Choir', 'Moth Lanterns', 'Night Ferry', 'Copper Tide', 'Ninth Bell', 'Glass Heron', 'Ash Orchard', 'Quiet Forge', 'Zero Hour', 'Lucky 7', 'Dune Keepers', 'Velvet Rook', 'Kite Runners', 'Hollow Pines'];
+  $('randBtn').addEventListener('click', () => { user(); let n; do { n = NAMES[(rnd() * NAMES.length) | 0]; } while (sanitize(n) === S.name); typeName(n, 80); });
+  const soundBtn = $('soundBtn');
+  soundBtn.addEventListener('click', () => { S.sound = !S.sound; soundBtn.setAttribute('aria-pressed', String(S.sound)); soundBtn.textContent = S.sound ? 'Sound on' : 'Sound off'; if (S.sound) audioInit(); if (master) master.gain.value = S.sound ? .55 : 0; });
+
+  // the scene: hold to heat, quick tap to brand
+  let cvHold = null;
+  cv.addEventListener('pointerdown', e => { user(); if (cvHold) return; cvHold = { id: e.pointerId, t: performance.now(), T: S.T }; cv.setPointerCapture(e.pointerId); S.holds++; });
+  const cvUp = e => {
+    if (!cvHold || cvHold.id !== e.pointerId) return;
+    const quick = performance.now() - cvHold.t < 230; S.holds = Math.max(0, S.holds - 1);
+    if (quick && e.type === 'pointerup') { S.T = cvHold.T; brand(); }
+    cvHold = null;
+  };
+  cv.addEventListener('pointerup', cvUp); cv.addEventListener('pointercancel', cvUp);
+  cv.addEventListener('contextmenu', e => e.preventDefault());
+  let spaceHold = false;
+  addEventListener('keydown', e => {
+    if (e.target === nameEl || e.target.tagName === 'BUTTON' || e.target.tagName === 'A') return;
+    if (e.key === ' ' && !e.repeat) { e.preventDefault(); user(); if (!spaceHold) { spaceHold = true; S.holds++; } }
+    else if (e.key === 'Enter') { user(); brand(); }
+  });
+  addEventListener('keyup', e => { if (e.key === ' ' && spaceHold) { spaceHold = false; S.holds = Math.max(0, S.holds - 1); } });
+  addEventListener('blur', () => { S.holds = 0; spaceHold = keyHold = false; btnHold = cvHold = null; });
+
+  // ---------- about ----------
+  const info = $('info'), ib = $('infoBtn');
+  const setInfo = o => { info.hidden = !o; ib.setAttribute('aria-expanded', String(o)); document.querySelector('.topbtns').hidden = o; if (o) info.querySelector('.close').focus(); else ib.focus(); };
+  ib.addEventListener('click', () => { stopDemo(); setInfo(true); });
+  info.querySelector('.close').addEventListener('click', () => setInfo(false));
+  addEventListener('keydown', e => { if (e.key === 'Escape' && !info.hidden) setInfo(false); });
+
+  // ---------- loop ----------
+  let last = performance.now(), paused = false;
+  function frame(now) {
+    const dt = Math.min(.05, Math.max(0, (now - last) / 1000)); last = now;
+    if (!paused) { update(dt); draw(dt); }
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- boot: the demo forges, heats and brands one iron ----------
+  layout();
+  addEventListener('resize', layout);
+  if (window.visualViewport) visualViewport.addEventListener('resize', layout);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
+  const BOOT = 'Iron Owls';
+  if (reduced()) { setName(BOOT, { quiet: true }); S.T = Tof(830); S.demo = false; $('status').innerHTML = hint(); }
+  else {
+    setName('', { force: true, quiet: true }); S.T = Tof(300);
+    $('status').innerHTML = 'Type a name. Every letter welds one more ring onto the iron.';
+    S.demoTimer = setTimeout(() => typeName(BOOT, 120).then(() => {
+      if (!S.demo) return;
+      S.demoTimer = setTimeout(() => {
+        if (!S.demo) return; S.auto = Tof(835); $('status').innerHTML = 'Heating the iron. Watch the needle head for the gold band.';
+        const wait = () => { if (!S.demo) return; if (S.auto === null) { brand(); S.demo = false; setTimeout(() => { if (!S.slam) $('status').innerHTML = 'Your turn. Type your own guild, hold Heat, and press Brand in the gold band.'; }, 2600); } else S.demoTimer = setTimeout(wait, 60); };
+        wait();
+      }, 350);
+    }), 500);
+  }
+  requestAnimationFrame(t => { last = t; frame(t); });
+
+  // ---------- hooks for capture ----------
+  window.__lab = {
+    stopDemo,
+    setName: (s, quiet) => { stopDemo(); setName(s, { quiet }); },
+    typeName: (s, ms) => { stopDemo(); return typeName(s, ms); },
+    setTemp: t => { S.T = clamp(Tof(t), 0, 1); }, temp: () => tempOf(S.T),
+    heat: on => { stopDemo(); S.holds = on ? 1 : 0; },
+    heatTo: t => { stopDemo(); S.auto = Tof(t); return new Promise(res => { const w = () => S.auto === null ? res(tempOf(S.T)) : setTimeout(w, 30); w(); }); },
+    brand: () => { stopDemo(); brand(); }, newPlank: instant => { stopDemo(); newPlank(instant); },
+    pause: p => { paused = !!p; },
+    board: () => ({ x: BX, y: BY, size: BS, R: RI }),
+    state: () => ({ name: S.name, k: S.k, rings: S.items.length, temp: Math.round(tempOf(S.T)), h: S.h, slam: !!S.slam, mark: S.mark && S.mark.q, streak: S.streak, sparks: sparks.length, fire: fire.length, smoke: smoke.length, demo: S.demo })
+  };
+})();
+</script>
