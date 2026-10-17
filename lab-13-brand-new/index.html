@@ -277,7 +277,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
 
   // ---------- canvases ----------
   const mk = () => { const c = document.createElement('canvas'); return { c, x: c.getContext('2d') }; };
-  const BG = mk(), G1 = mk(), G2 = mk(), SH = mk();
+  const BG = mk(), G1 = mk(), G2 = mk(), SH = mk(), PSH = mk();
   let wood = mk(), burn = mk(), oldWood = null, oldBurn = null, plankAnim = 1;
   let dpr = 1, VW = 0, VH = 0, BX = 0, BY = 0, BS = 300, RI = 100;
   const sprite = (inner, outer, size = 64) => { const s = mk(); s.c.width = s.c.height = size; const g = s.x.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2); g.addColorStop(0, inner); g.addColorStop(.35, outer); g.addColorStop(1, 'rgba(0,0,0,0)'); s.x.fillStyle = g; s.x.fillRect(0, 0, size, size); return s.c; };
@@ -335,8 +335,8 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
     x.fillStyle = g; x.fillRect(0, 0, VW, VH);
     const r = mulberry(99);
     for (let i = 0; i < VW * VH / 900; i++) { x.fillStyle = r() < .5 ? 'rgba(255,220,190,.025)' : 'rgba(0,0,0,.2)'; x.fillRect(r() * VW, r() * VH, 2, 2); }
-    x.save(); x.shadowColor = 'rgba(0,0,0,.75)'; x.shadowBlur = 40; x.shadowOffsetY = 18;
-    x.fillStyle = '#1a120e'; x.fillRect(BX - BS / 2 + 6, BY - BS / 2 + 6, BS - 12, BS - 12); x.restore();
+    PSH.c.width = PSH.c.height = Math.round((BS + 140) * dpr); const p = PSH.x; p.setTransform(dpr, 0, 0, dpr, 0, 0);
+    p.shadowColor = 'rgba(0,0,0,.75)'; p.shadowBlur = 40 * dpr; p.shadowOffsetX = 20000 * dpr; p.shadowOffsetY = 18 * dpr; p.fillStyle = '#000'; p.fillRect(76 - 20000, 76, BS - 12, BS - 12);
   }
 
   function layout() {
@@ -591,11 +591,12 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
 
     // planks (a new one slides in from the right)
     const bx = BX - BS / 2, by = BY - BS / 2;
+    const ps = x0 => ctx.drawImage(PSH.c, x0 - 70, by - 70, BS + 140, BS + 140);
     if (oldWood && plankAnim < 1) {
       const e = eio(plankAnim), off = -e * (VW / 2 + BS), off2 = (1 - e) * (VW / 2 + BS);
-      ctx.drawImage(oldWood.c, bx + off, by, BS, BS); ctx.drawImage(oldBurn.c, bx + off, by, BS, BS);
+      ps(bx + off); ps(bx + off2); ctx.drawImage(oldWood.c, bx + off, by, BS, BS); ctx.drawImage(oldBurn.c, bx + off, by, BS, BS);
       ctx.drawImage(wood.c, bx + off2, by, BS, BS);
-    } else { ctx.drawImage(wood.c, bx, by, BS, BS); ctx.drawImage(burn.c, bx, by, BS, BS); }
+    } else { ps(bx); ctx.drawImage(wood.c, bx, by, BS, BS); ctx.drawImage(burn.c, bx, by, BS, BS); }
 
     // the fresh mark keeps glowing in the char
     let mg = 0;
