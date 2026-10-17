@@ -1,0 +1,687 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Lab #13 — Paper Cut</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Figtree:wght@400;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: a sheet of dyed paper lies on a dark cutting mat and fills the screen; the guild-creation panel docks at the bottom. Every letter typed is one snip. Single dark look by design. */
+:root{
+  --mat:#121a18;         /* cutting mat */
+  --panel:#0d1312;       /* dock glass */
+  --paper:#f3ecdf;       /* text, the colour of plain paper */
+  --mist:#9fada7;        /* muted text */
+  --dim:#5d6b66;
+  --accent:#2fd1c5;      /* Greyframe turquoise: the blade, focus, highlights */
+  --dye:#efe5cf;         /* current paper dye, set from script */
+  --line:rgba(243,236,223,.12);
+  --display:"Fraunces",Georgia,"Times New Roman",serif;
+  --body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--mat);color:var(--paper);font:16px/1.5 var(--body);overflow:hidden;-webkit-font-smoothing:antialiased;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+#cv{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none;cursor:grab}
+#cv.over{cursor:pointer}
+#cv:focus-visible{box-shadow:inset 0 0 0 2px var(--accent)}
+
+.brand{position:fixed;z-index:3;left:max(16px,env(safe-area-inset-left,0px));top:calc(env(safe-area-inset-top,0px) + 14px);display:flex;flex-direction:column;gap:4px;pointer-events:none;max-width:calc(100% - 150px)}
+@media (min-width:900px){.brand{left:40px;top:34px;max-width:440px}}
+.eyebrow{font:600 11px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--mist)}
+.eyebrow b{color:var(--accent);font-weight:600}
+.brand h1{margin:2px 0 0;font:800 34px/1 var(--display);letter-spacing:-.01em;font-variation-settings:"opsz" 144}
+.brand h1 i{font-style:normal;color:var(--dye);transition:color .4s}
+.brand p{margin:0;color:var(--mist);font-size:14px;max-width:36ch;text-wrap:balance}
+@media (min-width:900px){.brand h1{font-size:50px}.brand p{font-size:16px}}
+
+.topbtns{position:fixed;z-index:5;right:max(16px,env(safe-area-inset-right,0px));top:calc(env(safe-area-inset-top,0px) + 14px)}
+@media (min-width:900px){.topbtns{right:40px;top:36px}}
+#infoBtn{padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:rgba(13,19,18,.85);color:var(--paper);font:600 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
+#infoBtn:hover{border-color:var(--accent)}
+
+#info{box-sizing:border-box;position:fixed;z-index:6;right:12px;top:calc(env(safe-area-inset-top,0px) + 12px);width:min(420px,calc(100vw - 24px));max-height:calc(100% - 24px);overflow:auto;padding:22px;border-radius:14px;background:#0b1110;border:1px solid var(--line);box-shadow:0 24px 70px rgba(0,0,0,.6);display:flex;flex-direction:column;gap:14px;font-size:15px;animation:rise .3s cubic-bezier(.2,.9,.3,1)}
+@media (min-width:900px){#info{right:40px;top:36px}}
+@keyframes rise{from{transform:translateY(-10px);opacity:0}}
+#info .meta{font:600 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+#info h3{margin:0;font:800 36px/1 var(--display)}
+#info h4{margin:2px 0 6px;font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--mist)}
+#info p{margin:0}
+#info ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+#info a{color:var(--accent)}
+#info .close{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--paper);font-size:18px;cursor:pointer}
+#allLabs{font:600 12px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase}
+
+.dock{position:fixed;z-index:3;left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 12px);margin:0 auto;max-width:900px;box-sizing:border-box;padding:12px 14px;border-radius:16px;background:rgba(13,19,18,.82);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border:1px solid var(--line);box-shadow:0 20px 60px rgba(0,0,0,.55);display:flex;flex-direction:column;gap:10px}
+@media (min-width:900px){.dock{bottom:28px;padding:16px 20px;gap:12px}}
+.row{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end}
+.lbl{display:block;font:600 10px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--mist);margin-bottom:6px}
+.field{flex:1 1 260px;min-width:0}
+#name{box-sizing:border-box;width:100%;padding:8px 2px 8px;border:0;border-bottom:2px solid var(--line);background:transparent;color:var(--paper);font:800 26px/1.1 var(--display);letter-spacing:.06em;text-transform:uppercase;outline:none;border-radius:0;caret-color:var(--accent);transition:border-color .2s}
+#name:focus{border-bottom-color:var(--accent)}
+#name::placeholder{color:var(--dim)}
+.seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.seg button{width:38px;height:38px;border:0;background:transparent;color:var(--mist);font:600 14px/1 var(--mono);cursor:pointer;transition:background-color .2s,color .2s}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-checked="true"]{background:var(--paper);color:#121a18}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btn{height:40px;padding:0 15px;border-radius:9px;border:1px solid var(--line);background:transparent;color:var(--paper);font:700 15px/1 var(--body);cursor:pointer;transition:transform .15s cubic-bezier(.2,.9,.3,1),background-color .2s,border-color .2s,color .2s}
+.btn:hover{border-color:var(--accent)}
+.btn:active{transform:scale(.96)}
+.btn.main{background:var(--accent);border-color:var(--accent);color:#06201d;min-width:92px}
+.btn[aria-pressed="true"]{background:#ffd78f;border-color:#ffd78f;color:#2a1a05}
+button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.row2{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between}
+.cuts{display:flex;flex-wrap:wrap;gap:5px;min-width:0;flex:1 1 300px;padding:2px}
+.cut{flex:none;display:flex;align-items:center;gap:4px;height:30px;padding:0 7px 0 8px;border-radius:7px;border:1px solid var(--line);background:rgba(243,236,223,.04);color:var(--paper);font:600 13px/1 var(--mono);cursor:pointer;transition:background-color .2s,border-color .2s,transform .3s cubic-bezier(.2,1.6,.4,1)}
+.cut svg{width:14px;height:14px;display:block}
+.cut.space{width:12px;padding:0;border-style:dashed;opacity:.5;cursor:default}
+.cut.on{border-color:var(--accent);background:rgba(47,209,197,.16);transform:translateY(-2px)}
+.cut.new{animation:pop .45s cubic-bezier(.2,1.6,.4,1)}
+@keyframes pop{from{transform:scale(.6);opacity:0}}
+.status{margin:0;font-size:14px;line-height:1.35;color:var(--paper);min-width:0;text-wrap:balance}
+.status b{color:var(--accent);font-weight:700}
+.code{font:500 11px/1.3 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--mist);font-variant-numeric:tabular-nums;white-space:nowrap}
+.code b{color:var(--dye);font-weight:600}
+@media (max-width:560px){
+  .dock{padding:10px 12px;gap:8px}
+  #name{font-size:22px}
+  .seg button{width:34px;height:36px;font-size:13px}
+  .btn{height:36px;padding:0 11px;font-size:14px}
+  .btn.main{min-width:76px}
+  .status{font-size:13px}
+  .brand h1{font-size:28px}.brand p{font-size:13px}
+  .code{white-space:normal}
+}
+@media (prefers-reduced-motion:reduce){#info,.cut.new{animation:none}.btn,.cut,.seg button{transition:none}}
+</style>
+
+<canvas id="cv" tabindex="0" aria-label="A sheet of dyed paper on a cutting mat. Each letter of the guild name is one cut in the folded sheet, and unfolding it repeats every cut around the centre to make the guild's crest. Arrow keys spin the paper, F folds or unfolds it, L lights it from behind."></canvas>
+
+<div class="brand">
+  <div class="eyebrow"><b>Greyframe Labs</b> · #13 · UI</div>
+  <h1>Paper <i>Cut</i></h1>
+  <p>Your guild name, cut into a folded sheet. Every letter is one snip.</p>
+</div>
+
+<div class="topbtns"><button id="infoBtn" type="button" aria-expanded="false" aria-controls="info">About this lab</button></div>
+<aside id="info" hidden aria-label="About this lab">
+  <button class="close" type="button" aria-label="Close">×</button>
+  <div class="meta">Lab #13 · UI · 17 Oct 2026</div>
+  <h3>Paper Cut</h3>
+  <div><h4>Idea</h4><p>What if your guild name cut its own crest? The name is cut into a folded sheet of paper, one snip per letter: vowels punch holes, consonants notch the folds, numbers nick the edge, and the first letter picks the paper and the shape of its rim. Unfold it and the name becomes an emblem. Type the same name tomorrow, on any device, and you get exactly the same crest.</p></div>
+  <div><h4>Controls</h4><ul>
+    <li>Type in "Guild name" (letters, numbers and spaces, up to 16). Each new letter lands as a cut and the paper chips fall away.</li>
+    <li>Points sets how many times the sheet is folded, from 3 to 8 points. Same name, new symmetry.</li>
+    <li>Fold and Unfold show the folded sheet and open it crease by crease. Light up holds it against a lamp.</li>
+    <li>Hover or tap a hole, or a letter in the cut list, to see which letter made it. Drag the paper to spin it. Random name tries another guild.</li>
+    <li>Keyboard: arrow keys spin, F folds or unfolds, L lights it up (with the paper focused).</li>
+  </ul></div>
+  <div><h4>Inspired by</h4><ul>
+    <li>SIGILIZERSIXHUNDRED by niftymonkee: a word that turns into a sigil, letter by letter.</li>
+    <li>Papel picado, the Mexican folk art of cutting patterns into stacked tissue paper for festival banners.</li>
+    <li>Folded paper snowflakes: fold a sheet a few times, make a few snips, and the symmetry does the rest.</li>
+  </ul></div>
+  <div><h4>For game UI</h4><p>Emblem editors usually hand players a menu of icons, colours and frames. A deterministic generator turns that around: the name the player already chose becomes the art. Every guild gets a unique crest with no extra steps, and any client can rebuild it from the text alone, so there is no image to store or sync. Showing each letter's cut as it lands keeps the system readable, so players can steer the result instead of rerolling it. The same idea works for player badges, spell runes, ship liveries or shareable seeds.</p></div>
+  <a id="allLabs" href="https://claude.ai/artifact/CDYy2LnuZN3Tdb1A9BSHrG" target="_blank" rel="noopener">← All labs</a>
+  <script>if (/github\.io$/.test(location.hostname)) { const a = document.getElementById('allLabs'); a.href = '../'; a.removeAttribute('target'); }</script>
+</aside>
+
+<section class="dock" aria-label="Create guild crest">
+  <div class="row">
+    <label class="field" for="name"><span class="lbl">Guild name</span><input id="name" type="text" maxlength="16" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Type a name" enterkeyhint="done"></label>
+    <div><span class="lbl" id="ptsLbl">Points</span><div class="seg" id="pts" role="radiogroup" aria-labelledby="ptsLbl"></div></div>
+    <div class="btns">
+      <button class="btn main" id="foldBtn" type="button">Fold</button>
+      <button class="btn" id="lightBtn" type="button" aria-pressed="false">Light up</button>
+      <button class="btn" id="randBtn" type="button">Random name</button>
+    </div>
+  </div>
+  <div class="row2">
+    <div class="cuts" id="cuts" aria-label="Cut list"></div>
+    <div class="code" id="code"></div>
+  </div>
+  <p class="status" id="status" aria-live="polite"></p>
+</section>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const cv = $('cv'), ctx = cv.getContext('2d');
+  const RM = matchMedia('(prefers-reduced-motion: reduce)');
+  const reduced = () => RM.matches;
+  const TAU = Math.PI * 2;
+  const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const eio = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  const eout = t => 1 - Math.pow(1 - t, 3);
+  const hash = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+  const hex2 = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const mix = (a, b, t) => { const A = hex2(a), B = hex2(b); return `rgb(${A.map((v, i) => Math.round(lerp(v, B[i], t))).join(',')})`; };
+
+  // ---------- the cutting system ----------
+  const DYES = [
+    { n: 'Vermilion', c: '#e5553d' }, { n: 'Saffron', c: '#f0b23a' }, { n: 'Moss', c: '#8fa63e' },
+    { n: 'Ivory', c: '#efe5cf' }, { n: 'Plum', c: '#a8559a' }, { n: 'Rose', c: '#ea8ca2' }, { n: 'Ochre', c: '#cc8a3c' }
+  ];
+  const VOW = 'AEIOUY';
+  const PUNCH = ['circle', 'diamond', 'petal', 'star'];
+  const NOTCH = ['diamond', 'circle', 'square', 'slit'];
+  const RIMS = ['Round', 'Star', 'Scallop', 'Crown', 'Wave', 'Spur'];
+  const rimFn = [
+    u => 1,
+    u => 1 - .2 * u,
+    u => .9 + .1 * Math.sqrt(Math.sin(Math.PI * u)),
+    u => u < .5 ? 1 : .86,
+    u => .94 + .06 * Math.cos(3 * Math.PI * u),
+    u => .8 + .2 * u * u
+  ];
+  const SHAPE_WORD = { circle: 'round', diamond: 'diamond', petal: 'petal', star: 'star', square: 'square', slit: 'slit' };
+
+  const S = {
+    name: '', cuts: [], n: 6, rim: 0, dye: DYES[3],
+    fold: 1, foldTarget: 1, light: 0, lightTarget: 0,
+    rot: 0, vrot: 0, flashes: [], chips: [], hi: -1, hiHold: 0, pulse: 0, t: 0,
+    drag: null, dirty: true, typing: null
+  };
+
+  function sanitize(v) {
+    return v.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9 ]/g, '').replace(/ {2,}/g, ' ').slice(0, 16);
+  }
+  function buildCuts(name) {
+    const seen = {}, out = [];
+    [...name].forEach((ch, i) => {
+      const j = seen[ch] || 0; seen[ch] = j + 1;
+      const sig = ch + j;
+      if (ch === ' ') { out.push({ ch, i, sig, kind: 'space' }); return; }
+      const code = ch.charCodeAt(0);
+      let c;
+      if (code >= 48 && code <= 57) {
+        const d = code - 48;
+        c = { kind: 'rim', shape: 'circle', u: clamp((d + .5) / 10 + j * .045, .04, .96), s: .052 };
+      } else {
+        const k = code - 65;
+        if (VOW.includes(ch)) {
+          const r = .24 + ((k / 25) * .58 + j * .19) % .58;
+          const u = clamp(.5 + ((((k * 5) % 7) / 6) - .5) * .5 + (j ? (j % 2 ? -.14 : .14) : 0), .2, .8);
+          c = { kind: 'punch', shape: PUNCH[k % 4], r, u, s: Math.min(.05 + .03 * (((k * 3) % 4) / 3), r * .4) };
+        } else {
+          const edge = k % 2 ? 'B' : 'A';
+          const r = .17 + ((k / 25) * .64 + j * .21) % .64;
+          c = { kind: 'notch', shape: NOTCH[(k >> 1) % 4], edge, r, u: edge === 'A' ? 0 : 1, s: Math.min(.045 + .035 * (((k * 7) % 5) / 4), r * .48) };
+        }
+      }
+      c.ch = ch; c.i = i; c.sig = sig;
+      out.push(c);
+    });
+    return out;
+  }
+  function firstKey(name) {
+    const m = name.match(/[A-Z0-9]/);
+    if (!m) return -1;
+    const c = m[0].charCodeAt(0);
+    return c <= 57 ? c - 48 : c - 65;
+  }
+  function framePt(r, a, x, y) { const ca = Math.cos(a), sa = Math.sin(a); return [r * ca + x * ca - y * sa, r * sa + x * sa + y * ca]; }
+  function shapePath(shape, r, a, s) {
+    const p = new Path2D(), cx = r * Math.cos(a), cy = r * Math.sin(a);
+    const poly = pts => { pts.forEach(([x, y], i) => { const q = framePt(r, a, x, y); i ? p.lineTo(q[0], q[1]) : p.moveTo(q[0], q[1]); }); p.closePath(); };
+    if (shape === 'circle') p.arc(cx, cy, s, 0, TAU);
+    else if (shape === 'diamond') poly([[s * 1.35, 0], [0, s], [-s * 1.35, 0], [0, -s]]);
+    else if (shape === 'petal') p.ellipse(cx, cy, s * 1.7, s * .62, a, 0, TAU);
+    else if (shape === 'star') { const pts = []; for (let i = 0; i < 8; i++) { const rr = i % 2 ? s * .42 : s * 1.35, t = i * Math.PI / 4; pts.push([Math.cos(t) * rr, Math.sin(t) * rr]); } poly(pts); }
+    else if (shape === 'square') poly([[s, s], [-s, s], [-s, -s], [s, -s]]);
+    else if (shape === 'slit') p.ellipse(cx, cy, s * 2.3, s * .3, a, 0, TAU);
+    return p;
+  }
+  function geom(c) {
+    if (c.kind === 'space') return;
+    const th = Math.PI / S.n;
+    c.a = c.kind === 'notch' ? (c.edge === 'A' ? 0 : th) : c.u * th;
+    c.rr = c.kind === 'rim' ? rimFn[S.rim](c.u) : c.r;
+    c.path = shapePath(c.shape, c.rr, c.a, c.s);
+    c.cx = c.rr * Math.cos(c.a); c.cy = c.rr * Math.sin(c.a);
+  }
+  function describe(c, first) {
+    if (!c) return '';
+    let s;
+    if (c.kind === 'punch') s = `<b>${c.ch}</b> punches a ${SHAPE_WORD[c.shape]} hole`;
+    else if (c.kind === 'notch') s = `<b>${c.ch}</b> cuts a ${SHAPE_WORD[c.shape]} notch in the ${c.edge === 'A' ? 'right' : 'left'} fold`;
+    else s = `<b>${c.ch}</b> nicks the edge`;
+    if (first) s += `, and as the first letter it picks ${S.dye.n.toLowerCase()} paper with a ${RIMS[S.rim].toLowerCase()} rim`;
+    return s + '.';
+  }
+
+  // ---------- canvases ----------
+  const mk = () => { const c = document.createElement('canvas'); return { c, x: c.getContext('2d') }; };
+  const W = { norm: mk(), dark: mk(), lit: mk(), shadow: mk() };
+  const E = { norm: mk(), lit: mk(), shadow: mk() };
+  const M = mk(), hitX = mk().x;
+  let dpr = 1, VW = 0, VH = 0, Rc = 100, RP = 100, SZ = 200, PAD = 40, CX = 0, CY = 0, wp = null;
+  const noise = (() => {
+    const n = mk(); n.c.width = n.c.height = 128; const id = n.x.createImageData(128, 128);
+    for (let i = 0; i < id.data.length; i += 4) { const v = Math.random(), w = v < .5 ? 0 : 255; id.data[i] = id.data[i + 1] = id.data[i + 2] = w; id.data[i + 3] = Math.random() < .35 ? 40 + Math.random() * 90 : 0; }
+    n.x.putImageData(id, 0, 0); return n.c;
+  })();
+
+  function wedgePath() {
+    const th = Math.PI / S.n, eps = .006, N = 120, p = new Path2D(), f = rimFn[S.rim];
+    p.moveTo(0, 0);
+    for (let i = 0; i <= N; i++) { const a = -eps + (th + 2 * eps) * i / N, r = f(clamp(a / th, 0, 1)); p.lineTo(r * Math.cos(a), r * Math.sin(a)); }
+    p.closePath(); return p;
+  }
+  function paintWedge(w, fill, tex) {
+    const { c, x } = w; c.width = c.height = SZ;
+    x.setTransform(RP, 0, 0, RP, SZ / 2, SZ / 2); x.fillStyle = fill; x.fill(wp);
+    x.globalCompositeOperation = 'destination-out';
+    for (const cut of S.cuts) if (cut.path) x.fill(cut.path);
+    x.globalCompositeOperation = 'source-atop'; x.setTransform(dpr, 0, 0, dpr, 0, 0);
+    x.globalAlpha = tex; x.fillStyle = x.createPattern(noise, 'repeat'); x.fillRect(0, 0, SZ, SZ);
+    x.globalAlpha = 1; x.globalCompositeOperation = 'source-over';
+  }
+  function shadowOf(dst, src, blur, alpha) {
+    const { c, x } = dst; c.width = c.height = SZ + PAD * 2;
+    x.shadowColor = `rgba(0,0,0,${alpha})`; x.shadowBlur = blur; x.shadowOffsetX = 20000;
+    x.drawImage(src.c, PAD - 20000, PAD); x.shadowColor = 'transparent';
+  }
+  function applyT(x, k, th) { if (k % 2) { x.rotate((k + 1) * th); x.scale(1, -1); } else x.rotate(k * th); }
+  function stamp(dst, src, crease) {
+    const { c, x } = dst; c.width = c.height = SZ; const th = Math.PI / S.n;
+    for (let k = 0; k < 2 * S.n; k++) { x.setTransform(1, 0, 0, 1, SZ / 2, SZ / 2); applyT(x, k, th); x.drawImage(src.c, -SZ / 2, -SZ / 2); }
+    x.setTransform(RP, 0, 0, RP, SZ / 2, SZ / 2); x.globalCompositeOperation = 'source-atop'; x.lineWidth = 1.3 * dpr / RP;
+    for (let k = 0; k < 2 * S.n; k++) {
+      const a = k * th; x.strokeStyle = k % 2 ? `rgba(0,0,0,${crease})` : `rgba(255,255,255,${crease * .8})`;
+      x.beginPath(); x.moveTo(0, 0); x.lineTo(Math.cos(a) * 1.1, Math.sin(a) * 1.1); x.stroke();
+    }
+    x.globalCompositeOperation = 'source-over';
+  }
+  function rebuild() {
+    S.dirty = false;
+    const k = firstKey(S.name);
+    S.rim = k < 0 ? 0 : k % 6;
+    S.dye = k < 0 ? DYES[3] : DYES[(k * 3) % 7];
+    document.documentElement.style.setProperty('--dye', S.dye.c);
+    S.cuts.forEach(geom);
+    wp = wedgePath();
+    paintWedge(W.norm, S.dye.c, .09);
+    paintWedge(W.dark, mix(S.dye.c, '#000000', .5), .05);
+    paintWedge(W.lit, mix(S.dye.c, '#1c0e05', .42), .26);
+    shadowOf(W.shadow, W.norm, 14 * dpr, .5);
+    stamp(E.norm, W.norm, .13);
+    stamp(E.lit, W.lit, .3);
+    shadowOf(E.shadow, E.norm, 22 * dpr, .6);
+    renderList(); renderCode();
+  }
+
+  function drawMat() {
+    M.c.width = VW * dpr; M.c.height = VH * dpr;
+    const x = M.x; x.setTransform(dpr, 0, 0, dpr, 0, 0);
+    x.fillStyle = '#121a18'; x.fillRect(0, 0, VW, VH);
+    const g = 22, ox = (CX % g), oy = (CY % g);
+    for (let i = -1; i * g < VW + g; i++) { const X = ox + i * g, major = Math.round((X - CX) / g) % 5 === 0; x.fillStyle = major ? 'rgba(190,230,215,.075)' : 'rgba(190,230,215,.035)'; x.fillRect(Math.round(X), 0, 1, VH); }
+    for (let i = -1; i * g < VH + g; i++) { const Y = oy + i * g, major = Math.round((Y - CY) / g) % 5 === 0; x.fillStyle = major ? 'rgba(190,230,215,.075)' : 'rgba(190,230,215,.035)'; x.fillRect(0, Math.round(Y), VW, 1); }
+    // 45 and 60 degree guides, as on a real cutting mat
+    x.strokeStyle = 'rgba(190,230,215,.05)'; x.lineWidth = 1;
+    [Math.PI / 4, -Math.PI / 4, Math.PI / 3, -Math.PI / 3].forEach(a => { const L = Math.hypot(VW, VH); x.beginPath(); x.moveTo(CX - Math.cos(a) * L, CY - Math.sin(a) * L); x.lineTo(CX + Math.cos(a) * L, CY + Math.sin(a) * L); x.stroke(); });
+    // ruler ticks on the left edge
+    x.fillStyle = 'rgba(190,230,215,.18)';
+    for (let i = 0; i * g / 2 < VH; i++) { const Y = (oy % (g / 2)) + i * g / 2; x.fillRect(0, Math.round(Y), i % 10 === 0 ? 12 : i % 2 ? 4 : 7, 1); }
+    const v = x.createRadialGradient(CX, CY, Math.min(VW, VH) * .2, CX, CY, Math.hypot(VW, VH) * .62);
+    v.addColorStop(0, 'rgba(40,60,54,.22)'); v.addColorStop(1, 'rgba(0,0,0,.55)');
+    x.fillStyle = v; x.fillRect(0, 0, VW, VH);
+  }
+
+  function layout() {
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    VW = innerWidth; VH = innerHeight;
+    cv.width = Math.round(VW * dpr); cv.height = Math.round(VH * dpr);
+    const top = document.querySelector('.brand').getBoundingClientRect().bottom + 10;
+    const bot = document.querySelector('.dock').getBoundingClientRect().top - 10;
+    CX = VW / 2; CY = (top + bot) / 2;
+    Rc = Math.max(60, Math.min(VW / 2 - 18, (bot - top) / 2 - 8, 340));
+    RP = Rc * dpr * 1.04; SZ = Math.ceil(RP * 2.1); PAD = Math.ceil(30 * dpr);
+    drawMat(); S.dirty = true;
+  }
+
+  // ---------- view ----------
+  function view() {
+    const th = Math.PI / S.n;
+    const m = eio(clamp(S.fold / .22, 0, 1));
+    const fr = Math.PI / 2 - th / 2;               // folded wedge points down
+    let ur = S.rot % TAU; let d = ur - fr; d = ((d + Math.PI) % TAU + TAU) % TAU - Math.PI;
+    const rot = fr + d * m;
+    const sF = n => n <= 3 ? 1.25 : n <= 4 ? 1.45 : 1.6;
+    const pulse = reduced() ? 0 : Math.sin(Math.min(1, S.pulse) * Math.PI) * .035;
+    const sc = lerp(sF(S.n), 1, m) * (1 - pulse);
+    const c0 = [Math.cos(th / 2) * .55, Math.sin(th / 2) * .55];
+    const ox = -(c0[0] * Math.cos(rot) - c0[1] * Math.sin(rot)) * Rc * sc * (1 - m);
+    const oy = -(c0[0] * Math.sin(rot) + c0[1] * Math.cos(rot)) * Rc * sc * (1 - m);
+    const q = clamp((S.fold - .22) / .78, 0, 1) * (2 * S.n - 1);
+    return { rot, sc, x: CX + ox, y: CY + oy, q, th, flat: S.fold >= 1 };
+  }
+  function unitFrame(v, extraX = 0, extraY = 0) { ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.translate(v.x + extraX, v.y + extraY); ctx.rotate(v.rot); ctx.scale(Rc * v.sc, Rc * v.sc); }
+  function copyFrames(v) {
+    // list of transforms for copies present: [{k, s}] where s is the flip state (1 placed, else flipping)
+    if (v.flat) return [...Array(2 * S.n).keys()].map(k => ({ k, s: -1 }));
+    const done = Math.floor(v.q), out = [];
+    for (let k = 0; k <= Math.min(done, 2 * S.n - 1); k++) out.push({ k, s: -1 });
+    if (done < 2 * S.n - 1) { const t = eio(v.q - done); out.push({ k: done + 1, s: Math.cos(Math.PI * t), flip: true }); }
+    return out;
+  }
+  function placeCopy(f, th) {
+    if (f.flip) { const k = f.k; ctx.rotate(k * th); ctx.scale(1, f.s); ctx.rotate(-k * th); applyT(ctx, k - 1, th); }
+    else applyT(ctx, f.k, th);
+  }
+  function toScreen(px, py, k, v) {
+    let x = px, y = py, a;
+    if (k % 2) { y = -y; a = (k + 1) * v.th; } else a = k * v.th;
+    let X = x * Math.cos(a) - y * Math.sin(a), Y = x * Math.sin(a) + y * Math.cos(a);
+    const R = Rc * v.sc, X2 = (X * Math.cos(v.rot) - Y * Math.sin(v.rot)) * R + v.x, Y2 = (X * Math.sin(v.rot) + Y * Math.cos(v.rot)) * R + v.y;
+    return [X2, Y2, a + v.rot, k % 2 ? -1 : 1];
+  }
+
+  // ---------- drawing ----------
+  function draw(dt) {
+    const v = view(), L = S.light;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(M.c, 0, 0);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (L > .002) {
+      ctx.fillStyle = `rgba(4,6,6,${.62 * L})`; ctx.fillRect(0, 0, VW, VH);
+      const R = Rc * v.sc, g = ctx.createRadialGradient(v.x, v.y, 0, v.x, v.y, R * 1.35);
+      g.addColorStop(0, `rgba(255,236,190,${L})`); g.addColorStop(.55, `rgba(255,196,110,${.75 * L})`); g.addColorStop(.8, `rgba(255,150,70,${.22 * L})`); g.addColorStop(1, 'rgba(255,140,60,0)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, VW, VH);
+    }
+    const so = (1 - L);
+    if (v.flat) {
+      if (so > .01) { unitFrame(v, 7, 12); ctx.scale(1 / RP, 1 / RP); ctx.globalAlpha = so; ctx.drawImage(E.shadow.c, -SZ / 2 - PAD, -SZ / 2 - PAD); ctx.globalAlpha = 1; }
+      unitFrame(v); ctx.scale(1 / RP, 1 / RP);
+      if (L < .999) ctx.drawImage(E.norm.c, -SZ / 2, -SZ / 2);
+      if (L > .001) { ctx.globalAlpha = L; ctx.drawImage(E.lit.c, -SZ / 2, -SZ / 2); ctx.globalAlpha = 1; }
+    } else {
+      const frames = copyFrames(v);
+      // thickness of the folded stack under the top layer
+      const stack = Math.max(0, 2 * S.n - 1 - Math.floor(v.q));
+      if (stack > 0) for (let i = Math.min(3, stack); i >= 1; i--) { unitFrame(v, i * .8, i * 1.6); applyT(ctx, Math.min(Math.floor(v.q), 2 * S.n - 1), v.th); ctx.scale(1 / RP, 1 / RP); ctx.globalAlpha = .9; ctx.drawImage(W.dark.c, -SZ / 2, -SZ / 2); ctx.globalAlpha = 1; }
+      for (const f of frames) {
+        if (so > .01) { unitFrame(v, 6, 10); placeCopy(f, v.th); ctx.scale(1 / RP, 1 / RP); ctx.globalAlpha = .7 * so; ctx.drawImage(W.shadow.c, -SZ / 2 - PAD, -SZ / 2 - PAD); ctx.globalAlpha = 1; }
+      }
+      for (const f of frames) {
+        unitFrame(v); placeCopy(f, v.th); ctx.scale(1 / RP, 1 / RP);
+        if (L < .999) ctx.drawImage(W.norm.c, -SZ / 2, -SZ / 2);
+        if (L > .001) { ctx.globalAlpha = L; ctx.drawImage(W.lit.c, -SZ / 2, -SZ / 2); ctx.globalAlpha = 1; }
+        if (f.flip) { ctx.globalAlpha = (1 - Math.abs(f.s)) * .55; ctx.drawImage(W.dark.c, -SZ / 2, -SZ / 2); ctx.globalAlpha = 1; }
+      }
+    }
+    // cut outlines: new cuts, healed cuts and the highlighted one
+    const frames = v.flat ? copyFrames(v) : copyFrames(v).filter(f => !f.flip);
+    const lw = 2.2 / (Rc * v.sc);
+    ctx.lineJoin = 'round';
+    for (let fi = S.flashes.length - 1; fi >= 0; fi--) {
+      const fl = S.flashes[fi]; fl.t += dt;
+      if (fl.t > 1.6) { S.flashes.splice(fi, 1); continue; }
+      for (const f of frames) {
+        const tt = fl.t - (reduced() ? 0 : f.k * .035);
+        if (tt < 0) continue;
+        const a = tt < .08 ? tt / .08 : Math.max(0, 1 - (tt - .08) / .9);
+        if (a <= 0) continue;
+        unitFrame(v); placeCopy(f, v.th);
+        const sc = reduced() ? 1 : 1 + .35 * Math.pow(1 - Math.min(1, tt / .35), 3);
+        ctx.translate(fl.cx, fl.cy); ctx.scale(sc, sc); ctx.translate(-fl.cx, -fl.cy);
+        ctx.globalAlpha = a; ctx.lineWidth = lw * (fl.heal ? 1 : 1.2) / sc;
+        ctx.strokeStyle = fl.heal ? '#ffd78f' : '#2fd1c5';
+        if (fl.heal) ctx.setLineDash([lw * 3, lw * 2]);
+        ctx.stroke(fl.path); ctx.setLineDash([]);
+      }
+      ctx.globalAlpha = 1;
+    }
+    const hc = S.cuts[S.hi];
+    if (hc && hc.path) {
+      const a = .75 + .25 * (reduced() ? 1 : Math.sin(S.t * 5));
+      for (const f of frames) { unitFrame(v); placeCopy(f, v.th); ctx.globalAlpha = a; ctx.lineWidth = lw * 1.3; ctx.strokeStyle = '#2fd1c5'; ctx.stroke(hc.path); ctx.fillStyle = 'rgba(47,209,197,.22)'; ctx.fill(hc.path); }
+      ctx.globalAlpha = 1;
+    }
+    // falling paper chips
+    for (let i = S.chips.length - 1; i >= 0; i--) {
+      const p = S.chips[i]; p.t += dt;
+      if (p.t > p.life) { S.chips.splice(i, 1); continue; }
+      p.vy += 1100 * dt; p.vx *= Math.exp(-dt * 1.2); p.x += p.vx * dt; p.y += p.vy * dt; p.ang += p.va * dt;
+      const a = Math.min(1, (p.life - p.t) / .35), R = Rc * v.sc * (1 - .25 * p.t / p.life);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.translate(p.x, p.y); ctx.rotate(p.ang); ctx.scale(R, R * p.flip * (reduced() ? 1 : Math.cos(p.t * p.spin)));
+      ctx.translate(-p.c.cx, -p.c.cy);
+      ctx.globalAlpha = a; ctx.fillStyle = L > .5 ? mix(S.dye.c, '#1c0e05', .3) : S.dye.c; ctx.fill(p.c.path);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- name changes ----------
+  function setName(raw, opts = {}) {
+    const name = sanitize(raw);
+    const input = $('name'); if (input.value !== name) input.value = name;
+    if (name === S.name && !opts.force) return;
+    const old = S.cuts, oldRim = S.rim, oldName = S.name;
+    S.name = name; S.cuts = buildCuts(name); S.dirty = true;
+    const k = firstKey(name), newRim = k < 0 ? 0 : k % 6;
+    rebuild();
+    if (opts.quiet) { $('status').innerHTML = name ? `<b>${name.length}</b> letters, <b>${S.cuts.filter(c => c.kind !== 'space').length}</b> cuts. Same name, same crest.` : 'Type a guild name.'; return; }
+    const v = view();
+    const added = S.cuts.filter((c, i) => c.kind !== 'space' && (!old[i] || old[i].sig !== c.sig || newRim !== oldRim));
+    const gone = old.filter((c, i) => c.kind !== 'space' && (!S.cuts[i] || S.cuts[i].sig !== c.sig) && c.path);
+    gone.forEach(c => S.flashes.push({ path: c.path, cx: c.cx, cy: c.cy, t: 0, heal: true }));
+    const fresh = added.filter(c => !old[c.i] || old[c.i].sig !== c.sig);
+    fresh.forEach(c => {
+      S.flashes.push({ path: c.path, cx: c.cx, cy: c.cy, t: 0 });
+      if (reduced() || S.light > .5) return;
+      const ks = v.flat ? [...Array(2 * S.n).keys()] : [Math.min(Math.floor(v.q), 2 * S.n - 1)];
+      ks.forEach(kk => {
+        if (S.chips.length > 260) return;
+        const [x, y, ang, flip] = toScreen(c.cx, c.cy, kk, v);
+        const dx = x - v.x, dy = y - v.y, dl = Math.hypot(dx, dy) || 1;
+        S.chips.push({ c, x, y, ang, flip, vx: dx / dl * (60 + Math.random() * 90) + (Math.random() - .5) * 40, vy: dy / dl * 50 - 160 - Math.random() * 120, va: (Math.random() - .5) * 7, spin: 4 + Math.random() * 6, t: 0, life: 1.1 + Math.random() * .4 });
+      });
+    });
+    if (newRim !== oldRim || (oldName === '' && name) || (!name && oldName)) S.pulse = 0.0001;
+    const last = fresh[fresh.length - 1];
+    $('status').innerHTML = last ? describe(last, last.i === S.cuts.findIndex(c => c.kind !== 'space')) : name ? `<b>${name.length}</b> letters, <b>${S.cuts.filter(c => c.kind !== 'space').length}</b> cuts. Same name, same crest.` : 'Type a guild name. Vowels punch holes, consonants notch the folds, the first letter picks the paper and its rim.';
+    document.querySelectorAll('.cut').forEach(el => { if (fresh.some(c => c.i === +el.dataset.i)) el.classList.add('new'); });
+  }
+
+  const ICON = {
+    circle: '<circle cx="8" cy="8" r="4.2"/>', diamond: '<path d="M8 2.5 13 8 8 13.5 3 8z"/>', petal: '<ellipse cx="8" cy="8" rx="5.6" ry="2.6"/>',
+    star: '<path d="M8 1.8 9.4 6.6 14.2 8 9.4 9.4 8 14.2 6.6 9.4 1.8 8 6.6 6.6z"/>', square: '<rect x="4" y="4" width="8" height="8"/>', slit: '<ellipse cx="8" cy="8" rx="6.4" ry="1.3"/>'
+  };
+  function iconFor(c) {
+    const fill = 'var(--dye)';
+    let extra = '';
+    if (c.kind === 'notch') extra = '<line x1="1" y1="15" x2="15" y2="1" stroke="var(--paper)" stroke-width="1" stroke-dasharray="2 1.5" opacity=".7"/>';
+    if (c.kind === 'rim') extra = '<path d="M1 13.5 Q8 9 15 13.5" fill="none" stroke="var(--paper)" stroke-width="1.2" opacity=".7"/>';
+    const sh = c.kind === 'rim' ? '<circle cx="8" cy="9" r="3"/>' : ICON[c.shape];
+    return `<svg viewBox="0 0 16 16" aria-hidden="true"><g fill="${fill}">${sh}</g>${extra}</svg>`;
+  }
+  function renderList() {
+    const box = $('cuts');
+    box.innerHTML = S.cuts.map(c => c.kind === 'space' ? `<span class="cut space" data-i="${c.i}" aria-hidden="true"></span>` :
+      `<button type="button" class="cut${S.hi === c.i ? ' on' : ''}" data-i="${c.i}" aria-label="${c.ch}: ${c.kind === 'punch' ? SHAPE_WORD[c.shape] + ' hole' : c.kind === 'notch' ? SHAPE_WORD[c.shape] + ' notch in the ' + (c.edge === 'A' ? 'right' : 'left') + ' fold' : 'nick in the edge'}">${c.ch}${iconFor(c)}</button>`).join('');
+    if (!S.cuts.length) box.innerHTML = '<span class="code">No cuts yet</span>';
+  }
+  function renderCode() {
+    const id = (hash(S.name + '|' + S.n) & 0xffff).toString(16).toUpperCase().padStart(4, '0');
+    $('code').innerHTML = `<b>${S.dye.n}</b> · ${RIMS[S.rim]} rim · ${S.n} points · Crest ${S.name ? id : '----'}`;
+  }
+  function setHi(i, hold) {
+    if (S.hi === i) { if (hold) S.hiHold = hold; return; }
+    S.hi = i; S.hiHold = hold || 0;
+    document.querySelectorAll('.cut').forEach(el => el.classList.toggle('on', +el.dataset.i === i));
+    const c = S.cuts[i];
+    if (c && c.kind !== 'space') $('status').innerHTML = describe(c, i === S.cuts.findIndex(q => q.kind !== 'space'));
+  }
+
+  // typing animation for intro and random names
+  function typeName(str, ms = 110) {
+    if (S.typing) clearTimeout(S.typing.id);
+    const target = sanitize(str);
+    if (reduced()) { setName(target); S.typing = null; return Promise.resolve(); }
+    return new Promise(res => {
+      let i = 0;
+      const step = () => {
+        // delete back to the shared prefix first
+        if (!target.startsWith(S.name)) { setName(S.name.slice(0, -1)); S.typing = { id: setTimeout(step, ms * .45) }; return; }
+        if (S.name.length < target.length) { setName(target.slice(0, S.name.length + 1)); S.typing = { id: setTimeout(step, ms) }; return; }
+        S.typing = null; res();
+      };
+      step();
+    });
+  }
+  function stopTyping() { if (S.typing) { clearTimeout(S.typing.id); S.typing = null; } }
+
+  // ---------- controls ----------
+  const nameEl = $('name');
+  nameEl.addEventListener('input', () => { stopTyping(); setName(nameEl.value); });
+  nameEl.addEventListener('focus', stopTyping);
+  nameEl.addEventListener('keydown', e => { if (e.key === 'Enter') nameEl.blur(); });
+
+  const POINTS = [3, 4, 5, 6, 8];
+  $('pts').innerHTML = POINTS.map(n => `<button type="button" role="radio" aria-checked="${n === S.n}" data-n="${n}">${n}</button>`).join('');
+  function setPoints(n) {
+    if (!POINTS.includes(n)) return;
+    S.n = n; S.dirty = true; S.pulse = 0.0001; S.chips.length = 0;
+    document.querySelectorAll('#pts button').forEach(b => b.setAttribute('aria-checked', String(+b.dataset.n === n)));
+    rebuild();
+    $('status').innerHTML = `Folded for <b>${n} points</b>. Same cuts, new symmetry.`;
+  }
+  $('pts').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setPoints(+b.dataset.n); });
+  $('pts').addEventListener('keydown', e => {
+    if (!/Arrow(Left|Right|Up|Down)/.test(e.key)) return; e.preventDefault();
+    const i = POINTS.indexOf(S.n), d = /Right|Down/.test(e.key) ? 1 : -1, n = POINTS[(i + d + POINTS.length) % POINTS.length];
+    setPoints(n); document.querySelector(`#pts button[data-n="${n}"]`).focus();
+  });
+
+  function setFold(unfolded, instant) {
+    S.foldTarget = unfolded ? 1 : 0;
+    if (instant || reduced()) S.fold = S.foldTarget;
+    $('foldBtn').textContent = unfolded ? 'Fold' : 'Unfold';
+    if (unfolded) setHi(-1);
+  }
+  $('foldBtn').addEventListener('click', () => setFold(S.foldTarget < .5));
+  function setLight(on, instant) {
+    S.lightTarget = on ? 1 : 0; if (instant || reduced()) S.light = S.lightTarget;
+    $('lightBtn').setAttribute('aria-pressed', String(!!on));
+  }
+  $('lightBtn').addEventListener('click', () => setLight(S.lightTarget < .5));
+
+  const NAMES = ['Hollow Pines', 'Moth Lanterns', 'Iron Choir', 'Salt Wolves', 'Velvet Rook', 'Quiet Embers', 'Copper Tide', 'Ninth Bell', 'Glass Heron', 'Ash Orchard', 'Paper Tigers', 'Zero Hour', 'Lucky 7', 'Owl Council', 'Dune Keepers', 'Kite Runners'];
+  $('randBtn').addEventListener('click', () => {
+    let n; do { n = NAMES[(Math.random() * NAMES.length) | 0]; } while (sanitize(n) === S.name);
+    typeName(n, 90);
+  });
+
+  $('cuts').addEventListener('pointerover', e => { const b = e.target.closest('button.cut'); if (b) setHi(+b.dataset.i); });
+  $('cuts').addEventListener('focusin', e => { const b = e.target.closest('button.cut'); if (b) setHi(+b.dataset.i); });
+  $('cuts').addEventListener('click', e => { const b = e.target.closest('button.cut'); if (b) setHi(+b.dataset.i, 2.2); });
+  $('cuts').addEventListener('pointerleave', () => { if (!S.hiHold) setHi(-1); });
+  $('cuts').addEventListener('focusout', () => { if (!S.hiHold) setHi(-1); });
+
+  // pointer on the paper: hover a hole, drag to spin
+  function hitCut(px, py) {
+    const v = view(); if (!v.flat) return -2;
+    let x = (px - v.x) / (Rc * v.sc), y = (py - v.y) / (Rc * v.sc);
+    const c = Math.cos(-v.rot), s = Math.sin(-v.rot); [x, y] = [x * c - y * s, x * s + y * c];
+    const r = Math.hypot(x, y); if (r > 1.08) return -2;
+    let a = ((Math.atan2(y, x) % TAU) + TAU) % TAU; a = a % (2 * v.th); if (a > v.th) a = 2 * v.th - a;
+    const lx = r * Math.cos(a), ly = r * Math.sin(a);
+    for (let i = S.cuts.length - 1; i >= 0; i--) { const q = S.cuts[i]; if (q.path && hitX.isPointInPath(q.path, lx, ly)) return i; }
+    return -1;
+  }
+  cv.addEventListener('pointerdown', e => {
+    const h = hitCut(e.clientX, e.clientY); if (h === -2) return;
+    cv.setPointerCapture(e.pointerId);
+    const v = view();
+    S.drag = { id: e.pointerId, a: Math.atan2(e.clientY - v.y, e.clientX - v.x), x: e.clientX, y: e.clientY, moved: 0, t: performance.now() };
+    S.vrot = 0; cv.style.cursor = 'grabbing';
+  });
+  cv.addEventListener('pointermove', e => {
+    if (S.drag && S.drag.id === e.pointerId) {
+      const v = view(), a = Math.atan2(e.clientY - v.y, e.clientX - v.x);
+      let d = a - S.drag.a; d = ((d + Math.PI) % TAU + TAU) % TAU - Math.PI;
+      const now = performance.now(), dt = Math.max(.008, (now - S.drag.t) / 1000);
+      S.rot += d; S.vrot = lerp(S.vrot, d / dt, .5); S.drag.a = a; S.drag.t = now;
+      S.drag.moved += Math.hypot(e.clientX - S.drag.x, e.clientY - S.drag.y); S.drag.x = e.clientX; S.drag.y = e.clientY;
+      return;
+    }
+    if (e.pointerType === 'mouse') { const h = hitCut(e.clientX, e.clientY); cv.classList.toggle('over', h >= 0); if (!S.hiHold) setHi(h >= 0 ? h : -1); }
+  });
+  const endDrag = e => {
+    if (!S.drag || S.drag.id !== e.pointerId) return;
+    const tap = S.drag.moved < 8; S.drag = null; cv.style.cursor = '';
+    if (performance.now() - (S.lastMove || 0) > 80 && !tap) {}
+    if (tap) { S.vrot = 0; const h = hitCut(e.clientX, e.clientY); setHi(h >= 0 ? h : -1, h >= 0 ? 2.2 : 0); }
+    if (reduced()) S.vrot = 0;
+  };
+  cv.addEventListener('pointerup', endDrag);
+  cv.addEventListener('pointercancel', endDrag);
+  cv.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse' && !S.drag && !S.hiHold) setHi(-1); });
+  cv.addEventListener('keydown', e => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { S.vrot -= reduced() ? 0 : 2.4; if (reduced()) S.rot -= .26; e.preventDefault(); }
+    else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { S.vrot += reduced() ? 0 : 2.4; if (reduced()) S.rot += .26; e.preventDefault(); }
+    else if (e.key === 'f' || e.key === 'F') setFold(S.foldTarget < .5);
+    else if (e.key === 'l' || e.key === 'L') setLight(S.lightTarget < .5);
+  });
+
+  // ---------- about ----------
+  const info = $('info'), ib = $('infoBtn');
+  const setInfo = o => { info.hidden = !o; ib.setAttribute('aria-expanded', String(o)); document.querySelector('.topbtns').hidden = o; if (o) info.querySelector('.close').focus(); else ib.focus(); };
+  ib.addEventListener('click', () => setInfo(true));
+  info.querySelector('.close').addEventListener('click', () => setInfo(false));
+  addEventListener('keydown', e => { if (e.key === 'Escape' && !info.hidden) setInfo(false); });
+
+  // ---------- loop ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(.05, Math.max(0, (now - last) / 1000)); last = now; S.t += dt;
+    if (S.fold !== S.foldTarget) { const sp = dt / (S.foldTarget > S.fold ? 1.7 : 1.1); S.fold = S.foldTarget > S.fold ? Math.min(S.foldTarget, S.fold + sp) : Math.max(S.foldTarget, S.fold - sp); }
+    S.light += (S.lightTarget - S.light) * (1 - Math.exp(-dt * 5)); if (Math.abs(S.light - S.lightTarget) < .002) S.light = S.lightTarget;
+    if (!S.drag) { S.rot += S.vrot * dt; S.vrot *= Math.exp(-dt * 2.4); if (Math.abs(S.vrot) < .002) S.vrot = 0; }
+    if (S.pulse > 0) { S.pulse += dt / .45; if (S.pulse >= 1) S.pulse = 0; }
+    if (S.hiHold > 0) { S.hiHold -= dt; if (S.hiHold <= 0) { S.hiHold = 0; setHi(-1); } }
+    if (S.dirty) rebuild();
+    draw(dt);
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- boot: the sheet starts folded and the first guild cuts itself ----------
+  layout();
+  addEventListener('resize', layout);
+  if (window.visualViewport) visualViewport.addEventListener('resize', layout);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
+  const BOOT = 'Hollow Pines';
+  if (reduced()) { setName(BOOT, { quiet: true }); $('status').innerHTML = describe(S.cuts[0], true); }
+  else {
+    setFold(false, true);
+    setName('', { force: true, quiet: true });
+    $('status').innerHTML = 'Type a guild name. Vowels punch holes, consonants notch the folds, the first letter picks the paper and its rim.';
+    S.boot = setTimeout(() => typeName(BOOT, 120).then(() => { S.boot = setTimeout(() => setFold(true), 350); }), 500);
+    nameEl.addEventListener('focus', () => { clearTimeout(S.boot); if (S.foldTarget < .5 && !S.userFolded) setFold(true); }, { once: true });
+  }
+  $('foldBtn').addEventListener('click', () => { clearTimeout(S.boot); S.userFolded = true; });
+  requestAnimationFrame(t => { last = t; frame(t); });
+
+  // ---------- hooks for capture ----------
+  window.__lab = {
+    setName: (s, quiet) => { stopTyping(); clearTimeout(S.boot); setName(s, { quiet }); },
+    typeName: (s, ms) => { clearTimeout(S.boot); return typeName(s, ms); },
+    setPoints, setFold: (u, instant) => { clearTimeout(S.boot); setFold(u, instant); }, setLight,
+    setRot: r => { S.rot = r; S.vrot = 0; }, spin: v => { S.vrot = v; }, setHi: (i, hold) => setHi(i, hold),
+    setFoldT: f => { clearTimeout(S.boot); S.fold = S.foldTarget = f; },
+    stopBoot: () => { clearTimeout(S.boot); stopTyping(); },
+    view: () => { const v = view(); return { x: v.x, y: v.y, R: Rc * v.sc, rot: v.rot }; },
+    cutScreen: i => { const v = view(), c = S.cuts[i]; if (!c || !c.path) return null; const p = toScreen(c.cx, c.cy, 0, v); return { x: p[0], y: p[1] }; },
+    state: () => ({ name: S.name, n: S.n, rim: RIMS[S.rim], dye: S.dye.n, fold: S.fold, light: S.light, cuts: S.cuts.length, chips: S.chips.length, flashes: S.flashes.length })
+  };
+})();
+</script>
