@@ -182,6 +182,7 @@ import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
 import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
 import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
 import {OutputPass} from 'three/addons/postprocessing/OutputPass.js';
+import {ShaderPass} from 'three/addons/postprocessing/ShaderPass.js';
 
 const $ = s => document.querySelector(s);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -222,7 +223,7 @@ const ICONS = {
 /* ---------- renderer ---------- */
 const cv = $('#cv');
 const renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: false, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.75));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 renderer.shadowMap.enabled = true;
@@ -234,6 +235,8 @@ const rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, sample
 const composer = new EffectComposer(renderer, rt);
 composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), .5, .4, .9);
+/* guard pass: some GPUs produce NaN or huge values that the bloom blur spreads into black blocks */
+composer.addPass(new ShaderPass({ uniforms: { tDiffuse: { value: null } }, vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`, fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv; void main(){ vec4 c=texture2D(tDiffuse,vUv); vec3 r=c.rgb; if(any(isnan(r))||any(isinf(r))) r=vec3(0.); gl_FragColor=vec4(clamp(r,0.,40.),1.); }` }));
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
@@ -307,7 +310,7 @@ const sky = new THREE.Mesh(new THREE.SphereGeometry(400, 32, 16), new THREE.Shad
     float shade=smoothstep(.9996,.99985,dot(d,normalize(moonDir+vec3(.012,.008,0.))));
     col+=vec3(.75,.85,1.)*pow(max(md,0.),90.)*.35*moonVis;
     col=mix(col,vec3(1.,.96,.86)*(2.6-1.5*shade),disc*moonVis);
-    if(stars>0.){ vec3 p=d*260.; vec3 c=floor(p); float r=h3(c); vec3 f=fract(p)-.5; float s=smoothstep(.16,0.,length(f))*step(.9965,r);
+    if(stars>0.){ vec3 p=d*260.; vec3 c=floor(p); float r=h3(c); vec3 f=fract(p)-.5; float s=(1.-smoothstep(0.,.16,length(f)))*step(.9965,r);
       s*= .55+.45*sin(time*(2.+r*5.)+r*60.); col+=vec3(.85,.92,1.)*s*stars*smoothstep(.02,.25,y)*2.2; }
     gl_FragColor=vec4(col,1.); }`
 }));
@@ -359,13 +362,15 @@ const gate = grp(world, -.05, 0, 0);
 add(gate, G.box, M.wood, 0, .8, -.62, .1, 1.6, .1); add(gate, G.box, M.wood, 0, .8, .62, .1, 1.6, .1); add(gate, G.box, M.wood, 0, 1.55, 0, .12, .1, 1.5);
 const gateSign = add(gate, G.plane, new THREE.MeshStandardMaterial({ map: signTex('PIER 9', false), roughness: .8 }), .07, 1.33, 0, .9, .26, 1, false); gateSign.rotation.y = Math.PI / 2;
 
+/* one warm light per tile, so open businesses really light the people and the deck around them (fixed count: no shader rebuilds) */
+const cellLights = []; for (let r = 0; r < 2; r++) for (let c = 0; c < COLS; c++) { const l = new THREE.PointLight(0xffffff, 0, 2.8, 1.5); l.position.set(cellX(c), .72, ROWZ[r] * .5); world.add(l); cellLights.push(l); }
 /* light helpers: pools on the deck and streaks on the water */
 const pools = [], streaks = [];
 function pool(parent, x, z, size, color) { const m = new THREE.Mesh(G.plane, new THREE.MeshBasicMaterial({ map: radialTex, color: new THREE.Color(color), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0 })); m.rotation.x = -Math.PI / 2; m.position.set(x, .012, z); m.scale.set(size, size, 1); m.renderOrder = 2; parent.add(m); const p = { m, base: new THREE.Color(color) }; pools.push(p); return p; }
 const streakMat = c => new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, uniforms: { col: { value: new THREE.Color(c) }, k: { value: 0 }, time: U.time, sd: { value: Math.random() * 10 } },
   vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
   fragmentShader: `uniform vec3 col; uniform float k,time,sd; varying vec2 vUv; void main(){ float y=vUv.y; float x=abs(vUv.x*2.-1.);
-    float w=.5+.5*sin(y*70.-time*2.6+sd)*sin(y*23.+time*1.3+sd*2.); float a=pow(1.-y,1.6)*smoothstep(1.,.15,x+ (1.-y)*.0)*(.25+.75*w*w);
+    float w=.5+.5*sin(y*70.-time*2.6+sd)*sin(y*23.+time*1.3+sd*2.); float a=pow(1.-y,1.6)*(1.-smoothstep(.15,1.,x))*(.25+.75*w*w);
     a*=smoothstep(0.,.06,y); gl_FragColor=vec4(col*k*a,1.); }` });
 function streak(src, color, len = 3.2, wid = .3) { const m = new THREE.Mesh(G.plane, streakMat(color)); m.rotation.order = 'YXZ'; m.renderOrder = 3; scene.add(m); const s = { m, src, len, wid, k: 0 }; streaks.push(s); return s; }
 
@@ -413,12 +418,37 @@ scene.add(town);
 const PCOL = [0x2f5d7c, 0xc4553f, 0xe0b04a, 0x3f8d6b, 0x7b6aa8, 0xd9d2c3, 0x31424d, 0xb86a8e, 0x5aa0b4];
 const bodyGeo = new THREE.CapsuleGeometry(.045, .09, 3, 8), headGeo = new THREE.SphereGeometry(.042, 10, 8);
 const bodyMats = PCOL.map(c => std(c)), headMats = [std(0xe2b08e), std(0xb98263), std(0x8a5a41), std(0xf0c9a6)];
-function person(parent, ci) { const g = grp(parent); const b = add(g, bodyGeo, bodyMats[ci % bodyMats.length], 0, .09, 0); const h = add(g, headGeo, headMats[ci % headMats.length], 0, .225, 0); return { g, b, h }; }
+/* little people: legs, arms, torso, head and a hairstyle or hat, animated by a walk cycle */
+const limbGeo = new THREE.CapsuleGeometry(.0135, .066, 2, 8), torsoGeo = new THREE.CapsuleGeometry(.031, .05, 4, 12), pHeadGeo = new THREE.SphereGeometry(.03, 16, 12);
+const hairGeo = new THREE.SphereGeometry(.0325, 16, 8, 0, Math.PI * 2, 0, Math.PI * .56), brimGeo = new THREE.CylinderGeometry(.052, .052, .005, 20), pomGeo = new THREE.SphereGeometry(.011, 8, 6), lantGeo = new THREE.SphereGeometry(.017, 10, 8);
+const PANTS = [0x22303a, 0x3c4350, 0x5d4b3b, 0x2d4f5e, 0x1d2328].map(c => std(c)), HAIR = [0x2a1d16, 0x5a3a22, 0xb98a4e, 0x141414, 0x9a9590].map(c => std(c)), HATS = [0xd8a23a, 0xc4553f, 0x2fa89f, 0xe9e2d3].map(c => std(c));
+function person(parent, ci, o = {}) {
+  const g = grp(parent), body = grp(g), shirt = bodyMats[ci % bodyMats.length], pants = PANTS[ci % PANTS.length], skin = headMats[(ci * 3 + 1) % headMats.length];
+  const legs = [-1, 1].map(s => { const pv = grp(body, s * .017, .097, 0); add(pv, limbGeo, pants, 0, -.046, 0); add(pv, G.box, M.dark, 0, -.091, .009, .024, .013, .04, false); return pv; });
+  add(body, torsoGeo, shirt, 0, .148, 0, 1, 1, .78); add(body, G.box, pants, 0, .104, 0, .058, .022, .044);
+  const arms = [-1, 1].map(s => { const pv = grp(body, s * .041, .186, 0); pv.rotation.z = s * .13; add(pv, limbGeo, shirt, 0, -.04, 0, .92, .9, .92); add(pv, G.sph, skin, 0, -.083, 0, .021, .021, .021, false); return pv; });
+  const head = grp(body, 0, .243, 0); add(head, pHeadGeo, skin, 0, 0, 0);
+  const st = o.hat ?? (ci * 7 + 3) % 6;
+  if (st === 4) { add(head, hairGeo, HATS[ci % 4], 0, .006, 0, 1.05, 1.05, 1.05); add(head, pomGeo, M.white, 0, .04, 0, 1, 1, 1, false); }
+  else if (st === 5) { add(head, hairGeo, HATS[(ci + 1) % 4], 0, .008, 0); add(head, brimGeo, HATS[(ci + 1) % 4], 0, .012, 0, 1, 1, 1, false); }
+  else { add(head, hairGeo, HAIR[(ci + st) % HAIR.length], 0, .004, -.003, 1, 1 + (st === 2 ? .25 : 0), 1); }
+  let lmat = null; if (o.lantern) { lmat = glowMat('#000'); add(arms[1], G.cyl8, M.dark, 0, -.1, 0, .003, .03, .003, false); add(arms[1], lantGeo, lmat, 0, -.125, 0, 1, 1.25, 1, false); }
+  return { g, body, legs, arms, head, lmat };
+}
+function animPerson(p, walking, age, dt) {
+  const ph = age * 10.5, sw = walking ? Math.sin(ph) : 0;
+  p.sw = lerp(p.sw || 0, sw, Math.min(1, dt * 12));
+  p.body.position.y = walking ? Math.abs(Math.cos(ph)) * .011 : Math.sin(age * 1.7) * .0015;
+  p.legs[0].rotation.x = p.sw * .62; p.legs[1].rotation.x = -p.sw * .62;
+  p.arms[0].rotation.x = -p.sw * .5 + (walking ? 0 : Math.sin(age * 1.3) * .05); p.arms[1].rotation.x = p.lmat ? -.55 + p.sw * .15 : p.sw * .5;
+  p.head.rotation.y = walking ? 0 : Math.sin(age * .6 + (p.ph || 0)) * .35;
+  if (p.lmat) { const k = state.night; p.lmat.color.setRGB(3.2 * k, 1.7 * k, .6 * k); }
+}
 
 /* ---------- venues ---------- */
 const venues = new Map(); const keyOf = (r, c) => r + ',' + c;
 function makeSign(v, y, z = 0, w = .92) {
-  const t = TYPES[v.type]; const pivot = grp(v.g, 0, y, z); const flip = grp(pivot);
+  const t = TYPES[v.type]; const pivot = grp(v.g, 0, y, z); pivot.userData.noPick = true; const flip = grp(pivot);
   const front = add(flip, G.plane, new THREE.MeshStandardMaterial({ map: signTex(t.daySign, false), roughness: .85, side: THREE.FrontSide }), 0, 0, .006, w, w * .28, 1, false);
   const nmat = new THREE.MeshBasicMaterial({ map: signTex(t.nightSign, true, t.glow), color: 0x000000 });
   const back = add(flip, G.plane, nmat, 0, 0, -.006, w, w * .28, 1, false); back.rotation.x = Math.PI; back.rotation.z = 0;
@@ -523,13 +553,13 @@ const BUILD = {
 function createVenue(type, r, c, instant = false) {
   const g = grp(world, cellX(c), 0, ROWZ[r]); g.rotation.y = r === 0 ? 0 : Math.PI;
   const v = { type, r, c, g, n: 0, tgt: 0, spawn: instant ? 1 : 0, dying: false, openAt: TYPES[type].open + ((r * 7 + c * 3) % 5) * .04, closeAt: 5.1 + ((r * 3 + c) % 4) * .08, tOpen: -1, ph: rnd() * 6 };
-  BUILD[type](v);
+  BUILD[type](v); g.userData.venue = v;
   const lz = .62; v.pool = pool(g, 0, lz, 2.0, TYPES[type].glow);
   v.wpos = new THREE.Vector3(); v.st = streak(v.wpos, TYPES[type].glow, 3.4, .36);
   v.g.scale.setScalar(instant ? 1 : .001);
-  venues.set(keyOf(r, c), v); refreshTicks(); return v;
+  venues.set(keyOf(r, c), v); setHitTall(r, c, true); refreshTicks(); return v;
 }
-function removeVenue(v) { v.dying = true; venues.delete(keyOf(v.r, v.c)); refreshTicks(); }
+function removeVenue(v) { v.dying = true; venues.delete(keyOf(v.r, v.c)); setHitTall(v.r, v.c, false); refreshTicks(); }
 function disposeVenue(v) { world.remove(v.g); scene.remove(v.st.m); streaks.splice(streaks.indexOf(v.st), 1); const i = pools.indexOf(v.pool); if (i >= 0) pools.splice(i, 1); for (const k of [...strings.keys()]) if (k.includes(v.id)) killString(k); const di = dying.indexOf(v); if (di >= 0) dying.splice(di, 1); }
 const dying = [];
 
@@ -552,6 +582,7 @@ function updateVenue(v, dt, t) {
   v.sign.pivot.rotation.y = Math.atan2(Math.sin(ang), Math.cos(ang)) * .85;
   const glow = e2 * fl;
   v.pool.m.material.opacity = glow * (.2 + .06 * Math.sin(t * 3 + v.ph)) * (.4 + .6 * nf);
+  if (!v.dying) { const cl = cellLights[v.r * COLS + v.c]; cl.color.set(TYPES[v.type].glow); cl.intensity = glow * (.3 + .7 * nf) * 2.6 * Math.min(1, v.spawn * 2); }
   v.wpos.copy(v.anchor); v.g.localToWorld(v.wpos); v.wpos.y = Math.min(v.wpos.y, 1.0); v.st.k = glow * .55 * (.3 + .7 * nf);
   const T_ = v.type;
   if (T_ === 'stall') {
@@ -587,7 +618,7 @@ function updateVenue(v, dt, t) {
     tmpQ.setFromUnitVectors(UPV, tmpV.normalize()); v.scopeAim.quaternion.slerpQuaternions(new THREE.Quaternion(), tmpQ, e3);
     v.beam.material.color.setRGB(.06 * e3 * nf, .22 * e3 * nf, .2 * e3 * nf);
   }
-  if (v.worker) v.worker.g.position.y = Math.abs(Math.sin(t * 2 + v.ph)) * .01;
+  if (v.worker) { v.worker.g.scale.setScalar(1.12); animPerson(v.worker, false, t + v.ph, dt); }
 }
 
 /* ---------- string lights between open neighbours ---------- */
@@ -607,7 +638,7 @@ function killString(k) { const s = strings.get(k); if (!s) return; world.remove(
 
 /* ---------- crowd ---------- */
 const guests = []; const pool_ = [];
-function spawnGuest() { let p = pool_.pop(); if (!p) { p = person(world, Math.floor(rnd() * 9)); p.ci = 0; } p.g.visible = true; p.g.position.set(-.9 - rnd() * .4, 0, (rnd() - .5) * .6); p.g.scale.setScalar(.001); p.state = 'in'; p.sp = .38 + rnd() * .2; p.lane = (rnd() - .5) * .5; p.age = 0; pickTarget(p); guests.push(p); }
+function spawnGuest() { let p = pool_.pop(); if (!p) { p = person(world, Math.floor(rnd() * 23), { lantern: rnd() < .3 }); p.ph = rnd() * 6; } p.g.visible = true; p.g.position.set(-.9 - rnd() * .4, 0, (rnd() - .5) * .6); p.g.scale.setScalar(.001); p.state = 'in'; p.sp = .38 + rnd() * .2; p.lane = (rnd() - .5) * .5; p.age = 0; pickTarget(p); guests.push(p); }
 function pickTarget(p) {
   const open = [...venues.values()].filter(v => v.n > .6 && !v.dying);
   if (!open.length) { p.state = 'out'; return; }
@@ -624,14 +655,14 @@ function updateGuests(dt, t) {
     let walking = false;
     if (gx !== undefined) { const dx = gx - p.g.position.x, dz = gz - p.g.position.z, d = Math.hypot(dx, dz); if (d > .01) { const st = Math.min(d, p.sp * dt * (state.fast ? 1.8 : 1)); p.g.position.x += dx / d * st; p.g.position.z += dz / d * st; p.g.rotation.y = Math.atan2(dx, dz); walking = true; } }
     if (p.state === 'stay' && p.v) { const fx = cellX(p.v.c) - p.g.position.x, fz = ROWZ[p.v.r] - p.g.position.z; p.g.rotation.y = Math.atan2(fx, fz); }
-    p.b.position.y = .09 + (walking ? Math.abs(Math.sin(p.age * 11)) * .025 : Math.sin(p.age * 2) * .004);
+    animPerson(p, walking, p.age, dt);
     const outK = p.state === 'out' && p.leg === 1 ? clamp((p.g.position.x + 1.6) / .6, 0, 1) : 1;
-    p.g.scale.setScalar(Math.max(.001, Math.min(1, p.age * 3) * outK));
+    p.g.scale.setScalar(Math.max(.001, Math.min(1, p.age * 3) * outK) * 1.12);
     if (p.state === 'out' && p.leg === 1 && p.g.position.x < -1.55) { p.g.visible = false; guests.splice(i, 1); pool_.push(p); }
   }
 }
 /* daytime fishers on the end of the pier */
-const fishers = []; for (let i = 0; i < 3; i++) { const p = person(world, i + 3); p.g.position.set(L - .25, 0, -1.1 + i * 1.05); p.g.rotation.y = Math.PI / 2; const rod = add(p.g, G.cyl8, M.dark, .12, .3, 0, .012, .9, .012, false); rod.rotation.z = -1.0; rod.position.set(.36, .42, 0); fishers.push(p); }
+const fishers = []; for (let i = 0; i < 3; i++) { const p = person(world, i + 3, { hat: 5 }); p.g.position.set(L - .25, 0, -1.1 + i * 1.05); p.g.rotation.y = Math.PI / 2; const rod = p.rod = add(p.g, G.cyl8, M.dark, .12, .3, 0, .012, .9, .012, false); rod.rotation.z = -1.0; rod.position.set(.36, .42, 0); fishers.push(p); }
 
 /* ---------- time of day ---------- */
 const KEYS = [[0, '#030915', '#0c1d31', '#020a12'], [4.7, '#05101f', '#11253a', '#03101a'], [5.6, '#1b3253', '#be7e6f', '#13283a'], [6.6, '#5c8cb6', '#f0c39d', '#2f6070'], [8, '#4f9cc8', '#cfe4e8', '#2c7782'], [16.5, '#4c95c2', '#e2e4d2', '#2c727e'], [18.3, '#47739f', '#f3ab78', '#255a69'], [19.2, '#253b68', '#e47958', '#183a4c'], [20, '#112244', '#3b506d', '#0a2030'], [21, '#071328', '#162e46', '#05121c'], [24, '#030915', '#0c1d31', '#020a12']].map(k => [k[0], new THREE.Color(k[1]), new THREE.Color(k[2]), new THREE.Color(k[3])]);
@@ -738,11 +769,23 @@ function setStatus() {
 
 /* ---------- picking ---------- */
 const hits = []; const hitMat = new THREE.MeshBasicMaterial({ visible: false });
-for (let r = 0; r < 2; r++) for (let c = 0; c < COLS; c++) { const m = new THREE.Mesh(G.box, hitMat); m.position.set(cellX(c), .8, ROWZ[r]); m.scale.set(1.15, 1.7, 1.15); m.userData = { r, c }; world.add(m); hits.push(m); }
+for (let r = 0; r < 2; r++) for (let c = 0; c < COLS; c++) { const m = new THREE.Mesh(G.box, hitMat); m.position.set(cellX(c), .05, ROWZ[r]); m.scale.set(1.18, .1, 1.18); m.userData = { r, c }; world.add(m); hits.push(m); }
+/* empty tiles are picked on the floor, built ones by their whole body, so a tall building never steals a click meant for the tile behind it */
+function setHitTall(r, c, tall) { const m = hits[r * COLS + c]; if (!m) return; m.scale.y = tall ? 1.6 : .1; m.position.y = tall ? .8 : .05; }
 const hl = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([[-.55, -.55], [.55, -.55], [.55, .55], [-.55, .55]].map(([x, z]) => new THREE.Vector3(x, .02, z))), new THREE.LineBasicMaterial({ color: new THREE.Color(.18 * 3, .82 * 3, .77 * 3), transparent: true }));
 hl.visible = false; world.add(hl);
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
-function pick(x, y) { ndc.set(x / innerWidth * 2 - 1, -(y / innerHeight) * 2 + 1); ray.setFromCamera(ndc, camera); const h = ray.intersectObjects(hits, false)[0]; return h ? h.object.userData : null; }
+const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), floorPt = new THREE.Vector3();
+function pick(x, y) {
+  ndc.set(x / innerWidth * 2 - 1, -(y / innerHeight) * 2 + 1); ray.setFromCamera(ndc, camera);
+  /* a building is picked by its real shape; otherwise the tile under the cursor on the deck */
+  const noPick = o => { for (; o; o = o.parent) if (o.userData.noPick) return true; return false; };
+  const hb = ray.intersectObjects([...venues.values()].map(v => v.g), true).find(h => h.object.isMesh && h.point.y < 1.0 && h.object.material.blending !== THREE.AdditiveBlending && h.object.material.opacity !== 0 && !noPick(h.object));
+  let floor = null, fd = Infinity;
+  if (ray.ray.intersectPlane(floorPlane, floorPt)) { const c = Math.floor(floorPt.x / S), z = floorPt.z; const r = z < -.6 && z > -1.8 ? 0 : z > .6 && z < 1.8 ? 1 : -1; if (c >= 0 && c < COLS && r >= 0) { floor = { r, c }; fd = floorPt.distanceTo(ray.ray.origin); } }
+  if (hb && hb.distance < fd) { let o = hb.object; while (o && !o.userData.venue) o = o.parent; if (o) return { r: o.userData.venue.r, c: o.userData.venue.c }; }
+  return floor;
+}
 function setHover(c) { const k = c ? keyOf(c.r, c.c) : null; if (k === state.hover) return; state.hover = k; if (c) { hl.position.set(cellX(c.c), 0, ROWZ[c.r]); hl.visible = true; } else hl.visible = false; setStatus(); }
 function tapCell(c) {
   const k = keyOf(c.r, c.c), v = venues.get(k);
@@ -792,6 +835,7 @@ function frame(now) {
   const dt = Math.min(.05, (now - last) / 1000); last = now; if (!state.paused) simT += dt; const t = simT; U.time.value = t;
   if (state.anim) { const a = state.anim, k = clamp((now - a.t0) / a.dur, 0, 1); setHour(lerp(a.from, a.to, eio(k))); state.fast = k < 1; if (k >= 1) { state.anim = null; state.fast = false; } }
   applyTime(); placeCamera();
+  for (const l of cellLights) l.intensity = 0;
   for (const v of venues.values()) { updateVenue(v, dt, t); if (v.id === undefined) v.id = ++vid; }
   for (const v of [...dying]) { updateVenue(v, dt, t); if (v.spawn <= 0) disposeVenue(v); }
   /* strings */
@@ -806,7 +850,7 @@ function frame(now) {
   if (living < target && state.spawnT <= 0) { spawnGuest(); state.spawnT = state.fast ? .12 : .3; }
   if (living > target) { const p = guests.find(p => p.state !== 'out'); if (p) { p.state = 'out'; p.leg = 0; } }
   updateGuests(dt, t);
-  fishers.forEach((p, i) => { const k = 1 - sm(.2, .6, state.night); p.g.scale.setScalar(Math.max(.001, k)); p.g.children[2].rotation.z = -1 + Math.sin(t * .8 + i) * .05; });
+  fishers.forEach((p, i) => { const k = 1 - sm(.2, .6, state.night); p.g.scale.setScalar(Math.max(.001, k) * 1.12); p.rod.rotation.z = -1 + Math.sin(t * .8 + i) * .05; animPerson(p, false, t + i * 2, dt); });
   /* props */
   buoys.forEach((b, i) => { b.g.position.y = -.5 + Math.sin(t * 1.1 + b.ph) * .04; b.g.rotation.z = Math.sin(t * .9 + i) * .08; const on = (Math.floor(t * 1.2 + i * .5) % 2 === 0 ? 1 : .05) * state.night; b.mat.color.copy(b.c).multiplyScalar(.35 + 2.7 * on); b.st.k = .5 * on; });
   boat.position.y = -.52 + Math.sin(t * .9) * .03; boat.rotation.z = Math.sin(t * .7) * .03; boat.rotation.x = Math.sin(t * .6 + 1) * .02; boatLamp.color.setRGB(3 * state.night, 2 * state.night, 1 * state.night); boatSt.k = .45 * state.night;
@@ -838,6 +882,7 @@ window.__lab = {
   hover: (r, c) => { state.hover = null; setHover(r == null ? null : { r, c }); },
   setView: (yaw, pitch, zoom) => { if (yaw != null) state.yaw = yaw; if (pitch != null) state.pitch = pitch; if (zoom != null) state.zoom = zoom; },
   pause: p => state.paused = p !== false, relayout: layout,
+  cellScreen: (r, c) => { const p = new THREE.Vector3(cellX(c), 0, ROWZ[r]).project(camera); return [(p.x * .5 + .5) * innerWidth, (-p.y * .5 + .5) * innerHeight]; },
   state: () => ({ h: +state.h.toFixed(2), night: +state.night.toFixed(2), crowd: state.crowd, guests: guests.length, venues: [...venues.values()].map(v => `${v.type}@${v.r},${v.c}:${v.n.toFixed(2)}`), combos: computeCrowd().list.map(x => x.c[0]), strings: strings.size }),
 };
 
