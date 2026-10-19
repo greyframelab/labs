@@ -6,6 +6,7 @@ Experiments in UI, motion and creative coding for games, apps and interfaces.
 
 | # | Lab | Category |
 |---|-----|----------|
+| 15 | [Moonlighting](lab-15-moonlighting/) | Creative Coding |
 | 14 | [Grey Area](lab-14-grey-area/) | Motion |
 | 13 | [Brand New](lab-13-brand-new/) | UI |
 | 12 | [Pin Code](lab-12-pin-code/) | Creative Coding |
