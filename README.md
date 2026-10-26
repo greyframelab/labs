@@ -6,6 +6,7 @@ Experiments in UI, motion and creative coding for games, apps and interfaces.
 
 | # | Lab | Category |
 |---|-----|----------|
+| 17 | [Feature Creep](lab-17-feature-creep/) | Motion |
 | 16 | [Noble Gas](lab-16-noble-gas/) | UI |
 | 15 | [Moonlighting](lab-15-moonlighting/) | Creative Coding |
 | 14 | [Grey Area](lab-14-grey-area/) | Motion |
