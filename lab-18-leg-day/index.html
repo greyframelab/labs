@@ -1,0 +1,665 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Lab #18 — Leg Day</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Archivo:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a full-bleed test floor seen from above (a greybox gym), the creature walks on it; a compact rig panel docks right on desktop and along the bottom on phones. Single light look by design. */
+:root{
+  --floor:#14171a; --tile:rgba(220,228,236,.045); --tile-major:rgba(220,228,236,.1);
+  --ink:#e6eaee; --bone:#cfd5db; --muted:#8a939c; --panel:rgba(26,30,35,.88); --line:rgba(220,228,236,.14); --raise:rgba(255,255,255,.04);
+  --shell:#e6eaee; --shell-2:#aeb6be; --signal:#ff5b2e; --signal-ink:#ff7a52; --shadow:rgba(0,0,0,.55); --sheet:#1b1f24;
+  --display:"Big Shoulders Display","Arial Narrow",Impact,sans-serif;
+  --body:"Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--floor);color:var(--ink);font-family:var(--body);overflow:hidden;-webkit-font-smoothing:antialiased;touch-action:none}
+canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:crosshair}
+.title{position:fixed;z-index:3;top:calc(env(safe-area-inset-top,0px) + 16px);left:max(16px,env(safe-area-inset-left,0px));pointer-events:none;display:flex;flex-direction:column;gap:6px}
+.eyebrow{font:500 11px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.eyebrow b{color:var(--signal-ink);font-weight:500}
+h1{font:800 clamp(44px,7vw,76px)/.85 var(--display);margin:0;letter-spacing:.01em;text-transform:uppercase}
+.hint{font:400 14px/1.35 var(--body);color:var(--muted);max-width:30ch;margin:4px 0 0}
+.hud{position:fixed;z-index:3;left:max(16px,env(safe-area-inset-left,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 64px);display:grid;grid-template-columns:auto auto;gap:3px 14px;font:500 11px/1.3 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);pointer-events:none;font-variant-numeric:tabular-nums}
+.hud b{color:var(--ink);font-weight:500;text-align:right}
+.hud .ok{color:var(--signal-ink)}
+
+.rig{position:fixed;z-index:4;right:max(16px,env(safe-area-inset-right,0px));top:calc(env(safe-area-inset-top,0px) + 16px);width:248px;display:flex;flex-direction:column;gap:14px;padding:16px;background:var(--panel);border:1px solid var(--line);border-radius:6px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.rig h2{font:800 22px/1 var(--display);text-transform:uppercase;letter-spacing:.03em;margin:0;display:flex;justify-content:space-between;align-items:baseline}
+.rig h2 span{font:500 10px/1 var(--mono);letter-spacing:.14em;color:var(--muted)}
+.row{display:flex;flex-direction:column;gap:7px}
+.lab{display:flex;justify-content:space-between;font:500 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.lab output{color:var(--ink);font-variant-numeric:tabular-nums}
+.stepper{display:grid;grid-template-columns:40px 1fr 40px;align-items:center;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:var(--raise)}
+.stepper button{height:36px;border:0;background:transparent;font:600 20px/1 var(--body);color:var(--ink);cursor:pointer}
+.stepper button:hover{background:rgba(255,255,255,.07)}
+.stepper button:disabled{color:rgba(230,234,238,.25);cursor:default;background:transparent}
+.stepper .v{text-align:center;font:800 22px/1 var(--display);letter-spacing:.04em;text-transform:uppercase}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:20px;background:transparent;margin:0;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:3px;background:var(--line);border-radius:2px}
+input[type=range]::-moz-range-track{height:3px;background:var(--line);border-radius:2px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;margin-top:-6.5px;border-radius:50%;background:var(--floor);border:3px solid var(--bone)}
+input[type=range]::-moz-range-thumb{width:10px;height:10px;border-radius:50%;background:var(--floor);border:3px solid var(--bone)}
+.ends{display:flex;justify-content:space-between;font:400 10px/1 var(--mono);color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.seg button{height:32px;border:0;background:var(--raise);font:500 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--floor)}
+.toggles{display:flex;gap:8px}
+.chip{flex:1;height:34px;border-radius:4px;border:1px solid var(--line);background:var(--raise);font:500 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px}
+.chip[aria-pressed=true]{border-color:var(--signal-ink);color:var(--signal-ink)}
+.chip.demo{background:var(--signal);border-color:var(--signal);color:#1c1009}
+.chip.demo[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:var(--floor)}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--signal-ink);outline-offset:2px}
+
+#infoBtn{position:fixed;z-index:5;left:max(16px,env(safe-area-inset-left,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 16px);padding:9px 14px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:500 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;cursor:pointer;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+#info{position:fixed;z-index:8;left:max(16px,env(safe-area-inset-left,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 16px);width:min(400px,calc(100% - 32px));max-height:calc(100% - 32px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));overflow:auto;padding:20px;background:var(--sheet);border:1px solid var(--line);border-radius:6px;display:flex;flex-direction:column;gap:14px;box-shadow:0 18px 40px rgba(0,0,0,.45)}
+#info h3{font:800 34px/.9 var(--display);text-transform:uppercase;margin:0}
+#info h4{font:500 11px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--signal-ink);margin:0 0 6px}
+#info p,#info li{font:400 14px/1.5 var(--body);margin:0;max-width:62ch}
+#info ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+#info .meta{font:500 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+#info .close{position:absolute;top:10px;right:10px;width:32px;height:32px;border:0;background:transparent;font:400 22px/1 var(--body);color:var(--ink);cursor:pointer}
+#allLabs{font:500 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink)}
+
+@media (max-width:720px){
+  .rig{top:auto;left:max(16px,env(safe-area-inset-left,0px));right:max(16px,env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 16px);width:auto;display:grid;grid-template-columns:1fr 1fr;gap:10px 12px;padding:12px}
+  .rig h2,.hide-sm{display:none}
+  .rig .full{grid-column:1/-1}
+  .stepper button{height:32px}
+  .hint{display:none}
+  .hud{bottom:auto;top:calc(env(safe-area-inset-top,0px) + 92px)}
+  #infoBtn{left:auto;right:max(16px,env(safe-area-inset-right,0px));bottom:auto;top:calc(env(safe-area-inset-top,0px) + 16px)}
+}
+.rec .rig,.rec #infoBtn,.rec .hint{display:none!important}
+.rec .hud{top:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 22px)}
+</style>
+
+<canvas id="c" aria-label="A procedurally animated creature walking on a test floor"></canvas>
+
+<div class="title">
+  <div class="eyebrow"><b>Greyframe Labs</b> · #18<span class="hide-sm"> · Creative Coding</span></div>
+  <h1>Leg Day</h1>
+  <p class="hint">Point and it walks there. Add legs, stretch the bones, change the weight: it works out the gait by itself.</p>
+</div>
+
+<div class="hud" aria-live="off">
+  <span>Legs</span><b id="hLegs">6</b>
+  <span>Planted</span><b id="hPlanted">6/6</b>
+  <span>Stride</span><b id="hStride">0 cm</b>
+  <span>Cadence</span><b id="hCad">0.0 /s</b>
+  <span>Foot slip</span><b id="hSlip" class="ok">0.0 mm</b>
+</div>
+
+<section class="rig" aria-label="Rig">
+  <h2>Rig <span>Edit live</span></h2>
+  <div class="row full">
+    <div class="lab"><span>Leg pairs</span></div>
+    <div class="stepper">
+      <button id="minus" type="button" aria-label="Remove a pair of legs">−</button>
+      <div class="v" id="pairsV">3 pairs</div>
+      <button id="plus" type="button" aria-label="Add a pair of legs">+</button>
+    </div>
+  </div>
+  <div class="row">
+    <div class="lab"><label for="bone">Bone</label><output id="boneV" for="bone">25 cm</output></div>
+    <input id="bone" type="range" min="32" max="80" value="50">
+  </div>
+  <div class="row">
+    <div class="lab"><label for="weight">Weight</label><output id="weightV" for="weight">Mid</output></div>
+    <input id="weight" type="range" min="0" max="100" value="45">
+    <div class="ends hide-sm"><span>Skitter</span><span>Lumber</span></div>
+  </div>
+  <div class="row full">
+    <div class="lab hide-sm"><span>Gait</span></div>
+    <div class="seg" role="group" aria-label="Gait">
+      <button type="button" data-gait="walk" aria-pressed="true">Walk</button>
+      <button type="button" data-gait="wave" aria-pressed="false">Wave</button>
+      <button type="button" data-gait="trot" aria-pressed="false">Trot</button>
+    </div>
+  </div>
+  <div class="toggles full">
+    <button id="ghosts" class="chip" type="button" aria-pressed="false">Ghosts</button>
+    <button id="demo" class="chip demo" type="button" aria-pressed="false">Play demo</button>
+  </div>
+</section>
+
+<button id="infoBtn" type="button" aria-expanded="false" aria-controls="info">About this lab</button>
+<aside id="info" hidden aria-label="About this lab">
+  <button class="close" type="button" aria-label="Close">×</button>
+  <div class="meta">Lab #18 · Creative Coding · 27 Oct 2026</div>
+  <h3>Leg Day</h3>
+  <div><h4>Idea</h4><p>What if you could build a creature and it learned to walk on the spot? Add legs, stretch the bones, shift the weight, and the gait works itself out. Nothing is keyframed: every step is decided live.</p></div>
+  <div><h4>Controls</h4><ul>
+    <li>Move the pointer, or tap and drag, to set where it walks.</li>
+    <li>Use the rig panel to add or remove leg pairs, change bone length and weight.</li>
+    <li>Walk, Wave and Trot change which feet may lift at the same time.</li>
+    <li>Ghosts leaves a trail of past poses. Play demo runs a short choreography.</li>
+  </ul></div>
+  <div><h4>How it works</h4><p>Each leg is a two-bone chain solved with inverse kinematics. A foot stays locked to the floor until it drifts too far from where the hip wants it, then it lifts, arcs to a predicted landing spot and plants. The gait is only a rule about which neighbours can be in the air together. The slip readout stays at zero because a planted foot never moves.</p></div>
+  <div><h4>Inspired by</h4><ul>
+    <li>A procedural creature Reel by @rybinfx on Instagram.</li>
+    <li>Rain World's procedurally animated creatures.</li>
+    <li>Spore's creature editor, where any body you build can walk.</li>
+  </ul></div>
+  <div><h4>For game UI</h4><p>Character and mount editors feel alive when every change shows up in motion straight away. Let players see how a choice changes the way something moves, not just how it looks, and give them a readout that proves it (here, foot slip).</p></div>
+  <a id="allLabs" href="https://claude.ai/artifact/CDYy2LnuZN3Tdb1A9BSHrG" target="_blank" rel="noopener">← All labs</a>
+  <script>if (/github\.io$/.test(location.hostname)) { const a = document.getElementById('allLabs'); a.href = '../'; a.removeAttribute('target'); }</script>
+</aside>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const cv = $('c'), ctx = cv.getContext('2d');
+  const css = getComputedStyle(document.documentElement);
+  const T = n => css.getPropertyValue(n).trim();
+  const COL = { tile: T('--tile'), major: T('--tile-major'), bone: T('--bone'), ink: T('--ink'), shell: T('--shell'), shell2: T('--shell-2'), signal: T('--signal'), signalInk: T('--signal-ink'), shadow: T('--shadow'), floor: T('--floor'), muted: T('--muted') };
+  const mq = matchMedia('(prefers-reduced-motion: reduce)');
+  let RM = mq.matches; mq.addEventListener?.('change', e => RM = e.matches);
+  const REC = /[?&]rec/.test(location.search) || location.hash === '#rec';
+  if (REC) document.documentElement.classList.add('rec');
+
+  // ---------- math ----------
+  const V = (x = 0, y = 0) => ({ x, y });
+  const add = (a, b) => V(a.x + b.x, a.y + b.y), sub = (a, b) => V(a.x - b.x, a.y - b.y);
+  const mul = (a, s) => V(a.x * s, a.y * s), len = a => Math.hypot(a.x, a.y);
+  const norm = a => { const l = len(a) || 1; return V(a.x / l, a.y / l); };
+  const rot = (a, t) => V(a.x * Math.cos(t) - a.y * Math.sin(t), a.x * Math.sin(t) + a.y * Math.cos(t));
+  const lerp = (a, b, t) => a + (b - a) * t, lerpV = (a, b, t) => V(lerp(a.x, b.x, t), lerp(a.y, b.y, t));
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  const back = t => { const c = 1.9; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
+  const angLerp = (a, b, t) => { let d = ((b - a + Math.PI * 3) % (Math.PI * 2)) - Math.PI; return a + d * t; };
+
+  // ---------- params ----------
+  const P = { pairs: 3, L: 50, w: .45, gait: 'walk', ghosts: false };
+  const PX_CM = .5; // 1 px of floor = 0.5 cm
+
+  // ---------- creature ----------
+  const C = { segs: [], legs: [], vel: V(), head: 0, spacing: 40, halfW: 13, bob: 0, bobV: 0, speedBoost: 1 };
+  function femur() { return P.L; }
+  function tibia() { return P.L * 1.18; }
+  function reach() { return (femur() + tibia()); }
+
+  function makeLeg(seg, side, grow = 1) {
+    const l = { seg, side, foot: V(), planted: true, t: 0, dur: .2, from: V(), to: V(), lift: 0, grow, needT: 0 };
+    l.foot = restTarget(l, false);
+    return l;
+  }
+  function init(pos) {
+    C.segs = []; C.legs = [];
+    for (let i = 0; i < P.pairs; i++) C.segs.push({ p: V(pos.x - i * 40, pos.y), a: 0, scale: 1, dying: false });
+    for (let i = 0; i < P.pairs; i++) for (const s of [-1, 1]) C.legs.push(makeLeg(i, s));
+  }
+  function segNormal(seg) { const a = C.segs[seg].a; return V(-Math.sin(a), Math.cos(a)); }
+  function hip(l) { const s = C.segs[l.seg]; return add(s.p, mul(segNormal(l.seg), l.side * C.halfW * s.scale)); }
+  function restTarget(l, predict = true) {
+    const n = C.segs.length, s = C.segs[l.seg];
+    const t = n > 1 ? l.seg / (n - 1) : .5;
+    const bias = lerp(.55, -.45, t);
+    const dir = rot(mul(segNormal(l.seg), l.side), -l.side * bias);
+    let r = add(hip(l), mul(dir, reach() * .66 * l.grow));
+    if (predict) r = add(r, mul(C.vel, l.dur * .55));
+    return r;
+  }
+
+  // ---------- gait ----------
+  function stepping(l) { return !l.planted; }
+  function legAt(seg, side) { return C.legs.find(l => l.seg === seg && l.side === side && !C.segs[seg].dying); }
+  let trotGroup = 0;
+  const waveTok = { '-1': 0, '1': 0 };
+  function gaitAllows(l) {
+    if (P.gait === 'walk') {
+      const nb = [legAt(l.seg, -l.side), legAt(l.seg - 1, l.side), legAt(l.seg + 1, l.side)];
+      return !nb.some(x => x && stepping(x));
+    }
+    if (P.gait === 'trot') return ((l.seg + (l.side > 0 ? 1 : 0)) % 2) === trotGroup;
+    // wave: one leg per side, rear to front
+    const n = C.segs.length;
+    const tok = waveTok[l.side] % n;
+    if (C.legs.some(x => x.side === l.side && stepping(x))) return false;
+    if (C.legs.some(x => x.seg === l.seg && x.side === -l.side && stepping(x))) return false;
+    return l.seg === (n - 1 - tok);
+  }
+
+  // ---------- fx state ----------
+  let prints = [], dust = [], ghosts = [], landings = [], strides = [];
+  let slipMax = 0;
+
+  function land(l) {
+    l.planted = true; l.lift = 0; l.anchor = V(l.foot.x, l.foot.y);
+    const s = C.segs[l.seg];
+    prints.push({ p: V(l.foot.x, l.foot.y), a: s.a, t: 0 });
+    if (prints.length > 260) prints.shift();
+    if (!RM) dust.push({ p: V(l.foot.x, l.foot.y), t: 0, r: 4 + P.w * 6 });
+    C.bobV -= (1.4 + P.w * 3.2) * l.grow;
+    landings.push(now);
+    strides.push(len(sub(l.to, l.from)));
+    if (strides.length > 24) strides.shift();
+    if (P.gait === 'wave') waveTok[l.side] = (waveTok[l.side] + 1) % C.segs.length;
+  }
+
+  // ---------- input ----------
+  let target = V(), pointerOn = false, lastInput = -10, autopilot = true;
+  let camera = { p: V(), z: 1, zt: 1, focus: null, shake: 0 };
+  function toWorld(sx, sy) { return V((sx - innerWidth / 2) / camera.z + camera.p.x, (sy - innerHeight / 2) / camera.z + camera.p.y); }
+  cv.addEventListener('pointermove', e => {
+    if (demo.on) return;
+    if (e.pointerType === 'mouse' || e.buttons) { target = toWorld(e.clientX, e.clientY); pointerOn = true; lastInput = now; autopilot = false; }
+  });
+  cv.addEventListener('pointerdown', e => { if (demo.on) stopDemo(); target = toWorld(e.clientX, e.clientY); pointerOn = true; lastInput = now; autopilot = false; cv.setPointerCapture?.(e.pointerId); });
+  cv.addEventListener('pointerleave', () => { pointerOn = false; });
+
+  // ---------- rig UI ----------
+  function syncUI() {
+    $('pairsV').textContent = P.pairs + (P.pairs === 1 ? ' pair' : ' pairs');
+    $('minus').disabled = P.pairs <= 1; $('plus').disabled = P.pairs >= 5;
+    $('boneV').textContent = Math.round(P.L * PX_CM) + ' cm';
+    $('weightV').textContent = P.w < .3 ? 'Light' : P.w > .7 ? 'Heavy' : 'Mid';
+    document.querySelectorAll('[data-gait]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.gait === P.gait)));
+    $('ghosts').setAttribute('aria-pressed', String(P.ghosts));
+  }
+  function addPair() {
+    if (P.pairs >= 5) return;
+    const last = C.segs[C.segs.length - 1];
+    const dir = V(Math.cos(last.a), Math.sin(last.a));
+    C.segs.push({ p: sub(last.p, mul(dir, C.spacing)), a: last.a, scale: 0, dying: false });
+    const i = C.segs.length - 1;
+    for (const s of [-1, 1]) { const l = makeLeg(i, s, 0); C.legs.push(l); }
+    P.pairs++; syncUI();
+  }
+  function removePair() {
+    if (P.pairs <= 1) return;
+    const i = C.segs.length - 1; C.segs[i].dying = true; P.pairs--; syncUI();
+  }
+  $('plus').onclick = addPair; $('minus').onclick = removePair;
+  $('bone').oninput = e => { P.L = +e.target.value; syncUI(); };
+  $('weight').oninput = e => { P.w = e.target.value / 100; syncUI(); };
+  document.querySelectorAll('[data-gait]').forEach(b => b.onclick = () => { P.gait = b.dataset.gait; syncUI(); });
+  $('ghosts').onclick = () => { P.ghosts = !P.ghosts; ghosts = []; syncUI(); };
+  $('demo').onclick = () => demo.on ? stopDemo() : startDemo();
+  addEventListener('keydown', e => {
+    if (e.target.closest('input')) return;
+    if (e.key === '+' || e.key === '=') addPair();
+    if (e.key === '-') removePair();
+    if (e.key === 'g') $('ghosts').click();
+  });
+
+  // ---------- demo choreography ----------
+  const demo = { on: false, t: 0, origin: V(), saved: null, ev: 0 };
+  // times in seconds; targets relative to origin (head start), facing +x
+  const SCRIPT = [
+    { t: 0.0, act: () => { camera.zt = Z(1.55); C.speedBoost = .8; tgt(0, 0); } },
+    { t: 1.4, act: () => { camera.zt = Z(1.05); tgt(260, -140); } },
+    { t: 3.0, act: () => tgt(520, 60) },
+    { t: 4.5, act: () => tgt(360, 260) },                         // swing back: hard turn
+    { t: 5.6, act: () => { C.speedBoost = 1.55; tgt(-260, 200); } }, // sprint
+    { t: 7.6, act: () => { C.speedBoost = .9; stopHere(); camera.zt = Z(2.3); camera.focus = 'foot'; } }, // dead stop + close-up
+    { t: 9.3, act: () => { P.ghosts = true; syncUI(); } },
+    { t: 9.8, act: () => { addPair(); } },
+    { t: 10.6, act: () => { camera.zt = Z(1.15); camera.focus = null; C.speedBoost = 1.1; tgt(-40, -220); } },
+    { t: 12.2, act: () => tgt(240, -160) },
+    { t: 13.6, act: () => { C.speedBoost = .8; tgt(330, -40); camera.zt = Z(1.0); } },
+    { t: 15.2, act: () => stopDemo() },
+  ];
+  function Z(k) { return k * baseZoom() / 1.05 * (REC ? 1.75 : 1); }
+  function tgt(x, y) { target = add(demo.origin, V(x, y)); }
+  function stopHere() { const h = C.segs[0].p; target = add(h, mul(norm(C.vel), 18)); }
+  function startDemo() {
+    demo.saved = { ...P };
+    P.pairs = 3; P.L = 50; P.w = .45; P.gait = 'walk'; P.ghosts = false;
+    $('bone').value = 50; $('weight').value = 45;
+    const start = V(camera.p.x - 200, camera.p.y + 40);
+    C.vel = V(); init(start); C.segs.forEach((s, i) => { s.p = V(start.x - i * C.spacing, start.y); s.a = 0; });
+    C.legs.forEach(l => { l.foot = restTarget(l, false); });
+    demo.origin = start; demo.on = true; demo.t = 0; demo.ev = 0; autopilot = false; ghosts = [];
+    camera.p = V(start.x + 60, start.y); camera.z = Z(1.6);
+    $('demo').setAttribute('aria-pressed', 'true'); $('demo').textContent = 'Stop demo';
+    syncUI();
+  }
+  function stopDemo() {
+    demo.on = false; camera.zt = baseZoom(); camera.focus = null; C.speedBoost = 1;
+    if (demo.saved) { P.L = demo.saved.L; P.w = demo.saved.w; P.gait = demo.saved.gait; P.ghosts = demo.saved.ghosts; $('bone').value = P.L; $('weight').value = Math.round(P.w * 100); }
+    $('demo').setAttribute('aria-pressed', 'false'); $('demo').textContent = 'Play demo';
+    lastInput = now; autopilot = false; syncUI();
+    if (REC) { demo.ended = true; }
+  }
+
+  // ---------- autopilot ----------
+  let wanderA = 0;
+  function autopilotTarget(dt) {
+    wanderA += dt * .35;
+    const r = Math.min(innerWidth, innerHeight) / camera.z * .28;
+    const c = V(Math.sin(wanderA * .7) * r * 1.6, Math.sin(wanderA * 1.3) * r);
+    return c;
+  }
+
+  // ---------- sizing ----------
+  let dpr = 1;
+  function baseZoom() { return clamp(Math.min(innerWidth, innerHeight) / 760, .62, 1.25); }
+  function resize() {
+    dpr = Math.min(2, devicePixelRatio || 1);
+    cv.width = Math.round(innerWidth * dpr); cv.height = Math.round(innerHeight * dpr);
+    if (!demo.on) camera.zt = baseZoom();
+  }
+  addEventListener('resize', resize);
+
+  // ---------- update ----------
+  let now = 0, last = performance.now(), ghostT = 0;
+  function update(dt) {
+    now += dt;
+    if (demo.on) {
+      demo.t += dt;
+      while (demo.ev < SCRIPT.length && demo.t >= SCRIPT[demo.ev].t) SCRIPT[demo.ev++].act();
+    } else {
+      if (!pointerOn && now - lastInput > 3) autopilot = true;
+      if (autopilot) target = autopilotTarget(dt);
+    }
+
+    // body proportions follow params smoothly
+    C.spacing = lerp(C.spacing, 30 + P.w * 16 + P.L * .12, dt * 4);
+    C.halfW = lerp(C.halfW, 9 + P.w * 10, dt * 4);
+
+    // remove dead tail segments when shrunk
+    for (let i = C.segs.length - 1; i >= 0; i--) {
+      const s = C.segs[i];
+      if (s.dying) { s.scale -= dt * 3.2; if (s.scale <= 0) { C.segs.splice(i, 1); C.legs = C.legs.filter(l => l.seg !== i); } }
+      else if (s.scale < 1) s.scale = Math.min(1, s.scale + dt * 2.2);
+    }
+    for (const l of C.legs) { if (!C.segs[l.seg]?.dying && l.grow < 1) l.grow = Math.min(1, l.grow + dt * 1.8); if (C.segs[l.seg]?.dying) l.grow = Math.max(0, C.segs[l.seg].scale); }
+
+    // head steering (arrive)
+    const head = C.segs[0];
+    const maxSp = (210 - P.w * 110) * Math.sqrt(P.L / 50) * C.speedBoost;
+    const toT = sub(target, head.p), dist = len(toT);
+    const desired = dist > 6 ? mul(norm(toT), maxSp * clamp(dist / 140, 0, 1)) : V();
+    const accel = (520 - P.w * 260) * C.speedBoost;
+    const dv = sub(desired, C.vel), dvl = len(dv);
+    C.vel = add(C.vel, dvl > accel * dt ? mul(dv, accel * dt / dvl) : dv);
+    head.p = add(head.p, mul(C.vel, dt));
+    const sp = len(C.vel);
+    if (sp > 4) head.a = angLerp(head.a, Math.atan2(C.vel.y, C.vel.x), clamp(dt * (3 + sp / 60), 0, 1));
+    for (let i = 1; i < C.segs.length; i++) {
+      const a = C.segs[i - 1], b = C.segs[i];
+      const d = sub(a.p, b.p), dl = len(d) || 1;
+      const want = C.spacing * (b.scale * .8 + .2);
+      b.p = sub(a.p, mul(d, want / dl));
+      b.a = angLerp(b.a, Math.atan2(d.y, d.x), clamp(dt * 12, 0, 1));
+    }
+
+    // legs
+    const speedK = clamp(sp / maxSp, 0, 1);
+    const baseDur = (.15 + P.w * .17) * Math.sqrt(P.L / 50);
+    if (P.gait === 'trot') {
+      const g = C.legs.filter(l => ((l.seg + (l.side > 0 ? 1 : 0)) % 2) === trotGroup);
+      if (g.every(l => l.planted) && C.legs.some(l => ((l.seg + (l.side > 0 ? 1 : 0)) % 2) !== trotGroup && l.needT > 0)) trotGroup ^= 1;
+    }
+    let planted = 0, lifted = 0;
+    for (const l of C.legs) {
+      l.dur = baseDur * lerp(1.15, .72, speedK);
+      if (l.planted) {
+        const rt = restTarget(l);
+        const d = len(sub(l.foot, rt));
+        const hd = len(sub(l.foot, hip(l)));
+        const thresh = reach() * lerp(.58, .4, P.w) * l.grow + 2;
+        const settle = sp < 12 && d > reach() * .16;
+        l.needT = (d > thresh || settle) ? l.needT + dt : 0;
+        const force = hd > reach() * .97;
+        if ((l.needT > (settle && d < thresh ? .12 : 0) && gaitAllows(l)) || force) {
+          l.planted = false; l.t = 0; l.from = V(l.foot.x, l.foot.y);
+          l.to = add(restTarget(l), mul(C.vel, l.dur * .45));
+          const r = sub(l.to, hip(l)), rl = len(r);
+          if (rl > reach() * .92) l.to = add(hip(l), mul(r, reach() * .92 / rl));
+        } else { planted++; if (l.anchor) slipMax = Math.max(slipMax, len(sub(l.foot, l.anchor)) * PX_CM * 10); }
+      }
+      if (!l.planted) {
+        lifted++;
+        l.t += dt / l.dur;
+        // retarget toward the moving rest point while in the air
+        const goal = add(restTarget(l), mul(C.vel, l.dur * .45 * (1 - l.t)));
+        l.to = lerpV(l.to, goal, clamp(dt * 6, 0, 1));
+        const k = ease(clamp(l.t, 0, 1));
+        l.foot = lerpV(l.from, l.to, k);
+        l.lift = Math.sin(Math.PI * clamp(l.t, 0, 1)) * (7 + P.L * .2) * (.65 + P.w * .45) * l.grow;
+        if (l.t >= 1) { l.foot = V(l.to.x, l.to.y); land(l); }
+      }
+    }
+
+    // body bob spring
+    const kS = 120, cS = 11;
+    C.bobV += (-kS * C.bob - cS * C.bobV) * dt; C.bob += C.bobV * dt;
+
+    // fx
+    for (const p of prints) p.t += dt;
+    prints = prints.filter(p => p.t < 9);
+    for (const d of dust) d.t += dt; dust = dust.filter(d => d.t < .5);
+    landings = landings.filter(t => now - t < 2);
+
+    if (P.ghosts && !RM) {
+      ghostT += dt;
+      if (ghostT > .07) { ghostT = 0; ghosts.push(snapshot()); if (ghosts.length > 14) ghosts.shift(); }
+    } else ghosts = [];
+
+    // camera
+    const mid = C.segs[Math.floor((C.segs.length - 1) / 2)].p;
+    let focus = add(mid, mul(C.vel, .25));
+    if (camera.focus === 'foot') {
+      const f = C.legs.find(l => l.seg === 0 && l.side === -1);
+      if (f) focus = lerpV(mid, f.foot, .55);
+    }
+    const cz = RM ? baseZoom() : camera.zt;
+    camera.z = lerp(camera.z, cz, clamp(dt * 2.2, 0, 1));
+    camera.p = lerpV(camera.p, focus, clamp(dt * (demo.on ? 2.6 : 1.8), 0, 1));
+
+    // HUD (throttled)
+    hudT -= dt;
+    if (hudT <= 0) {
+      hudT = .2;
+      const total = C.legs.filter(l => !C.segs[l.seg]?.dying).length;
+      $('hLegs').textContent = total;
+      $('hPlanted').textContent = Math.min(planted, total) + '/' + total;
+      const st = strides.length ? strides.reduce((a, b) => a + b, 0) / strides.length : 0;
+      $('hStride').textContent = Math.round(st * PX_CM) + ' cm';
+      $('hCad').textContent = (landings.length / 2).toFixed(1) + ' /s';
+      $('hSlip').textContent = slipMax.toFixed(1) + ' mm';
+    }
+  }
+  let hudT = 0;
+
+  function snapshot() {
+    return {
+      segs: C.segs.map(s => ({ p: V(s.p.x, s.p.y), a: s.a, s: s.scale })),
+      legs: C.legs.map(l => { const g = legGeo(l); return [g.h, g.k, g.f]; })
+    };
+  }
+
+  // ---------- leg geometry (2-bone IK) ----------
+  function legGeo(l) {
+    const H = hip(l), F = l.foot;
+    const L1 = femur() * l.grow, L2 = tibia() * l.grow;
+    let d = sub(F, H), dl = len(d);
+    const maxR = L1 + L2 - .01;
+    let f = F;
+    if (dl > maxR) { f = add(H, mul(d, maxR / dl)); dl = maxR; d = sub(f, H); }
+    dl = Math.max(dl, Math.abs(L1 - L2) + 1);
+    const a = Math.acos(clamp((L1 * L1 + dl * dl - L2 * L2) / (2 * L1 * dl), -1, 1));
+    const base = Math.atan2(d.y, d.x);
+    const out = mul(segNormal(l.seg), l.side);
+    const k1 = add(H, V(Math.cos(base + a) * L1, Math.sin(base + a) * L1));
+    const k2 = add(H, V(Math.cos(base - a) * L1, Math.sin(base - a) * L1));
+    const k = (k1.x - H.x) * out.x + (k1.y - H.y) * out.y > (k2.x - H.x) * out.x + (k2.y - H.y) * out.y ? k1 : k2;
+    return { h: H, k, f };
+  }
+
+  // ---------- draw ----------
+  const LIGHT = norm(V(.55, .85));
+  function bodyH() { return 10 + P.L * .12 + C.bob; }
+  function kneeH(l) { return bodyH() + 10 + P.L * .32 * l.grow; }
+
+  function drawFloor(W, H) {
+    ctx.fillStyle = COL.floor; ctx.fillRect(0, 0, W, H);
+    const step = 40, z = camera.z;
+    const tl = toWorld(0, 0), br = toWorld(W / dpr, H / dpr);
+    ctx.lineWidth = 1;
+    for (let gx = Math.floor(tl.x / step) * step; gx <= br.x; gx += step) {
+      const major = Math.round(gx / step) % 5 === 0;
+      ctx.strokeStyle = major ? COL.major : COL.tile;
+      const sx = ((gx - camera.p.x) * z + W / dpr / 2) * dpr;
+      ctx.beginPath(); ctx.moveTo(Math.round(sx) + .5, 0); ctx.lineTo(Math.round(sx) + .5, H); ctx.stroke();
+    }
+    for (let gy = Math.floor(tl.y / step) * step; gy <= br.y; gy += step) {
+      const major = Math.round(gy / step) % 5 === 0;
+      ctx.strokeStyle = major ? COL.major : COL.tile;
+      const sy = ((gy - camera.p.y) * z + H / dpr / 2) * dpr;
+      ctx.beginPath(); ctx.moveTo(0, Math.round(sy) + .5); ctx.lineTo(W, Math.round(sy) + .5); ctx.stroke();
+    }
+    // metre labels on major lines
+    ctx.fillStyle = COL.muted; ctx.globalAlpha = .55;
+    ctx.font = `${10 * dpr}px "IBM Plex Mono", monospace`;
+    const mstep = step * 5;
+    for (let gx = Math.floor(tl.x / mstep) * mstep; gx <= br.x; gx += mstep)
+      for (let gy = Math.floor(tl.y / mstep) * mstep; gy <= br.y; gy += mstep) {
+        const sx = ((gx - camera.p.x) * z + W / dpr / 2) * dpr, sy = ((gy - camera.p.y) * z + H / dpr / 2) * dpr;
+        ctx.fillText(`${(gx * PX_CM / 100).toFixed(0)},${(gy * PX_CM / 100).toFixed(0)} m`, sx + 5 * dpr, sy + 13 * dpr);
+      }
+    ctx.globalAlpha = 1;
+  }
+
+  function capsule(p, a, hl, hw) {
+    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(a);
+    ctx.beginPath(); ctx.roundRect(-hl, -hw, hl * 2, hw * 2, Math.min(hw, hl)); ctx.restore();
+  }
+
+  function drawCreatureShape(offFn, shadow) {
+    // legs
+    for (const l of C.legs) {
+      if (l.grow <= .01) continue;
+      const g = legGeo(l);
+      const h = offFn(g.h, bodyH()), k = offFn(g.k, kneeH(l)), f = offFn(g.f, l.lift);
+      const w = (6 + P.w * 3) * l.grow;
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.strokeStyle = shadow ? COL.shadow : COL.bone;
+      ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(h.x, h.y); ctx.lineTo(k.x, k.y); ctx.stroke();
+      ctx.lineWidth = w * .72; ctx.beginPath(); ctx.moveTo(k.x, k.y); ctx.lineTo(f.x, f.y); ctx.stroke();
+      if (!shadow) {
+        // knee + foot
+        ctx.fillStyle = COL.floor; ctx.beginPath(); ctx.arc(k.x, k.y, w * .55, 0, 7); ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = COL.bone; ctx.stroke();
+        const fr = (w * .55 + 1.5) * (1 + l.lift * .025);
+        ctx.fillStyle = l.planted ? COL.bone : COL.signal;
+        ctx.beginPath(); ctx.arc(f.x, f.y, fr, 0, 7); ctx.fill();
+      } else {
+        ctx.fillStyle = COL.shadow; ctx.beginPath(); ctx.arc(f.x, f.y, w * .6, 0, 7); ctx.fill();
+      }
+    }
+    // body segments, tail first
+    for (let i = C.segs.length - 1; i >= 0; i--) {
+      const s = C.segs[i]; if (s.scale <= .01) continue;
+      const p = offFn(s.p, bodyH());
+      const hl = (C.spacing * .62) * s.scale, hw = (C.halfW + 3) * s.scale;
+      capsule(p, s.a, hl, hw);
+      ctx.fillStyle = shadow ? COL.shadow : COL.shell; ctx.fill();
+      if (!shadow) {
+        capsule(p, s.a, hl - 3.5 * s.scale, hw - 3.5 * s.scale);
+        ctx.fillStyle = COL.shell2; ctx.fill();
+        // spine tick + hip sockets
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(s.a);
+        ctx.fillStyle = COL.floor; ctx.globalAlpha = .45;
+        ctx.fillRect(-hl * .45, -1, hl * .9, 2);
+        ctx.globalAlpha = 1;
+        if (i === 0) { // sensor eyes
+          ctx.fillStyle = COL.signal;
+          ctx.beginPath(); ctx.arc(hl * .55, -hw * .42, 2.6 * s.scale, 0, 7); ctx.arc(hl * .55, hw * .42, 2.6 * s.scale, 0, 7); ctx.fill();
+        }
+        ctx.restore();
+        for (const side of [-1, 1]) {
+          const hp = offFn(add(s.p, mul(segNormal(i), side * C.halfW * s.scale)), bodyH());
+          ctx.fillStyle = COL.signal; ctx.beginPath(); ctx.arc(hp.x, hp.y, 3.2 * s.scale, 0, 7); ctx.fill();
+        }
+      }
+    }
+  }
+
+  function drawGhosts() {
+    ctx.lineCap = 'round';
+    ghosts.forEach((g, gi) => {
+      const a = (gi + 1) / ghosts.length * .32;
+      ctx.strokeStyle = COL.signalInk; ctx.globalAlpha = a; ctx.lineWidth = 1.2;
+      for (const [h, k, f] of g.legs) { ctx.beginPath(); ctx.moveTo(h.x, h.y); ctx.lineTo(k.x, k.y); ctx.lineTo(f.x, f.y); ctx.stroke(); }
+      for (const s of g.segs) { capsule(s.p, s.a, C.spacing * .62 * s.s, (C.halfW + 3) * s.s); ctx.stroke(); }
+    });
+    ctx.globalAlpha = 1;
+  }
+
+  function draw() {
+    const W = cv.width, H = cv.height;
+    drawFloor(W, H);
+    ctx.save();
+    ctx.setTransform(dpr * camera.z, 0, 0, dpr * camera.z, dpr * (innerWidth / 2 - camera.p.x * camera.z), dpr * (innerHeight / 2 - camera.p.y * camera.z));
+
+    // footprints
+    for (const p of prints) {
+      const a = Math.max(0, 1 - p.t / 9) * .16;
+      ctx.fillStyle = COL.ink; ctx.globalAlpha = a;
+      ctx.save(); ctx.translate(p.p.x, p.p.y); ctx.rotate(p.a); ctx.beginPath(); ctx.ellipse(0, 0, 4.2, 2.6, 0, 0, 7); ctx.fill(); ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+    // dust
+    for (const d of dust) {
+      const k = d.t / .5;
+      ctx.strokeStyle = COL.ink; ctx.globalAlpha = (1 - k) * .35; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(d.p.x, d.p.y, d.r + k * (10 + P.w * 12), 0, 7); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // target marker
+    if (!autopilot || demo.on) {
+      const pulse = (now * 1.4) % 1;
+      ctx.strokeStyle = COL.signalInk; ctx.lineWidth = 1.5 / camera.z;
+      ctx.globalAlpha = .9;
+      ctx.beginPath(); ctx.moveTo(target.x - 8, target.y); ctx.lineTo(target.x + 8, target.y); ctx.moveTo(target.x, target.y - 8); ctx.lineTo(target.x, target.y + 8); ctx.stroke();
+      if (!RM) { ctx.globalAlpha = (1 - pulse) * .6; ctx.beginPath(); ctx.arc(target.x, target.y, 6 + pulse * 16, 0, 7); ctx.stroke(); }
+      ctx.globalAlpha = 1;
+    }
+
+    if (ghosts.length) drawGhosts();
+    // shadow pass then body pass
+    const sh = (p, h) => add(p, mul(LIGHT, h * .9));
+    drawCreatureShape(sh, true);
+    drawCreatureShape(p => p, false);
+    ctx.restore();
+  }
+
+  function frame(t) {
+    let dt = Math.min(.033, (t - last) / 1000); last = t;
+    update(dt); draw();
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- info sheet ----------
+  const info = $('info'), btn = $('infoBtn');
+  const openInfo = o => { info.hidden = !o; btn.setAttribute('aria-expanded', String(o)); if (o) info.querySelector('.close').focus(); };
+  btn.onclick = () => openInfo(info.hidden);
+  info.querySelector('.close').onclick = () => { openInfo(false); btn.focus(); };
+  addEventListener('keydown', e => { if (e.key === 'Escape' && !info.hidden) { openInfo(false); btn.focus(); } });
+
+  // ---------- boot ----------
+  resize(); camera.z = baseZoom();
+  init(V(0, 0));
+  target = autopilotTarget(0);
+  syncUI();
+  window.__leg = { startDemo, demo, C, P };
+  const FRAMES = /[?&]frames/.test(location.search);
+  if (FRAMES) { startDemo(); window.__tick = () => { update(1 / 60); update(1 / 60); draw(); return demo.on; }; }
+  else { if (REC) setTimeout(startDemo, 300); requestAnimationFrame(t => { last = t; frame(t); }); }
+})();
+</script>
