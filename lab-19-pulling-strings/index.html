@@ -1,0 +1,692 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Lab #19 — Pulling Strings</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pirata+One&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a one-screen puppet theatre. Velvet frame, painted backdrop, a skeleton marionette hanging from a wooden control, pumpkins as footlights. Dark by design. */
+:root{
+  --night:#100b16;       /* house darkness */
+  --velvet:#4b1431;      /* curtain */
+  --bone:#efe5cf;        /* bones, primary text */
+  --pumpkin:#ff8a24;     /* footlight */
+  --spectre:#8ff0cf;     /* danse macabre light */
+  --muted:#b7a6b3;       /* secondary text */
+  --line:rgba(239,229,207,.16);
+  --panel:rgba(22,14,26,.86);
+  --display:"Pirata One","UnifrakturCook",Georgia,serif;
+  --body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--night);color:var(--bone);font-family:var(--body);font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;overflow:hidden;overscroll-behavior:none}
+#app{position:relative;height:100%;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;cursor:default}
+#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+
+.top{position:absolute;z-index:3;left:0;right:0;top:0;padding-top:14px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;justify-content:space-between;align-items:flex-start;gap:12px;pointer-events:none}
+.brand{display:flex;flex-direction:column;gap:4px;min-width:0}
+.eyebrow{font:500 11px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.eyebrow b{color:var(--pumpkin);font-weight:500}
+h1{font:400 clamp(34px,5.6vw,60px)/.95 var(--display);margin:0;letter-spacing:.01em;text-shadow:0 2px 0 rgba(0,0,0,.5)}
+.tag{margin:2px 0 0;font-size:14px;color:var(--muted);max-width:32ch}
+.rattle{display:flex;flex-direction:column;align-items:flex-end;gap:6px;font:500 11px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);flex:none}
+.rattle .bones{display:flex;gap:4px}
+.rattle .bones i{display:block;width:12px;height:22px;border-radius:6px;background:rgba(239,229,207,.14);transition:background .2s,transform .25s cubic-bezier(.3,1.6,.5,1)}
+.rattle .bones i.on{background:var(--bone);transform:translateY(-3px)}
+.rattle.hot .bones i.on{background:var(--spectre)}
+.rattle .n{font:400 30px/1 var(--display);color:var(--bone);letter-spacing:0;text-transform:none}
+
+#card{position:absolute;z-index:4;left:50%;top:26%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;display:flex;flex-direction:column;gap:6px}
+#card .t{font:400 clamp(54px,11vw,120px)/.9 var(--display);color:var(--spectre);text-shadow:0 0 30px rgba(143,240,207,.55),0 4px 0 rgba(0,0,0,.4)}
+#card .s{font:500 12px/1 var(--mono);letter-spacing:.24em;text-transform:uppercase;color:var(--bone)}
+#card.show{animation:card 4.6s cubic-bezier(.2,.9,.25,1) forwards}
+@keyframes card{0%{opacity:0;transform:translate(-50%,-30%) scale(.8)}10%{opacity:1;transform:translate(-50%,-50%) scale(1.04)}16%{transform:translate(-50%,-50%) scale(1)}85%{opacity:1}100%{opacity:0;transform:translate(-50%,-62%)}}
+
+.bottom{position:absolute;z-index:6;left:0;right:0;bottom:0;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 12px);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;justify-content:space-between;align-items:flex-end;gap:12px;pointer-events:none}
+.pill{pointer-events:auto;display:inline-flex;align-items:center;gap:8px;padding:9px 14px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--bone);font:500 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;cursor:pointer}
+.pill:hover{border-color:var(--pumpkin)}
+.pill:focus-visible,.close:focus-visible,#info a:focus-visible,#app:focus-visible{outline:2px solid var(--pumpkin);outline-offset:2px}
+
+#info{position:absolute;z-index:8;left:max(16px,env(safe-area-inset-left,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 12px);width:min(430px,calc(100% - 32px));max-height:calc(100% - 100px);overflow:auto;padding:22px;border-radius:14px;background:#1a1220;border:1px solid var(--line);box-shadow:0 20px 60px rgba(0,0,0,.6);display:flex;flex-direction:column;gap:14px;font-size:15px;line-height:1.5;animation:rise .3s cubic-bezier(.2,.9,.3,1);user-select:text;-webkit-user-select:text;touch-action:pan-y;cursor:auto}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}}
+#info h3{font:400 40px/1 var(--display);margin:0}
+#info .meta{font:500 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--pumpkin)}
+#info h4{font:500 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:4px 0 6px}
+#info p,#info li{color:var(--bone);margin:0}
+#info ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+#info a{color:var(--pumpkin)}
+#info .close{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--bone);font-size:18px;cursor:pointer}
+#allLabs{font:500 12px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase}
+#finger{position:absolute;z-index:9;left:0;top:0;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.5),rgba(255,255,255,.1) 60%,transparent 70%);border:2px solid rgba(255,255,255,.7);pointer-events:none;transition:transform .15s}
+#finger.down{transform:scale(.78)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+@media (max-width:560px){.tag{display:none}.rattle .bones i{width:9px;height:18px}}
+@media (prefers-reduced-motion:reduce){#card.show{animation:none;opacity:1}#info{animation:none}}
+</style>
+
+<div id="app" tabindex="0" aria-label="Puppet stage. Keys 1 to 5 pluck the threads, arrows move the control, space strums.">
+  <canvas id="cv" aria-hidden="true"></canvas>
+  <header class="top">
+    <div class="brand">
+      <div class="eyebrow"><b>Greyframe Labs</b> · #19 · UI</div>
+      <h1>Pulling Strings</h1>
+      <p class="tag">Pull a thread to move a bone. Let go and it sings. Strum them all and he dances.</p>
+    </div>
+    <div class="rattle" id="rattle" aria-live="polite">
+      <span>Rattle</span>
+      <div class="bones" id="bones" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <span class="n" id="combo">×0</span>
+    </div>
+  </header>
+  <div id="card" hidden><span class="s">Rattle maxed</span><span class="t">Danse Macabre</span></div>
+
+  <div class="bottom">
+    <button class="pill" id="infoBtn" type="button" aria-expanded="false" aria-controls="info">About this lab</button>
+    <button class="pill" id="mute" type="button" aria-pressed="false">Sound on</button>
+  </div>
+
+  <aside id="info" hidden aria-label="About this lab">
+    <button class="close" type="button" aria-label="Close">×</button>
+    <div class="meta">Lab #19 · UI · 30 Oct 2026</div>
+    <h3>Pulling Strings</h3>
+    <div><h4>Idea</h4><p>What if the controls were the puppet's strings? Pull a thread and the skeleton lifts that bone. Let go and the thread rings like a string. Strum across them all and he dances, and if you keep the rattle going the stage turns into a danse macabre.</p></div>
+    <div><h4>Controls</h4><ul>
+      <li>Drag a thread to lift that limb. Let go to pluck it: the further you pulled, the louder it rings.</li>
+      <li>Sweep across the threads to strum. On touch, press on the empty stage and sweep.</li>
+      <li>Drag the wooden control to walk him across the stage. Grab a bone to throw him around.</li>
+      <li>Keyboard: 1–5 pluck a thread, arrows move the control, Space strums.</li>
+    </ul></div>
+    <div><h4>Inspired by</h4><ul>
+      <li>A piece by dmvrg shared by the Three.js account on X, where fine lines answer a touch like taut strings.</li>
+      <li>The marionette control: a wooden cross where every thread is one limb, so the puppeteer's hand is the whole interface.</li>
+      <li>Karplus–Strong string synthesis (1983): each note is a burst of noise ringing in a short delay line.</li>
+    </ul></div>
+    <div><h4>For game UI</h4><p>Put the input on stage. When the controls are physically tied to the character, every press reads as cause and effect without a tutorial. Feedback lives where the player is looking (the thread, the bone, the shadow), and a combo meter that changes the whole scene rewards rhythm better than a number in a corner.</p></div>
+    <a id="allLabs" href="https://claude.ai/artifact/CDYy2LnuZN3Tdb1A9BSHrG" target="_blank" rel="noopener">← All labs</a>
+    <script>if (/github\.io$/.test(location.hostname)) { const a = document.getElementById('allLabs'); a.href = '../'; a.removeAttribute('target'); }</script>
+  </aside>
+  <div id="finger" hidden></div>
+  <div class="sr" id="live" aria-live="polite"></div>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const app = $('app'), cv = $('cv'), mainCtx = cv.getContext('2d'); let ctx = mainCtx;
+  const mq = matchMedia('(prefers-reduced-motion: reduce)');
+  let RM = mq.matches; mq.addEventListener?.('change', e => RM = e.matches);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+  const rgba = (c, a = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+  const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  const css = getComputedStyle(document.documentElement);
+  const hex = n => { const h = css.getPropertyValue(n).trim().replace('#', ''); return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)); };
+  const C = { night: hex('--night'), velvet: hex('--velvet'), bone: hex('--bone'), pumpkin: hex('--pumpkin'), spectre: hex('--spectre') };
+
+  // seeded random for the painted scenery
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+  // ---------- skeleton definition (units of u, origin between the feet) ----------
+  const REST = { head: [0, -6.9], neck: [0, -6.25], shL: [-.85, -5.95], shR: [.85, -5.95], elbL: [-1.05, -4.75], elbR: [1.05, -4.75], handL: [-1.1, -3.6], handR: [1.1, -3.6],
+    pelvis: [0, -3.75], hipL: [-.42, -3.65], hipR: [.42, -3.65], kneeL: [-.45, -1.9], kneeR: [.45, -1.9], footL: [-.5, -.12], footR: [.5, -.12] };
+  const STICKS = [['head', 'neck'], ['neck', 'shL'], ['neck', 'shR'], ['shL', 'shR'], ['shL', 'elbL'], ['elbL', 'handL'], ['shR', 'elbR'], ['elbR', 'handR'], ['neck', 'pelvis'],
+    ['shL', 'pelvis', .6], ['shR', 'pelvis', .6], ['shL', 'hipL', .5], ['shR', 'hipR', .5], ['pelvis', 'hipL'], ['pelvis', 'hipR'], ['hipL', 'hipR'], ['hipL', 'kneeL'], ['kneeL', 'footL'],
+    ['hipR', 'kneeR'], ['kneeR', 'footR'], ['head', 'shL', .35], ['head', 'shR', .35]];
+  const MINS = [['shL', 'handL', .5], ['shR', 'handR', .5], ['hipL', 'footL', .6], ['hipR', 'footR', .6], ['footL', 'footR', .25], ['kneeL', 'kneeR', .3]];
+  // threads: limb, attach point on the wooden control (u, relative to its centre), note
+  const THREADS = [
+    { p: 'handL', ax: -2.1, ay: 0, f: 261.63, name: 'left hand' },
+    { p: 'kneeL', ax: -.95, ay: .62, f: 196.0, name: 'left knee' },
+    { p: 'head', ax: 0, ay: -.35, f: 220.0, name: 'head' },
+    { p: 'kneeR', ax: .95, ay: .62, f: 233.08, name: 'right knee' },
+    { p: 'handR', ax: 2.1, ay: 0, f: 293.66, name: 'right hand' }
+  ];
+  const NW = 28;
+  THREADS.forEach(t => { t.d = new Float32Array(NW); t.v = new Float32Array(NW); t.glow = 0; t.grab = null; });
+
+  // ---------- state ----------
+  const S = { combo: 0, lastHit: -9, danse: 0, danseT: 0, flash: 0, speed: 1, light: 0 };
+  let W = 0, H = 0, dpr = 1, u = 40, floorY = 0, cx = 0, stageL = 0, stageR = 0, valH = 0;
+  const bar = { x: 0, y: 0, tx: 0, vx: 0, a: 0, drag: false }; let PK = 1;
+  let P = {}, bats = [], motes = [], pops = [], fog = [], tree = [];
+
+  function layout(){
+    const r = app.getBoundingClientRect(); W = r.width; H = r.height;
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    u = Math.min(H * .064, W * .1);
+    floorY = H * .84; cx = W / 2;
+    const dw = clamp(W * .1, 30, 150); stageL = dw; stageR = W - dw; valH = clamp(H * .07, 40, 80);
+    bar.y = Math.max(H * .17, 104); bar.x = bar.tx = cx;
+    if (window.__labLayoutHook) { const o = window.__labLayoutHook({ W, H }) || {}; if (o.u) u = o.u; if (o.floorY) floorY = o.floorY; if (o.barY) bar.y = o.barY; if (o.valH) valH = o.valH; if (o.stageL != null) { stageL = o.stageL; stageR = W - o.stageL; } if (o.pk) PK = o.pk; }
+    build(); paintStatic();
+  }
+  const bgN = document.createElement('canvas'), bgS = document.createElement('canvas'), curt = document.createElement('canvas');
+  function paintStatic(){
+    const keep = S.light;
+    for (const [c, l, f] of [[bgN, 0, drawBackdrop], [bgS, 1, drawBackdrop], [curt, 0, drawCurtains]]) {
+      c.width = cv.width; c.height = cv.height; ctx = c.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H); S.light = l; f(0);
+    }
+    S.light = keep; ctx = mainCtx;
+  }
+  function build(){
+    P = {};
+    for (const k in REST) { const x = cx + REST[k][0] * u, y = floorY - .25 * u + REST[k][1] * u; P[k] = { x, y, px: x, py: y, pin: null }; }
+    STICKS.forEach(s => s.len = Math.hypot(P[s[0]].x - P[s[1]].x, P[s[0]].y - P[s[1]].y));
+    MINS.forEach(s => s.len = Math.hypot(P[s[0]].x - P[s[1]].x, P[s[0]].y - P[s[1]].y) * s[2]);
+    THREADS.forEach(t => { const [ax, ay] = attach(t); t.len = Math.hypot(P[t.p].x - ax, P[t.p].y - ay) * .985; t.d.fill(0); t.v.fill(0); });
+    // scenery
+    seed = 11; tree = []; branch(stageL + (stageR - stageL) * .16, floorY - u * .2, -Math.PI / 2, u * 1.9, 0);
+    fog = Array.from({ length: 9 }, (_, i) => ({ x: rnd(), y: rnd(), s: .6 + rnd() * .8, v: (rnd() - .5) * .012 }));
+    motes = Array.from({ length: 40 }, () => ({ x: rnd(), y: rnd(), s: rnd() }));
+  }
+  function branch(x, y, a, len, depth){
+    const x2 = x + Math.cos(a) * len, y2 = y + Math.sin(a) * len;
+    tree.push([x, y, x2, y2, Math.max(1, (5 - depth) * u * .06)]);
+    if (depth >= 4) return;
+    const n = depth < 1 ? 2 : 2 + (rnd() > .6 ? 1 : 0);
+    for (let i = 0; i < n; i++) branch(x2, y2, a + (rnd() - .5) * 1.5 + (i - (n - 1) / 2) * .35, len * (.6 + rnd() * .2), depth + 1);
+  }
+  function attach(t){
+    const c = Math.cos(bar.a), s = Math.sin(bar.a), x = t.ax * u, y = t.ay * u;
+    return [bar.x + x * c - y * s, bar.y + x * s + y * c];
+  }
+
+  // ---------- audio ----------
+  let ac = null, master = null, muted = false; const cache = new Map();
+  function audio(){
+    if (muted) return null;
+    if (ac) { if (ac.state === 'suspended') ac.resume(); return ac; }
+    try { ac = new (window.AudioContext || window.webkitAudioContext)(); master = ac.createGain(); master.gain.value = .8; master.connect(ac.destination); } catch (e) { ac = null; }
+    return ac;
+  }
+  function ks(freq, bright, dur = 2.4){
+    const key = freq.toFixed(1) + '|' + bright.toFixed(2); if (cache.has(key)) return cache.get(key);
+    const sr = ac.sampleRate, len = Math.floor(sr * dur), buf = ac.createBuffer(1, len, sr), d = buf.getChannelData(0);
+    const Pn = Math.max(2, Math.round(sr / freq)), ring = new Float32Array(Pn);
+    let lp = 0; for (let i = 0; i < Pn; i++) { lp += ((Math.random() * 2 - 1) - lp) * (.2 + bright * .8); ring[i] = lp; }
+    let idx = 0; const decay = .996 + bright * .002;
+    for (let i = 0; i < len; i++) { const a = ring[idx], b = ring[(idx + 1) % Pn]; d[i] = a; ring[idx] = (a + b) * .5 * decay; idx = (idx + 1) % Pn; }
+    cache.set(key, buf); return buf;
+  }
+  function play(buf, gain, when = 0){ if (!audio()) return; const s = ac.createBufferSource(), g = ac.createGain(); s.buffer = buf; g.gain.value = gain; s.connect(g).connect(master); s.start(ac.currentTime + when); }
+  function note(i, amp){ if (!audio()) return; const t = THREADS[i]; play(ks(t.f * (S.danse > 0 ? 2 : 1), clamp(.3 + amp * .7, .3, 1)), clamp(.12 + amp * .55, .1, .7)); }
+  function clack(v){
+    if (!audio()) return; const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'triangle'; o.frequency.setValueAtTime(700 + Math.random() * 500, t); o.frequency.exponentialRampToValueAtTime(300, t + .05);
+    g.gain.setValueAtTime(clamp(v, .05, .35), t); g.gain.exponentialRampToValueAtTime(.001, t + .07); o.connect(g).connect(master); o.start(t); o.stop(t + .08);
+  }
+  function gong(){
+    if (!audio()) return; [110, 164.81, 196, 261.63, 329.63].forEach((f, k) => play(ks(f, .5, 3), .2, k * .06));
+  }
+  $('mute').onclick = () => { muted = !muted; $('mute').textContent = muted ? 'Sound off' : 'Sound on'; $('mute').setAttribute('aria-pressed', muted); if (master) master.gain.value = muted ? 0 : .8; };
+
+  // ---------- combo ----------
+  const boneEls = [...$('bones').children];
+  function hit(i, amp){
+    const now = performance.now() / 1000;
+    if (S.danse <= 0) {
+      S.combo = now - S.lastHit < .9 ? S.combo + 1 : 1; S.lastHit = now;
+      if (S.combo >= 8) startDanse();
+    }
+    const h = P.head; pops.push({ x: h.x + (Math.random() - .5) * u, y: h.y - u * 1.2, t: 0, text: S.danse > 0 ? '♪' : '×' + S.combo });
+    renderCombo();
+  }
+  function renderCombo(){
+    boneEls.forEach((b, k) => b.classList.toggle('on', S.danse > 0 || k < S.combo));
+    $('combo').textContent = S.danse > 0 ? 'Danse!' : '×' + S.combo;
+    $('rattle').classList.toggle('hot', S.danse > 0);
+  }
+  function startDanse(){
+    S.danse = 5; S.danseT = 0; S.flash = 1; gong();
+    const c = $('card'); c.hidden = false; c.classList.remove('show'); void c.offsetWidth; c.classList.add('show');
+    $('live').textContent = 'Danse macabre!';
+    for (let k = 0; k < 16; k++) spawnBat(true);
+  }
+  function spawnBat(swarm){
+    const fromL = Math.random() < .5;
+    bats.push({ x: fromL ? -40 : W + 40, y: valH + Math.random() * (floorY - valH) * .6, vx: (fromL ? 1 : -1) * (120 + Math.random() * 160), vy: (Math.random() - .5) * 40, ph: Math.random() * 6, s: (swarm ? .6 + Math.random() * .7 : .8) * u * .55, t: Math.random() * 6 });
+  }
+
+  // ---------- pluck & strum ----------
+  function threadGeom(t){ const [ax, ay] = attach(t), b = P[t.p]; const dx = b.x - ax, dy = b.y - ay, L = Math.hypot(dx, dy) || 1; return { ax, ay, bx: b.x, by: b.y, nx: -dy / L, ny: dx / L, L }; }
+  function pluck(i, amp, dir){
+    const t = THREADS[i], g = threadGeom(t), a = clamp(amp, 3, u * 1.4);
+    for (let k = 0; k < NW; k++) { const s = k / (NW - 1); t.d[k] += dir * a * Math.sin(Math.PI * s) * (1 + .3 * Math.sin(Math.PI * 3 * s)); }
+    t.glow = 1;
+    const p = P[t.p]; p.px -= g.nx * dir * a * .22; p.py -= g.ny * dir * a * .22 + a * .12; // jerk the limb up and sideways
+    note(i, a / (u * 1.4)); hit(i, a);
+  }
+  function release(t, i){
+    const g = threadGeom(t), G = t.grab; t.grab = null;
+    // perpendicular offset of the grab point from the straight line
+    const dx = G.x - g.ax, dy = G.y - g.ay, off = dx * g.nx + dy * g.ny;
+    const s0 = clamp((dx * (g.bx - g.ax) + dy * (g.by - g.ay)) / (g.L * g.L), .08, .92);
+    for (let k = 0; k < NW; k++) { const s = k / (NW - 1); t.d[k] = off * (s <= s0 ? s / s0 : (1 - s) / (1 - s0)); t.v[k] = 0; }
+    t.glow = 1; const a = Math.max(Math.abs(off), Math.hypot(G.x - G.x0, G.y - G.y0) * .45);
+    note(i, clamp(a / (u * 1.6), 0, 1)); hit(i, a);
+  }
+  const segX = (p1, p2, p3, p4) => { const d = (p2[0] - p1[0]) * (p4[1] - p3[1]) - (p2[1] - p1[1]) * (p4[0] - p3[0]); if (!d) return false; const ua = ((p3[0] - p1[0]) * (p4[1] - p3[1]) - (p3[1] - p1[1]) * (p4[0] - p3[0])) / d, ub = ((p3[0] - p1[0]) * (p2[1] - p1[1]) - (p3[1] - p1[1]) * (p2[0] - p1[0])) / d; return ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1; };
+  let prevPt = null;
+  function strumTo(x, y){
+    if (prevPt) {
+      const sp = Math.hypot(x - prevPt[0], y - prevPt[1]);
+      THREADS.forEach((t, i) => { if (t.grab) return; const g = threadGeom(t);
+        if (segX(prevPt, [x, y], [g.ax, g.ay], [g.bx, g.by])) { const dir = Math.sign((x - prevPt[0]) * g.nx + (y - prevPt[1]) * g.ny) || 1; pluck(i, clamp(sp * .9, 6, u * 1.2), dir); } });
+    }
+    prevPt = [x, y];
+  }
+  function distSeg(px, py, ax, ay, bx, by){ const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy || 1; const t = clamp(((px - ax) * dx + (py - ay) * dy) / l2, 0, 1); return [Math.hypot(px - ax - t * dx, py - ay - t * dy), t]; }
+
+  // ---------- pointer ----------
+  let mode = null; const pos = e => { const r = app.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  function down(x, y){
+    audio();
+    // the wooden control
+    if (Math.abs(x - bar.x) < u * 2.5 && Math.abs(y - bar.y) < u * .7) { mode = { k: 'bar', ox: bar.x - x }; bar.drag = true; return; }
+    // nearest thread
+    let best = -1, bd = Math.max(22, u * .45);
+    THREADS.forEach((t, i) => { const g = threadGeom(t), [d, s] = distSeg(x, y, g.ax, g.ay, g.bx, g.by); if (d < bd && s > .04 && s < .97) { bd = d; best = i; } });
+    if (best >= 0) { const [ax, ay] = attach(THREADS[best]); THREADS[best].grab = { x, y, x0: x, y0: y, hold: Math.hypot(x - ax, y - ay) }; mode = { k: 'thread', i: best }; return; }
+    // a bone
+    let bp = null; bd = u * .7;
+    for (const k in P) { const d = Math.hypot(P[k].x - x, P[k].y - y); if (d < bd) { bd = d; bp = k; } }
+    if (bp) { P[bp].pin = { x, y }; mode = { k: 'bone', p: bp }; return; }
+    mode = { k: 'strum' }; prevPt = [x, y];
+  }
+  function move(x, y){
+    if (!mode) { strumTo(x, y); return; }
+    if (mode.k === 'bar') bar.tx = clamp(x + mode.ox, stageL + u * 2, stageR - u * 2);
+    else if (mode.k === 'thread') { const g = THREADS[mode.i].grab; g.x = x; g.y = y; }
+    else if (mode.k === 'bone') P[mode.p].pin = { x, y };
+    else strumTo(x, y);
+  }
+  function up(){
+    if (!mode) return;
+    if (mode.k === 'thread') release(THREADS[mode.i], mode.i);
+    if (mode.k === 'bone') P[mode.p].pin = null;
+    if (mode.k === 'bar') bar.drag = false;
+    mode = null; prevPt = null;
+  }
+  app.addEventListener('pointerdown', e => { if (e.target.closest('#info,.pill')) return; const [x, y] = pos(e); app.setPointerCapture(e.pointerId); down(x, y); e.preventDefault(); });
+  app.addEventListener('pointermove', e => { if (e.target.closest && e.target.closest('#info')) return; const [x, y] = pos(e); move(x, y); });
+  app.addEventListener('pointerup', up); app.addEventListener('pointercancel', up);
+  app.addEventListener('pointerleave', () => { if (!mode) prevPt = null; });
+  app.addEventListener('keydown', e => {
+    if (e.target.closest && e.target.closest('#info')) return;
+    const n = parseInt(e.key, 10);
+    if (n >= 1 && n <= 5) { audio(); pluck(n - 1, u * .8, Math.random() < .5 ? -1 : 1); e.preventDefault(); }
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { bar.tx = clamp(bar.tx + (e.key === 'ArrowLeft' ? -1 : 1) * u, stageL + u * 2, stageR - u * 2); e.preventDefault(); }
+    else if (e.key === ' ') { audio(); THREADS.forEach((t, i) => setTimeout(() => pluck(i, u * .7, 1), i * 60)); e.preventDefault(); }
+  });
+
+  // ---------- physics ----------
+  const H_STEP = 1 / 120; let acc = 0;
+  function physics(dt){
+    acc += Math.min(dt, .05) * S.speed;
+    const g = 2400 * (u / 50);
+    // the control follows the hand with a little lag and tilts with its speed
+    const t = performance.now() / 1000;
+    const idle = bar.drag ? 0 : Math.sin(t * .7) * u * .12;
+    const nx = bar.x + ((bar.tx + idle) - bar.x) * Math.min(1, dt * 7);
+    bar.vx = (nx - bar.x) / Math.max(dt, .001); bar.x = nx;
+    bar.a += ((clamp(bar.vx * .0009, -.4, .4) + (RM ? 0 : Math.sin(t * .9) * .035)) - bar.a) * Math.min(1, dt * 6);
+    while (acc >= H_STEP) {
+      acc -= H_STEP;
+      for (const k in P) { const p = P[k]; const vx = (p.x - p.px) * .993, vy = (p.y - p.py) * .993; p.px = p.x; p.py = p.y; p.x += vx; p.y += vy + g * H_STEP * H_STEP; }
+      for (let it = 0; it < 10; it++) {
+        for (const s of STICKS) { const a = P[s[0]], b = P[s[1]], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1, f = (d - s.len) / d * .5 * (s[2] || 1); a.x += dx * f; a.y += dy * f; b.x -= dx * f; b.y -= dy * f; }
+        for (const s of MINS) { const a = P[s[0]], b = P[s[1]], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1; if (d < s.len) { const f = (d - s.len) / d * .5; a.x += dx * f; a.y += dy * f; b.x -= dx * f; b.y -= dy * f; } }
+        for (const th of THREADS) {
+          const [ax, ay] = attach(th), p = P[th.p];
+          let ox = ax, oy = ay, L = th.len;
+          if (th.grab) { L = Math.max(u * .3, th.len - th.grab.hold); ox = th.grab.x; oy = th.grab.y; }
+          const dx = p.x - ox, dy = p.y - oy, d = Math.hypot(dx, dy) || 1;
+          if (d > L) { p.x -= dx * (d - L) / d; p.y -= dy * (d - L) / d; }
+        }
+        for (const k in P) { const p = P[k]; if (p.pin) { p.x += (p.pin.x - p.x) * .5; p.y += (p.pin.y - p.y) * .5; } }
+        for (const k in P) { const p = P[k]; if (p.y > floorY) { const vy = p.y - p.py; p.y = floorY; p.px = p.x - (p.x - p.px) * .5; if (it === 0 && vy > u * .06 && (k === 'footL' || k === 'footR')) clack(vy / (u * .4)); } p.x = clamp(p.x, stageL + 4, stageR - 4); }
+      }
+    }
+    // string vibration
+    for (const th of THREADS) {
+      if (th.grab) { th.d.fill(0); th.v.fill(0); continue; }
+      const d = th.d, v = th.v, sub = 8;
+      for (let s = 0; s < sub; s++) { for (let k = 1; k < NW - 1; k++) v[k] = (v[k] + .7 * (d[k - 1] + d[k + 1] - 2 * d[k])) * .9955; for (let k = 1; k < NW - 1; k++) d[k] += v[k]; }
+      th.glow = Math.max(0, th.glow - dt * 1.4);
+    }
+  }
+
+  // ---------- drawing ----------
+  function lightCol(){ return mix(C.pumpkin, C.spectre, S.light); }
+  function drawBackdrop(t){
+    const L = lightCol();
+    // painted sky flat
+    const sky = ctx.createLinearGradient(0, valH, 0, floorY);
+    sky.addColorStop(0, rgba(mix([30, 16, 44], [12, 34, 40], S.light))); sky.addColorStop(1, rgba(mix([58, 26, 52], [20, 56, 56], S.light)));
+    ctx.fillStyle = sky; ctx.fillRect(stageL, valH, stageR - stageL, floorY - valH);
+    // moon
+    const mx = stageL + (stageR - stageL) * .74, my = valH + (floorY - valH) * .3, mr = Math.min(W, H) * .11;
+    const mg = ctx.createRadialGradient(mx, my, mr * .6, mx, my, mr * 3); mg.addColorStop(0, rgba(mix([255, 236, 190], C.spectre, S.light), .35)); mg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = mg; ctx.fillRect(stageL, valH, stageR - stageL, floorY - valH);
+    ctx.fillStyle = rgba(mix([246, 232, 196], [210, 255, 236], S.light)); ctx.beginPath(); ctx.arc(mx, my, mr, 0, 6.283); ctx.fill();
+    ctx.fillStyle = 'rgba(120,90,80,.18)'; [[-.3, -.2, .22], [.25, .15, .16], [-.05, .4, .1], [.35, -.35, .09]].forEach(([a, b, r]) => { ctx.beginPath(); ctx.arc(mx + a * mr, my + b * mr, r * mr, 0, 6.283); ctx.fill(); });
+    // hills
+    const hill = (col, base, amp, f, ph) => { ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(stageL, floorY); for (let x = stageL; x <= stageR + 8; x += 8) ctx.lineTo(x, base - Math.sin(x * f + ph) * amp - Math.sin(x * f * 2.3 + ph) * amp * .4); ctx.lineTo(stageR, floorY); ctx.fill(); };
+    hill(rgba(mix([40, 20, 46], [16, 40, 44], S.light)), floorY - (floorY - valH) * .22, u * .7, .006, 1);
+    hill(rgba(mix([26, 14, 32], [10, 28, 32], S.light)), floorY - (floorY - valH) * .1, u * .45, .011, 3);
+    // crooked tree and graves
+    ctx.strokeStyle = '#120a17'; ctx.lineCap = 'round';
+    tree.forEach(([x1, y1, x2, y2, w]) => { ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); });
+    ctx.fillStyle = '#150c1a';
+    [[.62, .9], [.83, .7], [.9, 1.05]].forEach(([fx, s]) => { const x = stageL + (stageR - stageL) * fx, w = u * .55 * s, h = u * .8 * s, y = floorY - h; ctx.beginPath(); ctx.moveTo(x - w / 2, floorY); ctx.lineTo(x - w / 2, y + w / 2); ctx.arc(x, y + w / 2, w / 2, Math.PI, 0); ctx.lineTo(x + w / 2, floorY); ctx.fill(); });
+    // theatre flat seams
+    ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 1;
+    for (let k = 1; k < 4; k++) { const x = stageL + (stageR - stageL) * k / 4; ctx.beginPath(); ctx.moveTo(x, valH); ctx.lineTo(x, floorY); ctx.stroke(); }
+  }
+  function capsule(x, y, w, h){ ctx.beginPath(); ctx.arc(x - w / 2, y, h, Math.PI / 2, Math.PI * 1.5); ctx.arc(x + w / 2, y, h, -Math.PI / 2, Math.PI / 2); ctx.fill(); }
+
+  // projected shadow of the puppet on the backdrop, cast by the centre footlight
+  function drawShadow(t, flick){
+    const Lx = cx, Ly = floorY + (H - floorY) * .5, k = 1.38 + flick * .04;
+    const pr = p => [Lx + (p.x - Lx) * k, Ly + (p.y - Ly) * k];
+    ctx.save(); ctx.beginPath(); ctx.rect(stageL, valH, stageR - stageL, floorY - valH); ctx.clip();
+    ctx.strokeStyle = rgba(mix([8, 2, 14], [2, 14, 16], S.light), .5); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const bones = [['head', 'neck'], ['neck', 'pelvis'], ['shL', 'shR'], ['shL', 'elbL'], ['elbL', 'handL'], ['shR', 'elbR'], ['elbR', 'handR'], ['hipL', 'hipR'], ['hipL', 'kneeL'], ['kneeL', 'footL'], ['hipR', 'kneeR'], ['kneeR', 'footR']];
+    for (const pass of [1, 2]) {
+      ctx.lineWidth = u * (pass === 1 ? .55 : .3) * k; ctx.globalAlpha = pass === 1 ? .35 : .7;
+      bones.forEach(([a, b]) => { const A = pr(P[a]), B = pr(P[b]); ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke(); });
+      const hd = pr(P.head); ctx.fillStyle = ctx.strokeStyle; ctx.beginPath(); ctx.arc(hd[0], hd[1], u * .62 * k * (pass === 1 ? 1.15 : 1), 0, 6.283); ctx.fill();
+      const ch = pr({ x: (P.shL.x + P.shR.x + P.pelvis.x) / 3, y: (P.shL.y + P.shR.y + P.pelvis.y * .6) / 2.6 }); ctx.beginPath(); ctx.ellipse(ch[0], ch[1], u * .7 * k, u * .9 * k, 0, 0, 6.283); ctx.fill();
+    }
+    ctx.globalAlpha = .25; ctx.lineWidth = 1.2;
+    THREADS.forEach(th => { const [ax, ay] = attach(th), A = pr({ x: ax, y: ay }), B = pr(P[th.p]); ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke(); });
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
+
+  function drawFloor(flick){
+    const L = lightCol();
+    const g = ctx.createLinearGradient(0, floorY, 0, H); g.addColorStop(0, '#2a1a20'); g.addColorStop(1, '#120b10');
+    ctx.fillStyle = g; ctx.fillRect(0, floorY, W, H - floorY);
+    const vx = cx, vy = floorY - H * .9;
+    ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 1;
+    for (let k = -14; k <= 14; k++) { const xb = cx + k * u * 1.3; ctx.beginPath(); ctx.moveTo(vx + (xb - vx) * ((floorY - vy) / (H - vy)), floorY); ctx.lineTo(xb, H); ctx.stroke(); }
+    ctx.strokeStyle = 'rgba(255,200,150,.08)'; ctx.beginPath(); ctx.moveTo(0, floorY + .5); ctx.lineTo(W, floorY + .5); ctx.stroke();
+    // light pool from the footlights
+    const pg = ctx.createRadialGradient(cx, H, 0, cx, H, Math.max(W, H) * .55);
+    pg.addColorStop(0, rgba(L, .28 + flick * .05)); pg.addColorStop(1, rgba(L, 0));
+    ctx.fillStyle = pg; ctx.fillRect(0, floorY, W, H - floorY);
+    // contact shadow under the feet
+    ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.beginPath(); ctx.ellipse((P.footL.x + P.footR.x) / 2, floorY + 3, u * 1.1, u * .16, 0, 0, 6.283); ctx.fill();
+  }
+
+  function drawThreads(){
+    THREADS.forEach((th, i) => {
+      const g = threadGeom(th), L = lightCol();
+      const col = mix([215, 205, 190], L, .35 + th.glow * .5), a = .55 + th.glow * .4;
+      const pts = [];
+      if (th.grab) { pts.push([g.ax, g.ay], [th.grab.x, th.grab.y], [g.bx, g.by]); }
+      else for (let k = 0; k < NW; k++) { const s = k / (NW - 1); pts.push([g.ax + (g.bx - g.ax) * s + g.nx * th.d[k], g.ay + (g.by - g.ay) * s + g.ny * th.d[k]]); }
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = rgba(L, .08 + th.glow * .35); ctx.lineWidth = 6;
+      ctx.beginPath(); pts.forEach(([x, y], k) => k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = rgba(col, a); ctx.lineWidth = th.grab ? 1.8 : 1.2;
+      ctx.beginPath(); pts.forEach(([x, y], k) => k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke();
+      if (th.grab) { ctx.fillStyle = rgba(L, .9); ctx.beginPath(); ctx.arc(th.grab.x, th.grab.y, 4, 0, 6.283); ctx.fill(); }
+    });
+  }
+
+  function drawBar(){
+    ctx.save(); ctx.translate(bar.x, bar.y); ctx.rotate(bar.a);
+    // rod up to the unseen puppeteer
+    ctx.strokeStyle = '#2b1a14'; ctx.lineWidth = u * .16; ctx.beginPath(); ctx.moveTo(0, -u * .4); ctx.lineTo(0, -H); ctx.stroke();
+    const wood = (x, y, w, h) => { const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#9a6a3c'); g.addColorStop(.5, '#6e4423'); g.addColorStop(1, '#3d2414'); ctx.fillStyle = g; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x, y, w, h, h / 2); else ctx.rect(x, y, w, h); ctx.fill(); };
+    wood(-u * .14, -u * .5, u * .28, u * 1.35);
+    wood(-u * 2.3, -u * .12, u * 4.6, u * .24);
+    wood(-u * 1.15, u * .5, u * 2.3, u * .22);
+    ctx.fillStyle = '#d8b46a'; THREADS.forEach(t => { ctx.beginPath(); ctx.arc(t.ax * u, t.ay * u, u * .07, 0, 6.283); ctx.fill(); });
+    ctx.restore();
+  }
+
+  function bone(a, b, w, col){
+    const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L;
+    ctx.fillStyle = col; ctx.strokeStyle = 'rgba(40,24,30,.55)'; ctx.lineWidth = Math.max(1, w * .12);
+    ctx.beginPath();
+    ctx.moveTo(a.x + nx * w * .32 + dx / L * w * .3, a.y + ny * w * .32 + dy / L * w * .3);
+    ctx.lineTo(b.x + nx * w * .32 - dx / L * w * .3, b.y + ny * w * .32 - dy / L * w * .3);
+    ctx.lineTo(b.x - nx * w * .32 - dx / L * w * .3, b.y - ny * w * .32 - dy / L * w * .3);
+    ctx.lineTo(a.x - nx * w * .32 + dx / L * w * .3, a.y - ny * w * .32 + dy / L * w * .3);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    for (const [p, sgn] of [[a, 1], [b, -1]]) for (const s of [-1, 1]) {
+      ctx.beginPath(); ctx.arc(p.x + nx * s * w * .28 + dx / L * w * .18 * sgn, p.y + ny * s * w * .28 + dy / L * w * .18 * sgn, w * .36, 0, 6.283); ctx.fill(); ctx.stroke();
+    }
+  }
+  function drawSkeleton(t){
+    const L = lightCol(), col = rgba(mix(C.bone, L, .14)), w = u * .3;
+    const lim = [['hipL', 'kneeL'], ['kneeL', 'footL'], ['hipR', 'kneeR'], ['kneeR', 'footR']];
+    // pelvis
+    const pv = P.pelvis, hl = P.hipL, hr = P.hipR;
+    ctx.fillStyle = col; ctx.strokeStyle = 'rgba(40,24,30,.55)'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(hl.x - u * .2, hl.y - u * .25); ctx.quadraticCurveTo(pv.x, pv.y - u * .55, hr.x + u * .2, hr.y - u * .25); ctx.quadraticCurveTo(hr.x + u * .1, hr.y + u * .35, pv.x, pv.y + u * .3); ctx.quadraticCurveTo(hl.x - u * .1, hl.y + u * .35, hl.x - u * .2, hl.y - u * .25); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#1a1018'; ctx.beginPath(); ctx.ellipse(pv.x, pv.y + u * .05, u * .14, u * .12, 0, 0, 6.283); ctx.fill();
+    lim.forEach(([a, b]) => bone(P[a], P[b], w, col));
+    // feet
+    for (const f of ['footL', 'footR']) { const p = P[f]; ctx.fillStyle = col; ctx.beginPath(); ctx.ellipse(p.x + (f === 'footL' ? -1 : 1) * u * .12, p.y + u * .02, u * .26, u * .1, 0, 0, 6.283); ctx.fill(); ctx.stroke(); }
+    // spine
+    const nk = P.neck, sx = pv.x - nk.x, sy = pv.y - nk.y, SL = Math.hypot(sx, sy) || 1, ux = sx / SL, uy = sy / SL, nx = -uy, ny = ux;
+    ctx.fillStyle = col;
+    for (let k = 0; k <= 9; k++) { const s = k / 9; ctx.beginPath(); ctx.ellipse(nk.x + sx * s, nk.y + sy * s, u * .13, u * .08, Math.atan2(sy, sx) + Math.PI / 2, 0, 6.283); ctx.fill(); ctx.stroke(); }
+    // ribs: arcs that follow the spine
+    ctx.strokeStyle = col; ctx.lineCap = 'round';
+    for (let k = 0; k < 5; k++) {
+      const s = .1 + k * .1, ox = nk.x + sx * s, oy = nk.y + sy * s, rw = u * (.62 - k * .04), rd = u * (.2 + k * .02);
+      ctx.lineWidth = u * .1;
+      for (const side of [-1, 1]) { ctx.beginPath(); ctx.moveTo(ox, oy); ctx.bezierCurveTo(ox + nx * side * rw, oy + ny * side * rw, ox + nx * side * rw + ux * rd * 1.6, oy + ny * side * rw + uy * rd * 1.6, ox + nx * side * rw * .45 + ux * rd * 2.1, oy + ny * side * rw * .45 + uy * rd * 2.1); ctx.stroke(); }
+    }
+    ctx.strokeStyle = 'rgba(40,24,30,.55)';
+    // collarbones + arms
+    bone(P.shL, P.neck, w * .8, col); bone(P.neck, P.shR, w * .8, col);
+    [['shL', 'elbL'], ['elbL', 'handL'], ['shR', 'elbR'], ['elbR', 'handR']].forEach(([a, b]) => bone(P[a], P[b], w * .9, col));
+    // hands: little bony fans
+    for (const [h, e] of [['handL', 'elbL'], ['handR', 'elbR']]) {
+      const p = P[h], q = P[e], a = Math.atan2(p.y - q.y, p.x - q.x);
+      ctx.strokeStyle = col; ctx.lineWidth = u * .07;
+      for (let f = -2; f <= 2; f++) { const fa = a + f * .22; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + Math.cos(fa) * u * .38, p.y + Math.sin(fa) * u * .38); ctx.stroke(); }
+      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(p.x, p.y, u * .13, 0, 6.283); ctx.fill();
+    }
+    // skull
+    const hd = P.head, ang = Math.atan2(hd.y - nk.y, hd.x - nk.x) + Math.PI / 2;
+    const speed = Math.hypot(hd.x - hd.px, hd.y - hd.py);
+    const jaw = clamp(speed / (u * .08), 0, 1) * u * .18 + (S.danse > 0 ? Math.abs(Math.sin(t / 90)) * u * .12 : 0);
+    ctx.save(); ctx.translate(hd.x, hd.y); ctx.rotate(ang);
+    ctx.fillStyle = col; ctx.strokeStyle = 'rgba(40,24,30,.6)'; ctx.lineWidth = 1.4;
+    // jaw
+    ctx.beginPath(); ctx.moveTo(-u * .36, u * .12 + jaw * .4); ctx.quadraticCurveTo(-u * .34, u * .55 + jaw, 0, u * .6 + jaw); ctx.quadraticCurveTo(u * .34, u * .55 + jaw, u * .36, u * .12 + jaw * .4); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(0, -u * .1, u * .55, u * .55, 0, 0, 6.283); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-u * .38, u * .1); ctx.lineTo(-u * .32, u * .3); ctx.lineTo(u * .32, u * .3); ctx.lineTo(u * .38, u * .1); ctx.fill();
+    // teeth
+    ctx.strokeStyle = 'rgba(40,24,30,.6)'; ctx.lineWidth = 1;
+    for (let k = -3; k <= 3; k++) { ctx.beginPath(); ctx.moveTo(k * u * .08, u * .2); ctx.lineTo(k * u * .08, u * .32); ctx.stroke(); }
+    ctx.beginPath(); ctx.moveTo(-u * .3, u * .32); ctx.lineTo(u * .3, u * .32); ctx.stroke();
+    // eyes and nose
+    const glow = S.danse > 0 ? 1 : 0;
+    for (const s of [-1, 1]) {
+      ctx.fillStyle = '#140a12'; ctx.beginPath(); ctx.ellipse(s * u * .21, -u * .06, u * .15, u * .17, s * .25, 0, 6.283); ctx.fill();
+      if (glow || S.light > .05) { ctx.globalCompositeOperation = 'lighter'; const gg = ctx.createRadialGradient(s * u * .21, -u * .06, 0, s * u * .21, -u * .06, u * .4); gg.addColorStop(0, rgba(C.spectre, .9 * S.light)); gg.addColorStop(1, rgba(C.spectre, 0)); ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(s * u * .21, -u * .06, u * .4, 0, 6.283); ctx.fill(); ctx.globalCompositeOperation = 'source-over'; }
+      else { ctx.fillStyle = rgba(L, .8); ctx.beginPath(); ctx.arc(s * u * .21 + u * .03, -u * .02, u * .03, 0, 6.283); ctx.fill(); }
+    }
+    ctx.fillStyle = '#140a12'; ctx.beginPath(); ctx.moveTo(0, u * .04); ctx.lineTo(-u * .06, u * .16); ctx.lineTo(u * .06, u * .16); ctx.fill();
+    ctx.restore();
+    // warm rim light from below
+    ctx.globalCompositeOperation = 'lighter';
+    const rg = ctx.createLinearGradient(0, floorY, 0, P.head.y - u);
+    rg.addColorStop(0, rgba(L, .0)); rg.addColorStop(1, rgba(L, 0));
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  function pumpkin(x, y, s, face, flick, t){
+    const L = lightCol();
+    // glow
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(x, y - s * .2, 0, x, y - s * .2, s * 3.2);
+    g.addColorStop(0, rgba(L, .4 + flick * .15)); g.addColorStop(1, rgba(L, 0));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y - s * .2, s * 3.2, 0, 6.283); ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+    // ribbed body
+    const body = mix([214, 92, 22], mix([214, 92, 22], [60, 120, 100], .5), S.light);
+    [[-.55, .62], [.55, .62], [-.28, .72], [.28, .72], [0, .78]].forEach(([ox, rw], k) => {
+      const gg = ctx.createRadialGradient(x + ox * s - s * .1, y - s * .25, s * .1, x + ox * s, y, s * rw * 1.2);
+      gg.addColorStop(0, rgba(mix(body, [255, 190, 110], .35))); gg.addColorStop(1, rgba(mix(body, [60, 20, 10], .45)));
+      ctx.fillStyle = gg; ctx.beginPath(); ctx.ellipse(x + ox * s, y, s * rw * .62, s * .62, 0, 0, 6.283); ctx.fill();
+    });
+    ctx.fillStyle = '#3b2a12'; ctx.beginPath(); ctx.moveTo(x - s * .07, y - s * .55); ctx.quadraticCurveTo(x + s * .05, y - s * .9, x + s * .2, y - s * .86); ctx.lineTo(x + s * .08, y - s * .55); ctx.fill();
+    // carved face, lit from inside
+    const fc = rgba(mix([255, 214, 120], C.spectre, S.light), .85 + flick * .15);
+    ctx.fillStyle = fc;
+    const tri = (ax, ay, bx, by, cx2, cy2) => { ctx.beginPath(); ctx.moveTo(x + ax * s, y + ay * s); ctx.lineTo(x + bx * s, y + by * s); ctx.lineTo(x + cx2 * s, y + cy2 * s); ctx.fill(); };
+    if (face === 0) { tri(-.42, -.08, -.14, -.08, -.28, -.32); tri(.42, -.08, .14, -.08, .28, -.32); }
+    else if (face === 1) { tri(-.4, -.3, -.12, -.12, -.36, -.06); tri(.4, -.3, .12, -.12, .36, -.06); }
+    else { ctx.beginPath(); ctx.arc(x - s * .26, y - s * .16, s * .11, 0, 6.283); ctx.arc(x + s * .26, y - s * .16, s * .11, 0, 6.283); ctx.fill(); }
+    ctx.beginPath(); ctx.moveTo(x - s * .45, y + s * .08);
+    const teeth = face === 2 ? 3 : 4;
+    for (let k = 0; k <= teeth * 2; k++) { const fx = -.45 + .9 * k / (teeth * 2); ctx.lineTo(x + fx * s, y + s * (k % 2 ? .14 : .08) + (face === 1 ? Math.abs(fx) * -.12 * s : 0)); }
+    ctx.quadraticCurveTo(x, y + s * .5, x - s * .45, y + s * .08); ctx.fill();
+  }
+
+  function drawCurtains(){
+    const fold = (x0, w, flip) => {
+      const g = ctx.createLinearGradient(x0, 0, x0 + w, 0);
+      const n = 5; for (let k = 0; k <= n; k++) { g.addColorStop(k / n, k % 2 ? '#2b0a1c' : '#6a1d44'); }
+      ctx.fillStyle = g; ctx.beginPath();
+      const inner = flip ? x0 : x0 + w, outer = flip ? x0 + w : x0;
+      ctx.moveTo(outer, 0); ctx.lineTo(inner, 0); ctx.quadraticCurveTo(inner + (flip ? 1 : -1) * w * .25, H * .55, inner + (flip ? 1 : -1) * w * .05, H); ctx.lineTo(outer, H); ctx.fill();
+    };
+    fold(0, stageL + 10, false); fold(stageR - 10, W - stageR + 10, true);
+    // valance with scallops
+    const vg = ctx.createLinearGradient(0, 0, 0, valH); vg.addColorStop(0, '#2b0a1c'); vg.addColorStop(1, '#5e1a3c');
+    ctx.fillStyle = vg; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(W, 0); ctx.lineTo(W, valH);
+    const n = Math.max(6, Math.round(W / 110));
+    for (let k = n; k > 0; k--) { const x1 = W * k / n, x0 = W * (k - 1) / n; ctx.quadraticCurveTo((x0 + x1) / 2, valH + u * .55, x0, valH); }
+    ctx.fill();
+    ctx.strokeStyle = '#c99a45'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, valH - 6); ctx.lineTo(W, valH - 6); ctx.stroke();
+  }
+
+  function drawBats(dt, t){
+    bats = bats.filter(b => {
+      b.t += dt; b.ph += dt * 18; b.x += b.vx * dt; b.y += (b.vy + Math.sin(b.t * 3) * 40) * dt;
+      const f = Math.sin(b.ph), s = b.s;
+      ctx.fillStyle = '#0b060d'; ctx.save(); ctx.translate(b.x, b.y); ctx.scale(Math.sign(b.vx) || 1, 1);
+      ctx.beginPath(); ctx.ellipse(0, 0, s * .22, s * .14, 0, 0, 6.283); ctx.fill();
+      for (const sd of [-1, 1]) { ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(sd * s * .5, -s * (.2 + f * .5), sd * s, -s * f * .3); ctx.quadraticCurveTo(sd * s * .7, s * .1, sd * s * .45, s * .05); ctx.quadraticCurveTo(sd * s * .3, s * .15, 0, s * .05); ctx.fill(); }
+      ctx.restore();
+      return b.x > -80 && b.x < W + 80;
+    });
+  }
+  function drawFog(dt, flick){
+    const L = lightCol();
+    fog.forEach(f => { f.x += f.v * dt * (RM ? .2 : 1); if (f.x > 1.2) f.x = -.2; if (f.x < -.2) f.x = 1.2;
+      const x = f.x * W, y = floorY - u * .2 + f.y * u * .9, r = u * 2.6 * f.s;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, rgba(mix([190, 170, 200], L, .3), .14)); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill(); });
+  }
+  function drawMotes(dt, t){
+    const L = lightCol(); ctx.globalCompositeOperation = 'lighter';
+    motes.forEach(m => { if (!RM) { m.y -= dt * .01 * (.5 + m.s); if (m.y < 0) m.y = 1; }
+      const x = cx + (m.x - .5) * (stageR - stageL) * .8 + Math.sin(t / 1300 + m.s * 9) * 8, y = valH + m.y * (floorY - valH);
+      ctx.fillStyle = rgba(L, .25 * m.s * (1 - Math.abs(x - cx) / W)); ctx.beginPath(); ctx.arc(x, y, .8 + m.s * 1.4, 0, 6.283); ctx.fill(); });
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  function drawPops(dt){
+    ctx.textAlign = 'center'; pops = pops.filter(p => { p.t += dt; const a = 1 - p.t / 1; if (a <= 0) return false;
+      ctx.font = `${Math.round(u * .7 + (1 - a) * 4)}px "Pirata One", Georgia, serif`;
+      ctx.fillStyle = rgba(S.danse > 0 ? C.spectre : C.bone, a); ctx.fillText(p.text, p.x, p.y - easeOut(p.t) * u * 1.2); return true; });
+  }
+  const easeOut = t => 1 - Math.pow(1 - Math.min(1, t), 3);
+
+  // ---------- loop ----------
+  let last = performance.now(), nextBat = 4, autoT = 0, autoI = 0;
+  function frame(now){
+    const dt = Math.min(.05, (now - last) / 1000); last = now; const t = now;
+    physics(dt);
+    // danse macabre: the house lights turn spectral and the strings play themselves
+    if (S.danse > 0) {
+      S.danse -= dt * S.speed; autoT -= dt * S.speed;
+      if (autoT <= 0) { autoT = .2; const seq = [2, 0, 4, 1, 3, 0, 4, 2]; pluck(seq[autoI++ % seq.length], u * .9, autoI % 2 ? 1 : -1); }
+      if (S.danse <= 0) { S.combo = 0; renderCombo(); }
+    }
+    S.light += ((S.danse > 0 ? 1 : 0) - S.light) * Math.min(1, dt * 3);
+    if (S.danse <= 0 && performance.now() / 1000 - S.lastHit > 1.4 && S.combo) { S.combo = 0; renderCombo(); }
+    nextBat -= dt; if (nextBat <= 0 && !RM) { spawnBat(false); nextBat = 9 + Math.random() * 8; }
+    S.flash = Math.max(0, S.flash - dt * 1.5);
+    const flick = RM ? .5 : (Math.sin(t / 97) * .5 + Math.sin(t / 53) * .3 + Math.sin(t / 211) * .2) * .5 + .5;
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = rgba(C.night); ctx.fillRect(0, 0, W, H);
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(bgN, 0, 0);
+    if (S.light > .01) { ctx.globalAlpha = S.light; ctx.drawImage(bgS, 0, 0); ctx.globalAlpha = 1; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawShadow(t, flick);
+    drawFloor(flick);
+    drawFog(dt, flick);
+    drawThreads();
+    drawBar();
+    drawSkeleton(t);
+    drawMotes(dt, t);
+    const ps = u * .75 * PK, py = floorY + (H - floorY) * .42;
+    pumpkin(cx - u * 2.6 * PK, py, ps * .9, 0, flick, t); pumpkin(cx, py + u * .1, ps * 1.05, 1, 1 - flick, t); pumpkin(cx + u * 2.6 * PK, py, ps * .9, 2, flick, t);
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(curt, 0, 0); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawBats(dt, t);
+    drawPops(dt);
+    if (S.flash > 0) { ctx.fillStyle = rgba(C.spectre, S.flash * .25); ctx.fillRect(0, 0, W, H); }
+    // vignette
+    const vg = ctx.createRadialGradient(cx, H * .55, Math.min(W, H) * .35, cx, H * .55, Math.max(W, H) * .8);
+    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.55)'); ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- info ----------
+  const info = $('info'), btn = $('infoBtn');
+  const setInfo = open => { info.hidden = !open; btn.hidden = open; btn.setAttribute('aria-expanded', open); if (open) info.querySelector('.close').focus(); else btn.focus(); };
+  btn.onclick = () => setInfo(true);
+  info.querySelector('.close').onclick = () => setInfo(false);
+  addEventListener('keydown', e => { if (e.key === 'Escape' && !info.hidden) setInfo(false); });
+  addEventListener('resize', layout);
+  layout(); renderCombo(); requestAnimationFrame(frame);
+
+  // ---------- hooks for composing stills and video ----------
+  const finger = $('finger'); let fingerOn = false;
+  const showF = (x, y, d) => { if (!fingerOn) return; finger.hidden = false; finger.style.left = x + 'px'; finger.style.top = y + 'px'; finger.classList.toggle('down', !!d); };
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const tween = (ms, fn) => new Promise(res => { const t0 = performance.now(); const f = n => { const k = Math.min(1, (n - t0) / ms); fn(k); if (k < 1) requestAnimationFrame(f); else res(); }; requestAnimationFrame(f); });
+  window.__lab = {
+    state: S, threads: THREADS, bar, P, wait,
+    geom: i => threadGeom(THREADS[i]),
+    unit: () => ({ u, floorY, cx, W, H }),
+    relayout: layout,
+    finger(on){ fingerOn = on; finger.hidden = !on; },
+    mute(m){ muted = m; },
+    setSpeed(s){ S.speed = s; },
+    async pull(i, dx, dy, ms = 700, s = .55, hold = 120){
+      const g = threadGeom(THREADS[i]), x0 = g.ax + (g.bx - g.ax) * s, y0 = g.ay + (g.by - g.ay) * s;
+      showF(x0, y0, true); down(x0, y0); if (!mode || mode.k !== 'thread' || mode.i !== i) { if (mode && mode.k === 'thread') THREADS[mode.i].grab = null; if (mode && mode.k === 'bone') P[mode.p].pin = null; const [ax, ay] = attach(THREADS[i]); mode = { k: 'thread', i }; THREADS[i].grab = { x: x0, y: y0, x0, y0, hold: Math.hypot(x0 - ax, y0 - ay) }; }
+      await tween(ms, k => { const e = ease(k), x = x0 + dx * e, y = y0 + dy * e; move(x, y); showF(x, y, true); });
+      await wait(hold); up(); showF(x0 + dx, y0 + dy, false);
+    },
+    async strum(x0, y0, x1, y1, ms = 400){
+      prevPt = null; mode = { k: 'strum' }; prevPt = [x0, y0];
+      await tween(ms, k => { const e = ease(k), x = x0 + (x1 - x0) * e, y = y0 + (y1 - y0) * e; strumTo(x, y); showF(x, y, false); });
+      mode = null; prevPt = null;
+    },
+    async walk(x, ms = 900){ const x0 = bar.x; bar.drag = true; await tween(ms, k => { bar.tx = x0 + (x - x0) * ease(k); showF(bar.tx, bar.y, true); }); bar.drag = false; },
+    danse: startDanse, bat: () => spawnBat(true)
+  };
+})();
+</script>
