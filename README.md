@@ -6,6 +6,8 @@ Experiments in UI, motion and creative coding for games, apps and interfaces.
 
 | # | Lab | Category |
 |---|-----|----------|
+| 19 | [Pulling Strings](lab-19-pulling-strings/) | UI |
+| 18 | [Leg Day](lab-18-leg-day/) | Creative Coding |
 | 17 | [Feature Creep](lab-17-feature-creep/) | Motion |
 | 16 | [Noble Gas](lab-16-noble-gas/) | UI |
 | 15 | [Moonlighting](lab-15-moonlighting/) | Creative Coding |
