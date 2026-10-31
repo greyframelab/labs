@@ -1,0 +1,1021 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Lab #20 — Jump Start</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;800&family=Manrope:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a dark scrapyard workbench fills the screen; the machine sits in the middle wrapped in rarity rings. Parts tray docks at the bottom, readout top-right, the big Jump Start lever bottom-right. Single dark look by design. */
+:root{
+  --bench:#0b0d10; --peg:#161a1f; --steel:#2b3138; --steel-2:#3a424b; --rivet:#5b636c; --ink:#07090b;
+  --text:#e9ecef; --muted:#8c949c; --line:rgba(233,236,239,.12); --panel:rgba(16,19,23,.82);
+  --volt:#ffb12b; --volt-hot:#ffe2a3; --volt-dim:rgba(255,177,43,.16);
+  --display:"Unbounded","Arial Black",Impact,sans-serif;
+  --body:"Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--bench);color:var(--text);font-family:var(--body);overflow:hidden;-webkit-font-smoothing:antialiased;touch-action:none;user-select:none;-webkit-user-select:none}
+canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
+.title{position:fixed;z-index:3;top:calc(env(safe-area-inset-top,0px) + 16px);left:max(16px,env(safe-area-inset-left,0px));pointer-events:none;display:flex;flex-direction:column;gap:8px;max-width:min(420px,60vw)}
+.eyebrow{font:600 11px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.eyebrow b{color:var(--volt);font-weight:600}
+h1{font:800 clamp(26px,3.2vw,46px)/.92 var(--display);margin:0;letter-spacing:-.01em;text-transform:uppercase;white-space:nowrap}
+.hint{font:400 14px/1.45 var(--body);color:var(--muted);margin:2px 0 0;max-width:34ch}
+
+.readout{position:fixed;z-index:3;top:calc(env(safe-area-inset-top,0px) + 16px);right:max(16px,env(safe-area-inset-right,0px));width:236px;padding:14px 16px;background:var(--panel);border:1px solid var(--line);border-radius:10px;display:flex;flex-direction:column;gap:10px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.tier{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.tier b{font:800 18px/1 var(--display);text-transform:uppercase;letter-spacing:.02em}
+.tier b.on{color:var(--volt)}
+.pips{display:flex;gap:5px}
+.pips i{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--rivet)}
+.pips i.on{border-color:var(--volt);background:var(--volt);box-shadow:0 0 10px var(--volt)}
+.lab{display:flex;justify-content:space-between;font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-variant-numeric:tabular-nums}
+.lab span:last-child{color:var(--text)}
+.bar{position:relative;height:6px;border-radius:3px;background:rgba(233,236,239,.08);overflow:hidden}
+.bar i{position:absolute;inset:0 auto 0 0;width:0;background:var(--volt);border-radius:3px;transition:width .25s}
+.bar s{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--text);opacity:.7}
+.state{font:600 10px/1.3 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.state.warn{color:var(--volt)}
+
+.dock{position:fixed;z-index:4;left:max(16px,env(safe-area-inset-left,0px));right:max(16px,env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 16px);display:flex;align-items:flex-end;gap:12px}
+.tray{flex:1;min-width:0;display:flex;gap:8px;overflow-x:auto;padding:8px;background:var(--panel);border:1px solid var(--line);border-radius:12px;scrollbar-width:none;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.tray::-webkit-scrollbar{display:none}
+.part{flex:0 0 auto;width:84px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 4px 8px;border-radius:8px;border:1px solid transparent;background:rgba(233,236,239,.03);color:var(--text);cursor:grab;touch-action:none}
+.part:hover{border-color:var(--line);background:rgba(233,236,239,.06)}
+.part canvas{width:56px;height:46px;pointer-events:none}
+.part span{font:600 10px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase}
+.part em{font:400 10px/1 var(--mono);font-style:normal;color:var(--muted)}
+.part em.sup{color:var(--volt)}
+.actions{display:flex;flex-direction:column;gap:8px;align-items:stretch}
+.jump{height:64px;min-width:168px;padding:0 20px;border-radius:12px;border:0;background:var(--volt);color:#1a1205;font:800 15px/1 var(--display);text-transform:uppercase;letter-spacing:.04em;cursor:pointer;box-shadow:0 0 0 0 rgba(255,177,43,.5),0 10px 30px rgba(255,177,43,.25);transition:transform .12s,box-shadow .3s}
+.jump:hover{transform:translateY(-1px)}
+.jump:active{transform:translateY(1px)}
+.jump.live{background:transparent;color:var(--volt);border:1.5px solid var(--volt);box-shadow:none}
+.jump.shake{animation:shake .4s}
+@keyframes shake{20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}
+.mini{display:flex;gap:8px}
+.mini button{flex:1;height:32px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--text);font:600 10px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;cursor:pointer}
+.mini button:hover{border-color:var(--muted)}
+button:focus-visible,a:focus-visible{outline:2px solid var(--volt);outline-offset:2px}
+
+.stamp{position:fixed;z-index:6;left:50%;top:44%;transform:translate(-50%,-50%);pointer-events:none;text-align:center}
+.stamp b{display:block;font:800 clamp(44px,9vw,120px)/.9 var(--display);text-transform:uppercase;letter-spacing:-.01em;color:var(--volt-hot);text-shadow:0 0 30px rgba(255,177,43,.8),0 0 80px rgba(255,177,43,.45)}
+.stamp span{display:inline-block;margin-top:12px;padding:8px 12px;border-radius:6px;background:rgba(11,13,16,.88);font:600 12px/1 var(--mono);letter-spacing:.3em;text-transform:uppercase;color:var(--volt)}
+.stamp.go{animation:stamp 1.7s cubic-bezier(.2,.9,.3,1) forwards}
+@keyframes stamp{0%{opacity:0;transform:translate(-50%,-50%) scale(1.8);filter:blur(8px)}12%{opacity:1;transform:translate(-50%,-50%) scale(.96);filter:blur(0)}18%{transform:translate(-48%,-50%) scale(1)}20%{transform:translate(-52%,-50%) scale(1)}22%{transform:translate(-50%,-50%) scale(1)}75%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%) scale(1.04)}}
+
+#infoBtn{position:fixed;z-index:5;left:max(16px,env(safe-area-inset-left,0px));top:calc(env(safe-area-inset-top,0px) + 196px);padding:9px 14px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--text);font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;cursor:pointer}
+#info{position:fixed;z-index:8;left:max(16px,env(safe-area-inset-left,0px));top:calc(env(safe-area-inset-top,0px) + 16px);width:min(420px,calc(100% - 32px));max-height:calc(100% - 32px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));overflow:auto;padding:22px;background:#12161a;border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;gap:14px;box-shadow:0 20px 50px rgba(0,0,0,.6)}
+#info h3{font:800 30px/.95 var(--display);text-transform:uppercase;margin:0}
+#info h4{font:600 10px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--volt);margin:0 0 6px}
+#info p,#info li{font:400 14px/1.55 var(--body);margin:0;max-width:62ch;color:#cfd4d9}
+#info ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+#info .meta{font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+#info .close{position:absolute;top:10px;right:10px;width:32px;height:32px;border:0;background:transparent;font:400 22px/1 var(--body);color:var(--text);cursor:pointer}
+#allLabs{font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--text)}
+
+@media (max-width:760px){
+  .hint{display:none}
+  h1{font-size:26px}
+  .readout{top:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 186px);right:max(16px,env(safe-area-inset-right,0px));left:auto;width:auto;padding:10px 12px;gap:7px}
+  .readout .lab:not(.keep),.readout .bar:not(.keep){display:none}
+  .dock{flex-direction:column;align-items:stretch}
+  .actions{flex-direction:row}
+  .jump{flex:1;height:52px;min-width:0}
+  .mini{flex:0 0 auto;flex-direction:column}
+  .mini button{height:22px;padding:0 10px}
+  .part{width:72px}
+  #infoBtn{top:calc(env(safe-area-inset-top,0px) + 16px);left:auto;right:max(16px,env(safe-area-inset-right,0px));padding:8px 11px}
+  .hide-sm{display:none}
+}
+.rec .dock,.rec #infoBtn,.rec .hint{display:none!important}
+.rec .readout{top:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 20px);right:20px;left:auto}
+.rec .readout .lab:not(.keep),.rec .readout .bar:not(.keep){display:flex}
+.rec .readout .bar{display:block}
+@media (prefers-reduced-motion:reduce){.stamp.go{animation:fade 1.6s forwards}@keyframes fade{0%,80%{opacity:1}100%{opacity:0}}.jump{transition:none}}
+</style>
+
+<canvas id="c" aria-label="A machine assembled from scrap parts on a workbench"></canvas>
+
+<div class="title">
+  <div class="eyebrow"><b>Greyframe Labs</b> · #20<span class="hide-sm"> · Creative Coding</span></div>
+  <h1>Jump Start</h1>
+  <p class="hint">Drag scrap onto the bench. Every machine needs a heart. Then jump-start it and see what you built.</p>
+</div>
+
+<section class="readout" aria-label="Machine readout">
+  <div class="tier"><b id="tierName">Scrap</b><div class="pips" id="pips"><i></i><i></i><i></i><i></i><i></i></div></div>
+  <div class="lab keep"><span>Power</span><span id="pwrV">0 / 0</span></div>
+  <div class="bar keep"><i id="pwrBar"></i><s id="pwrMark"></s></div>
+  <div class="lab"><span>Parts</span><span id="partsV">0</span></div>
+  <div class="lab"><span>Stability</span><span id="stabV">—</span></div>
+  <div class="state" id="state">Dormant</div>
+</section>
+
+<div class="dock">
+  <div class="tray" id="tray" aria-label="Scrap parts. Drag onto the bench, or press to add."></div>
+  <div class="actions">
+    <button class="jump" id="jump" type="button">Jump start</button>
+    <div class="mini">
+      <button id="demoBtn" type="button">Demo</button>
+      <button id="clearBtn" type="button">Clear</button>
+    </div>
+  </div>
+</div>
+
+<div class="stamp" id="stamp" hidden><b id="stampB">Rare</b><span id="stampS">Tier 3 · stable</span></div>
+
+<button id="infoBtn" type="button" aria-expanded="false" aria-controls="info">About this lab</button>
+<aside id="info" hidden aria-label="About this lab">
+  <button class="close" type="button" aria-label="Close">×</button>
+  <div class="meta">Lab #20 · Creative Coding · 31 Oct 2026</div>
+  <h3>Jump Start</h3>
+  <div><h4>Idea</h4><p>What if a crafting screen had to be jump-started? Bolt scrap together, give it a heart, and throw the switch. Power surges from part to part, the machine wakes up, and rings around it tell you how good a build it is.</p></div>
+  <div><h4>Controls</h4><ul>
+    <li>Drag parts from the tray onto the bench, or press one to add it automatically. Parts snap to whatever they touch.</li>
+    <li>Drag a part back to the tray to scrap it.</li>
+    <li>Jump start powers the machine. Parts only work if they are bolted, directly or through others, to a heart.</li>
+    <li>If the parts need more power than the hearts and coils give, the machine glitches. Add a coil or remove something.</li>
+  </ul></div>
+  <div><h4>How it works</h4><p>Touching parts form a graph. The power surge travels through it outward from the heart, so you can see the order things wake up in. Cables are simulated ropes strung between neighbours. The glitch is not decoration: its strength is the power shortfall, so a stable build looks clean.</p></div>
+  <div><h4>Inspired by</h4><ul>
+    <li>Two maximalist scrap-machine collages seen on Instagram (author unknown).</li>
+    <li>Build-and-test loops like the vehicle workshops in Banjo-Kazooie: Nuts &amp; Bolts and Zelda: Tears of the Kingdom.</li>
+    <li>Loot rarity tiers, where colour and glow carry the value.</li>
+  </ul></div>
+  <div><h4>For game UI</h4><p>Crafting feels better when the result is felt, not just listed. Show the order systems come online, make failure readable (here, glitch equals power shortfall), and give the reward a moment of its own instead of a number in a corner.</p></div>
+  <a id="allLabs" href="https://claude.ai/artifact/CDYy2LnuZN3Tdb1A9BSHrG" target="_blank" rel="noopener">← All labs</a>
+  <script>if (/github\.io$/.test(location.hostname)) { const a = document.getElementById('allLabs'); a.href = '../'; a.removeAttribute('target'); }</script>
+</aside>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const cv = $('c'), ctx = cv.getContext('2d');
+  const scene = document.createElement('canvas'), sx = scene.getContext('2d');
+  const tR = document.createElement('canvas'), rx = tR.getContext('2d');
+  const tC = document.createElement('canvas'), cx2 = tC.getContext('2d');
+  const css = getComputedStyle(document.documentElement);
+  const T = n => css.getPropertyValue(n).trim();
+  const K = { bench: T('--bench'), peg: T('--peg'), steel: T('--steel'), steel2: T('--steel-2'), rivet: T('--rivet'), ink: T('--ink'), volt: T('--volt'), hot: T('--volt-hot'), text: T('--text'), muted: T('--muted') };
+  const mq = matchMedia('(prefers-reduced-motion: reduce)');
+  let RM = mq.matches; mq.addEventListener?.('change', e => RM = e.matches);
+  const REC = /[?&]rec/.test(location.search);
+  const FRAMES = /[?&]frames/.test(location.search);
+  if (REC) document.documentElement.classList.add('rec');
+
+  // seeded random so recordings are repeatable
+  let seed = 20261031;
+  const rnd = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const easeOut = t => 1 - Math.pow(1 - t, 3);
+
+  // ---------- parts ----------
+  const DEF = {
+    core:    { w: 76, h: 76, sup: 40, dem: 0, name: 'Heart' },
+    coil:    { w: 52, h: 46, sup: 18, dem: 0, name: 'Coil' },
+    fan:     { w: 66, h: 66, sup: 0, dem: 6, name: 'Fan' },
+    screen:  { w: 92, h: 64, sup: 0, dem: 8, name: 'Screen' },
+    board:   { w: 84, h: 52, sup: 0, dem: 4, name: 'Board' },
+    leg:     { w: 30, h: 64, sup: 0, dem: 6, name: 'Leg' },
+    antenna: { w: 24, h: 74, sup: 0, dem: 3, name: 'Antenna' },
+    speaker: { w: 56, h: 56, sup: 0, dem: 3, name: 'Speaker' },
+  };
+  const kick = (p, s, r = 0) => { if (RM) { s *= .3; r *= .3; } p.vsc += s; p.vrot += r; };
+  const CODE = { core: 'HRT-40', coil: 'CL-18', fan: 'FX-06', screen: 'VS-08', board: 'LB-04', leg: 'LG', antenna: 'AN', speaker: 'SP-03' };
+  const ORDER = ['core', 'coil', 'fan', 'screen', 'board', 'leg', 'antenna', 'speaker'];
+  let parts = [], uid = 1;
+  function mk(type, x, y) {
+    const d = DEF[type];
+    return { id: uid++, type, x, y, w: d.w, h: d.h, vx: 0, vy: 0, tx: x, ty: y, lit: 0, litAt: Infinity, spin: rnd() * 6, ph: rnd() * 6, drop: 0, fly: null, dead: 0, seed: rnd(), sc: 1, vsc: 0, rot: 0, vrot: 0, beatAt: Infinity };
+  }
+
+  // ---------- graph ----------
+  function gap(a, b) {
+    const dx = Math.abs(a.x - b.x) - (a.w + b.w) / 2, dy = Math.abs(a.y - b.y) - (a.h + b.h) / 2;
+    return { dx, dy, g: Math.max(dx, dy) };
+  }
+  let edges = [], comp = new Set(), dist = new Map();
+  function rebuild() {
+    edges = [];
+    const live = parts.filter(p => !p.fly && !p.dead && p !== drag?.p);
+    for (let i = 0; i < live.length; i++) for (let j = i + 1; j < live.length; j++) {
+      const a = live[i], b = live[j], { dx, dy } = gap(a, b);
+      if (dx < 12 && dy < 12 && !(dx > 0 && dy > 0)) edges.push([a, b]);
+    }
+    comp = new Set(); dist = new Map();
+    const q = [];
+    for (const p of live) if (p.type === 'core') { comp.add(p); dist.set(p, 0); q.push(p); }
+    while (q.length) {
+      const p = q.shift();
+      for (const [a, b] of edges) {
+        const o = a === p ? b : b === p ? a : null;
+        if (o && !comp.has(o)) { comp.add(o); dist.set(o, dist.get(p) + 1); q.push(o); }
+      }
+    }
+  }
+  function resolve(p) {
+    for (let k = 0; k < 8; k++) {
+      let moved = false;
+      for (const o of parts) {
+        if (o === p || o.fly || o.dead) continue;
+        const { dx, dy } = gap(p, o);
+        if (dx < 4 && dy < 4) {
+          if (dx > dy) p.tx += (p.x >= o.x ? 1 : -1) * (4 - dx);
+          else p.ty += (p.y >= o.y ? 1 : -1) * (4 - dy);
+          p.x = p.tx; p.y = p.ty; moved = true;
+        }
+      }
+      if (!moved) break;
+    }
+  }
+  function snap(p) {
+    let best = null, bg = 80;
+    for (const o of parts) {
+      if (o === p || o.fly || o.dead) continue;
+      const { dx, dy } = gap(p, o), g = Math.max(dx, dy);
+      if (g < bg) { bg = g; best = o; }
+    }
+    if (best) {
+      const { dx, dy } = gap(p, best);
+      if (dx >= dy) { // side by side
+        p.tx = best.x + (p.x >= best.x ? 1 : -1) * ((p.w + best.w) / 2 + 4);
+        if (Math.abs(p.y - best.y) < 16) p.ty = best.y;
+      } else {
+        p.ty = best.y + (p.y >= best.y ? 1 : -1) * ((p.h + best.h) / 2 + 4);
+        if (Math.abs(p.x - best.x) < 16) p.tx = best.x;
+      }
+      p.x = p.tx; p.y = p.ty;
+    }
+    resolve(p);
+    return !!best;
+  }
+  function autoSpot(type) {
+    const d = DEF[type], base = [...comp].length ? [...comp] : parts.filter(p => !p.dead);
+    if (!base.length) return { x: 0, y: 0 };
+    let best = null, bd = Infinity;
+    for (const o of base) for (const [sx_, sy_] of [[1, 0], [-1, 0], [0, -1], [0, 1]]) {
+      const x = o.x + sx_ * ((o.w + d.w) / 2 + 4), y = o.y + sy_ * ((o.h + d.h) / 2 + 4);
+      const test = { x, y, w: d.w, h: d.h };
+      if (parts.some(q => !q.dead && !q.fly && gap(test, q).dx < 3 && gap(test, q).dy < 3)) continue;
+      const score = Math.hypot(x, y * 1.3) + rnd() * 30;
+      if (score < bd) { bd = score; best = { x, y }; }
+    }
+    return best || { x: (rnd() - .5) * 200, y: (rnd() - .5) * 120 };
+  }
+
+  // ---------- power ----------
+  const P = { on: false, phase: 'off', t: 0, sup: 0, dem: 0, instab: 0, tier: 0, shown: 0 };
+  let glitch = 0, burst = 0, shake = 0, now = 0, flash = 0, lookAt = null, beatT = 0, beatN = 0;
+  let arcs = [];
+  function totals() {
+    let s = 0, d = 0;
+    for (const p of comp) { s += DEF[p.type].sup; d += DEF[p.type].dem; }
+    P.sup = s; P.dem = d;
+    P.instab = d > s ? clamp((d - s) / Math.max(d, 1) * 2.2, 0, 1) : 0;
+  }
+  function tierOf() {
+    const types = new Set([...comp].map(p => p.type).filter(t => t !== 'core')).size;
+    const raw = Math.floor((types * .6 + comp.size * .4) / 1.9);
+    return clamp(raw - (P.instab > .05 ? 1 : 0), 0, 5);
+  }
+  const TIERS = ['Scrap', 'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
+
+  function jumpStart() {
+    rebuild();
+    if (P.on) { powerDown(); return; }
+    if (![...comp].some(p => p.type === 'core')) {
+      $('jump').classList.remove('shake'); void $('jump').offsetWidth; $('jump').classList.add('shake');
+      $('state').textContent = 'Needs a heart'; $('state').classList.add('warn');
+      return;
+    }
+    P.on = true; P.phase = 'charge'; P.t = 0;
+    $('jump').textContent = 'Power down'; $('jump').classList.add('live');
+  }
+  function powerDown() {
+    P.on = false; P.phase = 'off';
+    for (const p of parts) { p.litAt = Infinity; }
+    burst = Math.max(burst, .5); shake = Math.max(shake, 4);
+    $('jump').textContent = 'Jump start'; $('jump').classList.remove('live');
+  }
+  function igniteWave(delayPer = .16) {
+    for (const p of comp) if (p.litAt === Infinity) p.litAt = now + dist.get(p) * delayPer;
+  }
+
+  // ---------- fx ----------
+  let sparks = [], waves = [];
+  function sparkBurst(x, y, n = 14, hot = true) {
+    if (RM) n = Math.ceil(n / 3);
+    for (let i = 0; i < n; i++) {
+      const a = rnd() * Math.PI * 2, s = 120 + rnd() * 380;
+      sparks.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 120, life: .35 + rnd() * .45, t: 0, hot });
+    }
+  }
+  function clunk(p, power = 1) {
+    sparkBurst(p.x, p.y + p.h / 2, 10 * power, false);
+    shake = Math.max(shake, 5 * power); burst = Math.max(burst, .22 * power);
+    p.drop = 1; kick(p, -5 * power, (rnd() - .5) * 3 * power);
+    lookAt = { x: p.x, y: p.y, t: now };
+  }
+
+  // ---------- cables (verlet ropes) ----------
+  const cables = new Map();
+  const JACKETS = ['#c9c1b1', '#4d565f', '#8a6a4f', '#1c2126', '#6f7a84'];
+  function port(a, b, side) {
+    const ang = Math.atan2(b.y - a.y, b.x - a.x);
+    const k = Math.min(a.w / 2 / Math.abs(Math.cos(ang) || 1e-6), a.h / 2 / Math.abs(Math.sin(ang) || 1e-6)) * .55;
+    const nx = -Math.sin(ang), ny = Math.cos(ang);
+    return { x: a.x + offX(a) + Math.cos(ang) * k * a.sc + nx * side, y: a.y + offY(a) + Math.sin(ang) * k * a.sc + ny * side };
+  }
+  function syncCables() {
+    const keep = new Set();
+    for (const [a, b] of edges) {
+      const key = a.id < b.id ? a.id + '-' + b.id : b.id + '-' + a.id;
+      keep.add(key);
+      let c = cables.get(key);
+      const side = ((a.id * 7 + b.id * 13) % 5 - 2) * 6;
+      const A = port(a, b, side), B = port(b, a, -side);
+      if (!c) {
+        const N = 11, pts = [];
+        for (let i = 0; i < N; i++) { const t = i / (N - 1); pts.push({ x: lerp(A.x, B.x, t), y: lerp(A.y, B.y, t), px: lerp(A.x, B.x, t), py: lerp(A.y, B.y, t) }); }
+        c = { a, b, pts, color: JACKETS[(a.id + b.id) % JACKETS.length], off: rnd(), slack: 1.18 + rnd() * .25, pulses: [] };
+        c.pts.from = a; cables.set(key, c);
+      }
+      c.A = A; c.B = B;
+    }
+    for (const k of [...cables.keys()]) if (!keep.has(k)) cables.delete(k);
+  }
+  function stepCables(dt) {
+    for (const c of cables.values()) {
+      const pts = c.pts, N = pts.length;
+      const L = Math.hypot(c.B.x - c.A.x, c.B.y - c.A.y) * c.slack / (N - 1);
+      for (let i = 1; i < N - 1; i++) {
+        const p = pts[i], vx = (p.x - p.px) * .97, vy = (p.y - p.py) * .97;
+        p.px = p.x; p.py = p.y; p.x += vx; p.y += vy + 900 * dt * dt;
+      }
+      pts[0].x = c.A.x; pts[0].y = c.A.y; pts[N - 1].x = c.B.x; pts[N - 1].y = c.B.y;
+      for (let it = 0; it < 6; it++) {
+        for (let i = 0; i < N - 1; i++) {
+          const p = pts[i], q = pts[i + 1], dx = q.x - p.x, dy = q.y - p.y, d = Math.hypot(dx, dy) || 1, diff = (d - L) / d * .5;
+          if (i > 0) { p.x += dx * diff; p.y += dy * diff; }
+          if (i + 1 < N - 1) { q.x -= dx * diff; q.y -= dy * diff; }
+        }
+      }
+    }
+  }
+
+  // ---------- camera ----------
+  const cam = { x: 0, y: 0, z: 1, tz: 1, tx: 0, ty: 0, lock: null };
+  let W = 0, H = 0, dpr = 1;
+  function viewport() {
+    const mob = innerWidth <= 760;
+    if (REC) return { top: 100, bottom: 150, h: innerHeight - 250, w: innerWidth - 40 };
+    const top = mob ? 70 : 90, bottom = mob ? 260 : 140;
+    return { top, bottom, h: innerHeight - top - bottom, w: innerWidth - (mob ? 32 : 560) };
+  }
+  function fitCam() {
+    const list = parts.filter(p => !p.dead && !p.fly);
+    const v = viewport();
+    if (!list.length) { cam.tx = 0; cam.ty = 0; cam.tz = 1; return; }
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const p of list) { x0 = Math.min(x0, p.x - p.w / 2); x1 = Math.max(x1, p.x + p.w / 2); y0 = Math.min(y0, p.y - p.h / 2); y1 = Math.max(y1, p.y + p.h / 2); }
+    const pad = 40 + P.shown * 15;
+    const z = Math.min(Math.max(v.w, innerWidth * .6) / (x1 - x0 + pad * 2), v.h / (y1 - y0 + pad * 2), 2.3);
+    cam.tz = clamp(z, .45, 2.3);
+    cam.tx = (x0 + x1) / 2;
+    cam.ty = (y0 + y1) / 2 - ((v.top - v.bottom) / 2) / cam.tz;
+  }
+  function toWorld(px, py) { return { x: (px - innerWidth / 2) / cam.z + cam.x, y: (py - innerHeight / 2) / cam.z + cam.y }; }
+
+  // ---------- input ----------
+  let drag = null, pointer = { x: 0, y: 0, has: false };
+  const trayEl = $('tray');
+  function overTray(cxp, cyp) { const r = trayEl.getBoundingClientRect(); return cxp >= r.left && cxp <= r.right && cyp >= r.top - 10 && cyp <= r.bottom; }
+  function hit(w) {
+    for (let i = parts.length - 1; i >= 0; i--) { const p = parts[i]; if (!p.dead && !p.fly && Math.abs(w.x - p.x) < p.w / 2 && Math.abs(w.y - p.y) < p.h / 2) return p; }
+    return null;
+  }
+  cv.addEventListener('pointerdown', e => {
+    if (demo.on) stopDemo();
+    const w = toWorld(e.clientX, e.clientY), p = hit(w);
+    if (!p) return;
+    drag = { p, ox: p.x - w.x, oy: p.y - w.y, sx: e.clientX, sy: e.clientY, moved: false, fromTray: false };
+    parts.splice(parts.indexOf(p), 1); parts.push(p);
+    cv.setPointerCapture?.(e.pointerId);
+  });
+  addEventListener('pointermove', e => {
+    const w = toWorld(e.clientX, e.clientY); pointer = { x: w.x, y: w.y, has: true };
+    if (!drag) return;
+    if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 5) drag.moved = true;
+    drag.p.x = drag.p.tx = w.x + drag.ox; drag.p.y = drag.p.ty = w.y + drag.oy;
+  });
+  addEventListener('pointerup', e => {
+    if (!drag) return;
+    const p = drag.p, fromTray = drag.fromTray, moved = drag.moved;
+    drag = null;
+    if (overTray(e.clientX, e.clientY)) { scrap(p); return; }
+    if (fromTray && !moved) { const s = autoSpot(p.type); p.x = p.tx = s.x; p.y = p.ty = s.y; }
+    if (snap(p)) clunk(p, .8); else clunk(p, .4);
+    afterChange(p);
+  });
+  function scrap(p) { p.dead = 1; sparkBurst(p.x, p.y, 8, false); setTimeout(() => { parts = parts.filter(q => q !== p); rebuild(); }, 0); afterChange(); }
+  function afterChange(p) {
+    rebuild();
+    if (P.on) {
+      if (![...comp].some(q => q.type === 'core')) { powerDown(); return; }
+      for (const q of parts) if (!comp.has(q)) q.litAt = Infinity;
+      if (p && comp.has(p)) p.litAt = now + .25;
+      igniteWave(.1);
+    }
+  }
+
+  // tray
+  ORDER.forEach(type => {
+    const d = DEF[type];
+    const b = document.createElement('button');
+    b.className = 'part'; b.type = 'button'; b.dataset.type = type;
+    b.setAttribute('aria-label', `${d.name}, ${d.sup ? 'gives ' + d.sup : 'uses ' + d.dem} power`);
+    const ic = document.createElement('canvas'); ic.width = 112; ic.height = 92;
+    b.append(ic);
+    const s = document.createElement('span'); s.textContent = d.name; b.append(s);
+    const em = document.createElement('em'); em.textContent = d.sup ? `+${d.sup}` : `−${d.dem}`; if (d.sup) em.className = 'sup'; b.append(em);
+    trayEl.append(b);
+    const ix = ic.getContext('2d');
+    const k = Math.min(100 / d.w, 80 / d.h, 1.1);
+    ix.translate(56, 46); ix.scale(k, k);
+    drawPart(ix, { ...mk(type, 0, 0), lit: type === 'core' || type === 'coil' ? .6 : 0 }, true);
+    b.addEventListener('pointerdown', e => {
+      if (demo.on) stopDemo();
+      e.preventDefault();
+      const w = toWorld(e.clientX, e.clientY);
+      const p = mk(type, w.x, w.y); parts.push(p);
+      drag = { p, ox: 0, oy: 0, sx: e.clientX, sy: e.clientY, moved: false, fromTray: true };
+    });
+    b.addEventListener('keydown', e => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault(); rebuild();
+      const s2 = autoSpot(type), p = mk(type, s2.x, s2.y); parts.push(p); snap(p); clunk(p, .8); afterChange(p);
+    });
+  });
+  $('jump').onclick = () => { if (demo.on) stopDemo(); jumpStart(); };
+  $('clearBtn').onclick = () => { if (demo.on) stopDemo(); if (P.on) powerDown(); parts = [mk('core', 0, 0)]; rebuild(); };
+  $('demoBtn').onclick = () => demo.on ? stopDemo() : startDemo();
+
+  // ---------- demo choreography ----------
+  const demo = { on: false, t: 0, i: 0 };
+  const flyIn = (type, x, y) => () => { const p = mk(type, x, y); p.fly = { t: 0, dur: .5, fx: x + (rnd() - .5) * 220, fy: y + 560, r: (rnd() < .5 ? -1 : 1) * (2 + rnd() * 3) }; p.x = p.fly.fx; p.y = p.fly.fy; parts.push(p); };
+  const SCRIPT = [
+    [0.0, () => { parts = [mk('core', 0, 0)]; if (P.on) powerDown(); rebuild(); cam.z = 1.6; }],
+    [0.5, flyIn('fan', 75, 0)], [1.0, flyIn('screen', 0, -74)], [1.5, flyIn('board', -84, 0)],
+    [2.0, flyIn('coil', -86, 53)], [2.5, flyIn('leg', -20, 74)], [2.8, flyIn('leg', 20, 74)],
+    [3.5, () => jumpStart()],
+    [6.4, flyIn('antenna', 30, -147)], [6.9, flyIn('speaker', 140, 0)],
+    [8.4, flyIn('screen', 96, -74)], [8.8, flyIn('fan', 75, 70)], [9.2, flyIn('screen', -96, -74)], [9.7, flyIn('screen', 158, 70)],
+    [11.4, flyIn('coil', -142, 53)],
+    [16.2, () => stopDemo()],
+  ];
+  function startDemo() {
+    demo.on = true; demo.t = 0; demo.i = 0; seed = 20261031;
+    $('demoBtn').textContent = 'Stop';
+  }
+  function stopDemo() { demo.on = false; $('demoBtn').textContent = 'Demo'; demo.ended = true; }
+
+  // ---------- drawing parts ----------
+  function rr(c, x, y, w, h, r) { c.beginPath(); c.roundRect(x, y, w, h, r); }
+  function voltA(a) { return `rgba(255,177,43,${a})`; }
+  function hazard(c, x, y, w, h) {
+    c.save(); rr(c, x, y, w, h, 1.5); c.clip(); c.fillStyle = '#d6981f'; c.fillRect(x, y, w, h);
+    c.fillStyle = '#121416'; for (let i = -h; i < w + h; i += 6) { c.beginPath(); c.moveTo(x + i, y + h); c.lineTo(x + i + 3, y + h); c.lineTo(x + i + 3 + h, y); c.lineTo(x + i + h, y); c.fill(); }
+    c.restore();
+  }
+  function body(c, p, r = 7) {
+    const w = p.w, h = p.h;
+    rr(c, -w / 2, -h / 2, w, h, r); c.fillStyle = K.ink; c.fill();
+    rr(c, -w / 2 + 2, -h / 2 + 2, w - 4, h - 4, r - 2);
+    const g = c.createLinearGradient(0, -h / 2, 0, h / 2); g.addColorStop(0, K.steel2); g.addColorStop(1, K.steel);
+    c.fillStyle = g; c.fill();
+    // bevel: lit top-left, dark bottom-right
+    c.lineWidth = 1;
+    c.strokeStyle = 'rgba(255,255,255,.14)'; c.beginPath(); c.moveTo(-w / 2 + 3, h / 2 - r); c.lineTo(-w / 2 + 3, -h / 2 + r); c.quadraticCurveTo(-w / 2 + 3, -h / 2 + 3, -w / 2 + r, -h / 2 + 3); c.lineTo(w / 2 - r, -h / 2 + 3); c.stroke();
+    c.strokeStyle = 'rgba(0,0,0,.5)'; c.beginPath(); c.moveTo(w / 2 - 3, -h / 2 + r); c.lineTo(w / 2 - 3, h / 2 - r); c.quadraticCurveTo(w / 2 - 3, h / 2 - 3, w / 2 - r, h / 2 - 3); c.lineTo(-w / 2 + r, h / 2 - 3); c.stroke();
+    // wear scratches
+    let sd = p.seed * 1000;
+    const sr = () => (sd = (sd * 9301 + 49297) % 233280) / 233280;
+    c.strokeStyle = 'rgba(255,255,255,.07)'; c.lineWidth = .8;
+    for (let i = 0; i < 3; i++) { const x = (sr() - .5) * (w - 14), y = (sr() - .5) * (h - 14), l = 4 + sr() * 10, a = sr() * 3; c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); c.stroke(); }
+    if (w > 40 && h > 40) for (const [ax, ay] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      const x = ax * (w / 2 - 7), y = ay * (h / 2 - 7), a = sr() * 3;
+      c.fillStyle = K.ink; c.beginPath(); c.arc(x, y + .6, 2.6, 0, 7); c.fill();
+      c.fillStyle = '#6d757e'; c.beginPath(); c.arc(x, y, 2.3, 0, 7); c.fill();
+      c.strokeStyle = 'rgba(0,0,0,.7)'; c.lineWidth = .9; c.beginPath(); c.moveTo(x - Math.cos(a) * 1.8, y - Math.sin(a) * 1.8); c.lineTo(x + Math.cos(a) * 1.8, y + Math.sin(a) * 1.8); c.stroke();
+    }
+    // stencilled code
+    if (p.type === 'screen' || p.type === 'speaker') { c.font = '600 5px "JetBrains Mono",monospace'; c.fillStyle = 'rgba(233,236,239,.32)'; c.textBaseline = 'alphabetic'; c.fillText(CODE[p.type], -w / 2 + 13, h / 2 - 3.2); }
+  }
+  function glow(c, x, y, r, a) { if (a <= .01) return; const g = c.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, voltA(a)); g.addColorStop(1, voltA(0)); c.fillStyle = g; c.fillRect(x - r, y - r, r * 2, r * 2); }
+  function drawPart(c, p, icon = false) {
+    const L = p.lit, t = now + p.ph;
+    c.save();
+    switch (p.type) {
+      case 'core': {
+        body(c, p, 12);
+        c.strokeStyle = K.ink; c.lineWidth = 9; c.beginPath(); c.arc(0, 0, 27, 0, 7); c.stroke();
+        c.strokeStyle = K.rivet; c.lineWidth = 5; c.beginPath(); c.arc(0, 0, 27, 0, 7); c.stroke();
+        const segs = 10, rot = t * (.3 + L * 2.2);
+        for (let i = 0; i < segs; i++) {
+          const a0 = rot + i / segs * Math.PI * 2;
+          c.strokeStyle = L > .02 ? voltA(.35 + L * .65 * (i % 2 ? .6 : 1)) : '#3a424b'; c.lineWidth = 4;
+          c.beginPath(); c.arc(0, 0, 27, a0, a0 + Math.PI * 2 / segs * .62); c.stroke();
+        }
+        c.strokeStyle = 'rgba(0,0,0,.55)'; c.lineWidth = 1;
+        for (let i = 0; i < 24; i++) { const a = i / 24 * Math.PI * 2; c.beginPath(); c.moveTo(Math.cos(a) * 33, Math.sin(a) * 33); c.lineTo(Math.cos(a) * 35.5, Math.sin(a) * 35.5); c.stroke(); }
+        const pulse = .75 + Math.sin(t * 3.2) * .25 * L + (p.sc - 1) * 3 * L;
+        c.globalCompositeOperation = 'lighter'; glow(c, 0, 0, 46, L * .55 * pulse); c.globalCompositeOperation = 'source-over';
+        c.fillStyle = L > .02 ? K.volt : '#14181c'; c.beginPath(); c.arc(0, 0, 15, 0, 7); c.fill();
+        c.fillStyle = L > .02 ? K.hot : '#1d2227'; c.beginPath(); c.arc(0, 0, 7 + pulse * 2 * L, 0, 7); c.fill();
+        break;
+      }
+      case 'coil': {
+        body(c, p, 6);
+        for (let i = 0; i < 8; i++) {
+          const y = -14 + i * 4.2;
+          c.strokeStyle = L > .02 ? voltA(.3 + L * .6 * (.5 + .5 * Math.sin(t * 6 - i))) : '#5b636c'; c.lineWidth = 2.4;
+          c.beginPath(); c.moveTo(-18, y); c.lineTo(18, y); c.stroke();
+        }
+        c.fillStyle = K.rivet; c.fillRect(-14, -p.h / 2 - 5, 7, 6); c.fillRect(7, -p.h / 2 - 5, 7, 6);
+        hazard(c, -p.w / 2 + 5, p.h / 2 - 9, p.w - 10, 4.5);
+        c.globalCompositeOperation = 'lighter'; glow(c, 0, 0, 34, L * .25); c.globalCompositeOperation = 'source-over';
+        break;
+      }
+      case 'fan': {
+        body(c, p, 8);
+        c.fillStyle = K.ink; c.beginPath(); c.arc(0, 0, 27, 0, 7); c.fill();
+        const sp = p.spin;
+        const blur = clamp(p.spinV / 30, 0, .8);
+        if (blur > .05) { c.fillStyle = `rgba(110,120,130,${blur * .35})`; c.beginPath(); c.arc(0, 0, 24, 0, 7); c.fill(); }
+        c.globalAlpha = 1 - blur * .7;
+        for (let i = 0; i < 5; i++) {
+          c.save(); c.rotate(sp + i * Math.PI * 2 / 5);
+          c.fillStyle = '#5f6973'; c.beginPath(); c.moveTo(4, -3); c.quadraticCurveTo(16, -12, 24, -2); c.quadraticCurveTo(16, 4, 4, 3); c.closePath(); c.fill();
+          c.restore();
+        }
+        c.globalAlpha = 1;
+        c.fillStyle = L > .02 ? K.volt : '#3a424b'; c.beginPath(); c.arc(0, 0, 6, 0, 7); c.fill();
+        c.strokeStyle = 'rgba(0,0,0,.6)'; c.lineWidth = 1.5;
+        for (let i = -2; i <= 2; i++) { c.beginPath(); c.moveTo(-27, i * 9); c.lineTo(27, i * 9); c.stroke(); }
+        break;
+      }
+      case 'screen': {
+        body(c, p, 8);
+        rr(c, -p.w / 2 + 8, -p.h / 2 + 8, p.w - 16, p.h - 18, 5); c.fillStyle = '#05070a'; c.fill();
+        c.save(); c.clip();
+        if (L > .02) {
+          c.fillStyle = voltA(.06 * L); c.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+          const tgt = !icon && lookAt && now - lookAt.t < 1.4 && !(lookAt.x === p.x && lookAt.y === p.y) ? lookAt : pointer.has && !demo.on ? pointer : null;
+          const lx = icon ? 0 : clamp((tgt ? tgt.x - p.x : Math.sin(t * .7) * 40) / 22, -1, 1) * 7;
+          const ly = icon ? 0 : clamp((tgt ? tgt.y - p.y : Math.cos(t * .5) * 20) / 22, -1, 1) * 4;
+          const blink = (Math.sin(t * 1.3 + p.seed * 9) > .985) ? .15 : 1;
+          const unstable = P.instab > .05 && rnd() < P.instab * .5;
+          if (unstable) {
+            for (let i = 0; i < 6; i++) { c.fillStyle = voltA(.2 + rnd() * .5); c.fillRect(-40 + rnd() * 20, -20 + rnd() * 36, 20 + rnd() * 50, 2 + rnd() * 3); }
+          } else {
+            for (const ex of [-17, 17]) {
+              c.fillStyle = voltA(.9 * L);
+              rr(c, ex - 8 + lx, -11 * blink - 2 + ly, 16, 22 * blink, 5); c.fill();
+              c.fillStyle = `rgba(255,244,214,${.9 * L})`; rr(c, ex - 5 + lx * 1.15, -9 * blink + ly, 5, 6 * blink, 2); c.fill();
+            }
+            c.fillStyle = voltA(.5 * L); c.fillRect(-12 + lx * .5, 15 + ly * .5, 24, 2.5);
+          }
+          c.fillStyle = 'rgba(0,0,0,.25)';
+          for (let y = -p.h / 2; y < p.h / 2; y += 3) c.fillRect(-p.w / 2, y, p.w, 1);
+        } else {
+          c.strokeStyle = 'rgba(255,255,255,.07)'; c.lineWidth = 6; c.beginPath(); c.moveTo(-30, 20); c.lineTo(10, -30); c.stroke();
+        }
+        const gl = c.createLinearGradient(-p.w / 2, -p.h / 2, p.w / 4, p.h / 2); gl.addColorStop(0, 'rgba(255,255,255,.1)'); gl.addColorStop(.45, 'rgba(255,255,255,0)');
+        c.fillStyle = gl; c.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        c.restore();
+        c.fillStyle = L > .02 ? K.volt : '#3a424b'; c.beginPath(); c.arc(p.w / 2 - 12, p.h / 2 - 6, 2, 0, 7); c.fill();
+        break;
+      }
+      case 'board': {
+        body(c, p, 5);
+        rr(c, -p.w / 2 + 6, -p.h / 2 + 6, p.w - 12, p.h - 12, 3); c.fillStyle = '#1a2025'; c.fill();
+        const traces = [[-34, -14, -6, -14, -6, 6, 30, 6], [-34, 0, -18, 0, -18, 14, 10, 14], [-20, -14, -20, -20], [12, -14, 30, -14, 30, -4], [-34, 12, -26, 12]];
+        traces.forEach((tr, i) => {
+          c.strokeStyle = '#3c454e'; c.lineWidth = 2; c.beginPath(); c.moveTo(tr[0], tr[1]); for (let k = 2; k < tr.length; k += 2) c.lineTo(tr[k], tr[k + 1]); c.stroke();
+          if (L > .02) {
+            const ph = (t * 1.6 + i * .37) % 1;
+            c.strokeStyle = voltA(.85 * L); c.lineWidth = 2; c.setLineDash([6, 40]); c.lineDashOffset = -ph * 46;
+            c.beginPath(); c.moveTo(tr[0], tr[1]); for (let k = 2; k < tr.length; k += 2) c.lineTo(tr[k], tr[k + 1]); c.stroke(); c.setLineDash([]);
+          }
+        });
+        c.fillStyle = '#0c0f12'; c.fillRect(-2, -10, 22, 14); c.fillRect(-30, 2, 10, 8);
+        c.fillStyle = L > .02 ? voltA(.4 + .6 * (Math.sin(t * 9) > 0 ? 1 : .2) * L) : '#2a3138'; c.fillRect(26, 14, 4, 4);
+        break;
+      }
+      case 'leg': {
+        const comp_ = P.on && L > .2 ? Math.abs(Math.sin(now * 5 + (p.x > 0 ? 0 : Math.PI / 2))) : 0;
+        const top = -p.h / 2, foot = p.h / 2 - 2 - comp_ * 6;
+        c.fillStyle = K.ink; rr(c, -12, top, 24, 14, 3); c.fill(); c.fillStyle = K.steel2; rr(c, -10, top + 2, 20, 10, 2); c.fill(); hazard(c, -8, top + 8, 16, 3);
+        c.strokeStyle = L > .02 ? voltA(.5 + .5 * L) : '#6b747d'; c.lineWidth = 3; c.lineJoin = 'round';
+        c.beginPath(); const n = 6, y0 = top + 14, y1 = foot - 8;
+        c.moveTo(0, y0); for (let i = 1; i <= n; i++) c.lineTo(i % 2 ? 9 : -9, lerp(y0, y1, i / (n + 1))); c.lineTo(0, y1); c.stroke();
+        c.fillStyle = K.ink; rr(c, -15, foot - 8, 30, 10, 4); c.fill(); c.fillStyle = K.steel2; rr(c, -13, foot - 6, 26, 6, 3); c.fill();
+        break;
+      }
+      case 'antenna': {
+        c.fillStyle = K.ink; rr(c, -12, p.h / 2 - 18, 24, 18, 4); c.fill(); c.fillStyle = K.steel2; rr(c, -10, p.h / 2 - 16, 20, 14, 3); c.fill();
+        c.strokeStyle = '#8b949c'; c.lineWidth = 2.5; c.beginPath(); c.moveTo(0, p.h / 2 - 18); c.lineTo(0, -p.h / 2 + 8); c.stroke();
+        c.lineWidth = 1.5; for (const y of [-12, 0, 12]) { c.beginPath(); c.moveTo(-6, y); c.lineTo(6, y); c.stroke(); }
+        const bl = L > .02 ? (Math.sin(t * 4) > .2 ? 1 : .25) * L : 0;
+        c.globalCompositeOperation = 'lighter'; glow(c, 0, -p.h / 2 + 6, 22, bl * .7); c.globalCompositeOperation = 'source-over';
+        c.fillStyle = bl > .1 ? K.hot : '#3a424b'; c.beginPath(); c.arc(0, -p.h / 2 + 6, 5, 0, 7); c.fill();
+        break;
+      }
+      case 'speaker': {
+        body(c, p, 8);
+        const pump = L > .02 ? 1 + Math.max(0, Math.sin(t * 6)) * .1 * L : 1;
+        c.fillStyle = K.ink; c.beginPath(); c.arc(0, 0, 22, 0, 7); c.fill();
+        c.save(); c.scale(pump, pump);
+        for (const [r, col] of [[18, '#4a535c'], [13, '#2f363d'], [7, L > .02 ? K.volt : '#4a535c']]) { c.fillStyle = col; c.beginPath(); c.arc(0, 0, r, 0, 7); c.fill(); }
+        c.restore();
+        break;
+      }
+    }
+    c.restore();
+  }
+
+  // ---------- rarity rings ----------
+  const rings = [];
+  function silhouette(c, e) {
+    c.beginPath();
+    for (const p of comp) c.roundRect(p.x + offX(p) - p.w / 2 - e, p.y - p.h / 2 - e + bob(p), p.w + e * 2, p.h + e * 2, 10 + e);
+  }
+  function drawRings(c) {
+    if (!comp.size) return;
+    for (let i = rings.length - 1; i >= 0; i--) {
+      const r = rings[i];
+      if (r.a <= .01) continue;
+      const jit = P.instab > .05 && !RM ? (rnd() - .5) * 8 * P.instab : 0;
+      c.save(); c.translate(jit, 0);
+      const inten = 1 - i * .13;
+      silhouette(c, r.e + r.w); c.fillStyle = `rgba(255,${Math.round(177 + 60 * (1 - inten))},${Math.round(43 + 120 * (1 - inten) * .5)},${r.a * inten})`; c.fill();
+      silhouette(c, r.e); c.fillStyle = K.bench; c.fill();
+      c.restore();
+    }
+  }
+  function updateRings(dt) {
+    const want = P.on && P.phase === 'alive' ? P.tier : 0;
+    while (rings.length < want) {
+      const i = rings.length;
+      rings.push({ e: 0, a: 0, w: 4, born: now });
+      flashRing = { t: 0, e0: 16 + i * 14 };
+      if (i + 1 === want && want > P.shown) setTimeout(() => announce(want), 0);
+    }
+    for (let i = 0; i < rings.length; i++) {
+      const r = rings[i], dying = i >= want;
+      const targetE = 16 + i * 14;
+      r.ve = (r.ve || 0) + ((dying ? targetE + 30 : targetE) - r.e) * 120 * dt; r.ve *= Math.pow(.02, dt);
+      r.e += r.ve * dt;
+      r.a = lerp(r.a, dying ? 0 : 1, clamp(dt * (dying ? 6 : 8), 0, 1));
+      r.w = lerp(r.w, i === 0 ? 5 : 3.5, dt * 4);
+    }
+    while (rings.length && rings[rings.length - 1].a < .02 && rings.length > want) rings.pop();
+    P.shown = want;
+  }
+  let flashRing = null;
+  function announce(tier) {
+    if (tier <= 0) return;
+    const s = $('stamp');
+    $('stampB').textContent = TIERS[tier];
+    $('stampS').textContent = `Tier ${tier} · ${P.instab > .05 ? 'unstable' : 'stable'}`;
+    s.hidden = false; s.classList.remove('go'); void s.offsetWidth; s.classList.add('go');
+    burst = Math.max(burst, .55); shake = Math.max(shake, 9);
+    for (const p of comp) if (p.type === 'core') sparkBurst(p.x, p.y, 34, true);
+  }
+
+  // ---------- update ----------
+  let walking = false, sway = 0, swayV = 0;
+  function bob(p) { return walking && p.type !== 'leg' && comp.has(p) ? -Math.abs(Math.sin(now * 5)) * 4 : 0; }
+  function offX(p) { return walking && p.type !== 'leg' && comp.has(p) ? sway : 0; }
+  function offY(p) { return bob(p) - (p.drop ? Math.sin(p.drop * Math.PI) * 4 : 0); }
+  let hudT = 0;
+  function update(dt) {
+    now += dt;
+    if (demo.on) { demo.t += dt; while (demo.i < SCRIPT.length && demo.t >= SCRIPT[demo.i][0]) SCRIPT[demo.i++][1](); }
+
+    // fly-ins
+    for (const p of parts) if (p.fly) {
+      p.fly.t += dt / p.fly.dur;
+      const k = easeOut(clamp(p.fly.t, 0, 1));
+      p.x = lerp(p.fly.fx, p.tx, k); p.y = lerp(p.fly.fy, p.ty, k) - Math.sin(k * Math.PI) * 80; p.rot = (1 - k) * p.fly.r; p.sc = lerp(1.25, 1, k);
+      if (p.fly.t >= 1) { const r0 = p.fly.r; p.fly = null; p.x = p.tx; p.y = p.ty; p.rot = 0; p.vrot = -r0 * 2; snap(p); clunk(p, 1); afterChange(p); }
+    }
+    rebuild(); totals(); syncCables(); stepCables(dt);
+
+    // power sequence
+    if (P.on) {
+      P.t += dt;
+      if (P.phase === 'charge') {
+        glitch = Math.max(glitch, P.t / .9 * .7); shake = Math.max(shake, P.t * 4);
+        for (const p of comp) if (p.type === 'core') { p.lit = Math.min(1, P.t / .9); if (rnd() < .6) { const a = rnd() * 7, r = 140; sparks.push({ x: p.x + Math.cos(a) * r, y: p.y + Math.sin(a) * r, vx: -Math.cos(a) * 320, vy: -Math.sin(a) * 320, life: .4, t: 0, hot: true, inward: true }); } }
+        if (P.t > .9) { P.phase = 'wave'; P.t = 0; igniteWave(.17); burst = 1; shake = 14; flash = 1; for (const p of comp) if (p.type === 'core') sparkBurst(p.x, p.y, 40, true); }
+      } else if (P.phase === 'wave') {
+        const maxD = Math.max(0, ...[...comp].map(p => dist.get(p)));
+        if (P.t > maxD * .17 + .45) { P.phase = 'alive'; }
+      }
+    }
+    for (const p of parts) {
+      const on = P.on && comp.has(p) && now >= p.litAt && P.phase !== 'charge';
+      if (on && !p.wasOn && P.phase !== 'off') { waves.push({ x: p.x, y: p.y, t: 0 }); sparkBurst(p.x, p.y, 8, true); burst = Math.max(burst, .25); shake = Math.max(shake, 3); kick(p, 7, (rnd() - .5) * 4); }
+      p.wasOn = on;
+      let target = on ? 1 : 0;
+      if (on && P.instab > .05 && rnd() < P.instab * .35) target = .15;
+      if (!(P.phase === 'charge' && p.type === 'core')) p.lit = lerp(p.lit, target, clamp(dt * (on ? 10 : 4), 0, 1));
+      if (p.type === 'fan') { p.spinV = lerp(p.spinV || 0, p.lit * (P.instab > .05 ? 14 : 34), dt * 1.5); p.spin += p.spinV * dt; }
+      p.drop = Math.max(0, p.drop - dt * 4);
+      if (!p.fly) {
+        p.vsc += ((1 - p.sc) * 420 - p.vsc * 13) * dt; p.sc += p.vsc * dt;
+        const rT = p.type === 'antenna' && comp.has(p) ? -swayV * .02 : 0;
+        p.vrot += ((rT - p.rot) * (p.type === 'antenna' ? 160 : 380) - p.vrot * (p.type === 'antenna' ? 5 : 14)) * dt; p.rot += p.vrot * dt;
+      }
+      if (now >= p.beatAt) { p.beatAt = Infinity; kick(p, p.type === 'core' ? 0 : 1.6, 0); }
+    }
+    // walk + sway
+    walking = P.on && P.phase === 'alive' && !RM && parts.some(q => q.type === 'leg' && comp.has(q));
+    const sw = walking ? Math.sin(now * 2.5) * 5 : 0; swayV = (sw - sway) / Math.max(dt, 1e-4); sway = sw;
+    // heartbeat: lub-dub, pulses through cables
+    const alive = P.on && (P.phase === 'alive' || P.phase === 'wave');
+    if (alive) {
+      beatT -= dt;
+      if (beatT <= 0) {
+        const unstable = P.instab > .05, dub = beatN % 2 === 0;
+        beatT = dub ? .22 : (unstable ? .35 + rnd() * .6 : .78);
+        beatN++;
+        for (const p of comp) {
+          if (p.type === 'core') { kick(p, dub ? 6 : 3.5); waves.push({ x: p.x, y: p.y, t: 0, big: dub }); if (dub) shake = Math.max(shake, 2); }
+          else if (dub) p.beatAt = now + dist.get(p) * .09;
+        }
+        if (dub) for (const c_ of cables.values()) if (comp.has(c_.a) && comp.has(c_.b)) {
+          const fwd = dist.get(c_.a) <= dist.get(c_.b);
+          c_.pulses.push({ t0: now + Math.min(dist.get(c_.a), dist.get(c_.b)) * .09, fwd });
+        }
+      }
+    } else { beatT = 0; beatN = 0; }
+    for (const c_ of cables.values()) c_.pulses = c_.pulses.filter(q => now - q.t0 < .5);
+    // arcs
+    const arcRate = P.phase === 'charge' ? 26 : P.on && P.phase === 'alive' ? 1.2 + P.instab * 16 : 0;
+    if (!RM && rnd() < arcRate * dt) {
+      if (P.phase === 'charge') {
+        const cores = [...comp].filter(p => p.type === 'core'), others = [...comp].filter(p => p.type !== 'core');
+        if (cores.length && others.length) { const a = cores[Math.floor(rnd() * cores.length)], b = others[Math.floor(rnd() * others.length)]; arcs.push({ a, b, t: 0, life: .1 + rnd() * .1, ext: 1 }); }
+      } else {
+        const live = edges.filter(([a, b]) => comp.has(a) && comp.has(b) && a.lit > .5 && b.lit > .5);
+        if (live.length) { const [a, b] = live[Math.floor(rnd() * live.length)]; arcs.push({ a, b, t: 0, life: .08 + rnd() * .12, ext: 0 }); }
+      }
+    }
+    for (const a of arcs) a.t += dt; arcs = arcs.filter(a => a.t < a.life);
+    if (P.on && P.phase === 'alive') P.tier = tierOf();
+    updateRings(dt);
+    if (flashRing) { flashRing.t += dt; if (flashRing.t > .7) flashRing = null; }
+
+    // glitch = power shortfall + bursts
+    const base = P.on ? P.instab * .75 : 0;
+    burst = Math.max(0, burst - dt * 1.6);
+    glitch = Math.max(base, burst, P.phase === 'charge' ? glitch : 0);
+    if (RM) glitch = Math.min(glitch, .15);
+    shake = Math.max(0, shake - dt * 30);
+    flash = Math.max(0, flash - dt * 2.5);
+
+    for (const s of sparks) { s.t += dt; s.x += s.vx * dt; s.y += s.vy * dt; if (!s.inward) s.vy += 900 * dt; }
+    sparks = sparks.filter(s => s.t < s.life);
+    for (const w of waves) w.t += dt; waves = waves.filter(w => w.t < .6);
+
+    // camera
+    if (!drag) fitCam();
+    cam.z = lerp(cam.z, cam.tz, clamp(dt * 2.4, 0, 1));
+    cam.x = lerp(cam.x, cam.tx, clamp(dt * 3, 0, 1)); cam.y = lerp(cam.y, cam.ty, clamp(dt * 3, 0, 1));
+
+    hudT -= dt;
+    if (hudT <= 0) { hudT = .1; hud(); }
+  }
+  function hud() {
+    const tier = P.on && P.phase === 'alive' ? P.tier : 0;
+    $('tierName').textContent = TIERS[tier]; $('tierName').classList.toggle('on', tier > 0);
+    [...$('pips').children].forEach((el, i) => el.classList.toggle('on', i < tier));
+    $('pwrV').textContent = `${P.dem} / ${P.sup}`;
+    const max = Math.max(P.sup, P.dem, 1);
+    $('pwrBar').style.width = (P.dem / max * 100) + '%';
+    $('pwrBar').style.background = P.dem > P.sup ? 'repeating-linear-gradient(90deg,var(--volt) 0 6px,transparent 6px 9px)' : '';
+    $('pwrMark').style.left = `calc(${P.sup / max * 100}% - 1px)`;
+    const loose = parts.filter(p => !p.dead && !p.fly && !comp.has(p) && p !== drag?.p).length;
+    $('partsV').textContent = comp.size + (loose ? ` +${loose} loose` : '');
+    const stab = P.dem ? Math.round(clamp(P.sup / P.dem, 0, 1) * 100) : 100;
+    $('stabV').textContent = stab + '%';
+    const st = $('state');
+    st.classList.toggle('warn', P.on && P.instab > .05);
+    st.textContent = !P.on ? (comp.size ? 'Dormant · ready to start' : 'Needs a heart')
+      : P.phase === 'charge' ? 'Charging…' : P.phase === 'wave' ? 'Power surge'
+      : P.instab > .05 ? `Unstable · short ${P.dem - P.sup} power` : 'Running';
+  }
+
+  // ---------- render ----------
+  function drawBench(c) {
+    c.fillStyle = K.bench; c.fillRect(0, 0, W, H);
+    c.save(); c.scale(dpr, dpr);
+    const step = 26 * cam.z;
+    if (step > 9) {
+      c.fillStyle = K.peg;
+      const ox = ((-cam.x * cam.z + innerWidth / 2) % step + step) % step, oy = ((-cam.y * cam.z + innerHeight / 2) % step + step) % step;
+      const r = Math.max(1, 2.2 * cam.z);
+      for (let x = ox; x < innerWidth; x += step) for (let y = oy; y < innerHeight; y += step) { c.fillRect(x - r / 2, y - r / 2, r, r); }
+    }
+    c.restore();
+  }
+  function drawCables(c) {
+    for (const c_ of cables.values()) {
+      const pts = c_.pts, live = comp.has(c_.a) && comp.has(c_.b);
+      const L = live ? Math.min(c_.a.lit, c_.b.lit) : 0;
+      const path = () => { c.beginPath(); c.moveTo(pts[0].x, pts[0].y); for (let i = 1; i < pts.length - 1; i++) { const mx = (pts[i].x + pts[i + 1].x) / 2, my = (pts[i].y + pts[i + 1].y) / 2; c.quadraticCurveTo(pts[i].x, pts[i].y, mx, my); } c.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y); };
+      c.lineCap = 'round'; c.lineJoin = 'round';
+      c.save(); c.translate(3, 5); path(); c.strokeStyle = 'rgba(0,0,0,.45)'; c.lineWidth = 7; c.stroke(); c.restore();
+      path(); c.strokeStyle = K.ink; c.lineWidth = 7; c.stroke();
+      path(); c.strokeStyle = c_.color; c.lineWidth = 4.5; c.stroke();
+      if (L > .02) {
+        c.globalCompositeOperation = 'lighter';
+        path(); c.strokeStyle = voltA(.25 * L); c.lineWidth = 7; c.stroke();
+        // travelling pulses
+        const segs = []; let total = 0;
+        for (let i = 0; i < pts.length - 1; i++) { const d = Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y); segs.push(d); total += d; }
+        const along = [];
+        for (const q of c_.pulses) { const k = (now - q.t0) / .38; if (k >= 0 && k <= 1) along.push([q.fwd === (c_.a === c_.pts.from) ? k : 1 - k, 1.6]); }
+        along.push([(now * .35 + c_.off) % 1, .5]);
+        for (const [f0, amp] of along) {
+          let s = f0 * total;
+          for (let i = 0; i < segs.length; i++) { if (s <= segs[i]) { const f = s / segs[i], x = lerp(pts[i].x, pts[i + 1].x, f), y = lerp(pts[i].y, pts[i + 1].y, f); glow(c, x, y, 12 + amp * 8, Math.min(1, .6 * amp) * L); c.fillStyle = K.hot; c.beginPath(); c.arc(x, y, 1.6 + amp, 0, 7); c.fill(); break; } s -= segs[i]; }
+        }
+        c.globalCompositeOperation = 'source-over';
+      }
+      for (const e of [pts[0], pts[pts.length - 1]]) { c.fillStyle = K.ink; rr(c, e.x - 5, e.y - 5, 10, 10, 2); c.fill(); c.fillStyle = '#4a535c'; rr(c, e.x - 3.5, e.y - 3.5, 7, 7, 1.5); c.fill(); }
+    }
+  }
+  function rim(c, p) {
+    let best = null, bd = Infinity;
+    for (const q of comp) if (q.type === 'core') { const d = Math.hypot(q.x - p.x, q.y - p.y); if (d < bd) { bd = d; best = q; } }
+    if (!best) return;
+    const a = Math.atan2(best.y - p.y, best.x - p.x), ca = Math.cos(a), sa = Math.sin(a);
+    const k = p.lit * clamp(1.2 - bd / 380, .35, 1);
+    const g = c.createLinearGradient(ca * p.w / 2, sa * p.h / 2, -ca * p.w * .1, -sa * p.h * .1);
+    g.addColorStop(0, voltA(.95 * k)); g.addColorStop(.35, voltA(.25 * k)); g.addColorStop(1, voltA(0));
+    c.globalCompositeOperation = 'lighter';
+    rr(c, -p.w / 2 + 1.5, -p.h / 2 + 1.5, p.w - 3, p.h - 3, 7); c.strokeStyle = g; c.lineWidth = 2; c.stroke();
+    c.globalCompositeOperation = 'source-over';
+  }
+  function edgePt(p, tx, ty) {
+    const dx = tx - p.x, dy = ty - p.y, k = Math.min(p.w / 2 / Math.abs(dx || 1e-6), p.h / 2 / Math.abs(dy || 1e-6), 1);
+    return { x: p.x + offX(p) + dx * k, y: p.y + offY(p) + dy * k };
+  }
+  function drawArcs(c) {
+    if (!arcs.length) return;
+    c.globalCompositeOperation = 'lighter'; c.lineJoin = 'miter'; c.lineCap = 'round';
+    for (const ar of arcs) {
+      const A = ar.ext ? { x: ar.a.x + offX(ar.a), y: ar.a.y + offY(ar.a) } : edgePt(ar.a, ar.b.x, ar.b.y), B = edgePt(ar.b, ar.a.x, ar.a.y);
+      const dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L;
+      const n = Math.max(4, Math.round(L / 9)), amp = Math.min(14, 4 + L * .12), fade = 1 - ar.t / ar.life;
+      const pts = [A];
+      for (let i = 1; i < n; i++) { const t = i / n, o = (rnd() - .5) * 2 * amp * Math.sin(t * Math.PI); pts.push({ x: A.x + dx * t + nx * o, y: A.y + dy * t + ny * o }); }
+      pts.push(B);
+      for (const [w, col] of [[7, voltA(.18 * fade)], [3, voltA(.6 * fade)], [1.3, `rgba(255,244,214,${fade})`]]) {
+        c.beginPath(); c.moveTo(pts[0].x, pts[0].y); for (const q of pts) c.lineTo(q.x, q.y); c.strokeStyle = col; c.lineWidth = w; c.stroke();
+      }
+      glow(c, B.x, B.y, 18, .6 * fade);
+    }
+    c.globalCompositeOperation = 'source-over';
+  }
+  const bl = document.createElement('canvas'), blx = bl.getContext('2d');
+  const bl2 = document.createElement('canvas'), blx2 = bl2.getContext('2d');
+  const BLOOM = typeof blx.filter === 'string';
+  function bloom(c) {
+    if (!BLOOM) return;
+    let lit = 0; for (const p of comp) lit = Math.max(lit, p.lit);
+    const amt = lit * .8 + flash * .8;
+    if (amt < .03) return;
+    const w1 = Math.ceil(W / 6), h1 = Math.ceil(H / 6), w2 = Math.ceil(W / 10), h2 = Math.ceil(H / 10);
+    if (bl.width !== w1 || bl.height !== h1) { bl.width = w1; bl.height = h1; }
+    if (bl2.width !== w2 || bl2.height !== h2) { bl2.width = w2; bl2.height = h2; }
+    blx.filter = 'contrast(3.4) brightness(.75) blur(2px)'; blx.clearRect(0, 0, w1, h1); blx.drawImage(scene, 0, 0, w1, h1); blx.filter = 'none';
+    blx2.filter = 'blur(4px)'; blx2.clearRect(0, 0, w2, h2); blx2.drawImage(bl, 0, 0, w2, h2); blx2.filter = 'none';
+    c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'lighter'; c.imageSmoothingQuality = 'high';
+    c.globalAlpha = amt * .32; c.drawImage(bl, 0, 0, W, H);
+    c.globalAlpha = amt * .5; c.drawImage(bl2, 0, 0, W, H);
+    c.restore();
+  }
+  function render() {
+    for (const cn of [scene, tR, tC]) if (cn.width !== W || cn.height !== H) { cn.width = W; cn.height = H; }
+    const c = sx;
+    c.globalCompositeOperation = 'source-over'; c.setTransform(1, 0, 0, 1, 0, 0);
+    drawBench(c);
+    const shx = RM ? 0 : (rnd() - .5) * shake, shy = RM ? 0 : (rnd() - .5) * shake;
+    c.setTransform(dpr * cam.z, 0, 0, dpr * cam.z, dpr * (innerWidth / 2 - cam.x * cam.z + shx), dpr * (innerHeight / 2 - cam.y * cam.z + shy));
+    // core light pool on the bench
+    for (const p of comp) if (p.type === 'core' && p.lit > .02) { c.globalCompositeOperation = 'lighter'; glow(c, p.x, p.y, 320, .09 * p.lit); c.globalCompositeOperation = 'source-over'; }
+    drawRings(c);
+    if (flashRing) { const k = flashRing.t / .7; c.globalCompositeOperation = 'lighter'; silhouette(c, flashRing.e0 + k * 90); c.strokeStyle = voltA((1 - k) * .8); c.lineWidth = 3; c.stroke(); c.globalCompositeOperation = 'source-over'; }
+    // parts, with shadows
+    for (const p of parts) {
+      if (p.dead) continue;
+      const lift = p.fly ? Math.sin(clamp(p.fly.t, 0, 1) * Math.PI) * 30 : 0;
+      c.save(); c.translate(p.x + offX(p) + 6 + lift * .3, p.y + 10 + lift * .6 + (p.fly ? 0 : offY(p) * .3)); c.scale(p.sc, p.sc); c.rotate(p.rot); c.fillStyle = `rgba(0,0,0,${.5 - lift * .008})`; rr(c, -p.w / 2, -p.h / 2, p.w, p.h, 8); c.fill(); c.restore();
+    }
+    for (const p of parts) {
+      if (p.dead) continue;
+      const loose = !comp.has(p) && !p.fly && p !== drag?.p;
+      const breathe = P.on && P.phase === 'alive' && comp.has(p) && !RM ? Math.sin(now * 2.2 - (dist.get(p) || 0) * .8) * .014 : 0;
+      c.save(); c.translate(p.x + offX(p), p.y + offY(p));
+      const pivot = p.type === 'antenna' ? p.h / 2 : p.type === 'leg' ? -p.h / 2 : 0;
+      c.translate(0, pivot); c.rotate(p.rot); c.translate(0, -pivot);
+      const s_ = p.sc * (1 + breathe) * (p === drag?.p ? 1.06 : 1); c.scale(s_, s_ * (p.type === 'leg' ? 1 : 1 + (1 - p.sc) * .4));
+      if (loose) c.globalAlpha = .55;
+      drawPart(c, p);
+      if (p.lit > .02 && p.type !== 'core') rim(c, p);
+      c.restore();
+    }
+    drawCables(c);
+    drawArcs(c);
+    // waves + sparks
+    c.globalCompositeOperation = 'lighter';
+    for (const w of waves) { const k = easeOut(w.t / .6); c.strokeStyle = voltA((1 - k) * (w.big ? .35 : .6)); c.lineWidth = w.big ? 3 * (1 - k) + .8 : 2; c.beginPath(); c.arc(w.x, w.y, 20 + k * (w.big ? 110 : 60), 0, 7); c.stroke(); }
+    for (const s of sparks) {
+      const k = 1 - s.t / s.life;
+      c.strokeStyle = s.hot ? `rgba(255,${200 + Math.round(55 * k)},${Math.round(120 * k)},${k})` : `rgba(220,226,232,${k * .8})`;
+      c.lineWidth = s.hot ? 2 : 1.5;
+      c.beginPath(); c.moveTo(s.x, s.y); c.lineTo(s.x - s.vx * .03, s.y - s.vy * .03); c.stroke();
+    }
+    c.globalCompositeOperation = 'source-over';
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    bloom(c);
+    if (flash > .01) { c.fillStyle = `rgba(255,226,163,${flash * .35})`; c.fillRect(0, 0, W, H); }
+    // vignette
+    const vg = c.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .3, W / 2, H / 2, Math.max(W, H) * .75);
+    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.55)');
+    c.fillStyle = vg; c.fillRect(0, 0, W, H);
+    composite();
+  }
+  function composite() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'source-over';
+    if (glitch < .03) { ctx.drawImage(scene, 0, 0); return; }
+    const g = glitch;
+    // split channels
+    for (const [cn, cc, col] of [[tR, rx, '#ff0000'], [tC, cx2, '#00ffff']]) {
+      cc.globalCompositeOperation = 'source-over'; cc.drawImage(scene, 0, 0);
+      cc.globalCompositeOperation = 'multiply'; cc.fillStyle = col; cc.fillRect(0, 0, W, H);
+      cc.globalCompositeOperation = 'source-over';
+    }
+    const off = Math.round((2 + g * 14) * dpr);
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.drawImage(tR, off, 0); ctx.drawImage(tC, -off, 0);
+    // displaced bands
+    const bands = Math.round(2 + g * 9);
+    for (let i = 0; i < bands; i++) {
+      const y = Math.floor(rnd() * H), h = Math.ceil((4 + rnd() * 40 * g) * dpr), dx = Math.round((rnd() - .5) * 90 * g * dpr);
+      ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = '#000'; ctx.fillRect(0, y, W, h);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.drawImage(tR, 0, y, W, h, dx + off, y, W, h); ctx.drawImage(tC, 0, y, W, h, dx - off, y, W, h);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    if (g > .45) for (let i = 0; i < 3; i++) { ctx.fillStyle = `rgba(255,177,43,${.08 + rnd() * .12})`; ctx.fillRect(rnd() * W, rnd() * H, (20 + rnd() * 160) * dpr, (2 + rnd() * 6) * dpr); }
+  }
+
+  // ---------- loop ----------
+  function resize() { dpr = Math.min(innerWidth < 760 ? 1.5 : 2, devicePixelRatio || 1); W = cv.width = Math.round(innerWidth * dpr); H = cv.height = Math.round(innerHeight * dpr); }
+  addEventListener('resize', resize);
+  let last = performance.now();
+  function frame(t) { const dt = Math.min(.033, (t - last) / 1000); last = t; update(dt); render(); requestAnimationFrame(frame); }
+
+  // ---------- info ----------
+  const info = $('info'), btn = $('infoBtn');
+  const openInfo = o => { info.hidden = !o; btn.setAttribute('aria-expanded', String(o)); if (o) info.querySelector('.close').focus(); };
+  btn.onclick = () => openInfo(info.hidden);
+  info.querySelector('.close').onclick = () => { openInfo(false); btn.focus(); };
+  addEventListener('keydown', e => { if (e.key === 'Escape' && !info.hidden) { openInfo(false); btn.focus(); } });
+  $('stamp').addEventListener('animationend', () => { $('stamp').hidden = true; });
+
+  // ---------- boot: a dormant machine, ready to start ----------
+  resize();
+  parts = [mk('core', 0, 0), mk('fan', 75, 0), mk('screen', 0, -74), mk('board', -84, 0), mk('leg', -20, 74), mk('leg', 20, 74)];
+  rebuild(); fitCam(); cam.x = cam.tx; cam.y = cam.ty; cam.z = cam.tz;
+  window.__js = { P, get parts() { return parts; }, startDemo };
+  if (FRAMES) { startDemo(); window.__tick = () => { update(1 / 60); update(1 / 60); render(); return demo.on; }; }
+  else { if (REC) setTimeout(startDemo, 200); requestAnimationFrame(t => { last = t; frame(t); }); }
+})();
+</script>
