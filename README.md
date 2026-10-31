@@ -6,6 +6,7 @@ Experiments in UI, motion and creative coding for games, apps and interfaces.
 
 | # | Lab | Category |
 |---|-----|----------|
+| 20 | [Jump Start](lab-20-jump-start/) | Creative Coding |
 | 19 | [Pulling Strings](lab-19-pulling-strings/) | UI |
 | 18 | [Leg Day](lab-18-leg-day/) | Creative Coding |
 | 17 | [Feature Creep](lab-17-feature-creep/) | Motion |
