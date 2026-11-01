@@ -1,0 +1,918 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Lab #21 — Sting Operation</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..800&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+/* Layout: one rounded instrument frame. Full-bleed 3D stage, panels float on both flanks, operation log docked bottom-center. Phones: stage on top, panels stack below. */
+:root{
+  --ground:#E9EBEA; --ground-hi:#F8F8F6; --panel:rgba(251,251,249,.86); --panel-solid:#FAFAF8;
+  --line:#D2D5D4; --line-soft:#E3E5E4;
+  --ink:#15171A; --ink-2:#3A3E43; --muted:#7A7F84; --faint:#A8ACAF;
+  --accent:#E58C00; --accent-ink:#9E5A00; --accent-tint:#FBEBD2;
+  --ok:#23824F; --ok-tint:#DFF1E6; --idle-tint:#ECEDED;
+  --f-display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--ground);color:var(--ink);font-family:var(--f-mono);font-size:10px;overflow:hidden;-webkit-font-smoothing:antialiased}
+.app{height:100%;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px}
+.frame{position:relative;height:100%;display:grid;grid-template-rows:auto 1fr;border:1px solid var(--line);border-radius:16px;overflow:hidden;
+  background:radial-gradient(120% 90% at 50% 45%,var(--ground-hi) 0%,var(--ground) 70%)}
+.cap{font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.num{font-variant-numeric:tabular-nums}
+
+/* header */
+.bar{display:grid;grid-template-columns:auto auto 1fr auto;align-items:stretch;border-bottom:1px solid var(--line-soft);background:rgba(250,250,248,.6);position:relative;z-index:3}
+.brand{background:var(--accent);color:#fff;display:flex;align-items:center;gap:10px;padding:0 20px 0 16px;font-weight:700;letter-spacing:.16em;font-size:10px}
+.brand svg{width:22px;height:22px}
+.title{padding:9px 22px 9px 18px;display:flex;flex-direction:column;gap:2px;border-right:1px solid var(--line-soft)}
+.title h1{margin:0;font-family:var(--f-display);font-stretch:118%;font-weight:640;font-size:22px;letter-spacing:-.01em;line-height:1.05;text-wrap:balance}
+.title h1 i{font-style:normal;color:var(--accent);font-weight:400;margin-left:4px}
+.load{display:flex;flex-direction:column;justify-content:center;gap:4px;padding:0 22px;min-width:0}
+.load .row{display:flex;justify-content:space-between;gap:8px}
+.barcode{display:flex;gap:1.5px;height:9px}
+.barcode span{flex:1;background:var(--line);border-radius:.5px;transition:background .15s}
+.barcode span.on{background:var(--ink)}
+.barcode span.hot{background:var(--accent)}
+.meta{display:flex}
+.meta div{padding:9px 16px;border-left:1px solid var(--line-soft);display:flex;flex-direction:column;justify-content:center;gap:5px;min-width:96px}
+.meta b{font-weight:500;font-size:10px;color:var(--ink);letter-spacing:.04em}
+.dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--accent);margin-right:6px;vertical-align:1px}
+
+/* stage */
+.stage{position:relative;min-height:0}
+.view{position:absolute;inset:0;cursor:grab;touch-action:none}
+.view:active{cursor:grabbing}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block}
+#leaders{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+#labels{position:absolute;inset:0;pointer-events:none}
+.lbl{position:absolute;top:0;left:0;background:var(--panel-solid);border:1px solid var(--line);padding:4px 7px 4px 6px;border-radius:3px;white-space:nowrap;
+  font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);transition:opacity .25s;will-change:transform}
+.lbl small{display:block;color:var(--muted);font-size:7.5px;margin-top:2px;letter-spacing:.12em}
+.lbl::before{content:"";display:inline-block;width:2px;height:8px;background:var(--accent);margin-right:6px;vertical-align:-1px}
+.labels-off #labels,.labels-off #leaders{opacity:0}
+.crosses{position:absolute;top:14px;left:50%;transform:translateX(-50%);color:var(--accent);opacity:.45;font-size:10px;letter-spacing:.9em;line-height:1.5;text-align:center;pointer-events:none;white-space:nowrap}
+.tag{position:absolute;top:16px;pointer-events:none}
+.tag.l{left:268px}.tag.r{right:268px;text-align:right}
+.mode{position:absolute;left:270px;bottom:118px;pointer-events:none}
+.mode .big{font-family:var(--f-display);font-stretch:122%;font-weight:620;font-size:30px;color:var(--accent);letter-spacing:-.01em;line-height:1;margin:5px 0 6px}
+
+/* side panels */
+.side{position:absolute;top:12px;bottom:44px;width:244px;display:flex;flex-direction:column;gap:8px;overflow:auto;scrollbar-width:none;z-index:2}
+.side::-webkit-scrollbar{display:none}
+.side.left{left:12px}.side.right{right:12px}
+.panel{background:var(--panel);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line-soft);border-radius:6px;padding:10px 11px 10px}
+.ph{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px}
+.pt{font-weight:700;font-size:8.5px;letter-spacing:.16em;text-transform:uppercase}
+.pt::before{content:"";display:inline-block;width:2px;height:9px;background:var(--accent);margin-right:7px;vertical-align:-1px}
+.pn{color:var(--faint);font-size:8px}
+.kv{display:flex;justify-content:space-between;align-items:flex-end;gap:10px}
+.kv .v{font-family:var(--f-display);font-stretch:110%;font-weight:600;font-size:21px;letter-spacing:-.01em;line-height:1}
+.kv .v sup{font-family:var(--f-mono);font-size:8px;color:var(--muted);font-weight:400;margin-left:3px;vertical-align:4px}
+.kv .v.s{font-size:14px}
+.sub{display:flex;justify-content:space-between;margin-top:4px}
+.foot-row{display:flex;justify-content:space-between;margin-top:8px;padding-top:7px;border-top:1px solid var(--line-soft)}
+.foot-row b{font-weight:500;color:var(--ink);letter-spacing:.08em}
+svg.mini{display:block;width:100%;height:auto;margin-top:8px}
+canvas.gait{display:block;width:100%;height:78px;margin-top:8px}
+.servo{display:grid;grid-template-columns:20px 1fr 30px;align-items:center;gap:8px;height:13px}
+.servo .t{height:3px;background:var(--line-soft);border-radius:2px;position:relative;overflow:hidden}
+.servo .t i{position:absolute;inset:0 auto 0 0;background:var(--ink);border-radius:2px;width:0}
+.servo.hot .t i{background:var(--accent)}
+.servo span:last-child{text-align:right}
+.pill{display:inline-block;font-size:7px;font-weight:700;letter-spacing:.12em;padding:2px 5px;border-radius:2px;text-transform:uppercase;background:var(--idle-tint);color:var(--muted)}
+.pill.ok{background:var(--ok-tint);color:var(--ok)}
+.pill.hot{background:var(--accent-tint);color:var(--accent-ink)}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{font:inherit;font-size:8px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;padding:5px 7px;border:1px solid var(--line);background:var(--panel-solid);color:var(--ink-2);border-radius:3px;cursor:pointer}
+.chip:hover{border-color:var(--ink-2)}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.chip:focus-visible,.play:focus-visible,.track:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.posture{display:grid;grid-template-columns:78px 1fr;gap:12px;align-items:center}
+.vals{display:grid;gap:5px}
+.vals div{display:flex;justify-content:space-between}
+.vals b{font-weight:500;color:var(--ink)}
+.subsys{display:grid;gap:6px}
+.subsys .r{display:grid;grid-template-columns:16px 1fr auto;gap:6px;align-items:start}
+.subsys .r b{display:block;font-weight:700;font-size:8.5px;letter-spacing:.1em;color:var(--ink)}
+.subsys .r small{display:block;font-size:7.5px;color:var(--muted);letter-spacing:.08em;margin-top:2px;text-transform:uppercase}
+.subsys .r.act b{color:var(--accent-ink)}
+
+/* operation log */
+.log{position:absolute;left:50%;transform:translateX(-50%);bottom:40px;width:min(600px,calc(100% - 560px));z-index:2}
+.log .body{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center}
+.play{width:30px;height:30px;border-radius:50%;border:0;background:var(--accent);color:#fff;display:grid;place-items:center;cursor:pointer}
+.play svg{width:11px;height:11px}
+.trk{display:flex;flex-direction:column;gap:5px;min-width:0}
+.track{position:relative;height:16px;cursor:pointer;touch-action:none}
+.track .base{position:absolute;left:0;right:0;top:7px;height:1px;background:var(--line)}
+.track .fill{position:absolute;left:0;top:6.5px;height:2px;background:var(--accent);width:0}
+.track .mk{position:absolute;top:2px;width:1px;height:12px;background:var(--faint)}
+.track .knob{position:absolute;top:3px;width:10px;height:10px;margin-left:-5px;border-radius:50%;background:var(--panel-solid);border:1.5px solid var(--accent)}
+.trk .row{display:flex;justify-content:space-between;gap:8px}
+#opnow{color:var(--accent-ink);font-weight:700;letter-spacing:.14em}
+
+.foot{position:absolute;left:16px;right:16px;bottom:12px;display:flex;justify-content:space-between;gap:12px;pointer-events:none}
+
+@media (max-width:1180px){
+  .meta div:nth-child(1),.meta div:nth-child(4){display:none}
+  .side{width:224px}.tag.l,.mode{left:246px}.tag.r{right:246px}
+  .log{width:calc(100% - 504px)}
+}
+@media (max-width:900px){
+  body{overflow:auto}
+  .app{height:auto}
+  .frame{height:auto}
+  .bar{grid-template-columns:auto 1fr}
+  .load,.meta div:nth-child(2),.meta div:nth-child(3){display:none}
+  .meta{position:absolute;right:0;top:0;bottom:0}
+  .meta div:nth-child(5){min-width:0}
+  .title h1{font-size:18px}
+  .title .cap:first-child{display:none}
+  .stage{display:flex;flex-direction:column}
+  .view{position:relative;inset:auto;height:62vh;min-height:360px}
+  .tag.l{left:12px}.tag.r{right:12px}.mode{left:14px;bottom:14px}
+  .mode .big{font-size:24px}
+  .crosses{display:none}
+  .log{position:static;transform:none;width:auto;margin:10px 10px 0}
+  .side{position:static;width:auto;overflow:visible;padding:8px 10px 0;display:grid;grid-template-columns:1fr;gap:8px}
+  .foot{position:static;padding:12px 14px 14px;flex-direction:column;gap:4px}
+}
+@media (min-width:560px) and (max-width:900px){.side{grid-template-columns:1fr 1fr}}
+@media (prefers-reduced-motion:reduce){.barcode span,.lbl{transition:none}}
+</style>
+
+</head>
+<body>
+<div class="app">
+<div class="frame">
+  <header class="bar">
+    <div class="brand" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10.2"/><path d="M8 16.5c0-3 1.6-5.2 4-5.2s4 1.6 4 3.4c0 1.3-.9 2.1-2 2.1" stroke-linecap="round"/><path d="M12 11.3V6.4l-1.8 1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      SX-7
+    </div>
+    <div class="title">
+      <span class="cap">Armored scorpion · cargo &amp; recon unit</span>
+      <h1>Akrab SX-7<i>/</i></h1>
+      <span class="cap">Arachnid chassis / field simulator</span>
+    </div>
+    <div class="load">
+      <div class="row"><span class="cap">Tail load</span><span class="cap num" id="loadpct">34%</span></div>
+      <div class="barcode" id="barcode"></div>
+      <div class="row"><span class="cap">Coiled</span><span class="cap">Loaded</span><span class="cap">Strike</span></div>
+    </div>
+    <div class="meta">
+      <div><span class="cap">Sim ID</span><b>SX7-0412</b></div>
+      <div><span class="cap">Runtime</span><b class="num" id="runtime">00:00:00</b></div>
+      <div><span class="cap">Legs</span><b class="num">8 · 24 DOF</b></div>
+      <div><span class="cap">Operator</span><b>GREYFRAME</b></div>
+      <div><span class="cap">Status</span><b><span class="dot"></span><span id="status">PATROL</span></b></div>
+    </div>
+  </header>
+
+  <div class="stage">
+    <div class="view" id="view" aria-label="Escorpión mecánico en 3D. Arrastra para girar, doble clic para recentrar.">
+      <canvas id="gl"></canvas>
+      <svg id="leaders"></svg>
+      <div id="labels"></div>
+      <div class="crosses" aria-hidden="true">+ + + + + + + + + + + + + + + +<br>+ + + + + + + + + + + + + + + +</div>
+      <div class="tag l cap">Model SX-7 · Rev C</div>
+      <div class="tag r cap" id="isotag">Isolate · Hero</div>
+      <div class="mode">
+        <span class="cap">Mode</span>
+        <div class="big" id="mode">PATROL</div>
+        <span class="cap num" id="modesub">Body 588 mm · gait 1.60 Hz</span>
+      </div>
+    </div>
+
+    <section class="panel log">
+      <div class="ph"><span class="pt">Operation log</span><span class="pn">08</span></div>
+      <div class="body">
+        <button class="play" id="play" aria-label="Pausar"><svg viewBox="0 0 12 12" fill="currentColor" id="playicon"><rect x="2" y="1.5" width="2.6" height="9" rx=".6"/><rect x="7.4" y="1.5" width="2.6" height="9" rx=".6"/></svg></button>
+        <div class="trk">
+          <div class="row"><span class="cap">Phase</span><span class="cap" id="opnow">OPERATOR · PATROL</span><span class="cap">Strike</span></div>
+          <div class="track" id="track" tabindex="0" role="slider" aria-label="Línea de tiempo" aria-valuemin="0" aria-valuemax="24" aria-valuenow="0">
+            <div class="base"></div><div class="fill" id="fill"></div><div id="marks"></div><div class="knob" id="knob"></div>
+          </div>
+          <div class="row"><span class="cap num" id="tc">00:00 / 00:24</span><span class="cap">8 operator actions</span></div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="side left">
+      <section class="panel">
+        <div class="ph"><span class="pt">Chelae</span><span class="pn">01</span></div>
+        <div class="kv"><span class="v num" id="grip">6.0<sup>N</sup></span><span class="v s num" id="gap">0°</span></div>
+        <div class="sub"><span class="cap">Grip force</span><span class="cap">Pincer gap</span></div>
+        <svg class="mini" viewBox="0 0 220 54" aria-hidden="true">
+          <line x1="0" y1="27" x2="220" y2="27" stroke="var(--line-soft)"/>
+          <g id="clawL" transform="translate(70 27)"><path d="M0 0 L46 -2 Q60 -4 66 -12" fill="none" stroke="var(--ink)" stroke-width="2" stroke-linecap="round"/></g>
+          <g id="clawM" transform="translate(70 27)"><path d="M0 0 L46 2 Q60 4 66 12" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/></g>
+          <circle cx="70" cy="27" r="4" fill="var(--panel-solid)" stroke="var(--ink)" stroke-width="1.5"/>
+          <path id="clawArc" d="" fill="none" stroke="var(--accent)" stroke-dasharray="2 2"/>
+        </svg>
+        <div class="foot-row"><span class="cap">Fingers <b>4</b></span><span class="cap">Hydraulic <b class="num" id="bar">180 bar</b></span></div>
+      </section>
+      <section class="panel">
+        <div class="ph"><span class="pt">Gait</span><span class="pn">02</span></div>
+        <div class="kv"><span class="v num" id="gaithz">1.60<sup>Hz</sup></span><span class="v s">Tetrapod</span></div>
+        <div class="sub"><span class="cap">Stride freq</span><span class="cap">Pattern</span></div>
+        <canvas class="gait" id="gait"></canvas>
+        <div class="foot-row"><span class="cap"><b>■</b> Stance</span><span class="cap">□ Swing</span><span class="cap">L1 → R4</span></div>
+      </section>
+      <section class="panel">
+        <div class="ph"><span class="pt">Leg servos</span><span class="pn">03</span></div>
+        <div class="sub" style="margin:-4px 0 8px"><span class="cap">Load per leg · femur torque</span><span class="pill ok" id="servostate">Holding</span></div>
+        <div id="servos"></div>
+      </section>
+    </aside>
+
+    <aside class="side right">
+      <section class="panel">
+        <div class="ph"><span class="pt">Posture</span><span class="pn">04</span></div>
+        <div class="posture">
+          <svg viewBox="0 0 78 78" aria-hidden="true">
+            <circle cx="39" cy="39" r="33" fill="none" stroke="var(--line-soft)" stroke-width="6"/>
+            <circle id="curlArc" cx="39" cy="39" r="33" fill="none" stroke="var(--ink)" stroke-width="6" stroke-dasharray="0 999" transform="rotate(90 39 39)"/>
+            <line id="needle" x1="39" y1="39" x2="39" y2="12" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round"/>
+            <circle cx="39" cy="39" r="3" fill="var(--accent)"/>
+            <text x="39" y="58" text-anchor="middle" font-size="7" fill="var(--muted)" font-family="JetBrains Mono, monospace" letter-spacing="1">CURL</text>
+          </svg>
+          <div class="vals cap">
+            <div>Body ht<b class="num" id="pBody">588 mm</b></div>
+            <div>Pitch<b class="num" id="pPitch">0.0°</b></div>
+            <div>Tail curl<b class="num" id="pCurl">150°</b></div>
+            <div>Reach<b class="num" id="pReach">0 mm</b></div>
+          </div>
+        </div>
+        <div class="foot-row"><span class="cap">Stance <b id="pStance">Wide</b></span><span class="cap">Telson v <b class="num" id="pVel">0.00 m/s</b></span></div>
+      </section>
+      <section class="panel">
+        <div class="ph"><span class="pt">Assemblies</span><span class="pn">05</span></div>
+        <div class="chips" id="asm"></div>
+      </section>
+      <section class="panel">
+        <div class="ph"><span class="pt">Display</span><span class="pn">06</span></div>
+        <div class="chips" id="disp"></div>
+      </section>
+      <section class="panel">
+        <div class="ph"><span class="pt">Subsystems</span><span class="pn">07</span></div>
+        <div class="subsys" id="subsys"></div>
+      </section>
+    </aside>
+
+
+    <footer class="foot cap">
+      <span id="footl">Field simulator · procedural model · 8 optics</span>
+      <span>Greyframe Labs · arachnid unit ////</span>
+    </footer>
+  </div>
+</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
+<script>
+(() => {
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = id => document.getElementById(id);
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const ease = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+const ramp = (t, a, b) => ease((t - a) / (b - a));
+
+/* ---------- timeline ---------- */
+const T = 24;
+const PHASES = [
+  { s: 0,    e: 3,    id: 'DORMANT',     sub: 'Folded · optics dim' },
+  { s: 3,    e: 6,    id: 'WAKE',        sub: 'Legs extending · optics online' },
+  { s: 6,    e: 10.5, id: 'PATROL',      sub: 'Tetrapod gait · 1.60 Hz' },
+  { s: 10.5, e: 13.5, id: 'CHELA CYCLE', sub: 'Pincer test · 3 cycles' },
+  { s: 13.5, e: 16.5, id: 'TEARDOWN',    sub: 'Armor shells detached' },
+  { s: 16.5, e: 19,   id: 'REASSEMBLY',  sub: 'Shells re-seating' },
+  { s: 19,   e: 22,   id: 'STRIKE',      sub: 'Telson armed · forward strike' },
+  { s: 22,   e: 24,   id: 'SETTLE',      sub: 'Returning to rest' },
+];
+const phaseAt = t => PHASES.find(p => t >= p.s && t < p.e) || PHASES[0];
+
+function pose(t) {
+  const P = {};
+  P.rise = ramp(t, 3, 5.6) - ramp(t, 22.2, 23.9);
+  P.walk = ramp(t, 6, 7) - ramp(t, 9.8, 10.6);
+  let c = 0;
+  if (t > 10.5 && t < 13.5) { const u = (t - 10.5) / 3; c = Math.pow(Math.sin(u * Math.PI * 3), 2) * Math.min(1, Math.sin(u * Math.PI) * 1.6); }
+  P.wind = ramp(t, 19, 20) - ramp(t, 20.1, 20.3);
+  P.hit = ramp(t, 20.1, 20.42) - ramp(t, 21.6, 23.2);
+  c += (ramp(t, 19, 19.7) - ramp(t, 21.4, 22.6)) * 0.85;
+  P.claw = clamp(c, 0, 1);
+  P.explode = ramp(t, 13.6, 15.4) - ramp(t, 16.6, 18.7);
+  P.optic = Math.max(0.06, ramp(t, 3, 4.3) - ramp(t, 22.6, 23.8));
+  return P;
+}
+
+/* ---------- renderer ---------- */
+const view = $('view'), canvas = $('gl');
+const R = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance', preserveDrawingBuffer: false });
+R.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+R.outputEncoding = THREE.sRGBEncoding;
+R.toneMapping = THREE.LinearToneMapping;
+R.toneMappingExposure = 0.95;
+R.shadowMap.enabled = true;
+R.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+const cam = new THREE.PerspectiveCamera(28, 1, 0.1, 100);
+
+// studio environment for reflections
+scene.environment = (() => {
+  const s = new THREE.Scene();
+  s.add(new THREE.Mesh(new THREE.BoxGeometry(24, 12, 24), new THREE.MeshBasicMaterial({ color: 0xa9adb0, side: THREE.BackSide })));
+  const panel = (w, h, pos, k) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(k, k, k), side: THREE.DoubleSide }));
+    m.position.set(...pos); m.lookAt(0, 0, 0); s.add(m);
+  };
+  panel(10, 4, [0, 5.8, 0], 3.2);
+  panel(3, 8, [-11.8, 1, 2], 1.8);
+  panel(3, 8, [11.8, 1, -2], 1.1);
+  panel(8, 2.5, [0, 2, -11.8], 1.4);
+  panel(8, 2.5, [0, 1.5, 11.8], 0.8);
+  const pm = new THREE.PMREMGenerator(R);
+  return pm.fromScene(s, 0.035).texture;
+})();
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0xb9bec1, 0.12));
+const key = new THREE.DirectionalLight(0xffffff, 1.9);
+key.position.set(-4.5, 7, 2.5);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+Object.assign(key.shadow.camera, { left: -4.5, right: 4.5, top: 4.5, bottom: -4.5, near: 1, far: 22 });
+key.shadow.bias = -0.0004; key.shadow.normalBias = 0.025;
+scene.add(key);
+const rim = new THREE.DirectionalLight(0xfff0d8, 0.55); rim.position.set(4, 3, -5); scene.add(rim);
+
+// ground: shadow catcher + contact blob + survey rings
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ opacity: 0.15 }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+
+const blobTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d'); const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gr.addColorStop(0, 'rgba(20,22,26,0.55)'); gr.addColorStop(0.5, 'rgba(20,22,26,0.18)'); gr.addColorStop(1, 'rgba(20,22,26,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 128); return new THREE.CanvasTexture(c);
+})();
+const blob = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false }));
+blob.rotation.x = -Math.PI / 2; blob.position.y = 0.003; scene.add(blob);
+
+(() => {
+  const ring = (r, dashed, op) => {
+    const pts = []; for (let i = 0; i <= 160; i++) { const a = i / 160 * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(a) * r, 0.002, Math.sin(a) * r)); }
+    const g = new THREE.BufferGeometry().setFromPoints(pts);
+    const m = dashed ? new THREE.LineDashedMaterial({ color: 0x8b9095, dashSize: 0.06, gapSize: 0.08, transparent: true, opacity: op })
+                     : new THREE.LineBasicMaterial({ color: 0x8b9095, transparent: true, opacity: op });
+    const l = new THREE.Line(g, m); if (dashed) l.computeLineDistances(); scene.add(l);
+  };
+  ring(2.9, true, 0.55); ring(2.05, false, 0.22); ring(4.2, false, 0.12);
+  const tk = [];
+  for (let i = 0; i < 72; i++) { const a = i / 72 * Math.PI * 2, r0 = 2.98, r1 = i % 6 ? 3.06 : 3.18;
+    tk.push(new THREE.Vector3(Math.cos(a) * r0, 0.002, Math.sin(a) * r0), new THREE.Vector3(Math.cos(a) * r1, 0.002, Math.sin(a) * r1)); }
+  scene.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(tk), new THREE.LineBasicMaterial({ color: 0x8b9095, transparent: true, opacity: 0.45 })));
+  const ax = [new THREE.Vector3(-4.6, 0.002, 0), new THREE.Vector3(4.6, 0.002, 0), new THREE.Vector3(0, 0.002, -4.6), new THREE.Vector3(0, 0.002, 4.6)];
+  scene.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(ax), new THREE.LineBasicMaterial({ color: 0x8b9095, transparent: true, opacity: 0.16 })));
+})();
+
+/* ---------- materials (one set per assembly, so isolate can fade them) ---------- */
+const KIND = {
+  shell:  { color: 0xEDEDEA, roughness: 0.3, metalness: 0.0, envMapIntensity: 0.6 },
+  shell2: { color: 0xB4B9BC, roughness: 0.4, metalness: 0.05, envMapIntensity: 0.6 },
+  dark:   { color: 0x23262A, roughness: 0.4, metalness: 0.65 },
+  steel:  { color: 0x8C9399, roughness: 0.26, metalness: 0.92 },
+  accent: { color: 0xE2600A, roughness: 0.34, metalness: 0.04, envMapIntensity: 0.6 },
+  glass:  { color: 0x0D0F12, roughness: 0.05, metalness: 0.4, emissive: 0xFF9414, emissiveIntensity: 0 },
+};
+const ASM = ['CARAPACE', 'OPTICS', 'CHELAE', 'LEGS', 'MESOSOMA', 'METASOMA', 'TELSON'];
+const mats = [], cache = {};
+const M = (asm, kind) => {
+  const k = asm + '|' + kind;
+  if (!cache[k]) { const m = new THREE.MeshStandardMaterial(KIND[kind]); m.userData = { asm, kind, cur: 1 }; cache[k] = m; mats.push(m); }
+  return cache[k];
+};
+const meshes = [];
+const add = (geo, mat, parent, p, r, s) => {
+  const m = new THREE.Mesh(geo, mat); m.castShadow = true; m.receiveShadow = true;
+  if (p) m.position.set(p[0], p[1], p[2]); if (r) m.rotation.set(r[0], r[1], r[2]);
+  if (s) { if (typeof s === 'number') m.scale.setScalar(s); else m.scale.set(s[0], s[1], s[2]); }
+  parent.add(m); meshes.push(m); return m;
+};
+const G = (parent, p, order) => { const g = new THREE.Group(); if (p) g.position.set(p[0], p[1], p[2]); if (order) g.rotation.order = order; parent.add(g); return g; };
+const parts = [];
+const part = (obj, amt) => { parts.push({ obj, amt, home: obj.position.clone(), hr: obj.rotation.clone(), dir: new THREE.Vector3(0, 1, 0), delay: 0, spin: (Math.sin(parts.length * 12.9898) * 43758.5453 % 1) - 0.5 }); return obj; };
+
+/* ---------- geometry ---------- */
+const DOME = new THREE.SphereGeometry(1, 56, 26, 0, Math.PI * 2, 0, Math.PI / 2);
+const BALL = new THREE.SphereGeometry(1, 32, 20);
+const RIM = new THREE.TorusGeometry(1, 0.035, 8, 72); RIM.rotateX(Math.PI / 2);
+const RING_Z = new THREE.TorusGeometry(1, 0.12, 8, 40);
+const RING_Y = new THREE.TorusGeometry(1, 0.16, 10, 32); RING_Y.rotateX(Math.PI / 2);
+const AXLE_X = new THREE.CylinderGeometry(1, 1, 1, 14); AXLE_X.rotateZ(Math.PI / 2);
+const CORE_Z = new THREE.CylinderGeometry(1, 1, 1, 14); CORE_Z.rotateX(Math.PI / 2);
+const BOX = new THREE.BoxGeometry(1, 1, 1);
+const capZ = (r, len, neg) => { const g = new THREE.CapsuleGeometry(r, len, 8, 22); g.rotateX(Math.PI / 2); g.translate(0, 0, (neg ? -1 : 1) * (len / 2 + r)); return g; };
+// cone along +y, tip bent toward +z
+const horn = (r, len, bend, seg = 18) => {
+  const g = new THREE.ConeGeometry(r, len, seg, 14); g.translate(0, len / 2, 0);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) { const t = p.getY(i) / len; p.setZ(i, p.getZ(i) + bend * t * t * len); }
+  g.computeVertexNormals(); return g;
+};
+const fingerGeo = dir => { const g = horn(0.058, 0.32, 0.32); g.rotateX(Math.PI / 2); g.rotateZ(dir > 0 ? Math.PI / 2 : -Math.PI / 2); return g; };
+const ACULEUS = horn(0.05, 0.44, 0.6); ACULEUS.rotateX(-Math.PI / 2);
+const TARSUS = horn(0.034, 0.38, 0.06); TARSUS.rotateX(Math.PI / 2);
+
+/* ---------- build: Akrab SX-7 ---------- */
+const root = G(scene); root.rotation.order = 'YXZ';
+const body = G(root);
+const anchors = {};
+
+// carapace (prosoma)
+const carShell = part(G(body, [0, 0, 0.95]), 0.75);
+add(DOME, M('CARAPACE', 'shell'), carShell, [0, 0, 0], null, [0.6, 0.3, 0.62]);
+add(RIM, M('CARAPACE', 'shell2'), carShell, [0, 0, 0], null, [0.6, 1, 0.62]);
+const arc = new THREE.TorusGeometry(1, 0.034, 8, 48, Math.PI * 0.9); arc.rotateZ(Math.PI * 0.05); arc.rotateX(Math.PI / 2);
+add(arc, M('CARAPACE', 'accent'), carShell, [0, 0.012, 0], null, [0.606, 1, 0.626]);
+add(BOX, M('CARAPACE', 'shell2'), carShell, [0, 0.29, -0.12], null, [0.07, 0.03, 0.42]);
+for (const s of [-1, 1]) {
+  add(BOX, M('CARAPACE', 'dark'), carShell, [s * 0.2, 0.235, -0.18], [0, s * 0.18, s * -0.5], [0.012, 0.012, 0.36]);
+  for (let k = 0; k < 3; k++) add(BALL, M('OPTICS', 'glass'), carShell, [s * (0.3 + k * 0.035), 0.09, 0.47 - k * 0.065], null, 0.032);
+}
+add(BALL, M('CARAPACE', 'dark'), body, [0, -0.03, 0.92], null, [0.5, 0.12, 0.58]);
+
+// optic turret
+const turret = part(G(body, [0, 0.27, 1.13]), 0.55);
+add(DOME, M('OPTICS', 'dark'), turret, [0, 0, 0], null, [0.14, 0.075, 0.12]);
+for (const s of [-1, 1]) {
+  add(BALL, M('OPTICS', 'glass'), turret, [s * 0.058, 0.045, 0.02], null, 0.043);
+  add(RING_Y, M('OPTICS', 'accent'), turret, [s * 0.058, 0.04, 0.02], null, 0.05);
+}
+anchors.optics = G(turret, [0, 0.08, 0]);
+
+// mesosoma: 7 tergites
+const W = [0.6, 0.64, 0.66, 0.66, 0.62, 0.55, 0.45];
+const terg = [];
+W.forEach((w, i) => {
+  const j = G(body, [0, 0, 0.42 - i * 0.28]); terg.push(j);
+  add(AXLE_X, M('MESOSOMA', 'dark'), j, [0, 0.02, 0], null, [w * 1.5, 0.045, 0.045]);
+  add(BALL, M('MESOSOMA', 'dark'), j, [0, -0.03, 0], null, [w * 0.85, 0.1, 0.16]);
+  const sh = part(G(j), 0.5);
+  add(DOME, M('MESOSOMA', 'shell'), sh, [0, 0, 0], null, [w, 0.21, 0.19]);
+  add(RIM, M('MESOSOMA', (i === 2 || i === 5) ? 'accent' : 'shell2'), sh, [0, 0, 0], null, [w, 1, 0.19]);
+  for (const s of [-1, 1]) add(BALL, M('MESOSOMA', 'steel'), sh, [s * w * 0.6, 0.15, 0.02], null, 0.022);
+  if (i === 3) anchors.terg = G(sh, [0.32, 0.17, 0]);
+});
+
+// metasoma: 5 tail segments + telson
+const TL = [0.32, 0.34, 0.36, 0.38, 0.42], TR = [0.15, 0.145, 0.14, 0.138, 0.136];
+const tail = [];
+let tp = body;
+TL.forEach((L, j) => {
+  const jg = G(tp, j === 0 ? [0, 0.05, -1.4] : [0, 0, -TL[j - 1]], 'YXZ'); tail.push(jg);
+  const r = TR[j];
+  add(BALL, M('METASOMA', 'dark'), jg, [0, 0, 0], null, r * 0.84);
+  add(CORE_Z, M('METASOMA', 'steel'), jg, [0, 0, -L / 2], null, [r * 0.5, r * 0.5, L]);
+  const sh = part(G(jg), 0.42);
+  const cg = new THREE.CapsuleGeometry(r, Math.max(0.02, L - r * 1.25), 8, 22); cg.rotateX(Math.PI / 2); cg.translate(0, 0, -L / 2);
+  add(cg, M('METASOMA', 'shell'), sh, [0, 0, 0], null, [1, 0.92, 1]);
+  add(BOX, M('METASOMA', 'shell2'), sh, [0, r * 0.88, -L / 2], null, [0.035, 0.03, L * 0.62]);
+  if (j === 1 || j === 3) add(RING_Z, M('METASOMA', 'accent'), sh, [0, 0, -L * 0.84], null, [r * 1.02, r * 0.95, r]);
+  if (j === 2) anchors.tail = G(sh, [0, r + 0.02, -L / 2]);
+  tp = jg;
+});
+const tel = G(tp, [0, 0, -TL[4]], 'YXZ');
+add(RING_Z, M('TELSON', 'shell2'), tel, [0, 0, -0.03], null, 0.12);
+add(BALL, M('TELSON', 'dark'), tel, [0, 0, 0], null, 0.1);
+const bulb = part(G(tel), 0.38);
+add(BALL, M('TELSON', 'accent'), bulb, [0, 0, -0.23], null, [0.17, 0.15, 0.24]);
+add(RING_Z, M('TELSON', 'dark'), bulb, [0, 0, -0.18], null, [0.168, 0.148, 0.17]);
+add(ACULEUS, M('TELSON', 'steel'), bulb, [0, 0.03, -0.42]);
+anchors.telson = G(bulb, [0, 0.15, -0.23]);
+
+// chelae (pedipalps)
+const chela = {};
+for (const s of [-1, 1]) {
+  const sh = G(body, [s * 0.36, 0, 1.42], 'YXZ');
+  add(BALL, M('CHELAE', 'dark'), sh, [0, 0, 0], null, 0.085);
+  add(capZ(0.065, 0.36), M('CHELAE', 'shell'), part(G(sh), 0.3));
+  const el = G(sh, [0, 0, 0.5], 'YXZ');
+  add(BALL, M('CHELAE', 'dark'), el, [0, 0, 0], null, 0.08);
+  add(capZ(0.075, 0.28), M('CHELAE', 'shell'), part(G(el), 0.3));
+  const wr = G(el, [0, 0, 0.44], 'YXZ');
+  add(BALL, M('CHELAE', 'dark'), wr, [0, 0, 0], null, 0.075);
+  add(RING_Z, M('CHELAE', 'accent'), wr, [0, 0, 0.03], null, 0.082);
+  const palm = part(G(wr), 0.35);
+  add(BALL, M('CHELAE', 'shell'), palm, [0, 0, 0.27], null, [0.2, 0.155, 0.3]);
+  add(BALL, M('CHELAE', 'shell2'), palm, [s * 0.06, 0.09, 0.25], null, [0.08, 0.06, 0.2]);
+  add(RING_Z, M('CHELAE', 'accent'), palm, [0, 0, 0.47], null, [0.135, 0.1, 0.13]);
+  add(fingerGeo(s), M('CHELAE', 'steel'), palm, [-s * 0.075, 0, 0.5]);
+  const mov = G(palm, [s * 0.09, 0, 0.48], 'YXZ');
+  add(BALL, M('CHELAE', 'dark'), mov, [0, 0, 0], null, 0.042);
+  add(fingerGeo(-s), M('CHELAE', 'steel'), mov, [0, 0, 0.02]);
+  chela[s] = { sh, el, wr, mov };
+  if (s === 1) anchors.chela = G(palm, [0, 0.13, 0.27]);
+}
+
+// legs: 4 pairs, 3 segments each
+const LZ = [1.08, 0.82, 0.56, 0.3], LYAW = [0.72, 1.22, 1.85, 2.38];
+const legs = [];
+for (const s of [-1, 1]) for (let i = 0; i < 4; i++) {
+  const co = G(body, [s * 0.3, -0.04, LZ[i]], 'YXZ');
+  add(BALL, M('LEGS', 'dark'), co, [0, 0, 0], null, 0.07);
+  add(capZ(0.05, 0.44), M('LEGS', 'shell'), part(G(co), 0.28));
+  const kn = G(co, [0, 0, 0.54]);
+  add(BALL, M('LEGS', 'dark'), kn, [0, 0, 0], null, 0.058);
+  add(capZ(0.042, 0.52), M('LEGS', 'shell'), part(G(kn), 0.26));
+  const an = G(kn, [0, 0, 0.6]);
+  add(BALL, M('LEGS', 'dark'), an, [0, 0, 0], null, 0.045);
+  add(TARSUS, M('LEGS', 'steel'), an, [0, 0, 0.01]);
+  const phase = ((i % 2) === (s > 0 ? 0 : 1)) ? 0 : Math.PI;
+  legs.push({ s, i, co, kn, an, phase, stance: true, load: 0.4 });
+  if (s === 1 && i === 1) anchors.leg = G(kn, [0, 0.08, 0]);
+}
+
+/* ---------- pose application ---------- */
+const GAIT_HZ = 1.6, W_G = Math.PI * 2 * GAIT_HZ;
+const C0 = [0.38, 0.5, 0.55, 0.6, 0.62], CH = [1.2, 0.78, 0.62, 0.5, 0.42];
+let lastP = pose(0);
+function applyPose(t, xp) {
+  const P = pose(t); lastP = P;
+  const rise = P.rise;
+  const rootY = lerp(0.3, 0.62, rise) + P.walk * 0.012 * Math.sin(t * W_G * 2);
+  root.position.y = rootY;
+  root.rotation.x = P.hit * 0.12 - P.wind * 0.08;
+  root.position.z = P.hit * 0.22 - P.wind * 0.12;
+  root.rotation.z = P.walk * 0.015 * Math.sin(t * W_G);
+  terg.forEach((j, i) => { j.rotation.x = 0.02 * Math.sin(t * 2.1 - i * 0.6) * rise; });
+
+  legs.forEach(L => {
+    const ph = W_G * t + L.phase, sw = Math.sin(ph), lift = Math.max(0, Math.cos(ph));
+    const yaw = L.s * (LYAW[L.i] + P.walk * 0.2 * sw);
+    const p1 = lerp(-0.25, -0.55, rise) - P.walk * 0.3 * lift - P.hit * (L.i > 1 ? 0.08 : -0.04);
+    const p2 = lerp(0.95, 1.5, rise);
+    L.co.rotation.set(p1, yaw, 0); L.kn.rotation.x = p2;
+    const A = rootY - 0.04, yK = A - 0.54 * Math.sin(p1), yA = yK - 0.6 * Math.sin(p1 + p2);
+    const target = 0.035 + P.walk * 0.13 * lift;
+    L.an.rotation.x = Math.asin(clamp((yA - target) / 0.38, -1, 1)) - p1 - p2;
+    L.stance = P.walk < 0.05 || lift < 0.08;
+    const base = rise < 0.3 ? 0.08 : 0.28 + (L.i > 1 ? 0.06 : 0);
+    L.load = base + (L.stance ? 0.24 * P.walk : 0) + P.hit * (L.i > 1 ? 0.4 : 0.15) + 0.03 * Math.sin(t * 5 + L.i * 2 + L.s);
+  });
+
+  for (const s of [-1, 1]) {
+    const c = chela[s];
+    c.sh.rotation.set(lerp(0.06, -0.12, rise) - P.claw * 0.08 - P.hit * 0.1, s * (lerp(1.05, 0.9, rise) + P.claw * 0.15 + 0.03 * Math.sin(t * 1.3 + s)), 0);
+    c.el.rotation.y = -s * (lerp(2.2, 1.9, rise) - P.claw * 0.35);
+    c.wr.rotation.set(-0.05, s * lerp(0.9, 0.7, rise), 0);
+    c.mov.rotation.y = s * P.claw * 0.85;
+  }
+
+  tail.forEach((jg, j) => {
+    let a = C0[j] * lerp(0.62, 1, rise) * (1 + P.wind * (j < 2 ? -0.35 : 0.3));
+    a = lerp(a, CH[j], P.hit);
+    jg.rotation.x = a;
+    jg.rotation.y = P.walk * 0.07 * Math.sin(t * 2.6 - j * 0.55) + 0.025 * Math.sin(t * 0.9 - j) * rise;
+  });
+  tel.rotation.x = lerp(lerp(0.4, 0.75, P.wind), 0.15, P.hit);
+
+  mats.forEach(m => { if (m.userData.kind === 'glass') m.emissiveIntensity = P.optic * (2.4 + 0.5 * Math.sin(t * 6)); });
+
+  const ex = Math.max(P.explode, xp);
+  parts.forEach(p => {
+    const e = ease(ex * 1.4 - p.delay);
+    p.obj.position.copy(p.home).addScaledVector(p.dir, p.amt * e);
+    p.obj.rotation.set(p.hr.x + p.spin * e * 0.35, p.hr.y, p.hr.z + p.spin * e * 0.25);
+  });
+
+  blob.position.set(0, 0.003, 0.1 + root.position.z);
+  blob.scale.set(3.4, 4.8, 1);
+  blob.material.opacity = lerp(0.9, 0.6, rise);
+  return P;
+}
+
+// explode directions, measured once from a neutral standing pose
+(() => {
+  applyPose(8, 0); scene.updateMatrixWorld(true);
+  const c = new THREE.Vector3(0, 0.62, 0.1), wp = new THREE.Vector3(), q = new THREE.Quaternion();
+  parts.forEach(p => {
+    p.obj.getWorldPosition(wp);
+    const d = wp.clone().sub(c); d.y = Math.max(d.y, 0) + 0.45 * d.length() + 0.1;
+    d.normalize();
+    p.obj.parent.getWorldQuaternion(q); d.applyQuaternion(q.invert());
+    p.dir.copy(d.normalize());
+    p.delay = clamp((1.6 - wp.z) / 4.2, 0, 1) * 0.4;
+  });
+})();
+$('footl').textContent = `Field simulator · procedural model · ${meshes.length} parts · 8 optics`;
+
+/* ---------- camera ---------- */
+const CK = [
+  { t: 0,    az: 1.25, el: 0.3,  d: 8.2, ty: 0.45, tz: -0.1 },
+  { t: 3,    az: 1.15, el: 0.28, d: 8.0, ty: 0.45, tz: -0.1 },
+  { t: 6,    az: 0.95, el: 0.26, d: 7.6, ty: 0.55, tz: 0 },
+  { t: 10.4, az: 2.05, el: 0.24, d: 7.6, ty: 0.55, tz: 0 },
+  { t: 11.3, az: 0.6,  el: 0.2,  d: 5.6, ty: 0.6,  tz: 1.2 },
+  { t: 13.4, az: 0.3,  el: 0.22, d: 5.4, ty: 0.6,  tz: 1.3 },
+  { t: 15.3, az: 1.0,  el: 0.55, d: 9.6, ty: 0.75, tz: 0 },
+  { t: 18.6, az: 1.65, el: 0.4,  d: 8.8, ty: 0.6,  tz: 0 },
+  { t: 19.7, az: 1.38, el: 0.14, d: 7.2, ty: 0.9,  tz: 0.3 },
+  { t: 20.2, az: 1.34, el: 0.14, d: 7.4, ty: 0.92, tz: 0.3 },
+  { t: 20.6, az: 1.15, el: 0.12, d: 6.0, ty: 1.0,  tz: 0.7 },
+  { t: 22.3, az: 1.2,  el: 0.2,  d: 7.0, ty: 0.8,  tz: 0.3 },
+  { t: 24,   az: 1.25, el: 0.3,  d: 8.2, ty: 0.45, tz: -0.1 },
+];
+const camState = { az: 0.95, el: 0.26, d: 7.6, ty: 0.55, tz: 0 };
+function camAt(t) {
+  let i = 0; while (i < CK.length - 2 && t >= CK[i + 1].t) i++;
+  const a = CK[i], b = CK[i + 1], u = ease((t - a.t) / (b.t - a.t)), o = {};
+  for (const k of ['az', 'el', 'd', 'ty', 'tz']) o[k] = lerp(a[k], b[k], u);
+  return o;
+}
+let userAz = 0, userEl = 0, ttAz = 0;
+const camTarget = new THREE.Vector3();
+
+/* ---------- UI: state ---------- */
+const ui = { labels: !matchMedia('(max-width: 900px)').matches, exploded: false, turntable: false, skeleton: false, iso: 'HERO' };
+let xpSm = 0;
+
+const barcode = $('barcode'); const BARS = 48;
+for (let i = 0; i < BARS; i++) barcode.appendChild(document.createElement('span'));
+const bars = [...barcode.children];
+
+const servoBox = $('servos');
+const servoNames = ['L1', 'L2', 'L3', 'L4', 'R1', 'R2', 'R3', 'R4'];
+const servoEls = servoNames.map(n => {
+  const d = document.createElement('div'); d.className = 'servo cap';
+  d.innerHTML = `<span>${n}</span><div class="t"><i></i></div><span class="num">0%</span>`;
+  servoBox.appendChild(d); return { row: d, bar: d.querySelector('i'), txt: d.lastElementChild, sm: 0.3 };
+});
+
+const asmBox = $('asm');
+['HERO', ...ASM].forEach(a => {
+  const b = document.createElement('button'); b.className = 'chip'; b.textContent = a === 'HERO' ? 'Hero' : a.toLowerCase();
+  b.setAttribute('aria-pressed', a === 'HERO'); b.onclick = () => {
+    ui.iso = (ui.iso === a) ? 'HERO' : a;
+    [...asmBox.children].forEach((c, k) => c.setAttribute('aria-pressed', ['HERO', ...ASM][k] === ui.iso));
+    $('isotag').textContent = 'Isolate · ' + (ui.iso === 'HERO' ? 'Hero' : ui.iso.toLowerCase());
+  };
+  asmBox.appendChild(b);
+});
+view.classList.toggle('labels-off', !ui.labels);
+const dispBox = $('disp');
+[['labels', 'Labels'], ['exploded', 'Exploded'], ['turntable', 'Turntable'], ['skeleton', 'Skeleton']].forEach(([k, n]) => {
+  const b = document.createElement('button'); b.className = 'chip'; b.textContent = n; b.setAttribute('aria-pressed', ui[k]);
+  b.onclick = () => { ui[k] = !ui[k]; b.setAttribute('aria-pressed', ui[k]); if (k === 'labels') view.classList.toggle('labels-off', !ui.labels); };
+  dispBox.appendChild(b);
+});
+
+const SUBS = [
+  ['OPTIC ARRAY', '8 lenses · amber IR'],
+  ['CHELAE', '2 pincers · hydraulic'],
+  ['LEG DRIVE', '8 legs · 24 servos'],
+  ['MESOSOMA', '7 tergites · sealed'],
+  ['METASOMA', '5 segments · tendon'],
+  ['TELSON', 'Venom-sim cell · aculeus'],
+];
+const subBox = $('subsys');
+const subEls = SUBS.map(([n, d], i) => {
+  const r = document.createElement('div'); r.className = 'r';
+  r.innerHTML = `<span class="cap">0${i + 1}</span><span><b>${n}</b><small>${d}</small></span><span class="pill">—</span>`;
+  subBox.appendChild(r); return { r, pill: r.lastElementChild };
+});
+const setPill = (o, txt, cls) => { if (o.pill.textContent !== txt) { o.pill.textContent = txt; o.pill.className = 'pill ' + cls; o.r.classList.toggle('act', cls === 'hot'); } };
+
+// labels
+const LABELS = [
+  { a: 'optics', t: 'Optic array', s: () => lastP.optic > 0.5 ? '8 lenses · tracking' : '8 lenses · dim', dx: -150, dy: -64 },
+  { a: 'chela',  t: 'Chela R',     s: () => `grip ${gripVal.toFixed(1)} N`, dx: 40, dy: -58 },
+  { a: 'telson', t: 'Telson',      s: () => (lastP.wind + lastP.hit) > 0.1 ? 'armed' : 'safe', dx: 46, dy: -40 },
+  { a: 'terg',   t: 'Tergite 04',  s: () => lastP.explode > 0.1 ? 'shell open' : 'sealed', dx: 60, dy: 34 },
+  { a: 'leg',    t: 'Leg R2',      s: () => '3 dof · femur 31 nm', dx: 44, dy: 52 },
+  { a: 'tail',   t: 'Metasoma',    s: () => '5 segments', dx: -158, dy: -30 },
+];
+const labelBox = $('labels'), leaders = $('leaders');
+LABELS.forEach(L => {
+  L.el = document.createElement('div'); L.el.className = 'lbl'; L.el.innerHTML = `${L.t}<small></small>`; L.small = L.el.querySelector('small');
+  labelBox.appendChild(L.el);
+  L.line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline'); L.line.setAttribute('fill', 'none'); L.line.setAttribute('stroke', '#15171A'); L.line.setAttribute('stroke-width', '0.8'); L.line.setAttribute('stroke-opacity', '0.55');
+  L.dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle'); L.dot.setAttribute('r', '2.6'); L.dot.setAttribute('fill', '#FAFAF8'); L.dot.setAttribute('stroke', '#E58C00'); L.dot.setAttribute('stroke-width', '1.4');
+  leaders.append(L.line, L.dot);
+});
+
+// timeline marks
+const marks = $('marks');
+PHASES.forEach(p => { if (p.s > 0) { const m = document.createElement('div'); m.className = 'mk'; m.style.left = (p.s / T * 100) + '%'; marks.appendChild(m); } });
+
+/* ---------- gait diagram ---------- */
+const gc = $('gait'), gx = gc.getContext('2d');
+const HIST = 96; const hist = legs.map(() => new Array(HIST).fill(true)); let histAcc = 0;
+function drawGait() {
+  const w = gc.clientWidth, h = gc.clientHeight, dpr = Math.min(window.devicePixelRatio || 1, 2);
+  if (gc.width !== Math.round(w * dpr)) { gc.width = Math.round(w * dpr); gc.height = Math.round(h * dpr); }
+  gx.setTransform(dpr, 0, 0, dpr, 0, 0); gx.clearRect(0, 0, w, h);
+  const lw = 18, rowH = h / 8, cw = (w - lw) / HIST;
+  gx.font = '500 7.5px "JetBrains Mono", monospace'; gx.textBaseline = 'middle';
+  servoNames.forEach((n, r) => {
+    const y = r * rowH;
+    gx.fillStyle = '#7A7F84'; gx.fillText(n, 0, y + rowH / 2);
+    gx.fillStyle = '#E3E5E4'; gx.fillRect(lw, y + rowH / 2 - 0.5, w - lw, 1);
+    const hrow = hist[r]; gx.fillStyle = r === 5 ? '#E58C00' : '#15171A';
+    let start = -1;
+    for (let k = 0; k <= HIST; k++) {
+      const on = k < HIST && hrow[k];
+      if (on && start < 0) start = k;
+      if (!on && start >= 0) { gx.fillRect(lw + start * cw, y + 2, (k - start) * cw - 0.6, rowH - 4); start = -1; }
+    }
+  });
+  gx.fillStyle = '#E58C00'; gx.fillRect(w - 1.2, 0, 1.2, h);
+}
+
+/* ---------- interaction ---------- */
+let drag = null;
+view.addEventListener('pointerdown', e => { if (e.button !== 0) return; drag = { x: e.clientX, y: e.clientY }; view.setPointerCapture(e.pointerId); });
+view.addEventListener('pointermove', e => { if (!drag) return; userAz -= (e.clientX - drag.x) * 0.006; userEl = clamp(userEl + (e.clientY - drag.y) * 0.004, -0.2, 0.7); drag = { x: e.clientX, y: e.clientY }; });
+view.addEventListener('pointerup', () => drag = null);
+view.addEventListener('pointercancel', () => drag = null);
+view.addEventListener('dblclick', () => { userAz = 0; userEl = 0; ttAz = 0; });
+
+let t = 6.6, playing = !reduce, runtime = 0;
+const playBtn = $('play');
+const setPlay = v => {
+  playing = v; playBtn.setAttribute('aria-label', v ? 'Pausar' : 'Reproducir');
+  $('playicon').innerHTML = v ? '<rect x="2" y="1.5" width="2.6" height="9" rx=".6"/><rect x="7.4" y="1.5" width="2.6" height="9" rx=".6"/>' : '<path d="M3 1.6v8.8L10.4 6z"/>';
+};
+setPlay(playing);
+playBtn.onclick = () => setPlay(!playing);
+window.addEventListener('keydown', e => { if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); setPlay(!playing); } });
+
+const track = $('track'); let scrub = false;
+const scrubTo = e => { const r = track.getBoundingClientRect(); t = clamp((e.clientX - r.left) / r.width, 0, 0.9999) * T; };
+track.addEventListener('pointerdown', e => { scrub = true; track.setPointerCapture(e.pointerId); scrubTo(e); });
+track.addEventListener('pointermove', e => { if (scrub) scrubTo(e); });
+track.addEventListener('pointerup', () => scrub = false);
+track.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight') { t = (t + 1) % T; e.preventDefault(); }
+  if (e.key === 'ArrowLeft') { t = (t - 1 + T) % T; e.preventDefault(); }
+});
+
+/* ---------- resize ---------- */
+let VW = 1, VH = 1;
+const resize = () => {
+  VW = view.clientWidth; VH = view.clientHeight;
+  R.setSize(VW, VH, false); cam.aspect = VW / VH; cam.updateProjectionMatrix();
+  leaders.setAttribute('viewBox', `0 0 ${VW} ${VH}`);
+};
+new ResizeObserver(resize).observe(view); resize();
+
+/* ---------- loop ---------- */
+const fmt = s => String(Math.floor(s)).padStart(2, '0');
+const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), prevTel = new THREE.Vector3();
+let gripVal = 6, telV = 0, frameN = 0, last = performance.now();
+
+function frame(now) {
+  const dt = clamp((now - last) / 1000, 0, 0.05); last = now;
+  if (playing && !scrub) { t += dt; runtime += dt; if (t >= T) t -= T; }
+  xpSm += ((ui.exploded ? 1 : 0) - xpSm) * Math.min(1, dt * 4);
+  const P = applyPose(t, xpSm);
+
+  // isolate / skeleton fades
+  mats.forEach(m => {
+    const { asm, kind } = m.userData;
+    let target = (ui.iso === 'HERO' || ui.iso === asm) ? 1 : 0.07;
+    if (ui.skeleton && (kind === 'shell' || kind === 'shell2' || (kind === 'accent' && asm !== 'TELSON' && asm !== 'OPTICS'))) target *= 0.1;
+    m.userData.cur += (target - m.userData.cur) * Math.min(1, dt * 6);
+    const o = m.userData.cur, tr = o < 0.995;
+    if (m.transparent !== tr) { m.transparent = tr; m.depthWrite = !tr || o > 0.6; m.needsUpdate = true; }
+    m.opacity = tr ? o : 1;
+  });
+  if (frameN % 10 === 0) meshes.forEach(me => { me.castShadow = me.material.userData.cur > 0.5; });
+
+  // camera
+  if (ui.turntable) ttAz += dt * 0.35;
+  const c = camAt(t);
+  for (const k in c) camState[k] += (c[k] - camState[k]) * Math.min(1, dt * 5);
+  const aspectK = Math.max(1, (cam.aspect < 1 ? 1.3 : 1.5) / cam.aspect);
+  const az = camState.az + userAz + ttAz, el = clamp(camState.el + userEl, -0.1, 1.2), d = camState.d * aspectK * 1.32;
+  camTarget.set(0, camState.ty, camState.tz);
+  cam.position.set(camTarget.x + Math.sin(az) * Math.cos(el) * d, camTarget.y + Math.sin(el) * d, camTarget.z + Math.cos(az) * Math.cos(el) * d);
+  cam.lookAt(camTarget);
+
+  R.render(scene, cam);
+
+  // telson velocity
+  anchors.telson.getWorldPosition(tmp2);
+  telV += ((dt > 0 ? tmp2.distanceTo(prevTel) / dt : 0) * 0.32 - telV) * 0.2; prevTel.copy(tmp2);
+
+  // gait history
+  histAcc += dt;
+  while (histAcc > 1 / 30) { histAcc -= 1 / 30; legs.forEach((L, k) => { hist[k].shift(); hist[k].push(L.stance); }); }
+
+  // labels
+  if (ui.labels) {
+    const rect = { w: VW, h: VH };
+    LABELS.forEach(L => {
+      anchors[L.a].getWorldPosition(tmp); tmp.project(cam);
+      const x = (tmp.x + 1) / 2 * rect.w, y = (1 - tmp.y) / 2 * rect.h;
+      const vis = tmp.z < 1 && (ui.iso === 'HERO' || labelAsm(L.a) === ui.iso);
+      const lx = clamp(x + L.dx, 6, rect.w - 140), ly = clamp(y + L.dy, 6, rect.h - 34);
+      L.el.style.transform = `translate(${lx}px,${ly}px)`;
+      L.el.style.opacity = vis ? 1 : 0;
+      const ex = L.dx < 0 ? lx + L.el.offsetWidth : lx, ey = ly + 12;
+      const mx = L.dx < 0 ? ex + 14 : ex - 14;
+      L.line.setAttribute('points', `${x},${y} ${mx},${ey} ${ex},${ey}`);
+      L.line.style.opacity = L.dot.style.opacity = vis ? 1 : 0;
+      L.dot.setAttribute('cx', x); L.dot.setAttribute('cy', y);
+      { const tx = L.s(); if (L.small.textContent !== tx) L.small.textContent = tx; }
+    });
+  }
+
+  if (frameN % 2 === 0) updateHUD(P);
+  frameN++;
+  requestAnimationFrame(frame);
+}
+const labelAsm = a => ({ optics: 'OPTICS', chela: 'CHELAE', telson: 'TELSON', terg: 'MESOSOMA', leg: 'LEGS', tail: 'METASOMA' })[a];
+
+function updateHUD(P) {
+  const ph = phaseAt(t);
+  $('mode').textContent = ph.id; $('status').textContent = ph.id; $('opnow').textContent = 'OPERATOR · ' + ph.id;
+  const bodyMM = Math.round(root.position.y * 950);
+  $('modesub').textContent = ph.id === 'PATROL' ? `Body ${bodyMM} mm · gait ${GAIT_HZ.toFixed(2)} Hz` : ph.sub;
+  $('runtime').textContent = `00:${fmt(runtime / 60)}:${fmt(runtime % 60)}`;
+  $('tc').textContent = `00:${fmt(t)} / 00:24`;
+  const pct = t / T * 100; $('fill').style.width = pct + '%'; $('knob').style.left = pct + '%';
+  track.setAttribute('aria-valuenow', t.toFixed(1));
+
+  // tail load barcode
+  const load = clamp(0.34 + P.rise * 0.1 + P.wind * 0.5 + P.hit * 0.6 + P.walk * 0.04 * Math.sin(t * 7), 0.05, 0.98);
+  $('loadpct').textContent = Math.round(load * 100) + '%';
+  const on = Math.round(load * BARS);
+  bars.forEach((b, i) => { b.className = i < on ? (i > BARS * 0.72 ? 'hot' : 'on') : ''; });
+
+  // chelae
+  const active = P.claw > 0.02 || ph.id === 'CHELA CYCLE';
+  gripVal = active ? (1 - P.claw) * 41.8 + 2 : (P.rise > 0.5 ? 6.0 : 1.2);
+  $('grip').innerHTML = `${gripVal.toFixed(1)}<sup>N</sup>`;
+  const gapDeg = P.claw * 43; $('gap').textContent = Math.round(gapDeg) + '°';
+  $('clawM').setAttribute('transform', `translate(70 27) rotate(${gapDeg})`);
+  $('clawL').setAttribute('transform', `translate(70 27) rotate(${-gapDeg * 0.15})`);
+  const ar = 52, a1 = gapDeg * Math.PI / 180;
+  $('clawArc').setAttribute('d', gapDeg > 1 ? `M${70 + ar} 27 A${ar} ${ar} 0 0 1 ${70 + ar * Math.cos(a1)} ${27 + ar * Math.sin(a1)}` : '');
+  $('bar').textContent = Math.round(120 + P.rise * 60 + P.claw * 70) + ' bar';
+
+  // gait
+  $('gaithz').innerHTML = `${(GAIT_HZ * P.walk).toFixed(2)}<sup>Hz</sup>`;
+  drawGait();
+
+  // servos
+  legs.forEach((L, k) => {
+    const s = servoEls[(L.s < 0 ? 0 : 4) + L.i];
+    s.sm += (clamp(L.load, 0.02, 0.99) - s.sm) * 0.25;
+    s.bar.style.width = (s.sm * 100).toFixed(1) + '%';
+    s.txt.textContent = Math.round(s.sm * 100) + '%';
+    s.row.classList.toggle('hot', s.sm > 0.6);
+  });
+  const ss = $('servostate'); const sst = P.walk > 0.1 ? ['Walking', 'ok'] : P.hit > 0.1 ? ['Bracing', 'hot'] : P.rise > 0.5 ? ['Holding', 'ok'] : ['Folded', ''];
+  if (ss.textContent !== sst[0]) { ss.textContent = sst[0]; ss.className = 'pill ' + sst[1]; }
+
+  // posture
+  const curl = tail.reduce((a, j) => a + j.rotation.x, 0) * 180 / Math.PI;
+  $('pBody').textContent = bodyMM + ' mm';
+  $('pPitch').textContent = (root.rotation.x * 180 / Math.PI).toFixed(1) + '°';
+  $('pCurl').textContent = Math.round(curl) + '°';
+  anchors.telson.getWorldPosition(tmp);
+  $('pReach').textContent = Math.round(Math.max(0, tmp.z + 1.4) * 420) + ' mm';
+  $('pVel').textContent = telV.toFixed(2) + ' m/s';
+  $('pStance').textContent = P.rise < 0.4 ? 'Folded' : P.hit > 0.1 ? 'Braced' : 'Wide';
+  const circ = 2 * Math.PI * 33, frac = clamp(curl / 200, 0, 1);
+  $('curlArc').setAttribute('stroke-dasharray', `${(circ * frac).toFixed(1)} 999`);
+  $('needle').setAttribute('transform', `rotate(${(frac * 360 + 180).toFixed(1)} 39 39)`);
+
+  // subsystems
+  setPill(subEls[0], P.optic > 0.5 ? 'Tracking' : 'Standby', P.optic > 0.5 ? 'ok' : '');
+  setPill(subEls[1], P.claw > 0.15 ? 'Open' : 'Locked', P.claw > 0.15 ? 'hot' : 'ok');
+  setPill(subEls[2], P.walk > 0.1 ? 'Walking' : P.rise > 0.5 ? 'Holding' : 'Folded', P.walk > 0.1 || P.rise > 0.5 ? 'ok' : '');
+  setPill(subEls[3], Math.max(P.explode, xpSm) > 0.1 ? 'Open' : 'Sealed', Math.max(P.explode, xpSm) > 0.1 ? 'hot' : 'ok');
+  setPill(subEls[4], P.hit > 0.1 ? 'Strike' : P.wind > 0.05 ? 'Loading' : 'Coiled', (P.hit > 0.1 || P.wind > 0.05) ? 'hot' : 'ok');
+  setPill(subEls[5], (P.wind + P.hit) > 0.05 ? 'Armed' : 'Safe', (P.wind + P.hit) > 0.05 ? 'hot' : 'ok');
+}
+
+requestAnimationFrame(frame);
+})();
+</script>
+
+</body>
+</html>
