@@ -15,7 +15,7 @@
   --ground:#E9EBEA; --ground-hi:#F8F8F6; --panel:rgba(251,251,249,.86); --panel-solid:#FAFAF8;
   --line:#D2D5D4; --line-soft:#E3E5E4;
   --ink:#15171A; --ink-2:#3A3E43; --muted:#7A7F84; --faint:#A8ACAF;
-  --accent:#E58C00; --accent-ink:#9E5A00; --accent-tint:#FBEBD2;
+  --accent:#E2600A; --accent-ink:#A3420A; --accent-tint:#FBE2D2;
   --ok:#23824F; --ok-tint:#DFF1E6; --idle-tint:#ECEDED;
   --f-display:"Archivo","Helvetica Neue",Arial,sans-serif;
   --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
@@ -83,12 +83,20 @@ body{background:var(--ground);color:var(--ink);font-family:var(--f-mono);font-si
 .foot-row{display:flex;justify-content:space-between;margin-top:8px;padding-top:7px;border-top:1px solid var(--line-soft)}
 .foot-row b{font-weight:500;color:var(--ink);letter-spacing:.08em}
 svg.mini{display:block;width:100%;height:auto;margin-top:8px}
-canvas.gait{display:block;width:100%;height:78px;margin-top:8px}
-.servo{display:grid;grid-template-columns:20px 1fr 30px;align-items:center;gap:8px;height:13px}
+canvas.gait{display:block;width:100%;height:64px;margin-top:8px}
+.servo{display:grid;grid-template-columns:20px 1fr 48px;align-items:center;gap:8px;height:13px}
 .servo .t{height:3px;background:var(--line-soft);border-radius:2px;position:relative;overflow:hidden}
 .servo .t i{position:absolute;inset:0 auto 0 0;background:var(--ink);border-radius:2px;width:0}
 .servo.hot .t i{background:var(--accent)}
 .servo span:last-child{text-align:right}
+.cells{display:flex;gap:2px;height:12px;align-self:center}
+.cells i{width:6px;border-radius:1px;background:var(--line-soft)}
+.cells i.on{background:var(--ok)}.cells i.hot{background:var(--accent)}
+.trio{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:9px;padding-top:7px;border-top:1px solid var(--line-soft)}
+.trio b{display:block;color:var(--ink);font-weight:500;font-size:10px;letter-spacing:.02em;margin-top:3px;text-transform:none}
+canvas.spark{display:block;width:100%;height:34px;margin-top:8px}
+.servo.det .t i{width:0!important}
+.servo.det span:last-child{color:var(--accent-ink);font-weight:700;font-size:7px;letter-spacing:.1em}
 .pill{display:inline-block;font-size:7px;font-weight:700;letter-spacing:.12em;padding:2px 5px;border-radius:2px;text-transform:uppercase;background:var(--idle-tint);color:var(--muted)}
 .pill.ok{background:var(--ok-tint);color:var(--ok)}
 .pill.hot{background:var(--accent-tint);color:var(--accent-ink)}
@@ -195,7 +203,7 @@ canvas.gait{display:block;width:100%;height:78px;margin-top:8px}
     </div>
 
     <section class="panel log">
-      <div class="ph"><span class="pt">Operation log</span><span class="pn">08</span></div>
+      <div class="ph"><span class="pt">Operation log</span><span class="pn">09</span></div>
       <div class="body">
         <button class="play" id="play" aria-label="Pausar"><svg viewBox="0 0 12 12" fill="currentColor" id="playicon"><rect x="2" y="1.5" width="2.6" height="9" rx=".6"/><rect x="7.4" y="1.5" width="2.6" height="9" rx=".6"/></svg></button>
         <div class="trk">
@@ -231,14 +239,20 @@ canvas.gait{display:block;width:100%;height:78px;margin-top:8px}
       </section>
       <section class="panel">
         <div class="ph"><span class="pt">Leg servos</span><span class="pn">03</span></div>
-        <div class="sub" style="margin:-4px 0 8px"><span class="cap">Load per leg · femur torque</span><span class="pill ok" id="servostate">Holding</span></div>
+        <div class="sub" style="margin:-4px 0 8px"><span class="cap">Load per leg</span><span class="pill ok" id="servostate">Holding</span></div>
         <div id="servos"></div>
+      </section>
+      <section class="panel">
+        <div class="ph"><span class="pt">Power</span><span class="pn">04</span></div>
+        <div class="kv"><span class="v num" id="batt">86<sup>%</sup></span><div class="cells" id="cells"></div></div>
+        <div class="sub"><span class="cap">Battery</span><span class="cap" id="cellstate">Nominal</span></div>
+        <div class="trio cap"><div>Draw<b class="num" id="pDraw">24.4 W</b></div><div>Cell<b class="num" id="pCell">3.86 V</b></div><div>Motor<b class="num" id="pTemp">32 °C</b></div></div>
       </section>
     </aside>
 
     <aside class="side right">
       <section class="panel">
-        <div class="ph"><span class="pt">Posture</span><span class="pn">04</span></div>
+        <div class="ph"><span class="pt">Posture</span><span class="pn">05</span></div>
         <div class="posture">
           <svg viewBox="0 0 78 78" aria-hidden="true">
             <circle cx="39" cy="39" r="33" fill="none" stroke="var(--line-soft)" stroke-width="6"/>
@@ -254,18 +268,19 @@ canvas.gait{display:block;width:100%;height:78px;margin-top:8px}
             <div>Reach<b class="num" id="pReach">0 mm</b></div>
           </div>
         </div>
+        <canvas class="spark" id="spark"></canvas>
         <div class="foot-row"><span class="cap">Stance <b id="pStance">Wide</b></span><span class="cap">Telson v <b class="num" id="pVel">0.00 m/s</b></span></div>
       </section>
       <section class="panel">
-        <div class="ph"><span class="pt">Assemblies</span><span class="pn">05</span></div>
+        <div class="ph"><span class="pt">Assemblies</span><span class="pn">06</span></div>
         <div class="chips" id="asm"></div>
       </section>
       <section class="panel">
-        <div class="ph"><span class="pt">Display</span><span class="pn">06</span></div>
+        <div class="ph"><span class="pt">Display</span><span class="pn">07</span></div>
         <div class="chips" id="disp"></div>
       </section>
       <section class="panel">
-        <div class="ph"><span class="pt">Subsystems</span><span class="pn">07</span></div>
+        <div class="ph"><span class="pt">Subsystems</span><span class="pn">08</span></div>
         <div class="subsys" id="subsys"></div>
       </section>
     </aside>
@@ -401,7 +416,7 @@ const ASM = ['CARAPACE', 'OPTICS', 'CHELAE', 'LEGS', 'MESOSOMA', 'METASOMA', 'TE
 const mats = [], cache = {};
 const M = (asm, kind) => {
   const k = asm + '|' + kind;
-  if (!cache[k]) { const m = new THREE.MeshStandardMaterial(KIND[kind]); m.userData = { asm, kind, cur: 1 }; cache[k] = m; mats.push(m); }
+  if (!cache[k]) { const m = new THREE.MeshStandardMaterial(KIND[kind]); m.side = THREE.DoubleSide; m.userData = { asm, kind, cur: 1 }; cache[k] = m; mats.push(m); }
   return cache[k];
 };
 const meshes = [];
@@ -413,7 +428,8 @@ const add = (geo, mat, parent, p, r, s) => {
 };
 const G = (parent, p, order) => { const g = new THREE.Group(); if (p) g.position.set(p[0], p[1], p[2]); if (order) g.rotation.order = order; parent.add(g); return g; };
 const parts = [];
-const part = (obj, amt) => { parts.push({ obj, amt, home: obj.position.clone(), hr: obj.rotation.clone(), dir: new THREE.Vector3(0, 1, 0), delay: 0, spin: (Math.sin(parts.length * 12.9898) * 43758.5453 % 1) - 0.5 }); return obj; };
+const hash = n => { const x = Math.sin(n * 12.9898 + 4.1) * 43758.5453; return x - Math.floor(x); };
+const part = (obj, amt) => { const n = parts.length; parts.push({ obj, amt, home: obj.position.clone(), hr: obj.rotation.clone(), dir: new THREE.Vector3(0, 1, 0), delay: 0, spin: hash(n) - 0.5, spin2: hash(n + 77) - 0.5 }); return obj; };
 
 /* ---------- geometry ---------- */
 const DOME = new THREE.SphereGeometry(1, 56, 26, 0, Math.PI * 2, 0, Math.PI / 2);
@@ -440,115 +456,248 @@ const TARSUS = horn(0.034, 0.38, 0.06); TARSUS.rotateX(Math.PI / 2);
 const root = G(scene); root.rotation.order = 'YXZ';
 const body = G(root);
 const anchors = {};
+const pistons = [];
+let gearCount = 0;
 
-// carapace (prosoma)
-const carShell = part(G(body, [0, 0, 0.95]), 0.75);
-add(DOME, M('CARAPACE', 'shell'), carShell, [0, 0, 0], null, [0.6, 0.3, 0.62]);
-add(RIM, M('CARAPACE', 'shell2'), carShell, [0, 0, 0], null, [0.6, 1, 0.62]);
-const arc = new THREE.TorusGeometry(1, 0.034, 8, 48, Math.PI * 0.9); arc.rotateZ(Math.PI * 0.05); arc.rotateX(Math.PI / 2);
-add(arc, M('CARAPACE', 'accent'), carShell, [0, 0.012, 0], null, [0.606, 1, 0.626]);
-add(BOX, M('CARAPACE', 'shell2'), carShell, [0, 0.29, -0.12], null, [0.07, 0.03, 0.42]);
-for (const s of [-1, 1]) {
-  add(BOX, M('CARAPACE', 'dark'), carShell, [s * 0.2, 0.235, -0.18], [0, s * 0.18, s * -0.5], [0.012, 0.012, 0.36]);
-  for (let k = 0; k < 3; k++) add(BALL, M('OPTICS', 'glass'), carShell, [s * (0.3 + k * 0.035), 0.09, 0.47 - k * 0.065], null, 0.032);
+const PIST = new THREE.CylinderGeometry(1, 1, 1, 12); PIST.rotateX(Math.PI / 2); PIST.translate(0, 0, 0.5);
+const CYL_Y = new THREE.CylinderGeometry(1, 1, 1, 20);
+const HEX = new THREE.CylinderGeometry(1, 1, 1, 6);
+const GEAR_X = (() => {
+  const sh = new THREE.Shape(), n = 14;
+  for (let i = 0; i < n * 2; i++) {
+    const a0 = i / (n * 2) * Math.PI * 2, a1 = (i + 1) / (n * 2) * Math.PI * 2, r = i % 2 ? 0.8 : 1;
+    if (i === 0) sh.moveTo(Math.cos(a0) * r, Math.sin(a0) * r); else sh.lineTo(Math.cos(a0) * r, Math.sin(a0) * r);
+    sh.lineTo(Math.cos(a1) * r, Math.sin(a1) * r);
+  }
+  const hole = new THREE.Path(); hole.absarc(0, 0, 0.38, 0, Math.PI * 2, true); sh.holes.push(hole);
+  const g = new THREE.ExtrudeGeometry(sh, { depth: 0.32, bevelEnabled: false, curveSegments: 12 });
+  g.translate(0, 0, -0.16); g.rotateY(Math.PI / 2); return g;
+})();
+const GEAR_Y = GEAR_X.clone(); GEAR_Y.rotateZ(Math.PI / 2);
+const WEDGE_L = new THREE.SphereGeometry(1, 40, 20, -0.95, 1.9, 0, Math.PI / 2);
+const WEDGE_R = new THREE.SphereGeometry(1, 40, 20, Math.PI - 0.95, 1.9, 0, Math.PI / 2);
+const HEMI_L = new THREE.SphereGeometry(1, 32, 20, -Math.PI / 2, Math.PI);
+const HEMI_R = new THREE.SphereGeometry(1, 32, 20, Math.PI / 2, Math.PI);
+const RIB = new THREE.TorusGeometry(1, 0.07, 6, 28, Math.PI);
+const halfShell = (r, len, dir) => { const g = new THREE.CylinderGeometry(r, r, len, 28, 1, true, Math.PI / 2, Math.PI); g.rotateX(Math.PI / 2); g.translate(0, 0, dir * len / 2); return g; };
+const plate = (asm, geo, parent, p, s, amt, kind = 'shell') => { const g = part(G(parent, p), amt); add(geo, M(asm, kind), g, null, null, s); return g; };
+const gear = (asm, geo, parent, p, s, amt) => {
+  gearCount++;
+  const g = amt ? part(G(parent, p), amt) : G(parent, p);
+  add(geo, M(asm, 'dark'), g, null, null, s);
+  return g;
+};
+function piston(asm, parent, p, endObj, r) {
+  const g = G(parent, p);
+  const sleeve = add(PIST, M(asm, 'dark'), g, null, null, [r * 1.4, r * 1.4, 1]);
+  const rod = add(PIST, M(asm, 'steel'), g, null, null, [r * 0.62, r * 0.62, 1]);
+  add(BALL, M(asm, 'accent'), g, null, null, r * 1.5);
+  const tip = add(BALL, M(asm, 'dark'), g, null, null, r * 1.2);
+  pistons.push({ g, sleeve, rod, tip, endObj }); return g;
 }
+
+// carapace (prosoma): dark core, centre spine plate, two side wedges, visor, sensor masts
+const car = G(body, [0, 0, 0.95]);
+add(DOME, M('CARAPACE', 'dark'), car, [0, -0.004, 0], null, [0.585, 0.285, 0.605]);
 add(BALL, M('CARAPACE', 'dark'), body, [0, -0.03, 0.92], null, [0.5, 0.12, 0.58]);
+const cc = plate('CARAPACE', DOME, car, [0, 0.004, 0], [0.27, 0.318, 0.63], 0.95);
+add(RIM, M('CARAPACE', 'shell2'), cc, null, null, [0.27, 1.4, 0.63]);
+for (let k = 0; k < 4; k++) add(BOX, M('CARAPACE', 'dark'), cc, [0, 0.3 - k * 0.013, -0.2 - k * 0.055], [-0.25 - k * 0.1, 0, 0], [0.13, 0.012, 0.022]);
+add(BOX, M('CARAPACE', 'accent'), cc, [0, 0.305, 0.18], [0.3, 0, 0], [0.05, 0.008, 0.16]);
+anchors.carapace = G(cc, [0, 0.33, -0.1]);
+for (const s of [-1, 1]) {
+  const w = plate('CARAPACE', s < 0 ? WEDGE_L : WEDGE_R, car, [0, 0, 0], [0.6, 0.3, 0.62], 0.8);
+  for (const z of [-0.26, -0.09, 0.08, 0.25]) add(HEX, M('CARAPACE', 'steel'), w, [s * 0.5, 0.115, z], [0, 0, s * 0.5], [0.017, 0.012, 0.017]);
+  add(BOX, M('CARAPACE', 'shell2'), w, [s * 0.4, 0.2, -0.05], [0, 0, s * 0.55], [0.012, 0.006, 0.42]);
+  for (let k = 0; k < 3; k++) add(BALL, M('OPTICS', 'glass'), w, [s * (0.3 + k * 0.035), 0.09, 0.47 - k * 0.065], null, 0.032);
+  const mast = G(car, [s * 0.11, 0.25, 0.3]);
+  mast.rotation.set(-0.6, s * 0.28, 0); part(mast, 0.9);
+  add(PIST, M('OPTICS', 'steel'), mast, null, null, [0.011, 0.011, 0.34]);
+  add(PIST, M('OPTICS', 'dark'), mast, null, null, [0.02, 0.02, 0.08]);
+  add(BALL, M('OPTICS', 'accent'), mast, [0, 0, 0.34], null, 0.024);
+}
+const visor = part(G(car, [0, 0.012, 0]), 0.7);
+const arc = new THREE.TorusGeometry(1, 0.034, 8, 48, Math.PI * 0.9); arc.rotateZ(Math.PI * 0.05); arc.rotateX(Math.PI / 2);
+add(arc, M('CARAPACE', 'accent'), visor, null, null, [0.606, 1.2, 0.626]);
 
 // optic turret
-const turret = part(G(body, [0, 0.27, 1.13]), 0.55);
-add(DOME, M('OPTICS', 'dark'), turret, [0, 0, 0], null, [0.14, 0.075, 0.12]);
+const turret = part(G(body, [0, 0.27, 1.13]), 0.65);
+add(DOME, M('OPTICS', 'dark'), turret, null, null, [0.14, 0.075, 0.12]);
 for (const s of [-1, 1]) {
   add(BALL, M('OPTICS', 'glass'), turret, [s * 0.058, 0.045, 0.02], null, 0.043);
   add(RING_Y, M('OPTICS', 'accent'), turret, [s * 0.058, 0.04, 0.02], null, 0.05);
 }
+add(BOX, M('OPTICS', 'dark'), turret, [0, 0.055, -0.075], null, [0.08, 0.035, 0.05]);
+add(BALL, M('OPTICS', 'glass'), turret, [0, 0.055, -0.048], null, 0.014);
 anchors.optics = G(turret, [0, 0.08, 0]);
 
-// mesosoma: 7 tergites
+// mesosoma: 7 tergites, each = dark core + centre plate + 2 wedges + side gear hubs
 const W = [0.6, 0.64, 0.66, 0.66, 0.62, 0.55, 0.45];
 const terg = [];
 W.forEach((w, i) => {
   const j = G(body, [0, 0, 0.42 - i * 0.28]); terg.push(j);
-  add(AXLE_X, M('MESOSOMA', 'dark'), j, [0, 0.02, 0], null, [w * 1.5, 0.045, 0.045]);
+  add(DOME, M('MESOSOMA', 'dark'), j, [0, -0.004, 0], null, [w * 0.97, 0.2, 0.18]);
+  add(AXLE_X, M('MESOSOMA', 'steel'), j, [0, 0.03, 0], null, [w * 2.05, 0.022, 0.022]);
   add(BALL, M('MESOSOMA', 'dark'), j, [0, -0.03, 0], null, [w * 0.85, 0.1, 0.16]);
-  const sh = part(G(j), 0.5);
-  add(DOME, M('MESOSOMA', 'shell'), sh, [0, 0, 0], null, [w, 0.21, 0.19]);
-  add(RIM, M('MESOSOMA', (i === 2 || i === 5) ? 'accent' : 'shell2'), sh, [0, 0, 0], null, [w, 1, 0.19]);
-  for (const s of [-1, 1]) add(BALL, M('MESOSOMA', 'steel'), sh, [s * w * 0.6, 0.15, 0.02], null, 0.022);
-  if (i === 3) anchors.terg = G(sh, [0.32, 0.17, 0]);
+  const c = plate('MESOSOMA', DOME, j, [0, 0.003, 0], [w * 0.42, 0.226, 0.2], 0.95);
+  add(RIM, M('MESOSOMA', (i === 2 || i === 5) ? 'accent' : 'shell2'), c, null, null, [w * 0.42, 1.6, 0.2]);
+  for (let k = -1; k <= 1; k++) add(BOX, M('MESOSOMA', 'dark'), c, [0, 0.222, k * 0.05], null, [w * 0.28, 0.008, 0.016]);
+  for (const s of [-1, 1]) {
+    const wd = plate('MESOSOMA', s < 0 ? WEDGE_L : WEDGE_R, j, [0, 0, 0], [w, 0.205, 0.19], 0.75);
+    add(HEX, M('MESOSOMA', 'steel'), wd, [s * w * 0.62, 0.15, 0], [0, 0, s * 0.6], [0.018, 0.012, 0.018]);
+    const g = gear('MESOSOMA', GEAR_X, j, [s * w * 1.0, 0.03, 0], 0.07, 0.65);
+    add(AXLE_X, M('MESOSOMA', 'accent'), g, [s * 0.03, 0, 0], null, [0.02, 0.034, 0.034]);
+    if (i === 2 && s === 1) anchors.gear = G(g, [0.03, 0.06, 0]);
+  }
+  if (i === 3) anchors.terg = G(c, [0, 0.235, 0]);
 });
+// cable runs along both flanks
+for (const s of [-1, 1]) {
+  const cable = (pts, r, kind) => add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(p => new THREE.Vector3(p[0], p[1], p[2]))), 90, r, 6), M('MESOSOMA', kind), body);
+  cable([[s * 0.4, -0.05, 1.3], [s * 0.56, -0.06, 0.8], [s * 0.64, -0.07, 0.2], [s * 0.6, -0.07, -0.5], [s * 0.42, -0.06, -1.1], [s * 0.1, -0.02, -1.42]], 0.017, 'dark');
+  cable([[s * 0.38, -0.08, 1.25], [s * 0.53, -0.1, 0.8], [s * 0.6, -0.1, 0.2], [s * 0.56, -0.1, -0.5], [s * 0.38, -0.09, -1.1], [s * 0.08, -0.05, -1.4]], 0.01, 'steel');
+}
 
-// metasoma: 5 tail segments + telson
+// metasoma: 5 tail segments, each = dark core, axle + gear hubs, upper armour, lower plate, tendon pistons
 const TL = [0.32, 0.34, 0.36, 0.38, 0.42], TR = [0.15, 0.145, 0.14, 0.138, 0.136];
 const tail = [];
 let tp = body;
 TL.forEach((L, j) => {
   const jg = G(tp, j === 0 ? [0, 0.05, -1.4] : [0, 0, -TL[j - 1]], 'YXZ'); tail.push(jg);
   const r = TR[j];
-  add(BALL, M('METASOMA', 'dark'), jg, [0, 0, 0], null, r * 0.84);
-  add(CORE_Z, M('METASOMA', 'steel'), jg, [0, 0, -L / 2], null, [r * 0.5, r * 0.5, L]);
-  const sh = part(G(jg), 0.42);
-  const cg = new THREE.CapsuleGeometry(r, Math.max(0.02, L - r * 1.25), 8, 22); cg.rotateX(Math.PI / 2); cg.translate(0, 0, -L / 2);
-  add(cg, M('METASOMA', 'shell'), sh, [0, 0, 0], null, [1, 0.92, 1]);
-  add(BOX, M('METASOMA', 'shell2'), sh, [0, r * 0.88, -L / 2], null, [0.035, 0.03, L * 0.62]);
-  if (j === 1 || j === 3) add(RING_Z, M('METASOMA', 'accent'), sh, [0, 0, -L * 0.84], null, [r * 1.02, r * 0.95, r]);
-  if (j === 2) anchors.tail = G(sh, [0, r + 0.02, -L / 2]);
+  const core = new THREE.CapsuleGeometry(r * 0.74, Math.max(0.02, L - r * 1.4), 6, 18); core.rotateX(Math.PI / 2); core.translate(0, 0, -L / 2);
+  add(core, M('METASOMA', 'dark'), jg);
+  add(AXLE_X, M('METASOMA', 'steel'), jg, null, null, [r * 2.5, 0.035, 0.035]);
+  for (const s of [-1, 1]) {
+    const g = gear('METASOMA', GEAR_X, jg, [s * r * 1.02, 0, 0], r * 0.5, 0.6);
+    add(AXLE_X, M('METASOMA', 'accent'), g, [s * r * 0.13, 0, 0], null, [0.018, r * 0.22, r * 0.22]);
+  }
+  const up = part(G(jg, [0, 0, -L * 0.1]), 0.6);
+  add(halfShell(r, L * 0.8, -1), M('METASOMA', 'shell'), up);
+  add(RIB, M('METASOMA', 'shell2'), up, [0, 0, -0.004], null, r);
+  add(RIB, M('METASOMA', 'shell2'), up, [0, 0, -L * 0.8 + 0.004], null, r);
+  if (j === 1 || j === 3) add(RIB, M('METASOMA', 'accent'), up, [0, 0, -L * 0.4], null, [r * 1.012, r * 1.012, r * 1.4]);
+  add(BOX, M('METASOMA', 'shell2'), up, [0, r + 0.006, -L * 0.4], null, [0.04, 0.022, L * 0.55]);
+  const lo = part(G(jg, [0, 0, -L * 0.1]), 0.45);
+  add(halfShell(r * 0.93, L * 0.8, -1), M('METASOMA', 'shell2'), lo, null, [0, 0, Math.PI]);
+  for (const s of [-1, 1]) {
+    const pg = part(G(jg, [s * r * 0.9, -r * 0.3, -L * 0.12]), 0.75);
+    add(PIST, M('METASOMA', 'dark'), pg, null, null, [0.026, 0.026, L * 0.42]);
+    add(PIST, M('METASOMA', 'steel'), pg, [0, 0, L * 0.42], null, [0.012, 0.012, L * 0.34]);
+    add(BALL, M('METASOMA', 'accent'), pg, null, null, 0.03);
+    if (j === 2 && s === 1) anchors.piston = G(pg, [0, 0, L * 0.3]);
+  }
+  if (j === 2) anchors.tail = G(up, [0, r + 0.03, -L * 0.4]);
   tp = jg;
 });
 const tel = G(tp, [0, 0, -TL[4]], 'YXZ');
 add(RING_Z, M('TELSON', 'shell2'), tel, [0, 0, -0.03], null, 0.12);
-add(BALL, M('TELSON', 'dark'), tel, [0, 0, 0], null, 0.1);
-const bulb = part(G(tel), 0.38);
-add(BALL, M('TELSON', 'accent'), bulb, [0, 0, -0.23], null, [0.17, 0.15, 0.24]);
-add(RING_Z, M('TELSON', 'dark'), bulb, [0, 0, -0.18], null, [0.168, 0.148, 0.17]);
-add(ACULEUS, M('TELSON', 'steel'), bulb, [0, 0.03, -0.42]);
-anchors.telson = G(bulb, [0, 0.15, -0.23]);
+add(BALL, M('TELSON', 'dark'), tel, null, null, 0.1);
+const bc = G(tel, [0, 0, -0.23]);
+add(BALL, M('TELSON', 'dark'), bc, null, null, [0.15, 0.135, 0.22]);
+for (const geo of [HEMI_L, HEMI_R]) { const b = part(G(bc), 0.6); add(geo, M('TELSON', 'accent'), b, null, null, [0.17, 0.15, 0.24]); }
+add(RING_Z, M('TELSON', 'dark'), bc, [0, 0, 0.06], null, [0.168, 0.148, 0.17]);
+add(BOX, M('TELSON', 'glass'), bc, [0, 0.148, -0.02], null, [0.026, 0.012, 0.15]);
+const acu = part(G(tel), 0.55);
+add(ACULEUS, M('TELSON', 'steel'), acu, [0, 0.03, -0.42]);
+add(RING_Z, M('TELSON', 'dark'), acu, [0, 0.03, -0.43], null, 0.056);
+anchors.telson = G(bc, [0, 0.15, 0]);
 
 // chelae (pedipalps)
 const chela = {};
 for (const s of [-1, 1]) {
   const sh = G(body, [s * 0.36, 0, 1.42], 'YXZ');
-  add(BALL, M('CHELAE', 'dark'), sh, [0, 0, 0], null, 0.085);
-  add(capZ(0.065, 0.36), M('CHELAE', 'shell'), part(G(sh), 0.3));
+  gear('CHELAE', GEAR_Y, sh, null, 0.08, 0.5);
+  add(CYL_Y, M('CHELAE', 'accent'), sh, [0, 0.03, 0], null, [0.035, 0.02, 0.035]);
+  add(capZ(0.04, 0.42), M('CHELAE', 'dark'), sh);
+  const s1 = part(G(sh, [0, 0, 0.06]), 0.5);
+  add(halfShell(0.07, 0.36, 1), M('CHELAE', 'shell'), s1);
+  add(RIB, M('CHELAE', 'shell2'), s1, null, null, 0.07); add(RIB, M('CHELAE', 'shell2'), s1, [0, 0, 0.36], null, 0.07);
   const el = G(sh, [0, 0, 0.5], 'YXZ');
-  add(BALL, M('CHELAE', 'dark'), el, [0, 0, 0], null, 0.08);
-  add(capZ(0.075, 0.28), M('CHELAE', 'shell'), part(G(el), 0.3));
+  gear('CHELAE', GEAR_Y, el, null, 0.075, 0.5);
+  add(CYL_Y, M('CHELAE', 'accent'), el, [0, 0.03, 0], null, [0.032, 0.02, 0.032]);
+  add(capZ(0.045, 0.36), M('CHELAE', 'dark'), el);
+  const s2 = part(G(el, [0, 0, 0.06]), 0.5);
+  add(halfShell(0.08, 0.3, 1), M('CHELAE', 'shell'), s2);
+  add(RIB, M('CHELAE', 'accent'), s2, [0, 0, 0.3], null, 0.081);
+  piston('CHELAE', sh, [0, 0.085, 0.12], G(el, [0, 0.09, 0.16]), 0.016);
   const wr = G(el, [0, 0, 0.44], 'YXZ');
-  add(BALL, M('CHELAE', 'dark'), wr, [0, 0, 0], null, 0.075);
-  add(RING_Z, M('CHELAE', 'accent'), wr, [0, 0, 0.03], null, 0.082);
-  const palm = part(G(wr), 0.35);
-  add(BALL, M('CHELAE', 'shell'), palm, [0, 0, 0.27], null, [0.2, 0.155, 0.3]);
-  add(BALL, M('CHELAE', 'shell2'), palm, [s * 0.06, 0.09, 0.25], null, [0.08, 0.06, 0.2]);
-  add(RING_Z, M('CHELAE', 'accent'), palm, [0, 0, 0.47], null, [0.135, 0.1, 0.13]);
-  add(fingerGeo(s), M('CHELAE', 'steel'), palm, [-s * 0.075, 0, 0.5]);
+  add(BALL, M('CHELAE', 'dark'), wr, null, null, 0.07);
+  add(RING_Z, M('CHELAE', 'accent'), wr, [0, 0, 0.03], null, 0.08);
+  const palm = G(wr);
+  add(BALL, M('CHELAE', 'dark'), palm, [0, 0, 0.27], null, [0.17, 0.13, 0.27]);
+  const pu = part(G(palm, [0, 0, 0.27]), 0.55);
+  add(DOME, M('CHELAE', 'shell'), pu, null, null, [0.2, 0.16, 0.3]);
+  add(RIM, M('CHELAE', 'shell2'), pu, null, null, [0.2, 1.2, 0.3]);
+  add(BALL, M('CHELAE', 'shell2'), pu, [s * 0.06, 0.1, -0.02], null, [0.07, 0.05, 0.18]);
+  for (const z of [-0.12, 0, 0.12]) add(HEX, M('CHELAE', 'steel'), pu, [-s * 0.1, 0.11, z], null, [0.014, 0.012, 0.014]);
+  const pl = part(G(palm, [0, 0, 0.27]), 0.4);
+  add(DOME, M('CHELAE', 'shell2'), pl, null, [Math.PI, 0, 0], [0.19, 0.12, 0.29]);
+  add(RING_Z, M('CHELAE', 'accent'), palm, [0, 0, 0.5], null, [0.13, 0.1, 0.12]);
+  add(PIST, M('CHELAE', 'dark'), palm, [s * 0.17, -0.02, 0.1], null, [0.02, 0.02, 0.24]);
+  add(PIST, M('CHELAE', 'steel'), palm, [s * 0.17, -0.02, 0.34], null, [0.01, 0.01, 0.14]);
+  const ff = part(G(palm, [-s * 0.075, 0, 0.5]), 0.6);
+  add(fingerGeo(s), M('CHELAE', 'steel'), ff);
   const mov = G(palm, [s * 0.09, 0, 0.48], 'YXZ');
-  add(BALL, M('CHELAE', 'dark'), mov, [0, 0, 0], null, 0.042);
+  gear('CHELAE', GEAR_Y, mov, null, 0.04, 0);
   add(fingerGeo(-s), M('CHELAE', 'steel'), mov, [0, 0, 0.02]);
   chela[s] = { sh, el, wr, mov };
-  if (s === 1) anchors.chela = G(palm, [0, 0.13, 0.27]);
+  if (s === 1) anchors.chela = G(pu, [0, 0.16, 0]);
 }
 
-// legs: 4 pairs, 3 segments each
+// legs: 4 pairs, femur / tibia / tarsus, gear hubs and a hydraulic piston on each
 const LZ = [1.08, 0.82, 0.56, 0.3], LYAW = [0.72, 1.22, 1.85, 2.38];
 const legs = [];
 for (const s of [-1, 1]) for (let i = 0; i < 4; i++) {
   const co = G(body, [s * 0.3, -0.04, LZ[i]], 'YXZ');
-  add(BALL, M('LEGS', 'dark'), co, [0, 0, 0], null, 0.07);
-  add(capZ(0.05, 0.44), M('LEGS', 'shell'), part(G(co), 0.28));
+  const g0 = gear('LEGS', GEAR_X, co, null, 0.075, 0.4);
+  add(AXLE_X, M('LEGS', 'accent'), g0, null, null, [0.1, 0.035, 0.035]);
+  add(capZ(0.03, 0.48), M('LEGS', 'dark'), co);
+  const fs = part(G(co, [0, 0, 0.07]), 0.55);
+  add(halfShell(0.056, 0.38, 1), M('LEGS', 'shell'), fs);
+  add(RIB, M('LEGS', 'shell2'), fs, null, null, 0.056); add(RIB, M('LEGS', 'shell2'), fs, [0, 0, 0.38], null, 0.056);
   const kn = G(co, [0, 0, 0.54]);
-  add(BALL, M('LEGS', 'dark'), kn, [0, 0, 0], null, 0.058);
-  add(capZ(0.042, 0.52), M('LEGS', 'shell'), part(G(kn), 0.26));
+  const g1 = gear('LEGS', GEAR_X, kn, null, 0.062, 0.4);
+  add(AXLE_X, M('LEGS', 'accent'), g1, null, null, [0.09, 0.028, 0.028]);
+  add(capZ(0.026, 0.56), M('LEGS', 'dark'), kn);
+  const ts = part(G(kn, [0, 0, 0.08]), 0.5);
+  add(halfShell(0.046, 0.4, 1), M('LEGS', 'shell'), ts);
+  add(RIB, M('LEGS', 'shell2'), ts, null, null, 0.046); add(RIB, M('LEGS', 'accent'), ts, [0, 0, 0.4], null, 0.047);
   const an = G(kn, [0, 0, 0.6]);
-  add(BALL, M('LEGS', 'dark'), an, [0, 0, 0], null, 0.045);
+  gear('LEGS', GEAR_X, an, null, 0.045, 0);
   add(TARSUS, M('LEGS', 'steel'), an, [0, 0, 0.01]);
+  add(RING_Z, M('LEGS', 'dark'), an, [0, 0, 0.05], null, 0.036);
+  piston('LEGS', co, [0, 0.07, 0.1], G(kn, [0, 0.055, 0.2]), 0.016);
   const phase = ((i % 2) === (s > 0 ? 0 : 1)) ? 0 : Math.PI;
   legs.push({ s, i, co, kn, an, phase, stance: true, load: 0.4 });
   if (s === 1 && i === 1) anchors.leg = G(kn, [0, 0.08, 0]);
 }
 
+// technical orbits around the model
+const orbits = G(scene, [0, 0.75, 0]);
+const orbitMats = [];
+const mkRing = (r, rx, rz, dashed, op, dots) => {
+  const holder = G(orbits); holder.rotation.set(rx, 0, rz);
+  const pts = []; for (let i = 0; i <= 200; i++) { const a = i / 200 * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r)); }
+  const mat = dashed ? new THREE.LineDashedMaterial({ color: 0x7d8388, dashSize: 0.05, gapSize: 0.07, transparent: true, opacity: op })
+                     : new THREE.LineBasicMaterial({ color: 0x7d8388, transparent: true, opacity: op });
+  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat); if (dashed) line.computeLineDistances();
+  holder.add(line); orbitMats.push({ m: mat, base: op });
+  dots.forEach(([a, col, sz]) => {
+    const dm = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 1 }); orbitMats.push({ m: dm, base: 0.9 });
+    const d = new THREE.Mesh(BALL, dm); d.scale.setScalar(sz); d.position.set(Math.cos(a) * r, 0, Math.sin(a) * r); holder.add(d);
+  });
+  return holder;
+};
+const ringA = mkRing(3.35, 0.42, 0.12, false, 0.26, [[0.4, 0x7d8388, 0.018], [2.1, 0x7d8388, 0.018], [4.0, 0xE2600A, 0.024]]);
+const ringB = mkRing(2.75, -0.8, -0.3, true, 0.38, [[1.2, 0xE2600A, 0.022], [4.6, 0x7d8388, 0.018]]);
+const ringC = mkRing(4.1, 1.15, 0.5, false, 0.12, [[3.0, 0x7d8388, 0.018]]);
+
 /* ---------- pose application ---------- */
 const GAIT_HZ = 1.6, W_G = Math.PI * 2 * GAIT_HZ;
 const C0 = [0.38, 0.5, 0.55, 0.6, 0.62], CH = [1.2, 0.78, 0.62, 0.5, 0.42];
 let lastP = pose(0);
+const _pv = new THREE.Vector3(), _pw = new THREE.Vector3();
 function applyPose(t, xp) {
   const P = pose(t); lastP = P;
   const rise = P.rise;
@@ -593,11 +742,20 @@ function applyPose(t, xp) {
 
   const ex = Math.max(P.explode, xp);
   parts.forEach(p => {
-    const e = ease(ex * 1.4 - p.delay);
-    p.obj.position.copy(p.home).addScaledVector(p.dir, p.amt * e);
-    p.obj.rotation.set(p.hr.x + p.spin * e * 0.35, p.hr.y, p.hr.z + p.spin * e * 0.25);
+    const e = ease(ex * 1.45 - p.delay);
+    p.obj.position.copy(p.home).addScaledVector(p.dir, p.amt * 1.35 * e);
+    p.obj.rotation.set(p.hr.x + p.spin * e * 1.1, p.hr.y + p.spin2 * e * 0.9, p.hr.z + p.spin * e * 0.7);
   });
 
+  root.updateMatrixWorld(true);
+  pistons.forEach(pp => {
+    pp.endObj.getWorldPosition(_pv); pp.g.lookAt(_pv);
+    const d = pp.g.getWorldPosition(_pw).distanceTo(_pv);
+    pp.sleeve.scale.z = d * 0.55; pp.rod.scale.z = d; pp.tip.position.z = d;
+  });
+  ringA.rotation.y = t * 0.11; ringB.rotation.y = -t * 0.08; ringC.rotation.y = t * 0.05;
+  orbitMats.forEach(o => { o.m.opacity = o.base * (0.55 + ex * 0.9); });
+  P.ex = ex;
   blob.position.set(0, 0.003, 0.1 + root.position.z);
   blob.scale.set(3.4, 4.8, 1);
   blob.material.opacity = lerp(0.9, 0.6, rise);
@@ -614,10 +772,10 @@ function applyPose(t, xp) {
     d.normalize();
     p.obj.parent.getWorldQuaternion(q); d.applyQuaternion(q.invert());
     p.dir.copy(d.normalize());
-    p.delay = clamp((1.6 - wp.z) / 4.2, 0, 1) * 0.4;
+    p.delay = clamp((1.6 - wp.z) / 4.2, 0, 1) * 0.32 + hash(p.amt * 100 + wp.x * 7) * 0.08;
   });
 })();
-$('footl').textContent = `Field simulator · procedural model · ${meshes.length} parts · 8 optics`;
+$('footl').textContent = `Field simulator · procedural model · ${meshes.length} parts · ${gearCount} gear hubs · ${pistons.length} pistons · 8 optics`;
 
 /* ---------- camera ---------- */
 const CK = [
@@ -627,7 +785,7 @@ const CK = [
   { t: 10.4, az: 2.05, el: 0.24, d: 7.6, ty: 0.55, tz: 0 },
   { t: 11.3, az: 0.6,  el: 0.2,  d: 5.6, ty: 0.6,  tz: 1.2 },
   { t: 13.4, az: 0.3,  el: 0.22, d: 5.4, ty: 0.6,  tz: 1.3 },
-  { t: 15.3, az: 1.0,  el: 0.55, d: 9.6, ty: 0.75, tz: 0 },
+  { t: 15.3, az: 0.95, el: 0.5,  d: 10.6, ty: 0.8, tz: 0 },
   { t: 18.6, az: 1.65, el: 0.4,  d: 8.8, ty: 0.6,  tz: 0 },
   { t: 19.7, az: 1.38, el: 0.14, d: 7.2, ty: 0.9,  tz: 0.3 },
   { t: 20.2, az: 1.34, el: 0.14, d: 7.4, ty: 0.92, tz: 0.3 },
@@ -700,22 +858,44 @@ const LABELS = [
   { a: 'optics', t: 'Optic array', s: () => lastP.optic > 0.5 ? '8 lenses · tracking' : '8 lenses · dim', dx: -150, dy: -64 },
   { a: 'chela',  t: 'Chela R',     s: () => `grip ${gripVal.toFixed(1)} N`, dx: 40, dy: -58 },
   { a: 'telson', t: 'Telson',      s: () => (lastP.wind + lastP.hit) > 0.1 ? 'armed' : 'safe', dx: 46, dy: -40 },
-  { a: 'terg',   t: 'Tergite 04',  s: () => lastP.explode > 0.1 ? 'shell open' : 'sealed', dx: 60, dy: 34 },
-  { a: 'leg',    t: 'Leg R2',      s: () => '3 dof · femur 31 nm', dx: 44, dy: 52 },
-  { a: 'tail',   t: 'Metasoma',    s: () => '5 segments', dx: -158, dy: -30 },
+  { a: 'terg',   t: 'Tergite 04',  s: () => lastP.ex > 0.1 ? '3 panels open' : 'sealed', dx: 60, dy: 34 },
+  { a: 'leg',    t: 'Leg R2',      s: () => '3 dof · femur 31 nm', dx: 44, dy: 52, hideEx: true },
+  { a: 'tail',   t: 'Metasoma',    s: () => '5 segments', dx: -158, dy: -30, hideEx: true },
+  { a: 'carapace', t: 'Carapace', s: () => '3 plates · 8 bolts', dx: -176, dy: 44, ex: true },
+  { a: 'gear',   t: 'Gear train',  s: () => `${gearCount} hubs · 14T`, dx: 48, dy: -64, ex: true },
+  { a: 'piston', t: 'Tendon pistons', s: () => `${pistons.length} actuators`, dx: 46, dy: 30, ex: true },
 ];
 const labelBox = $('labels'), leaders = $('leaders');
 LABELS.forEach(L => {
   L.el = document.createElement('div'); L.el.className = 'lbl'; L.el.innerHTML = `${L.t}<small></small>`; L.small = L.el.querySelector('small');
   labelBox.appendChild(L.el);
   L.line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline'); L.line.setAttribute('fill', 'none'); L.line.setAttribute('stroke', '#15171A'); L.line.setAttribute('stroke-width', '0.8'); L.line.setAttribute('stroke-opacity', '0.55');
-  L.dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle'); L.dot.setAttribute('r', '2.6'); L.dot.setAttribute('fill', '#FAFAF8'); L.dot.setAttribute('stroke', '#E58C00'); L.dot.setAttribute('stroke-width', '1.4');
+  L.dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle'); L.dot.setAttribute('r', '2.6'); L.dot.setAttribute('fill', '#FAFAF8'); L.dot.setAttribute('stroke', '#E2600A'); L.dot.setAttribute('stroke-width', '1.4');
   leaders.append(L.line, L.dot);
 });
 
 // timeline marks
 const marks = $('marks');
 PHASES.forEach(p => { if (p.s > 0) { const m = document.createElement('div'); m.className = 'mk'; m.style.left = (p.s / T * 100) + '%'; marks.appendChild(m); } });
+
+const cellEls = []; for (let k = 0; k < 10; k++) { const i = document.createElement('i'); $('cells').appendChild(i); cellEls.push(i); }
+let tempC = 30;
+const sc = $('spark'), sx = sc.getContext('2d'); const sHist = new Array(120).fill(150);
+function drawSpark(v) {
+  sHist.shift(); sHist.push(v);
+  const w = sc.clientWidth, h = sc.clientHeight, dpr = Math.min(window.devicePixelRatio || 1, 2);
+  if (sc.width !== Math.round(w * dpr)) { sc.width = Math.round(w * dpr); sc.height = Math.round(h * dpr); }
+  sx.setTransform(dpr, 0, 0, dpr, 0, 0); sx.clearRect(0, 0, w, h);
+  sx.strokeStyle = '#E3E5E4'; sx.lineWidth = 1;
+  for (let k = 1; k < 3; k++) { sx.beginPath(); sx.moveTo(0, h * k / 3 + 0.5); sx.lineTo(w, h * k / 3 + 0.5); sx.stroke(); }
+  const y = v => h - 3 - clamp((v - 80) / 140, 0, 1) * (h - 6);
+  sx.beginPath(); sHist.forEach((v, k) => { const x = k / (sHist.length - 1) * w; k ? sx.lineTo(x, y(v)) : sx.moveTo(x, y(v)); });
+  sx.lineTo(w, h); sx.lineTo(0, h); sx.closePath(); sx.fillStyle = 'rgba(226,96,10,.08)'; sx.fill();
+  sx.beginPath(); sHist.forEach((v, k) => { const x = k / (sHist.length - 1) * w; k ? sx.lineTo(x, y(v)) : sx.moveTo(x, y(v)); });
+  sx.strokeStyle = '#E2600A'; sx.lineWidth = 1.4; sx.stroke();
+  sx.fillStyle = '#E2600A'; sx.beginPath(); sx.arc(w - 2.5, y(v), 2.5, 0, Math.PI * 2); sx.fill();
+  sx.fillStyle = '#7A7F84'; sx.font = '500 7px "JetBrains Mono", monospace'; sx.fillText('TAIL CURL · 4 S', 0, 8);
+}
 
 /* ---------- gait diagram ---------- */
 const gc = $('gait'), gx = gc.getContext('2d');
@@ -730,7 +910,7 @@ function drawGait() {
     const y = r * rowH;
     gx.fillStyle = '#7A7F84'; gx.fillText(n, 0, y + rowH / 2);
     gx.fillStyle = '#E3E5E4'; gx.fillRect(lw, y + rowH / 2 - 0.5, w - lw, 1);
-    const hrow = hist[r]; gx.fillStyle = r === 5 ? '#E58C00' : '#15171A';
+    const hrow = hist[r]; gx.fillStyle = r === 5 ? '#E2600A' : '#15171A';
     let start = -1;
     for (let k = 0; k <= HIST; k++) {
       const on = k < HIST && hrow[k];
@@ -738,7 +918,7 @@ function drawGait() {
       if (!on && start >= 0) { gx.fillRect(lw + start * cw, y + 2, (k - start) * cw - 0.6, rowH - 4); start = -1; }
     }
   });
-  gx.fillStyle = '#E58C00'; gx.fillRect(w - 1.2, 0, 1.2, h);
+  gx.fillStyle = '#E2600A'; gx.fillRect(w - 1.2, 0, 1.2, h);
 }
 
 /* ---------- interaction ---------- */
@@ -806,7 +986,7 @@ function frame(now) {
   const c = camAt(t);
   for (const k in c) camState[k] += (c[k] - camState[k]) * Math.min(1, dt * 5);
   const aspectK = Math.max(1, (cam.aspect < 1 ? 1.3 : 1.5) / cam.aspect);
-  const az = camState.az + userAz + ttAz, el = clamp(camState.el + userEl, -0.1, 1.2), d = camState.d * aspectK * 1.32;
+  const az = camState.az + userAz + ttAz, el = clamp(camState.el + userEl, -0.1, 1.2), d = camState.d * aspectK * 1.24;
   camTarget.set(0, camState.ty, camState.tz);
   cam.position.set(camTarget.x + Math.sin(az) * Math.cos(el) * d, camTarget.y + Math.sin(el) * d, camTarget.z + Math.cos(az) * Math.cos(el) * d);
   cam.lookAt(camTarget);
@@ -827,7 +1007,8 @@ function frame(now) {
     LABELS.forEach(L => {
       anchors[L.a].getWorldPosition(tmp); tmp.project(cam);
       const x = (tmp.x + 1) / 2 * rect.w, y = (1 - tmp.y) / 2 * rect.h;
-      const vis = tmp.z < 1 && (ui.iso === 'HERO' || labelAsm(L.a) === ui.iso);
+      const exOn = lastP.ex > 0.3;
+      const vis = tmp.z < 1 && (ui.iso === 'HERO' || labelAsm(L.a) === ui.iso) && (L.ex ? exOn : !(L.hideEx && exOn));
       const lx = clamp(x + L.dx, 6, rect.w - 140), ly = clamp(y + L.dy, 6, rect.h - 34);
       L.el.style.transform = `translate(${lx}px,${ly}px)`;
       L.el.style.opacity = vis ? 1 : 0;
@@ -844,7 +1025,7 @@ function frame(now) {
   frameN++;
   requestAnimationFrame(frame);
 }
-const labelAsm = a => ({ optics: 'OPTICS', chela: 'CHELAE', telson: 'TELSON', terg: 'MESOSOMA', leg: 'LEGS', tail: 'METASOMA' })[a];
+const labelAsm = a => ({ optics: 'OPTICS', chela: 'CHELAE', telson: 'TELSON', terg: 'MESOSOMA', leg: 'LEGS', tail: 'METASOMA', carapace: 'CARAPACE', gear: 'MESOSOMA', piston: 'METASOMA' })[a];
 
 function updateHUD(P) {
   const ph = phaseAt(t);
@@ -883,9 +1064,11 @@ function updateHUD(P) {
     s.sm += (clamp(L.load, 0.02, 0.99) - s.sm) * 0.25;
     s.bar.style.width = (s.sm * 100).toFixed(1) + '%';
     s.txt.textContent = Math.round(s.sm * 100) + '%';
-    s.row.classList.toggle('hot', s.sm > 0.6);
+    const det = P.ex > 0.3;
+    s.row.classList.toggle('hot', s.sm > 0.6 && !det); s.row.classList.toggle('det', det);
+    if (det) s.txt.textContent = 'DETACHED';
   });
-  const ss = $('servostate'); const sst = P.walk > 0.1 ? ['Walking', 'ok'] : P.hit > 0.1 ? ['Bracing', 'hot'] : P.rise > 0.5 ? ['Holding', 'ok'] : ['Folded', ''];
+  const ss = $('servostate'); const sst = P.ex > 0.3 ? ['Detached', 'hot'] : P.walk > 0.1 ? ['Walking', 'ok'] : P.hit > 0.1 ? ['Bracing', 'hot'] : P.rise > 0.5 ? ['Holding', 'ok'] : ['Folded', ''];
   if (ss.textContent !== sst[0]) { ss.textContent = sst[0]; ss.className = 'pill ' + sst[1]; }
 
   // posture
@@ -902,12 +1085,27 @@ function updateHUD(P) {
   $('needle').setAttribute('transform', `rotate(${(frac * 360 + 180).toFixed(1)} 39 39)`);
 
   // subsystems
+  if (P.ex > 0.3) { subEls.forEach(o => setPill(o, 'Detached', 'hot')); }
+  else {
   setPill(subEls[0], P.optic > 0.5 ? 'Tracking' : 'Standby', P.optic > 0.5 ? 'ok' : '');
   setPill(subEls[1], P.claw > 0.15 ? 'Open' : 'Locked', P.claw > 0.15 ? 'hot' : 'ok');
   setPill(subEls[2], P.walk > 0.1 ? 'Walking' : P.rise > 0.5 ? 'Holding' : 'Folded', P.walk > 0.1 || P.rise > 0.5 ? 'ok' : '');
   setPill(subEls[3], Math.max(P.explode, xpSm) > 0.1 ? 'Open' : 'Sealed', Math.max(P.explode, xpSm) > 0.1 ? 'hot' : 'ok');
   setPill(subEls[4], P.hit > 0.1 ? 'Strike' : P.wind > 0.05 ? 'Loading' : 'Coiled', (P.hit > 0.1 || P.wind > 0.05) ? 'hot' : 'ok');
   setPill(subEls[5], (P.wind + P.hit) > 0.05 ? 'Armed' : 'Safe', (P.wind + P.hit) > 0.05 ? 'hot' : 'ok');
+  }
+
+  // power
+  const batt = 86 - (runtime / 60) * 0.4;
+  const draw = 6 + P.rise * 10 + P.walk * 14 + P.claw * 6 + P.wind * 18 + P.hit * 30 + Math.sin(t * 9) * 0.8;
+  $('batt').innerHTML = `${batt.toFixed(0)}<sup>%</sup>`;
+  $('pDraw').textContent = draw.toFixed(1) + ' W';
+  $('pCell').textContent = (3.9 - draw * 0.0025).toFixed(2) + ' V';
+  tempC += ((28 + draw * 0.35) - tempC) * 0.01; $('pTemp').textContent = Math.round(tempC) + ' °C';
+  const nOn = Math.round(batt / 10), hotN = draw > 30 ? 3 : draw > 20 ? 1 : 0;
+  cellEls.forEach((c, k) => { c.className = k < nOn ? (k >= nOn - hotN ? 'hot' : 'on') : ''; });
+  const cs = $('cellstate'); const cst = draw > 30 ? 'Peak draw' : 'Nominal'; if (cs.textContent !== cst) cs.textContent = cst;
+  drawSpark(curl);
 }
 
 requestAnimationFrame(frame);
