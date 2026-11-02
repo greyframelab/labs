@@ -301,15 +301,6 @@ canvas.spark{display:block;width:100%;height:34px;margin-top:8px}
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/CopyShader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/SSAOShader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/GammaCorrectionShader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/FXAAShader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/math/SimplexNoise.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/EffectComposer.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/RenderPass.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/ShaderPass.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/SSAOPass.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/environments/RoomEnvironment.js"></script>
 <script>
 (() => {
@@ -520,7 +511,7 @@ const WEDGE_R = new THREE.SphereGeometry(1, 40, 20, Math.PI - 0.95, 1.9, 0, Math
 const HEMI_L = new THREE.SphereGeometry(1, 32, 20, -Math.PI / 2, Math.PI);
 const HEMI_R = new THREE.SphereGeometry(1, 32, 20, Math.PI / 2, Math.PI);
 const RIB = new THREE.TorusGeometry(1, 0.07, 6, 28, Math.PI);
-const halfShell = (r, len, dir) => { const g = new THREE.CylinderGeometry(r, r, len, 28, 1, true, Math.PI / 2, Math.PI); g.rotateX(Math.PI / 2); g.translate(0, 0, dir * len / 2); return g; };
+const halfShell = (r, len, dir, arc = Math.PI) => { const g = new THREE.CylinderGeometry(r, r, len, 28, 1, true, Math.PI - arc / 2, arc); g.rotateX(Math.PI / 2); g.translate(0, 0, dir * len / 2); return g; };
 const plate = (asm, geo, parent, p, s, amt, kind = 'shell') => { const g = part(G(parent, p), amt); add(geo, M(asm, kind), g, null, null, s); return g; };
 const gear = (asm, geo, parent, p, s, amt) => {
   gearCount++;
@@ -661,14 +652,14 @@ for (const s of [-1, 1]) {
   add(CYL_Y, M('CHELAE', 'accent'), sh, [0, 0.03, 0], null, [0.035, 0.02, 0.035]);
   add(capZ(0.04, 0.42), M('CHELAE', 'dark'), sh);
   const s1 = part(G(sh, [0, 0, 0.06]), 0.5);
-  add(halfShell(0.07, 0.36, 1), M('CHELAE', 'shell'), s1);
+  add(halfShell(0.07, 0.36, 1, Math.PI * 2), M('CHELAE', 'shell'), s1);
   add(RIB, M('CHELAE', 'shell2'), s1, null, null, 0.07); add(RIB, M('CHELAE', 'shell2'), s1, [0, 0, 0.36], null, 0.07);
   const el = G(sh, [0, 0, 0.5], 'YXZ');
   gear('CHELAE', GEAR_Y, el, null, 0.075, 0.5);
   add(CYL_Y, M('CHELAE', 'accent'), el, [0, 0.03, 0], null, [0.032, 0.02, 0.032]);
   add(capZ(0.045, 0.36), M('CHELAE', 'dark'), el);
   const s2 = part(G(el, [0, 0, 0.06]), 0.5);
-  add(halfShell(0.08, 0.3, 1), M('CHELAE', 'shell'), s2);
+  add(halfShell(0.08, 0.3, 1, Math.PI * 2), M('CHELAE', 'shell'), s2);
   add(RIB, M('CHELAE', 'accent'), s2, [0, 0, 0.3], null, 0.081);
   piston('CHELAE', sh, [0, 0.085, 0.12], G(el, [0, 0.09, 0.16]), 0.016);
   const wr = G(el, [0, 0, 0.44], 'YXZ');
@@ -1016,13 +1007,19 @@ track.addEventListener('keydown', e => {
 });
 
 /* ---------- post: ambient occlusion + AA (desktop) ---------- */
-const useFX = !!(THREE.EffectComposer && THREE.SSAOPass) && window.innerWidth > 900;
+const useFX = false; // SSAO dropped: it produced screen-space smears behind the body
 let composer, ssao, fxaa;
 if (useFX) {
   composer = new THREE.EffectComposer(R);
   composer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   ssao = new THREE.SSAOPass(scene, cam, 2, 2);
   ssao.kernelRadius = 0.22; ssao.minDistance = 0.0002; ssao.maxDistance = 0.006;
+  ssao.normalMaterial.side = THREE.DoubleSide;
+  // keep see-through or flat overlays (decals, ground catcher, contact blob, rings) out of the occlusion buffers
+  ssao.overrideVisibility = function () {
+    const cache = this._visibilityCache;
+    this.scene.traverse(o => { cache.set(o, o.visible); if (o.isPoints || o.isLine || (o.isMesh && (o.material.transparent || o.material.isShadowMaterial))) o.visible = false; });
+  };
   composer.addPass(ssao);
   composer.addPass(new THREE.ShaderPass(THREE.GammaCorrectionShader));
   fxaa = new THREE.ShaderPass(THREE.FXAAShader); composer.addPass(fxaa);
@@ -1069,7 +1066,7 @@ function frame(now) {
     if (m.transparent !== tr) { m.transparent = tr; m.depthWrite = !tr || o > 0.6; m.needsUpdate = true; }
     m.opacity = tr ? o : 1;
   });
-  if (frameN % 10 === 0) meshes.forEach(me => { me.castShadow = me.material.userData.cur > 0.5; });
+  if (frameN % 10 === 0) meshes.forEach(me => { me.castShadow = me.material.userData.kind !== 'decal' && me.material.userData.cur > 0.5; });
 
   // camera
   if (ui.turntable) ttAz += dt * 0.35;
