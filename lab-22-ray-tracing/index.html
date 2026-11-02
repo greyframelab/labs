@@ -31,7 +31,7 @@ body{background:var(--ground);color:var(--ink);font-family:var(--f-mono);font-si
 .num{font-variant-numeric:tabular-nums}
 
 /* header */
-.bar{display:grid;grid-template-columns:auto auto 1fr auto;align-items:stretch;border-bottom:1px solid var(--line-soft);background:rgba(250,250,250,.6);position:relative;z-index:3}
+.bar{display:grid;grid-template-columns:auto auto 1fr auto auto;align-items:stretch;border-bottom:1px solid var(--line-soft);background:rgba(250,250,250,.6);position:relative;z-index:3}
 .brand{background:var(--accent);color:#fff;display:flex;align-items:center;gap:10px;padding:0 20px 0 16px;font-weight:700;letter-spacing:.16em;font-size:10px}
 .brand svg{width:24px;height:24px}
 .title{padding:9px 22px 9px 18px;display:flex;flex-direction:column;gap:2px;border-right:1px solid var(--line-soft)}
@@ -160,6 +160,24 @@ canvas.radar{display:block;width:100%;height:118px;margin-top:6px}
   .foot{position:static;padding:12px 14px 14px;flex-direction:column;gap:4px}
 }
 @media (min-width:560px) and (max-width:900px){.side{grid-template-columns:1fr 1fr}}
+
+/* back link + about drawer */
+.nav{display:flex;border-left:1px solid var(--line-soft)}
+.nav a,.nav button{font:inherit;font-size:8.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink);background:none;border:0;border-left:1px solid var(--line-soft);padding:0 16px;cursor:pointer;text-decoration:none;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.nav a:first-child{border-left:0}
+.nav a:hover,.nav button:hover{background:var(--accent-tint);color:var(--accent-ink)}
+.nav a:focus-visible,.nav button:focus-visible,#info .close:focus-visible,#allLabs:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+#info{position:fixed;z-index:20;top:0;right:0;bottom:0;width:min(420px,100%);overflow:auto;background:var(--panel-solid);border-left:1px solid var(--line);box-shadow:-20px 0 60px rgba(20,23,27,.12);
+  padding-block:calc(env(safe-area-inset-top,0px) + 26px) 32px;padding-left:28px;padding-right:max(28px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:18px;font-family:var(--f-mono)}
+#info[hidden]{display:none}
+#info .close{position:absolute;top:calc(env(safe-area-inset-top,0px) + 14px);right:max(14px,env(safe-area-inset-right,0px));width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:var(--panel-solid);font-size:18px;line-height:1;cursor:pointer;color:var(--ink)}
+#info .meta-l{font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent-ink);font-weight:700}
+#info h3{margin:0;font-family:var(--f-display);font-stretch:118%;font-weight:640;font-size:30px;letter-spacing:-.01em;line-height:1}
+#info h4{margin:0 0 6px;font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+#info p,#info li{margin:0;font-family:var(--f-display);font-size:14px;line-height:1.55;color:var(--ink-2)}
+#info ul{margin:0;padding-left:18px;display:grid;gap:6px}
+#allLabs{margin-top:6px;align-self:flex-start;font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#fff;background:var(--accent);padding:10px 14px;border-radius:4px;text-decoration:none}
+@media (max-width:900px){.bar{grid-template-columns:auto 1fr auto}.meta{position:static}.nav{grid-column:1/-1;border-left:0;border-top:1px solid var(--line-soft)}.nav a,.nav button{flex:1;justify-content:center;padding:10px 12px}.nav a{border-right:1px solid var(--line-soft)}.nav button{border-left:0}}
 @media (prefers-reduced-motion:reduce){.barcode span,.lbl{transition:none}}
 </style>
 
@@ -189,6 +207,10 @@ canvas.radar{display:block;width:100%;height:118px;margin-top:6px}
       <div><span class="cap">Operator</span><b>GREYFRAME</b></div>
       <div><span class="cap">Status</span><b><span class="dot"></span><span id="status">GLIDE</span></b></div>
     </div>
+    <nav class="nav" aria-label="Lab navigation">
+      <a id="backLabs" href="https://claude.ai/artifact/CDYy2LnuZN3Tdb1A9BSHrG" target="_blank" rel="noopener">← Labs</a>
+      <button id="infoBtn" type="button" aria-expanded="false" aria-controls="info">About</button>
+    </nav>
   </header>
 
   <div class="stage">
@@ -297,6 +319,30 @@ canvas.radar{display:block;width:100%;height:118px;margin-top:6px}
 </div>
 </div>
 
+<aside id="info" hidden aria-label="About this lab">
+  <button class="close" type="button" aria-label="Close">×</button>
+  <div class="meta-l">Lab #22 · Creative Coding · 2 Nov 2026</div>
+  <h3>Ray Tracing</h3>
+  <div><h4>Idea</h4><p>What if a manta ray came with its own flight deck? Mobula MX-4 swims on 22 fin rays that drive a ceramic skin in a travelling wave, and the HUD traces every ray live.</p></div>
+  <div><h4>Controls</h4><ul>
+    <li>Drag the view to orbit, double-click to recentre.</li>
+    <li>Scrub the operation log to jump to any phase. Space plays or pauses.</li>
+    <li>Assemblies isolates a system. Display toggles labels, the exploded view, a turntable, the skeleton and the wingtip trails.</li>
+  </ul></div>
+  <div><h4>How it works</h4><p>Each fin ray is a chain of six joints. A sine wave travels along the rays with a phase lag, and a single mesh is rebuilt every frame through the joints to form the wing skin. In the teardown the skin swaps for 132 separate plates.</p></div>
+  <div><h4>For game UI</h4><p>A live wing profile, a sonar sweep and an attitude indicator turn motion into readable data. Readouts feel trustworthy when they visibly follow the animation.</p></div>
+  <a id="allLabs" href="https://claude.ai/artifact/CDYy2LnuZN3Tdb1A9BSHrG" target="_blank" rel="noopener">← All labs</a>
+</aside>
+<script>
+(() => {
+  if (/github\.io$/.test(location.hostname)) for (const id of ['allLabs', 'backLabs']) { const a = document.getElementById(id); a.href = '../'; a.removeAttribute('target'); a.removeAttribute('rel'); }
+  const btn = document.getElementById('infoBtn'), info = document.getElementById('info');
+  const set = open => { info.hidden = !open; btn.setAttribute('aria-expanded', open); if (open) info.querySelector('.close').focus(); else btn.focus(); };
+  btn.addEventListener('click', () => set(info.hidden));
+  info.querySelector('.close').addEventListener('click', () => set(false));
+  addEventListener('keydown', e => { if (e.key === 'Escape' && !info.hidden) set(false); });
+})();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/environments/RoomEnvironment.js"></script>
 <script>
