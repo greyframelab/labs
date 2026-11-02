@@ -6,6 +6,7 @@ Experiments in UI, motion and creative coding for games, apps and interfaces.
 
 | # | Lab | Category |
 |---|-----|----------|
+| 22 | [Ray Tracing](lab-22-ray-tracing/) | Creative Coding |
 | 21 | [Sting Operation](lab-21-sting-operation/) | Creative Coding |
 | 20 | [Jump Start](lab-20-jump-start/) | Creative Coding |
 | 19 | [Pulling Strings](lab-19-pulling-strings/) | UI |
