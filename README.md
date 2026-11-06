@@ -6,6 +6,7 @@ Experiments in UI, motion and creative coding for games, apps and interfaces.
 
 | # | Lab | Category |
 |---|-----|----------|
+| 24 | [Turntable](lab-24-turntable/) | Creative Coding |
 | 23 | [Odd One Out](lab-23-odd-one-out/) | UI |
 | 22 | [Ray Tracing](lab-22-ray-tracing/) | Creative Coding |
 | 21 | [Sting Operation](lab-21-sting-operation/) | Creative Coding |
