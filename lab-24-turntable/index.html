@@ -143,9 +143,10 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--rune);outline-offse
     <li>Click a layer in the director panel to select its ring.</li>
     <li>Scramble mixes the tower again. Demo solves it for you.</li>
   </ul></div>
-  <div><h4>How it works</h4><p>Each ring is a 32-step loop wrapped around the tower. The light that sweeps around it is the playhead. The song is a two-step garage loop; when every ring fits, the bass drops into a half-time wobble. Turning a ring shifts its loop against the grid, so the bass can land under the wrong chord or the kick on the wrong beat. Only one position per ring fits. All the sound is synthesised live in the browser.</p></div>
+  <div><h4>How it works</h4><p>Each ring is a 32-step loop wrapped around the tower. The light that sweeps around it is the playhead. The song is a dark IDM take on the harmony and opening gesture of Beethoven's Piano Sonata No. 5 in C minor, Op. 10 No. 1; when every ring fits, it opens up into a fast arpeggiated climax.</p></div>
   <div><h4>Inspired by</h4><ul>
     <li>"Remixing with a Rubik's cube" by be.of.dao on Instagram, where every turn of a cube remixes a loop.</li>
+    <li>Beethoven's Piano Sonata No. 5 in C minor, Op. 10 No. 1, for the harmony and the rising opening gesture of the theme.</li>
     <li>Adaptive music in games, where layers fade in and out with what the player does.</li>
   </ul></div>
   <div><h4>For game UI</h4><p>Puzzles feel better when you can hear that you are getting closer. Give each part of the solution its own voice, show which part is right in a panel the player can read at a glance, and save one big moment for when it all clicks.</p></div>
@@ -171,20 +172,21 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + 
 const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 const mod = (a, n) => ((a % n) + n) % n;
 
-// ---------------- music: 2-step garage, dubstep drop when the groove locks ----------------
-const N = 32, BPM = 134, STEP = 60 / BPM / 4, SWING = .2 * STEP;
-const ROOT = [33, 29, 36, 31]; // A F C G
-const CH = [[57, 60, 64, 67, 71], [53, 57, 60, 64, 67], [52, 55, 59, 60, 64], [55, 59, 62, 65, 69]]; // Am9 Fmaj9 Cmaj7/E G9
+// ---------------- music: dark IDM after Beethoven's Sonata No. 5 in C minor, Op. 10 No. 1 ----------------
+// i – VI – iv – V(b9) in C minor; the theme ring plays a rising "rocket" arpeggio in the spirit of the sonata's opening
+const N = 32, BPM = 96, STEP = 60 / BPM / 4, SWING = 0;
+const ROOT = [36, 32, 29, 31]; // C Ab F G
+const CH = [[60, 63, 67], [56, 60, 63, 67], [53, 56, 60, 63], [55, 59, 62, 65, 68]]; // Cm, Abmaj7, Fm7, G7b9
 const PAT = [
-  { name: 'Drums', css: '--drums', col: 0xff6a3d, ev: { 0: 'K', 4: 'S', 10: 'K', 12: 'S', 16: 'K', 19: 'K', 20: 'S', 26: 'K', 28: 'S', 31: 'G' } },
+  { name: 'Drums', css: '--drums', col: 0xff6a3d, ev: { 0: 'K', 3: 'Z', 7: 'K', 8: 'S', 10: 'X', 11: 'X', 14: 'K', 15: 'Z', 19: 'K', 21: 'X', 22: 'K', 24: 'S', 26: 'Z', 27: 'X', 28: 'R', 30: 'R', 31: 'Z' } },
   { name: 'Bass', css: '--bass', col: 0x2fc7b0, ev: {} },
   { name: 'Chords', css: '--chords', col: 0xf2c14e, ev: {} },
-  { name: 'Vox', css: '--lead', col: 0x9cc8ff, ev: { 1: 76, 3: 72, 6: 74, 9: 69, 11: 72, 14: 76, 17: 79, 19: 76, 22: 74, 25: 72, 27: 69, 30: 67 } },
+  { name: 'Theme', css: '--lead', col: 0x9cc8ff, ev: { 0: 60, 1: 63, 2: 67, 3: 72, 4: 75, 6: 74, 7: 72, 8: 75, 10: 72, 11: 68, 14: 67, 16: 65, 17: 68, 18: 72, 19: 77, 20: 75, 22: 74, 24: 71, 25: 74, 26: 77, 27: 80, 28: 79, 30: 77, 31: 74 } },
 ];
 for (let c = 0; c < 4; c++) {
   const r = ROOT[c], b = c * 8;
-  PAT[1].ev[b] = [r, 3]; PAT[1].ev[b + 3] = [r + 12, 1]; PAT[1].ev[b + 5] = [r, 2]; if (c % 2) PAT[1].ev[b + 7] = [r + 7, 1];
-  PAT[2].ev[b + 2] = CH[c]; PAT[2].ev[b + 5] = CH[c]; if (c === 3) PAT[2].ev[b + 7] = CH[c];
+  PAT[1].ev[b] = [r, 5]; PAT[1].ev[b + 6] = [r + 12, 1]; if (c === 3) PAT[1].ev[b + 7] = [r - 1, 1];
+  PAT[2].ev[b] = [CH[c], 6]; PAT[2].ev[b + 6] = [CH[c].slice(1), 2];
 }
 const midi = m => 440 * Math.pow(2, (m - 69) / 12);
 
@@ -198,15 +200,16 @@ function makeBus(ac) {
   const lowc = ac.createBiquadFilter(); lowc.type = 'lowshelf'; lowc.frequency.value = 90; lowc.gain.value = -1.5;
   out.connect(lowc); lowc.connect(pres); pres.connect(air); air.connect(sat); sat.connect(comp); comp.connect(ac.destination);
   const pump = ac.createGain(); pump.connect(out);
-  const rev = ac.createConvolver(); const len = ac.sampleRate * 2.2, ir = ac.createBuffer(2, len, ac.sampleRate);
+  const rev = ac.createConvolver(); const len = ac.sampleRate * 3.2, ir = ac.createBuffer(2, len, ac.sampleRate);
   let s2 = 99; const r2 = () => { s2 = (s2 * 16807) % 2147483647; return s2 / 2147483647 * 2 - 1; };
   for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = r2() * Math.pow(1 - i / len, 3.6); }
-  rev.buffer = ir; const revG = ac.createGain(); revG.gain.value = .28; rev.connect(revG); revG.connect(pump);
-  const dly = ac.createDelay(1); dly.delayTime.value = STEP * 3; const fb = ac.createGain(); fb.gain.value = .3; const dlp = ac.createBiquadFilter(); dlp.type = 'lowpass'; dlp.frequency.value = 2400;
-  dly.connect(dlp); dlp.connect(fb); fb.connect(dly); const dG = ac.createGain(); dG.gain.value = .32; dlp.connect(dG); dG.connect(pump);
+  rev.buffer = ir; const revG = ac.createGain(); revG.gain.value = .5; rev.connect(revG); revG.connect(pump);
+  const dly = ac.createDelay(1); dly.delayTime.value = STEP * 3; const fb = ac.createGain(); fb.gain.value = .46; const dlp = ac.createBiquadFilter(); dlp.type = 'lowpass'; dlp.frequency.value = 2400;
+  dly.connect(dlp); dlp.connect(fb); fb.connect(dly); const dG = ac.createGain(); dG.gain.value = .5; dlp.connect(dG); dG.connect(pump);
   const noise = ac.createBuffer(1, ac.sampleRate, ac.sampleRate); { const d = noise.getChannelData(0); let s3 = 7; for (let i = 0; i < d.length; i++) { s3 = (s3 * 16807) % 2147483647; d[i] = s3 / 2147483647 * 2 - 1; } }
   const grit = ac.createWaveShaper(); { const n = 1024, cu = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; cu[i] = Math.tanh(x * 4); } grit.curve = cu; } grit.connect(pump);
-  return { ac, out, pump, rev, dly, noise, grit };
+  const crush = ac.createWaveShaper(); { const n = 4096, cu = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; cu[i] = Math.round(x * 6) / 6; } crush.curve = cu; } const cg = ac.createGain(); cg.gain.value = .8; crush.connect(cg); cg.connect(pump);
+  return { ac, out, pump, rev, dly, noise, grit, crush };
 }
 function env(g, t, a, peak, d, end = .0001) { g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(end, t + a + d); }
 function nz(B, t, dur, type, f, q, peak, send = 0, dest) {
@@ -216,52 +219,60 @@ function nz(B, t, dur, type, f, q, peak, send = 0, dest) {
 }
 function duck(B, t, depth = .35) { const p = B.pump.gain; p.cancelScheduledValues(t); p.setValueAtTime(depth, t); p.linearRampToValueAtTime(1, t + .19); }
 const V = {
-  K(B, t, v = 1) { const { ac } = B, o = ac.createOscillator(), g = ac.createGain(); o.frequency.setValueAtTime(128, t); o.frequency.exponentialRampToValueAtTime(46, t + .09); env(g, t, .002, 1 * v, .34); o.connect(g); g.connect(B.out); o.start(t); o.stop(t + .45); nz(B, t, .01, 'highpass', 2500, .7, .22 * v); duck(B, t, v > .6 ? .32 : .6); },
+  K(B, t, v = 1) { const { ac } = B, o = ac.createOscillator(), g = ac.createGain(); o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(40, t + .07); env(g, t, .001, .95 * v, .28); o.connect(g); g.connect(B.out); o.start(t); o.stop(t + .35); nz(B, t, .006, 'highpass', 3500, .7, .3 * v); duck(B, t, .55); },
   G(B, t, v = 1) { V.K(B, t, .45 * v); },
-  S(B, t, v = 1) { nz(B, t, .17, 'bandpass', 2100, .8, .6 * v, .3); nz(B, t, .06, 'highpass', 5000, .6, .42 * v); const { ac } = B, o = ac.createOscillator(), g = ac.createGain(); o.type = 'triangle'; o.frequency.setValueAtTime(230, t); o.frequency.exponentialRampToValueAtTime(170, t + .06); env(g, t, .001, .28 * v, .08); o.connect(g); g.connect(B.out); o.start(t); o.stop(t + .15); },
-  H(B, t, v = 1) { nz(B, t, .03, 'highpass', 8000, .7, .3 * v); },
-  OH(B, t, v = 1) { nz(B, t, .14, 'highpass', 6800, .8, .24 * v, .15); },
+  S(B, t, v = 1) { nz(B, t + STEP / 3, .03, 'bandpass', 2600, 2, .18 * v, .3, B.crush); nz(B, t + STEP * .66, .02, 'bandpass', 2200, 2, .1 * v, .3, B.crush); nz(B, t, .09, 'bandpass', 3200, 1.4, .5 * v, .55); nz(B, t, .02, 'highpass', 7000, .6, .35 * v); const { ac } = B, o = ac.createOscillator(), g = ac.createGain(); o.type = 'triangle'; o.frequency.setValueAtTime(330, t); o.frequency.exponentialRampToValueAtTime(140, t + .05); env(g, t, .001, .22 * v, .06); o.connect(g); g.connect(B.out); o.start(t); o.stop(t + .1); },
+  Z(B, t, v = 1) { const { ac } = B; for (let i = 0; i < 6; i++) { const tt = t + i * STEP / 6, o = ac.createOscillator(), g = ac.createGain(); o.type = 'square'; o.frequency.setValueAtTime(900 - i * 120, tt); o.frequency.exponentialRampToValueAtTime(60, tt + .02); env(g, tt, .0005, (.16 - i * .018) * v, .02); o.connect(g); g.connect(B.crush); o.start(tt); o.stop(tt + .04); } nz(B, t, .05, 'bandpass', 2400, 6, .18 * v, 0, B.crush); },
+  X(B, t, v = 1) { for (let i = 0; i < 4; i++) { const tt = t + i * STEP / 4; nz(B, tt, .012, 'bandpass', 5200 - i * 700, 3, (.32 - i * .05) * v, 0, B.crush); } const { ac } = B, o = ac.createOscillator(), g = ac.createGain(); o.type = 'square'; o.frequency.setValueAtTime(1800, t); o.frequency.exponentialRampToValueAtTime(120, t + .08); env(g, t, .001, .05 * v, .08); o.connect(g); g.connect(B.out); o.start(t); o.stop(t + .12); },
+  R(B, t, v = 1) { const { ac } = B, o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(2400, t); env(g, t, .0005, .12 * v, .025); o.connect(g); g.connect(B.out); o.start(t); o.stop(t + .05); },
+  H(B, t, v = 1) { nz(B, t, .02, 'highpass', 9000, .7, .22 * v); },
+  OH(B, t, v = 1) { nz(B, t, .09, 'highpass', 7600, .8, .16 * v, .2); },
   bass(B, t, m, len, v = 1) { const { ac } = B, f = ac.createBiquadFilter(), g = ac.createGain();
-    for (const d of [-12, 12]) { const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = midi(m); o.detune.value = d; o.connect(f); o.start(t); o.stop(t + len + .1); }
-    const sub = ac.createOscillator(), sg = ac.createGain(); sub.frequency.value = midi(m); sg.gain.value = 1.1; sub.connect(sg); sg.connect(g); sub.start(t); sub.stop(t + len + .1);
-    f.type = 'lowpass'; f.Q.value = 3; f.frequency.setValueAtTime(220, t); f.frequency.exponentialRampToValueAtTime(700, t + .015); f.frequency.exponentialRampToValueAtTime(260, t + .18);
-    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.2 * v, t + .006); g.gain.setValueAtTime(.2 * v, t + len * .8); g.gain.exponentialRampToValueAtTime(.0001, t + len + .06);
+    const o = ac.createOscillator(); o.type = 'triangle'; o.frequency.value = midi(m); o.connect(f); o.start(t); o.stop(t + len + .2);
+    const sub = ac.createOscillator(), sg = ac.createGain(); sub.frequency.value = midi(m); sg.gain.value = 1.2; sub.connect(sg); sg.connect(g); sub.start(t); sub.stop(t + len + .2);
+    f.type = 'lowpass'; f.Q.value = 1; f.frequency.setValueAtTime(900, t); f.frequency.exponentialRampToValueAtTime(240, t + .3);
+    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.24 * v, t + .02); g.gain.setValueAtTime(.24 * v, t + len * .7); g.gain.exponentialRampToValueAtTime(.0001, t + len + .15);
     f.connect(g); g.connect(B.pump); },
-  stab(B, t, notes, v = 1) { const { ac } = B, f = ac.createBiquadFilter(), g = ac.createGain(); f.type = 'lowpass'; f.frequency.setValueAtTime(3200, t); f.frequency.exponentialRampToValueAtTime(1100, t + .14);
-    env(g, t, .003, .3 * v, .17); for (const m of notes) { for (const [ty, mul, lv] of [['square', 1, .05], ['sine', 2, .07], ['sine', .5, .05]]) { const o = ac.createOscillator(), og = ac.createGain(); o.type = ty; o.frequency.value = midi(m) * mul; og.gain.value = lv; o.connect(og); og.connect(f); o.start(t); o.stop(t + .3); } }
-    f.connect(g); g.connect(B.pump); const sg = ac.createGain(); sg.gain.value = .35; g.connect(sg); sg.connect(B.rev); const ds = ac.createGain(); ds.gain.value = .25; g.connect(ds); ds.connect(B.dly); },
-  chop(B, t, m, v = 1) { const { ac } = B, o = ac.createOscillator(), g = ac.createGain(), mix = ac.createGain(); o.type = 'sawtooth'; o.frequency.setValueAtTime(midi(m) * .94, t); o.frequency.exponentialRampToValueAtTime(midi(m), t + .03);
-    for (const [ff, q, lv] of [[750, 7, 1], [1250, 8, .7], [2600, 9, .35]]) { const bp = ac.createBiquadFilter(), bg = ac.createGain(); bp.type = 'bandpass'; bp.frequency.setValueAtTime(ff * .8, t); bp.frequency.linearRampToValueAtTime(ff, t + .06); bp.Q.value = q; bg.gain.value = lv; o.connect(bp); bp.connect(bg); bg.connect(mix); }
-    env(g, t, .006, .85 * v, .15); mix.connect(g); g.connect(B.pump); const ds = ac.createGain(); ds.gain.value = .55; g.connect(ds); ds.connect(B.dly); const rs = ac.createGain(); rs.gain.value = .35; g.connect(rs); rs.connect(B.rev); o.start(t); o.stop(t + .25); },
-  wob(B, t, m, len, v = 1) { const { ac } = B, f = ac.createBiquadFilter(), g = ac.createGain(), lfo = ac.createOscillator(), lg = ac.createGain();
-    for (const [ty, d] of [['sawtooth', -8], ['square', 8]]) { const o = ac.createOscillator(); o.type = ty; o.frequency.value = midi(m); o.detune.value = d; o.connect(f); o.start(t); o.stop(t + len + .05); }
-    f.type = 'lowpass'; f.Q.value = 10; f.frequency.value = 520; lfo.type = 'sine'; lfo.frequency.value = 1 / (STEP * 2); lg.gain.value = 480; lfo.connect(lg); lg.connect(f.frequency); lfo.start(t); lfo.stop(t + len + .05);
-    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.16 * v, t + .01); g.gain.setValueAtTime(.16 * v, t + len - .05); g.gain.exponentialRampToValueAtTime(.0001, t + len);
-    f.connect(g); g.connect(B.grit);
-    const sub = ac.createOscillator(), sg = ac.createGain(); sub.frequency.value = midi(m - 12); env(sg, t, .01, .28 * v, len); sub.connect(sg); sg.connect(B.pump); sub.start(t); sub.stop(t + len + .05); },
+  // FM electric piano, slightly detuned, for the harmony
+  epiano(B, t, notes, len, v = 1) { const { ac } = B, g = ac.createGain(); env(g, t, .004, .16 * v, len + .6);
+    for (const m of notes) for (const d of [-4, 4]) { const c = ac.createOscillator(), mo = ac.createOscillator(), mg = ac.createGain(), og = ac.createGain();
+      c.frequency.value = midi(m); c.detune.value = d; mo.frequency.value = midi(m) * 1.0; mg.gain.setValueAtTime(midi(m) * 1.6, t); mg.gain.exponentialRampToValueAtTime(midi(m) * .08, t + .5);
+      mo.connect(mg); mg.connect(c.frequency); og.gain.value = .07 / Math.sqrt(notes.length); c.connect(og); og.connect(g); c.start(t); mo.start(t); c.stop(t + len + .8); mo.stop(t + len + .8); }
+    g.connect(B.pump); const sg = ac.createGain(); sg.gain.value = .8; g.connect(sg); sg.connect(B.rev); const ds = ac.createGain(); ds.gain.value = .3; g.connect(ds); ds.connect(B.dly); },
+  // glassy FM piano for the theme
+  theme(B, t, m, v = 1) { const { ac } = B, c = ac.createOscillator(), mo = ac.createOscillator(), mg = ac.createGain(), g = ac.createGain();
+    c.frequency.value = midi(m); mo.frequency.value = midi(m) * 2; mg.gain.setValueAtTime(midi(m) * 2.4, t); mg.gain.exponentialRampToValueAtTime(midi(m) * .05, t + .25);
+    mo.connect(mg); mg.connect(c.frequency); env(g, t, .002, .2 * v, .55); c.connect(g); g.connect(B.pump);
+    const ds = ac.createGain(); ds.gain.value = .8; g.connect(ds); ds.connect(B.dly); const rs = ac.createGain(); rs.gain.value = .6; g.connect(rs); rs.connect(B.rev); c.start(t); mo.start(t); c.stop(t + .7); mo.stop(t + .7); },
+  // the drop: fast 32nd-note arpeggio of chord tones and a distorted sub
+  arp(B, t, notes, v = 1) { const { ac } = B; for (let j = 0; j < 2; j++) { const m = notes[(j + Math.round(t / STEP)) % notes.length] + 12 * (1 + (j % 2)), tt = t + j * STEP / 2, o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.value = midi(m); env(g, tt, .001, .07 * v, .12); o.connect(g); g.connect(B.pump); const ds = ac.createGain(); ds.gain.value = .6; g.connect(ds); ds.connect(B.dly); o.start(tt); o.stop(tt + .18); } },
+  sub(B, t, m, len, v = 1) { const { ac } = B, o = ac.createOscillator(), o2 = ac.createOscillator(), f = ac.createBiquadFilter(), g = ac.createGain(); o.frequency.value = midi(m); o2.type = 'sawtooth'; o2.frequency.value = midi(m); f.type = 'lowpass'; f.frequency.value = 380; f.Q.value = 4; o2.connect(f); o.connect(g); f.connect(g);
+    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.2 * v, t + .02); g.gain.setValueAtTime(.2 * v, t + len - .06); g.gain.exponentialRampToValueAtTime(.0001, t + len); g.connect(B.grit); o.start(t); o2.start(t); o.stop(t + len + .05); o2.stop(t + len + .05); },
   tick(B, t, v = 1) { nz(B, t, .018, 'bandpass', 2600, 2, .12 * v); const { ac } = B, o = ac.createOscillator(), g = ac.createGain(); o.frequency.setValueAtTime(190, t); o.frequency.exponentialRampToValueAtTime(90, t + .05); env(g, t, .001, .16 * v, .06); o.connect(g); g.connect(B.out); o.start(t); o.stop(t + .1); },
   bell(B, t, m, v = 1) { const { ac } = B, c = ac.createOscillator(), mo = ac.createOscillator(), mg = ac.createGain(), g = ac.createGain();
     c.frequency.value = midi(m); mo.frequency.value = midi(m) * 3.5; mg.gain.setValueAtTime(midi(m) * 2.2, t); mg.gain.exponentialRampToValueAtTime(1, t + 1.4);
     mo.connect(mg); mg.connect(c.frequency); env(g, t, .003, .14 * v, 1.6); c.connect(g); g.connect(B.out); const sg = ac.createGain(); sg.gain.value = .8; g.connect(sg); sg.connect(B.rev); c.start(t); mo.start(t); c.stop(t + 2); mo.stop(t + 2); },
-  swell(B, t) { const { ac } = B, s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain(); s.buffer = B.noise; s.loop = true; f.type = 'highpass'; f.frequency.value = 2500; g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.14, t + .05); g.gain.exponentialRampToValueAtTime(.0001, t + 2.2); s.connect(f); f.connect(g); g.connect(B.out); const sg = ac.createGain(); sg.gain.value = .9; g.connect(sg); sg.connect(B.rev); s.start(t); s.stop(t + 2.3);
-    { const o = ac.createOscillator(), og = ac.createGain(); o.frequency.setValueAtTime(72, t); o.frequency.exponentialRampToValueAtTime(30, t + 1.3); env(og, t, .005, .9, 1.4); o.connect(og); og.connect(B.out); o.start(t); o.stop(t + 1.5); }
-    V.K(B, t, 1.15); V.bell(B, t + .01, 81, 1.1); V.bell(B, t + .1, 88, .7); V.stab(B, t, [57, 64, 69, 72, 76], 1.2); },
+  swell(B, t) { const { ac } = B, s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain(); s.buffer = B.noise; s.loop = true; f.type = 'highpass'; f.frequency.value = 2500; g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.12, t + .05); g.gain.exponentialRampToValueAtTime(.0001, t + 2.6); s.connect(f); f.connect(g); g.connect(B.out); const sg = ac.createGain(); sg.gain.value = .9; g.connect(sg); sg.connect(B.rev); s.start(t); s.stop(t + 2.7);
+    { const o = ac.createOscillator(), og = ac.createGain(); o.frequency.setValueAtTime(70, t); o.frequency.exponentialRampToValueAtTime(30, t + 1.4); env(og, t, .005, .9, 1.5); o.connect(og); og.connect(B.out); o.start(t); o.stop(t + 1.6); }
+    V.K(B, t, 1.15); V.bell(B, t + .01, 72, 1.1); V.bell(B, t + .1, 79, .7); V.epiano(B, t, [48, 55, 60, 63, 67, 72], 2.4, 1.2); },
 };
-const BELL = [69, 72, 76, 81];
+const BELL = [72, 75, 79, 84];
 function playStep(B, t, s, offs, solved, vol = 1) {
-  const tt = t + (s % 2 ? SWING : 0);
-  // hats keep time (busier after the drop)
-  if (s % 4 === 2) V.OH(B, tt, .8 * vol); else V.H(B, tt, (s % 2 ? (solved ? .42 : .26) : .45) * vol);
+  const tt = t;
+  // hats keep time; a few seeded 32nd ratchets give it the IDM stutter
+  if (s % 4 === 2) V.OH(B, tt, .7 * vol); else V.H(B, tt, (s % 2 ? .32 : .5) * vol);
+  if (s % 8 === 5) { for (let j = 1; j < 4; j++) V.H(B, tt + j * STEP / 4, (.34 - j * .06) * vol); }
+  if (s === 13 || s === 29) { V.H(B, tt + STEP / 2, .3 * vol); V.H(B, tt + STEP * .75, .22 * vol); }
   for (let i = 0; i < 4; i++) {
     const k = mod(s - offs[i], N), e = PAT[i].ev[k]; if (e === undefined) continue;
     if (i === 0) V[e](B, tt, vol);
     else if (i === 1) { if (!solved) V.bass(B, tt, e[0], e[1] * STEP, vol); }
-    else if (i === 2) V.stab(B, tt, e, vol);
-    else V.chop(B, tt, e, vol);
+    else if (i === 2) V.epiano(B, tt, e[0], e[1] * STEP, vol);
+    else V.theme(B, tt, e, vol);
   }
   const nl = offs.filter(o => o === 0).length;
-  if (!solved && nl === 3) { if (s % 2) V.H(B, tt, .3 * vol); if (s % 16 >= 12) V.S(B, tt, (.18 + (s % 16 - 12) * .06) * vol); }
-  if (solved && s % 8 === 0) V.wob(B, t, ROOT[s / 8 | 0] + 12, 8 * STEP, vol);
+  if (!solved && nl === 3) { if (s % 2) V.H(B, tt, .3 * vol); if (s % 16 >= 12) V.S(B, tt, (.14 + (s % 16 - 12) * .05) * vol); }
+  if (solved) { V.arp(B, tt, CH[s / 8 | 0], vol); if (s % 8 === 0) V.sub(B, t, ROOT[s / 8 | 0], 8 * STEP, vol); }
 }
 
 let B = null, playing = false, t0 = 0, nextStep = 0, schedTimer = 0;
@@ -525,9 +536,9 @@ cv.addEventListener('keydown', e => {
 function select(i) { selected = i; [...$('layers').children].forEach((el, k) => el.classList.toggle('sel', k === i)); }
 
 // director panel: a top-down dial of the tower
-const ES = { Drums: 'Batería', Bass: 'Bajo', Chords: 'Acordes', Vox: 'Voz' };
-const TX = REC ? { foot: 'Gira cada anillo hasta que su runa quede bajo la muesca.', solved: 'Todo encaja. Suena el drop.', left: n => `Faltan ${n} anillo${n > 1 ? 's' : ''} por encajar.` }
-  : { foot: 'Turn each ring until its rune sits under the notch.', solved: 'Groove locked. Here comes the drop.', left: n => `${n} ring${n > 1 ? 's' : ''} still out of time.` };
+const ES = { Drums: 'Batería', Bass: 'Bajo', Chords: 'Acordes', Theme: 'Tema' };
+const TX = REC ? { foot: 'Gira cada anillo hasta que su runa quede bajo la muesca.', solved: 'Todo encaja. La sonata se abre.', left: n => `Faltan ${n} anillo${n > 1 ? 's' : ''} por encajar.` }
+  : { foot: 'Turn each ring until its rune sits under the notch.', solved: 'Everything fits. The sonata opens up.', left: n => `${n} ring${n > 1 ? 's' : ''} still out of time.` };
 const layerEls = [], runeEls = [];
 PAT.forEach((p, i) => {
   const el = document.createElement('div'); el.className = 'layer'; el.style.setProperty('--c', `var(${p.css})`);
