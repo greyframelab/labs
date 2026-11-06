@@ -178,7 +178,7 @@ const N = 32, BPM = 96, STEP = 60 / BPM / 4, SWING = 0;
 const ROOT = [36, 32, 29, 31]; // C Ab F G
 const CH = [[60, 63, 67], [56, 60, 63, 67], [53, 56, 60, 63], [55, 59, 62, 65, 68]]; // Cm, Abmaj7, Fm7, G7b9
 const PAT = [
-  { name: 'Drums', css: '--drums', col: 0xff6a3d, ev: { 0: 'K', 7: 'K', 8: 'S', 11: 'X', 14: 'K', 19: 'K', 22: 'K', 24: 'S', 27: 'X', 30: 'R', 31: 'R' } },
+  { name: 'Drums', css: '--drums', col: 0xff6a3d, ev: { 0: 'K', 3: 'Z', 7: 'K', 8: 'S', 10: 'X', 11: 'X', 14: 'K', 15: 'Z', 19: 'K', 21: 'X', 22: 'K', 24: 'S', 26: 'Z', 27: 'X', 28: 'R', 30: 'R', 31: 'Z' } },
   { name: 'Bass', css: '--bass', col: 0x2fc7b0, ev: {} },
   { name: 'Chords', css: '--chords', col: 0xf2c14e, ev: {} },
   { name: 'Theme', css: '--lead', col: 0x9cc8ff, ev: { 0: 60, 1: 63, 2: 67, 3: 72, 4: 75, 6: 74, 7: 72, 8: 75, 10: 72, 11: 68, 14: 67, 16: 65, 17: 68, 18: 72, 19: 77, 20: 75, 22: 74, 24: 71, 25: 74, 26: 77, 27: 80, 28: 79, 30: 77, 31: 74 } },
@@ -208,7 +208,8 @@ function makeBus(ac) {
   dly.connect(dlp); dlp.connect(fb); fb.connect(dly); const dG = ac.createGain(); dG.gain.value = .5; dlp.connect(dG); dG.connect(pump);
   const noise = ac.createBuffer(1, ac.sampleRate, ac.sampleRate); { const d = noise.getChannelData(0); let s3 = 7; for (let i = 0; i < d.length; i++) { s3 = (s3 * 16807) % 2147483647; d[i] = s3 / 2147483647 * 2 - 1; } }
   const grit = ac.createWaveShaper(); { const n = 1024, cu = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; cu[i] = Math.tanh(x * 4); } grit.curve = cu; } grit.connect(pump);
-  return { ac, out, pump, rev, dly, noise, grit };
+  const crush = ac.createWaveShaper(); { const n = 4096, cu = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; cu[i] = Math.round(x * 6) / 6; } crush.curve = cu; } const cg = ac.createGain(); cg.gain.value = .8; crush.connect(cg); cg.connect(pump);
+  return { ac, out, pump, rev, dly, noise, grit, crush };
 }
 function env(g, t, a, peak, d, end = .0001) { g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(end, t + a + d); }
 function nz(B, t, dur, type, f, q, peak, send = 0, dest) {
@@ -220,8 +221,9 @@ function duck(B, t, depth = .35) { const p = B.pump.gain; p.cancelScheduledValue
 const V = {
   K(B, t, v = 1) { const { ac } = B, o = ac.createOscillator(), g = ac.createGain(); o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(40, t + .07); env(g, t, .001, .95 * v, .28); o.connect(g); g.connect(B.out); o.start(t); o.stop(t + .35); nz(B, t, .006, 'highpass', 3500, .7, .3 * v); duck(B, t, .55); },
   G(B, t, v = 1) { V.K(B, t, .45 * v); },
-  S(B, t, v = 1) { nz(B, t, .09, 'bandpass', 3200, 1.4, .5 * v, .55); nz(B, t, .02, 'highpass', 7000, .6, .35 * v); const { ac } = B, o = ac.createOscillator(), g = ac.createGain(); o.type = 'triangle'; o.frequency.setValueAtTime(330, t); o.frequency.exponentialRampToValueAtTime(140, t + .05); env(g, t, .001, .22 * v, .06); o.connect(g); g.connect(B.out); o.start(t); o.stop(t + .1); },
-  X(B, t, v = 1) { for (let i = 0; i < 4; i++) { const tt = t + i * STEP / 4; nz(B, tt, .012, 'bandpass', 5200 - i * 700, 3, (.28 - i * .05) * v); } const { ac } = B, o = ac.createOscillator(), g = ac.createGain(); o.type = 'square'; o.frequency.setValueAtTime(1800, t); o.frequency.exponentialRampToValueAtTime(120, t + .08); env(g, t, .001, .05 * v, .08); o.connect(g); g.connect(B.out); o.start(t); o.stop(t + .12); },
+  S(B, t, v = 1) { nz(B, t + STEP / 3, .03, 'bandpass', 2600, 2, .18 * v, .3, B.crush); nz(B, t + STEP * .66, .02, 'bandpass', 2200, 2, .1 * v, .3, B.crush); nz(B, t, .09, 'bandpass', 3200, 1.4, .5 * v, .55); nz(B, t, .02, 'highpass', 7000, .6, .35 * v); const { ac } = B, o = ac.createOscillator(), g = ac.createGain(); o.type = 'triangle'; o.frequency.setValueAtTime(330, t); o.frequency.exponentialRampToValueAtTime(140, t + .05); env(g, t, .001, .22 * v, .06); o.connect(g); g.connect(B.out); o.start(t); o.stop(t + .1); },
+  Z(B, t, v = 1) { const { ac } = B; for (let i = 0; i < 6; i++) { const tt = t + i * STEP / 6, o = ac.createOscillator(), g = ac.createGain(); o.type = 'square'; o.frequency.setValueAtTime(900 - i * 120, tt); o.frequency.exponentialRampToValueAtTime(60, tt + .02); env(g, tt, .0005, (.16 - i * .018) * v, .02); o.connect(g); g.connect(B.crush); o.start(tt); o.stop(tt + .04); } nz(B, t, .05, 'bandpass', 2400, 6, .18 * v, 0, B.crush); },
+  X(B, t, v = 1) { for (let i = 0; i < 4; i++) { const tt = t + i * STEP / 4; nz(B, tt, .012, 'bandpass', 5200 - i * 700, 3, (.32 - i * .05) * v, 0, B.crush); } const { ac } = B, o = ac.createOscillator(), g = ac.createGain(); o.type = 'square'; o.frequency.setValueAtTime(1800, t); o.frequency.exponentialRampToValueAtTime(120, t + .08); env(g, t, .001, .05 * v, .08); o.connect(g); g.connect(B.out); o.start(t); o.stop(t + .12); },
   R(B, t, v = 1) { const { ac } = B, o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(2400, t); env(g, t, .0005, .12 * v, .025); o.connect(g); g.connect(B.out); o.start(t); o.stop(t + .05); },
   H(B, t, v = 1) { nz(B, t, .02, 'highpass', 9000, .7, .22 * v); },
   OH(B, t, v = 1) { nz(B, t, .09, 'highpass', 7600, .8, .16 * v, .2); },
@@ -259,6 +261,7 @@ function playStep(B, t, s, offs, solved, vol = 1) {
   const tt = t;
   // hats keep time; a few seeded 32nd ratchets give it the IDM stutter
   if (s % 4 === 2) V.OH(B, tt, .7 * vol); else V.H(B, tt, (s % 2 ? .32 : .5) * vol);
+  if (s % 8 === 5) { for (let j = 1; j < 4; j++) V.H(B, tt + j * STEP / 4, (.34 - j * .06) * vol); }
   if (s === 13 || s === 29) { V.H(B, tt + STEP / 2, .3 * vol); V.H(B, tt + STEP * .75, .22 * vol); }
   for (let i = 0; i < 4; i++) {
     const k = mod(s - offs[i], N), e = PAT[i].ev[k]; if (e === undefined) continue;
