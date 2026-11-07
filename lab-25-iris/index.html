@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Iris</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&display=swap">
+<style>
+:root{--w:#e8eaed;--dim:rgba(232,234,237,.42);--red:#ff1a1a}
+html,body{margin:0;height:100%;background:#000;overflow:hidden}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block}
+.hud{position:fixed;inset:0;pointer-events:none;font:300 10px/1.5 "JetBrains Mono",monospace;letter-spacing:.14em;color:var(--dim);text-transform:uppercase}
+.hud .tl{position:absolute;left:30px;top:40px}
+.hud .tr{position:absolute;right:30px;top:40px;text-align:right}
+.hud .bl{position:absolute;left:30px;bottom:40px}
+.hud .br{position:absolute;right:30px;bottom:40px;text-align:right}
+.hud b{color:var(--w);font-weight:400}
+.hud .ttl{font-weight:600;font-size:12px;letter-spacing:.5em;color:var(--w)}
+.hud .rule{position:absolute;left:30px;right:30px;height:1px;background:rgba(232,234,237,.08)}
+.hud .r1{top:80px}.hud .r2{bottom:80px}
+.hud .red{color:var(--red)}
+.hud .cap{position:absolute;left:0;right:0;bottom:150px;text-align:center;font-size:12px;letter-spacing:.7em;color:var(--w);opacity:0;font-weight:400}
+.hud .sig{position:absolute;left:0;right:0;top:calc(50% + 120px);text-align:center;font-size:10px;letter-spacing:.6em;color:var(--w);opacity:0}
+.hud .sig i{font-style:normal;color:var(--red)}
+.hud .snd{position:absolute;left:0;right:0;bottom:100px;text-align:center;font-size:8px;letter-spacing:.4em;color:rgba(232,234,237,.35)}
+.lbl{position:absolute;font-size:8px;letter-spacing:.18em;color:rgba(232,234,237,.6);white-space:nowrap;opacity:0}
+.lbl:before{content:"";position:absolute;left:-18px;top:6px;width:14px;height:1px;background:rgba(232,234,237,.5)}
+.lbl b{color:var(--red);font-weight:400}
+.ticks{position:absolute;left:30px;right:30px;top:86px;height:6px;background:repeating-linear-gradient(90deg,rgba(232,234,237,.18) 0 1px,transparent 1px 12px)}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="hud">
+  <div class="tl"><div class="ttl">Iris</div><div>Ø-27 · <span id="ph">Latencia</span></div></div>
+  <div class="tr"><div>TC <b id="tc">00:00:00:00</b></div><div>FR <b id="fr">0000</b></div></div>
+  <div class="rule r1"></div><div class="ticks"></div><div class="rule r2"></div>
+  <div class="bl"><div>R <b>56</b> · SEG <b id="seg">0</b> · Θ <b id="th">0.000</b></div><div>APERTURA <b id="fn">f/22</b> · <span class="red" id="st">BUSCANDO</span></div></div>
+  <div class="br"><div>Z <b id="zz">0.00</b> · LOCK <b id="lk">00</b>/56</div><div>Δ <b id="dl">+0.000</b></div></div>
+  <div class="lbl" id="l0"></div><div class="lbl" id="l1"></div><div class="lbl" id="l2"></div>
+  <div class="cap" id="cap"></div>
+  <div class="snd" id="snd">[ Toca para sonido ]</div>
+  <div class="sig" id="sig">Greyframe <i>·</i> Motion 27</div>
+</div>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+const $ = id => document.getElementById(id);
+let seed = 27110712;
+const rnd = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t, sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const hsh = n => { const x = Math.sin(n * 127.1) * 43758.5453; return x - Math.floor(x); };
+const TAU = Math.PI * 2, LOOP = 22, FPS = 60;
+const backOut = x => { x = clamp(x, 0, 1); const c = 2.2; return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); };
+const expOut = x => x <= 0 ? 0 : x >= 1 ? 1 : 1 - Math.pow(2, -10 * x);
+
+// ---------- timeline (shared by image and sound) ----------
+const T_LOCK0 = 16.2, T_LOCK1 = 16.9, T_BOOM = 18.3;
+const GRID = 60 / 112 / 4;
+const OPEN = [[0, .36], [1.1, .44], [2.2, .52], [3.3, .6], [4.6, .7], [6.0, .84], [7.5, 1]];
+const phase = t => t < 2 ? 0 : t < 9 ? 1 : t < T_BOOM ? 2 : 3;
+const PH = ['Latencia', 'Calibración', 'Profundidad', 'Eco'];
+
+// ---------- the rings ----------
+const R = 56, KEEP = 23;
+const RING = [];
+const euclid = (k, n, rot) => { const a = []; for (let i = 0; i < n; i++) a.push(((i + rot) * k) % n < k); return a; };
+for (let i = 0; i < R; i++) {
+  const u = i / (R - 1), r = .07 + Math.pow(u, 1.12) * 1.62;
+  const type = i === KEEP ? 0 : rnd() < .27 ? 1 : rnd() < .3 ? 2 : 0; // 0 ribbon, 1 ticks, 2 hairline-dashes
+  const segN = [1, 2, 3, 4, 6, 8, 12, 16, 24][Math.floor(rnd() * 9)];
+  const cov = type === 2 ? .15 + rnd() * .3 : .35 + rnd() * .6;
+  const w = type === 1 ? .018 + rnd() * .05 : type === 2 ? .0035 : (rnd() < .6 ? .0035 + rnd() * .004 : .008 + rnd() * .03);
+  const n = [5, 7, 9, 11, 13, 16][Math.floor(rnd() * 6)], k = 1 + Math.floor(rnd() * n * .45);
+  const pat = euclid(k, n, Math.floor(rnd() * n)), dir = rnd() < .5 ? -1 : 1;
+  const pitch = TAU / Math.max(segN, 2) * (rnd() < .5 ? .5 : 1);
+  const start = i % 6 === 0 ? 0 : lerp(1.2, 7.5, rnd());
+  const steps = [];
+  for (let g = 0; g * GRID < T_LOCK0; g++) { const t = g * GRID + .02; if (t >= start && pat[g % n]) steps.push(t); }
+  RING.push({ r, type, segN, cov, w, dir, pitch, steps, dur: .07 + rnd() * .2, drift: (rnd() - .5) * .08, off: rnd() * TAU, red: i === KEEP || rnd() < .07, b: type === 1 ? .55 : type === 2 ? .9 : .8 * Math.pow(.004 / w, .55), z: (rnd() - .5) });
+}
+function ringRot(i, t) {
+  const g = RING[i]; const tt = Math.min(t, T_LOCK0);
+  let a = g.off + g.drift * tt;
+  for (const s of g.steps) { if (s > tt) break; a += g.dir * g.pitch * backOut((tt - s) / g.dur); }
+  if (t > T_LOCK0) { // lock: every ring snaps to its symmetry axis
+    const p = TAU / g.segN, tgt = Math.round(a / p) * p + (i === KEEP ? 0 : 0), d = sstep(T_LOCK0 + (i / R) * .35, T_LOCK0 + .3 + (i / R) * .35, t);
+    a = lerp(a, tgt, d);
+    if (t > T_BOOM && i === KEEP) a += (t - T_BOOM) * .35;
+  }
+  return a;
+}
+function openAt(t) { let v = OPEN[0][1]; for (let k = 1; k < OPEN.length; k++) { const [tk, vk] = OPEN[k]; v += (vk - OPEN[k - 1][1]) * backOut((t - tk) / .42); } return v; }
+
+// ---------- geometry ----------
+const pos = [], aRing = [], aAng = [], aRad = [], aB = [], aRed = [], aSeed = [], aKeep = [];
+function quad(i, a0, a1, r0, r1, b, red) {
+  const sd = rnd();
+  for (const [a, r] of [[a0, r0], [a1, r0], [a1, r1], [a0, r0], [a1, r1], [a0, r1]]) { pos.push(0, 0, 0); aRing.push(i); aAng.push(a); aRad.push(r); aB.push(b); aRed.push(red); aSeed.push(sd); aKeep.push(i === KEEP ? 1 : 0); }
+}
+let SEGS = 0;
+for (let i = 0; i < R; i++) {
+  const g = RING[i], P = TAU / g.segN;
+  for (let s = 0; s < g.segN; s++) {
+    const a0 = s * P, len = P * (g.segN === 1 ? .999 : g.cov); SEGS++;
+    const red = g.red && (s === 0 || i === KEEP) ? 1 : 0;
+    if (g.type === 1) { const nT = Math.max(3, Math.round(len * g.r * 60)); for (let q = 0; q < nT; q++) { const a = a0 + q / nT * len, tw = .0045 / g.r; const long = q % 5 === 0; quad(i, a, a + tw, g.r, g.r + g.w * (long ? 1 : .45), g.b * (long ? 1.2 : .7), red); } }
+    else { const nQ = Math.max(2, Math.ceil(len * 48)); for (let q = 0; q < nQ; q++) quad(i, a0 + q / nQ * len, a0 + (q + 1) / nQ * len, g.r, g.r + g.w, g.b, red); }
+  }
+}
+const geo = new THREE.BufferGeometry();
+const A = (n, a, s = 1) => geo.setAttribute(n, new THREE.Float32BufferAttribute(a, s));
+A('position', pos, 3); A('aRing', aRing); A('aAng', aAng); A('aRad', aRad); A('aB', aB); A('aRed', aRed); A('aSeed', aSeed); A('aKeep', aKeep);
+
+// ---------- three ----------
+const cv = $('c');
+const renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(devicePixelRatio || 1); renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0);
+const camera = new THREE.PerspectiveCamera(35, 9 / 16, .05, 100);
+const U = { uRot: { value: new Float32Array(R) }, uZ: { value: new Float32Array(R) }, uRS: { value: new Float32Array(R).fill(1) }, uBoom: { value: 0 }, uFade: { value: 1 }, uKeepFade: { value: 1 }, uSweep: { value: 0 }, uSweepA: { value: 0 }, uFlick: { value: 0 }, uT: { value: 0 } };
+const mat = new THREE.ShaderMaterial({ uniforms: U, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+  vertexShader: `attribute float aRing, aAng, aRad, aB, aRed, aSeed, aKeep;
+    uniform float uRot[${R}]; uniform float uZ[${R}]; uniform float uRS[${R}];
+    uniform float uBoom, uFade, uKeepFade, uSweep, uSweepA, uFlick, uT; varying float vB; varying float vRed;
+    void main(){ int ri = int(aRing + .5); float ang = aAng + uRot[ri]; float r = aRad * uRS[ri];
+      vec3 p = vec3(cos(ang) * r, sin(ang) * r, uZ[ri]);
+      float bm = uBoom * (1. - aKeep); p.xy *= 1. + bm * (.4 + aSeed * aSeed * 3.2); p.z += bm * (aSeed - .5) * 10.;
+      float wa = mod(ang - uSweep + 3.14159265, 6.2831853) - 3.14159265; float sw = 1. + uSweepA * exp(-wa * wa * 22.);
+      float fl = 1. - uFlick * step(.82, fract(sin(aSeed * 91.7 + floor(uT * 24.)) * 43758.5));
+      vB = aB * sw * fl * mix(uFade, uKeepFade, aKeep); vRed = aRed;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.); }`,
+  fragmentShader: `varying float vB; varying float vRed; void main(){ vec3 c = mix(vec3(.88, .91, .97), vec3(1., .1, .07), vRed); gl_FragColor = vec4(c * vB * .55, 1.); }` });
+const mesh = new THREE.Mesh(geo, mat); mesh.frustumCulled = false; scene.add(mesh);
+// red core
+const glowTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'); const g = x.createRadialGradient(64, 64, 0, 64, 64, 64); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(.08, 'rgba(255,70,50,.9)'); g.addColorStop(.35, 'rgba(255,20,10,.25)'); g.addColorStop(1, 'rgba(255,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, 128, 128); return new THREE.CanvasTexture(c); })();
+const core = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xffffff, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending })); scene.add(core);
+// radial scan beam (thin line)
+const beamG = new THREE.BufferGeometry(); beamG.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3));
+const beam = new THREE.Line(beamG, new THREE.LineBasicMaterial({ color: 0xff2a1f, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthTest: false })); scene.add(beam);
+
+const rt = new THREE.WebGLRenderTarget(1, 1, { samples: 4, type: THREE.HalfFloatType });
+const composer = new EffectComposer(renderer, rt);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), .55, .5, .2); composer.addPass(bloom);
+composer.addPass(new OutputPass());
+const post = new ShaderPass({ uniforms: { tDiffuse: { value: null }, uT: { value: 0 }, uGl: { value: 0 }, uRays: { value: 0 }, uFlash: { value: 0 }, uC: { value: new THREE.Vector2(.5, .5) }, uRes: { value: new THREE.Vector2(1, 1) } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }`,
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float uT, uGl, uRays, uFlash; uniform vec2 uC, uRes; varying vec2 vUv;
+    float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+    void main(){ vec2 uv = vUv; float k = floor(uT * 30.);
+      float sl = floor(uv.y * 60.), r = h(vec2(sl, k)); if (uGl > 0. && r > .76) uv.x += (h(vec2(sl + 3.1, k)) - .5) * .14 * uGl;
+      float ca = .0009 + uGl * .008 + length(vUv - uC) * .0025;
+      vec2 dir = normalize(vUv - uC + 1e-5);
+      vec3 c = vec3(texture2D(tDiffuse, uv + dir * ca).r, texture2D(tDiffuse, uv).g, texture2D(tDiffuse, uv - dir * ca).b);
+      if (uRays > 0.) { vec3 acc = vec3(0.); vec2 d = (uC - vUv) / 40.; vec2 p = vUv; float w = 1.;
+        for (int i = 0; i < 40; i++) { p += d; vec3 s = texture2D(tDiffuse, p).rgb; acc += max(s - .5, 0.) * w; w *= .955; }
+        c += acc * vec3(1., .35, .3) * uRays * .08; }
+      vec2 q = vUv - .5; c *= 1. - dot(q * vec2(1., .7), q * vec2(1., .7)) * 1.1;
+      c += (h(vUv * uRes + fract(uT * 7.31) * 91.) - .5) * .055;
+      c *= .97 + .03 * sin(vUv.y * uRes.y * 1.5);
+      c += vec3(1., .3, .25) * uFlash;
+      gl_FragColor = vec4(c, 1.); }` });
+composer.addPass(post);
+function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); composer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); bloom.resolution.set(w, h); post.uniforms.uRes.value.set(w * renderer.getPixelRatio(), h * renderer.getPixelRatio()); }
+addEventListener('resize', resize); resize();
+
+// ---------- HUD ----------
+const pad = (n, l) => String(n).padStart(l, '0');
+const LBL = [[14, 'l0'], [31, 'l1'], [47, 'l2']];
+const v3 = new THREE.Vector3();
+const CAPS = [[.25, 1.9, 'Algo despierta'], [3.0, 6.0, 'Calibrando'], [10.2, 13.6, 'Más adentro'], [16.95, 18.25, 'Te encontró']];
+function hud(t, frame, lockN, rots) {
+  const f = frame % FPS, s = Math.floor(t), ph = phase(t);
+  $('tc').textContent = `00:00:${pad(s, 2)}:${pad(Math.floor(f / 2), 2)}`; $('fr').textContent = pad(frame, 4);
+  $('ph').textContent = t > T_LOCK0 && t < T_BOOM ? 'Enfoque' : PH[ph];
+  $('seg').textContent = SEGS; $('th').textContent = (((rots[RED_LBL] % TAU) + TAU) % TAU).toFixed(3);
+  const fn = [22, 16, 11, 8, 5.6, 4, 2.8, 2, 1.4][Math.min(8, Math.floor(openAt(t) * 8.4))];
+  $('fn').textContent = 'f/' + fn;
+  $('st').textContent = t < 2 ? 'Buscando' : t < 9 ? 'Calibrando' : t < T_LOCK0 ? 'Rastreando' : t < T_BOOM ? 'Enfocado' : t < 19.6 ? 'Ruptura' : 'Eco';
+  $('zz').textContent = Math.abs(U.uZ.value[R - 1] - U.uZ.value[0]).toFixed(2); $('lk').textContent = pad(lockN, 2);
+  $('dl').textContent = (Math.sin(t * 3.1) * .02 * (t < T_LOCK0 ? 1 : 0) >= 0 ? '+' : '') + (Math.sin(t * 3.1) * .02 * (t < T_LOCK0 ? 1 : 0)).toFixed(3);
+  const W = innerWidth, H = innerHeight, lv = sstep(2.4, 3.2, t) * (1 - sstep(T_LOCK0 - .3, T_LOCK0, t));
+  for (const [ri, id] of LBL) { const g = RING[ri], a = rots[ri]; v3.set(Math.cos(a) * g.r * U.uRS.value[ri], Math.sin(a) * g.r * U.uRS.value[ri], U.uZ.value[ri]).project(camera);
+    const el = $(id), x = (v3.x * .5 + .5) * W, y = (-v3.y * .5 + .5) * H, inb = x > 40 && x < W - 150 && y > 110 && y < H - 120;
+    el.style.left = (x + 22) + 'px'; el.style.top = (y - 6) + 'px'; el.style.opacity = (inb ? lv : 0).toFixed(2);
+    el.innerHTML = `R${pad(ri, 2)} · <b>${((a * 180 / Math.PI) % 360 + 360).toFixed(1).padStart(5, '0')}°</b> · ${(g.r * U.uRS.value[ri]).toFixed(3)}`; }
+  let cap = '', co = 0; for (const [a, b, txt] of CAPS) if (t >= a - .1 && t < b + .3) { cap = txt; co = sstep(a, a + .35, t) * (1 - sstep(b - .05, b + .25, t)); }
+  const ce = $('cap'); ce.textContent = cap; ce.style.opacity = co.toFixed(3); ce.style.color = cap === 'Te encontró' ? 'var(--red)' : 'var(--w)';
+  const sg = $('sig'); sg.style.opacity = (sstep(19.6, 20.4, t) * (1 - sstep(21.4, 21.95, t))).toFixed(3);
+}
+const RED_LBL = KEEP;
+
+// ---------- frame ----------
+function frameAt(frame) {
+  const t = frame / FPS, ph = phase(t), op = openAt(t);
+  const rots = []; let lockN = 0;
+  for (let i = 0; i < R; i++) {
+    rots.push(ringRot(i, t)); U.uRot.value[i] = rots[i];
+    const g = RING[i];
+    // opening: rings expand with a ripple from the centre
+    U.uRS.value[i] = openAt(t - (i / R) * .09);
+    // depth: in act 3 the iris becomes a tunnel
+    const zs = sstep(9.0, 11.5, t) * (1 - sstep(T_LOCK0 - .4, T_LOCK0 + .5, t));
+    U.uZ.value[i] = zs * ((i / R - .5) * -7.5 + g.z * .8 + Math.sin(t * 1.3 + i * .4) * .15);
+    if (t > T_LOCK0 + .3 + (i / R) * .35) lockN++;
+  }
+  U.uT.value = t;
+  U.uBoom.value = t > T_BOOM ? 1 - Math.exp(-(t - T_BOOM) * 1.6) : 0;
+  U.uFade.value = t > T_BOOM ? Math.exp(-(t - T_BOOM) * 1.25) : 1;
+  U.uKeepFade.value = t > T_BOOM ? lerp(1, 1.6, sstep(T_BOOM, 19, t)) * (1 - sstep(21.2, 21.95, t)) : 1;
+  const frozen = t > T_LOCK1 && t < T_BOOM;
+  U.uSweep.value = t * 1.9 + Math.sin(t * .7) * .4; U.uSweepA.value = frozen ? 0 : t < 9 ? 1.4 : t < T_LOCK0 ? 2.2 : .6;
+  U.uFlick.value = ph === 2 && !frozen ? .25 * (hsh(Math.floor(t * 6)) > .6 ? 1 : 0) : 0;
+  // beam
+  const bA = U.uSweep.value, bL = 2.2 * op; beamG.attributes.position.array.set([0, 0, 0, Math.cos(bA) * bL, Math.sin(bA) * bL, 0]); beamG.attributes.position.needsUpdate = true;
+  beam.material.opacity = (frozen || t > T_BOOM ? 0 : t < 9 ? .5 : .25) * (1 - sstep(9, 10, t) * .5);
+  // core: a red pupil that breathes; flares at the lock
+  const pulse = .5 + .5 * Math.sin(t * 5.2);
+  let cs = .26 + pulse * .05 + op * .12, co = .75 + pulse * .2;
+  if (t > T_LOCK0) { const l = sstep(T_LOCK0, T_LOCK1, t); cs += l * .18; co += l * .3; }
+  if (t > T_BOOM) { cs *= 1 + Math.exp(-(t - T_BOOM) * 4) * 3; co *= Math.exp(-(t - T_BOOM) * 1.1); }
+  core.scale.setScalar(cs); core.material.opacity = Math.min(co, 1.6);
+  // post
+  const cut = x => Math.exp(-Math.pow((t - x) / .05, 2));
+  post.uniforms.uGl.value = cut(2.0) * .8 + cut(9.0) * 1.1 + cut(T_BOOM) * 1.4 + (ph === 2 && !frozen && hsh(Math.floor(t * 10) + 5) > .94 ? .4 : 0);
+  post.uniforms.uRays.value = sstep(T_LOCK0, T_LOCK1, t) * (t < T_BOOM ? 1 : Math.exp(-(t - T_BOOM) * 1.5)) * .8 + .2;
+  post.uniforms.uFlash.value = t > T_BOOM ? Math.exp(-(t - T_BOOM) * 14) * .25 : 0;
+  post.uniforms.uT.value = t;
+  bloom.strength = .55 + sstep(T_LOCK0, T_LOCK1, t) * .25 * (t < T_BOOM ? 1 : 0);
+  // camera: frontal → oblique tunnel → frontal for the mandala
+  const obl = sstep(9.0, 11.0, t) * (1 - sstep(T_LOCK0 - .6, T_LOCK0 + .3, t));
+  const yaw = obl * (.42 + Math.sin(t * .5) * .08), pit = obl * (.3 + Math.sin(t * .37) * .05);
+  let dist = lerp(9.2, 8.7, sstep(0, 9, t)) - obl * 2.6 - sstep(T_LOCK0, T_BOOM, t) * .5 + (t > T_BOOM ? sstep(T_BOOM, 21.9, t) * 1.2 : 0);
+  if (t < 2) dist -= (1 - expOut(t / 2)) * 1.6;
+  camera.position.set(Math.sin(yaw) * Math.cos(pit) * dist, Math.sin(pit) * dist, Math.cos(yaw) * Math.cos(pit) * dist);
+  camera.up.set(Math.sin(t * .23) * .04 * (frozen ? 0 : 1), 1, 0); camera.lookAt(0, 0, obl * -1.2);
+  v3.set(0, 0, 0).project(camera); post.uniforms.uC.value.set(v3.x * .5 + .5, v3.y * .5 + .5);
+  composer.render();
+  hud(t, frame, lockN, rots);
+}
+window.__frame = n => frameAt(n);
+window.__FRAMES = LOOP * FPS;
+if (!/[?&]frames/.test(location.search)) {
+  let t0 = performance.now(); const tick = () => { frameAt(Math.floor((performance.now() - t0) / 1000 * FPS) % (LOOP * FPS)); requestAnimationFrame(tick); }; tick();
+  // tap anywhere: render the score once and play it in sync with the loop
+  const hint = $('snd'); let ctx = null, buf = null, src = null, busy = false;
+  const start = () => { src = ctx.createBufferSource(); src.buffer = buf; src.loop = true; src.connect(ctx.destination); src.start(); t0 = performance.now(); hint.textContent = '[ Sonido · on ]'; };
+  addEventListener('pointerdown', async () => {
+    if (busy) return;
+    if (src) { src.stop(); src = null; hint.textContent = '[ Sonido · off ]'; return; }
+    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+    await ctx.resume();
+    if (!buf) { busy = true; hint.textContent = '[ Sintetizando… ]'; const b64 = await window.__renderAudio(); const bin = atob(b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); buf = await ctx.decodeAudioData(u.buffer); busy = false; }
+    start();
+  });
+}
+
+// ---------- sound: the machine's own clock (Autechre-like), rendered offline ----------
+window.__renderAudio = async () => {
+  const sr = 48000, ac = new OfflineAudioContext(2, sr * LOOP, sr);
+  let s = 27013; const r = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+  const out = ac.createGain(); out.gain.value = .7;
+  const comp = ac.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 5; comp.attack.value = .002; comp.release.value = .12;
+  const pk = ac.createBiquadFilter(); pk.type = 'peaking'; pk.frequency.value = 2400; pk.Q.value = .7; pk.gain.value = 8;
+  const sh = ac.createBiquadFilter(); sh.type = 'highshelf'; sh.frequency.value = 6000; sh.gain.value = 4;
+  const lo = ac.createBiquadFilter(); lo.type = 'lowshelf'; lo.frequency.value = 120; lo.gain.value = -1;
+  out.connect(lo); lo.connect(pk); pk.connect(sh); sh.connect(comp); comp.connect(ac.destination);
+  const rev = ac.createConvolver(); { const n = sr * 3.5, b = ac.createBuffer(2, n, sr); let q = 3; for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); for (let i = 0; i < n; i++) { q = (q * 16807) % 2147483647; d[i] = (q / 2147483647 * 2 - 1) * Math.pow(1 - i / n, 3.6); } } rev.buffer = b; }
+  const rg = ac.createGain(); rg.gain.value = .38; rev.connect(rg); rg.connect(out);
+  const crush = ac.createWaveShaper(); { const n = 4096, cu = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; cu[i] = Math.round(x * 5) / 5; } crush.curve = cu; } const cg = ac.createGain(); cg.gain.value = .7; crush.connect(cg); cg.connect(out);
+  const noise = ac.createBuffer(1, sr, sr); { const d = noise.getChannelData(0); let q = 9; for (let i = 0; i < d.length; i++) { q = (q * 16807) % 2147483647; d[i] = q / 2147483647 * 2 - 1; } }
+  const env = (g, t, a, p, d) => { g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(Math.max(p, .0002), t + a); g.gain.exponentialRampToValueAtTime(.0001, t + a + d); };
+  const pan = (node, p) => { const pn = ac.createStereoPanner(); pn.pan.value = clamp(p, -1, 1); node.connect(pn); return pn; };
+  const sendR = (n, v) => { const g = ac.createGain(); g.gain.value = v; n.connect(g); g.connect(rev); };
+  const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+  const fmHit = (t, f, ratio, idx, d, v, p, dest = out) => { const c = ac.createOscillator(), m = ac.createOscillator(), mg = ac.createGain(), g = ac.createGain();
+    c.frequency.value = f; m.frequency.value = f * ratio; mg.gain.setValueAtTime(f * idx, t); mg.gain.exponentialRampToValueAtTime(f * .01 + 1, t + d * .7);
+    m.connect(mg); mg.connect(c.frequency); env(g, t, .0006, v, d); c.connect(g); pan(g, p).connect(dest); sendR(g, .12); c.start(t); m.start(t); c.stop(t + d + .05); m.stop(t + d + .05); };
+  const kick = (t, v) => { const o = ac.createOscillator(), g = ac.createGain(); o.frequency.setValueAtTime(130 + r() * 30, t); o.frequency.exponentialRampToValueAtTime(36, t + .07); env(g, t, .001, .85 * v, .24); o.connect(g); g.connect(out); o.start(t); o.stop(t + .3); fmHit(t, 60, 1.41, 6, .03, .2 * v, 0); };
+  const combSnare = (t, v, p) => { const src = ac.createBufferSource(); src.buffer = noise; const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1800 + r() * 2200; f.Q.value = 1.2;
+    const g = ac.createGain(); env(g, t, .0008, .75 * v, .07 + r() * .05); const dl = ac.createDelay(.05); dl.delayTime.value = .0016 + r() * .004; const fb = ac.createGain(); fb.gain.value = .78;
+    src.connect(f); f.connect(g); g.connect(dl); dl.connect(fb); fb.connect(dl); const o = ac.createGain(); o.gain.value = .5; dl.connect(o); g.connect(o); pan(o, p).connect(out); sendR(o, .25); src.start(t, r() * .5); src.stop(t + .15); };
+  const click = (t, v, p, dest) => { const src = ac.createBufferSource(); src.buffer = noise; const f = ac.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 5000 + r() * 6000; const g = ac.createGain(); env(g, t, .0003, v * 3.2, .005 + r() * .01); src.connect(f); f.connect(g); pan(g, p).connect(dest || (r() < .4 ? crush : out)); src.start(t, r() * .5); src.stop(t + .03); };
+  const bass = (t, m, d, v) => { const c = ac.createOscillator(), mo = ac.createOscillator(), mg = ac.createGain(), g = ac.createGain(), f = ac.createBiquadFilter();
+    c.frequency.setValueAtTime(mtof(m + 1), t); c.frequency.exponentialRampToValueAtTime(mtof(m), t + .05); mo.frequency.value = mtof(m) * .5; mg.gain.setValueAtTime(mtof(m) * 3, t); mg.gain.exponentialRampToValueAtTime(mtof(m) * .2, t + d);
+    mo.connect(mg); mg.connect(c.frequency); f.type = 'lowpass'; f.frequency.value = 650; f.Q.value = 3; env(g, t, .004, .34 * v, d); c.connect(g); g.connect(f); f.connect(out); c.start(t); mo.start(t); c.stop(t + d + .1); mo.stop(t + d + .1); };
+  const grains = (t, f, n, gap, v, p) => { for (let i = 0; i < n; i++) fmHit(t + i * gap, f * (1 + (r() - .5) * .01), 2.76, 2.5, .025, v * (1 - i / n * .6), p + (r() - .5) * .3, crush); };
+  // 1. every ring step is a sound: grouped per grid tick, pitch from radius, pan from angle
+  const ticks = new Map();
+  RING.forEach((g, i) => g.steps.forEach(st => { const k = Math.round((st - .02) / GRID); if (!ticks.has(k)) ticks.set(k, []); ticks.get(k).push(i); }));
+  for (const [k, list] of ticks) {
+    const t = k * GRID + .02, ph = phase(t), n = list.length;
+    const jit = ph === 2 ? (r() - .5) * GRID * .3 : 0, tt = t + jit;
+    for (const i of list.slice(0, 3)) { const g = RING[i], p = Math.cos(ringRot(i, t)) * .9;
+      if (g.type === 1) click(tt, .07 + r() * .06, p);
+      else fmHit(tt, 300 + (1 - i / R) * 5200, [1.41, 2.76, 3.5][i % 3], 1.5 + r() * 2.5, .02 + r() * .05, .09 + r() * .06, p, r() < .3 ? crush : out); }
+    if (ph >= 1 && n >= 4 && r() < .8) kick(tt, .55 + Math.min(n, 8) * .05);
+    if (ph >= 1 && n === 3 && r() < .7) combSnare(tt, .55 + r() * .4, (r() - .5) * .8);
+    if (ph === 2 && r() < .09) grains(tt, 600 + r() * 2400, 5 + Math.floor(r() * 10), GRID / (2 + Math.floor(r() * 4)), .28, (r() - .5) * 1.6);
+  }
+  // 2. hats/clicks of the clock itself and a wandering FM bass
+  for (let g = 0; g * GRID < T_LOCK0; g++) { const t = g * GRID + .02, ph = phase(t);
+    if (ph >= 1 && euclid(5, 13, 0)[g % 13]) fmHit(t + GRID * .5, 6000 + r() * 2500, 1.41 + r(), 2, .015 + r() * .02, .1 + r() * .06, (r() - .5) * 1.6);
+    if (ph >= 1 && euclid(2, 7, 1)[g % 7] && r() < .85) bass(t, ph === 1 ? [31, 31, 34, 29][(g >> 4) % 4] : [26, 26, 29, 25, 33][(g >> 3) % 5], GRID * (2 + r() * 3), .9); }
+  // 3. aperture steps: low mechanical thuds
+  OPEN.forEach(([tk], k) => { if (!k) return; kick(tk, .9); fmHit(tk, 180, 1.41, 5, .2, .2, 0); click(tk + .01, .2, (r() - .5), out); });
+  // 4. drone: a dark cluster under the eye that opens with the aperture, then the lock
+  { const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = 5; f.frequency.setValueAtTime(110, 0); f.frequency.linearRampToValueAtTime(500, 7.5); f.frequency.linearRampToValueAtTime(1800, T_LOCK0); f.frequency.linearRampToValueAtTime(3600, T_LOCK1); f.frequency.setValueAtTime(3600, T_BOOM - .01); f.frequency.exponentialRampToValueAtTime(140, 21);
+    const g = ac.createGain(); g.gain.setValueAtTime(.0001, 0); g.gain.exponentialRampToValueAtTime(.08, 1.0); g.gain.setValueAtTime(.08, T_LOCK0); g.gain.linearRampToValueAtTime(.12, T_LOCK1); g.gain.exponentialRampToValueAtTime(.025, T_BOOM - .05); g.gain.setValueAtTime(.09, T_BOOM); g.gain.exponentialRampToValueAtTime(.0001, 21.9);
+    const tr = ac.createOscillator(), tg = ac.createGain(); tr.frequency.setValueAtTime(.5, 0); tr.frequency.linearRampToValueAtTime(9, T_LOCK0); tr.frequency.setValueAtTime(0, T_LOCK1); tg.gain.value = .03; tr.connect(tg); tg.connect(g.gain); tr.start(0); tr.stop(T_LOCK1);
+    for (const [m, d] of [[33, -6], [40, 5], [45, 0], [46, -4], [52, 7], [57, -8], [64, 3], [70, -2]]) { const o = ac.createOscillator(); o.type = m < 40 ? 'sawtooth' : 'triangle'; o.frequency.value = mtof(m); o.detune.value = d; o.connect(f); o.start(0); o.stop(22); }
+    f.connect(g); g.connect(out); sendR(g, .6); }
+  { const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = mtof(21); g.gain.setValueAtTime(.0001, 0); g.gain.exponentialRampToValueAtTime(.2, 2); g.gain.setValueAtTime(.2, T_LOCK0); g.gain.linearRampToValueAtTime(.32, T_BOOM - .05); g.gain.exponentialRampToValueAtTime(.0001, T_BOOM); o.connect(g); g.connect(out); o.start(0); o.stop(T_BOOM + .1); }
+  // 5. hook: the eye wakes up — a reversed swell into a hit at 0.25s, and act cuts
+  { const src = ac.createBufferSource(); src.buffer = noise; src.loop = true; const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 6; f.frequency.setValueAtTime(5000, 0); f.frequency.exponentialRampToValueAtTime(400, .9); const g = ac.createGain(); g.gain.setValueAtTime(.16, 0); g.gain.exponentialRampToValueAtTime(.0001, 1.1); src.connect(f); f.connect(g); g.connect(out); sendR(g, .6); src.start(0); src.stop(1.2); }
+  kick(0, 1); fmHit(0, 2400, 1.41, 9, .4, .2, 0);
+  for (const tc of [2.0, 9.0]) { grains(tc - .03, 1600, 14, .01, .5, 0); kick(tc, 1); const src = ac.createBufferSource(); src.buffer = noise; const f = ac.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 900; const g = ac.createGain(); env(g, tc, .001, .28, .1); src.connect(f); f.connect(g); g.connect(crush); src.start(tc, r() * .5); src.stop(tc + .15); }
+  // 6. the lock: every ring snaps — a cascade of metallic hits, inner to outer, then silence
+  for (let i = 0; i < R; i++) { const tt = T_LOCK0 + .3 + (i / R) * .35; fmHit(tt, 5200 - i * 70, 1.41, 3, .05, .07, (i % 2 ? -1 : 1) * (i / R), r() < .5 ? crush : out); }
+  fmHit(T_LOCK1, 55 * 8, 3.5, 2, 2.2, .12, 0); fmHit(T_LOCK1, 55 * 12, 3.5, 1.6, 2.0, .07, -.3); fmHit(T_LOCK1, 55 * 18, 3.5, 1.2, 1.8, .045, .3); kick(T_LOCK1, 1);
+  // 7. rupture and echo
+  { const src = ac.createBufferSource(); src.buffer = noise; src.loop = true; const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 3; f.frequency.setValueAtTime(600, T_BOOM - .9); f.frequency.exponentialRampToValueAtTime(8000, T_BOOM); const g = ac.createGain(); g.gain.setValueAtTime(.0001, T_BOOM - .9); g.gain.exponentialRampToValueAtTime(.1, T_BOOM - .02); g.gain.exponentialRampToValueAtTime(.0001, T_BOOM); src.connect(f); f.connect(g); g.connect(out); src.start(T_BOOM - .9); src.stop(T_BOOM + .05); }
+  { const o = ac.createOscillator(), g = ac.createGain(); o.frequency.setValueAtTime(140, T_BOOM); o.frequency.exponentialRampToValueAtTime(25, T_BOOM + 1.6); env(g, T_BOOM, .002, 1, 1.8); o.connect(g); g.connect(out); sendR(g, .5); o.start(T_BOOM); o.stop(T_BOOM + 2.1); }
+  { const src = ac.createBufferSource(); src.buffer = noise; const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(9000, T_BOOM); f.frequency.exponentialRampToValueAtTime(300, T_BOOM + 1.2); const g = ac.createGain(); env(g, T_BOOM, .002, .5, 1.3); src.connect(f); f.connect(g); g.connect(crush); sendR(g, .8); src.start(T_BOOM); src.stop(T_BOOM + 1); }
+  { let tc = T_BOOM + .05, gap = .012; while (tc < T_BOOM + 1.6) { fmHit(tc, 1200 + r() * 4000, 2.76, 2.5, .02, .1 * Math.exp(-(tc - T_BOOM) * 2), (r() - .5) * 1.8, crush); tc += gap; gap *= 1.09; } }
+  // the surviving ring keeps turning: slow pings
+  for (const [tt, m] of [[19.2, 81], [19.95, 76], [20.7, 84], [21.3, 69]]) fmHit(tt, mtof(m), 3.5, 1.4, 1.6, .05, (r() - .5) * .8, out);
+  const buf = await ac.startRendering();
+  const Ld = buf.getChannelData(0), Rd = buf.getChannelData(1), n = Ld.length, dv = new DataView(new ArrayBuffer(44 + n * 4));
+  const ws = (o, x) => { for (let i = 0; i < x.length; i++) dv.setUint8(o + i, x.charCodeAt(i)); };
+  ws(0, 'RIFF'); dv.setUint32(4, 36 + n * 4, true); ws(8, 'WAVE'); ws(12, 'fmt '); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 2, true); dv.setUint32(24, sr, true); dv.setUint32(28, sr * 4, true); dv.setUint16(32, 4, true); dv.setUint16(34, 16, true); ws(36, 'data'); dv.setUint32(40, n * 4, true);
+  for (let i = 0; i < n; i++) { dv.setInt16(44 + i * 4, clamp(Ld[i], -1, 1) * 32767, true); dv.setInt16(46 + i * 4, clamp(Rd[i], -1, 1) * 32767, true); }
+  const bytes = new Uint8Array(dv.buffer); let bin = ''; for (let i = 0; i < bytes.length; i += 32768) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 32768)); return btoa(bin);
+};
+</script>
+</body>
+</html>
