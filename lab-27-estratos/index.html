@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estratos · VØID_LOOM · Greyframe Labs</title>
+<meta name="description" content="VØID_LOOM · Estratos: veintiséis lecturas de un volumen que nadie ha visto entero. Cuando encajan, aparece.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&display=swap">
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden}
+body{display:flex;align-items:center;justify-content:center;}
+canvas{height:100vh;width:auto;max-width:100vw;aspect-ratio:9/16;object-fit:contain;display:block}
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920" role="img" aria-label="Estratos: veintiséis láminas escaneadas dentro de un prisma de alambre que al alinearse revelan un nudo verde"></canvas>
+
+<script>
+/* VØID_LOOM — núcleo compartido + firma animada (sting) de cierre.
+   Todo es determinista: el estado de cada frame depende solo de t.
+   Uso en cualquier lab:  VL.post(...), VL.drawSymbol(...), VL.stingState(t, opts)  */
+(function () {
+  const W = 1080, H = 1920;
+  const VL = { W, H };
+
+  // ---------- utilidades ----------
+  VL.clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+  VL.lerp = (a, b, k) => a + (b - a) * k;
+  VL.seg = (t, a, b) => VL.clamp((t - a) / (b - a));
+  VL.ease = {
+    inOut: (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2),
+    out: (x) => 1 - Math.pow(1 - x, 3),
+    outQuart: (x) => 1 - Math.pow(1 - x, 4),
+    outExpo: (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x)),
+    in: (x) => x * x * x,
+  };
+  VL.rng = function (seed) {
+    let a = seed >>> 0;
+    return function () {
+      a |= 0; a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  };
+  VL.hash = (a, b) => {
+    let h = Math.imul(a * 374761393 + b * 668265263, 1274126177);
+    h = (h ^ (h >>> 13)) * 1103515245;
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  };
+  VL.rgba = (hex, a) => {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  };
+  VL.INK = '#F2F0EA';
+  VL.GREY = '#8F8C86';
+  VL.ACCENTS = {
+    rojo: '#FF1A1A', cian: '#00E5FF', ambar: '#FFB000', verde: '#39FF6A',
+    violeta: '#8A2BFF', magenta: '#FF2BD6', blanco: '#F2F0EA',
+  };
+  VL.FONT = "'JetBrains Mono', ui-monospace, monospace";
+
+  // ---------- geometría del símbolo (viewBox 200 → pantalla) ----------
+  VL.geo = function (cx = 540, cy = 820, s = 3.0) {
+    const cols = [];
+    for (let k = 0; k < 7; k++) cols.push(cx + (k - 3) * 20 * s);
+    return {
+      cx, cy, s, cols,
+      R: 66 * s,                 // radio del vacío
+      top: cy - 86 * s, bottom: cy + 86 * s,
+      wA: [cx - 42 * s, cy + 42 * s], wB: [cx + 42 * s, cy - 42 * s],
+    };
+  };
+
+  // ---------- capas de post-procesado ----------
+  function mk(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+  let P = null;
+  function initPost() {
+    if (P) return P;
+    P = {};
+    P.scene = mk(W, H);
+    P.b1 = mk(W / 4, H / 4);
+    P.b2 = mk(W / 12, H / 12);
+    // grano: 6 texturas precalculadas
+    P.grain = [];
+    const r = VL.rng(77);
+    for (let g = 0; g < 6; g++) {
+      const c = mk(540, 960), x = c.getContext('2d');
+      const im = x.createImageData(540, 960);
+      for (let i = 0; i < im.data.length; i += 4) {
+        const v = (r() * 255) | 0;
+        im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255;
+      }
+      x.putImageData(im, 0, 0);
+      P.grain.push(c);
+    }
+    // scanlines
+    P.scan = mk(W, H);
+    const sx = P.scan.getContext('2d');
+    sx.fillStyle = 'rgba(0,0,0,0.22)';
+    for (let y = 0; y < H; y += 4) sx.fillRect(0, y, W, 1.5);
+    // viñeta
+    P.vig = mk(W, H);
+    const vx = P.vig.getContext('2d');
+    const gr = vx.createRadialGradient(W / 2, H * 0.45, H * 0.18, W / 2, H * 0.45, H * 0.72);
+    gr.addColorStop(0, 'rgba(0,0,0,0)');
+    gr.addColorStop(1, 'rgba(0,0,0,0.78)');
+    vx.fillStyle = gr; vx.fillRect(0, 0, W, H);
+    return P;
+  }
+  VL.sceneCtx = function () {
+    const p = initPost();
+    const c = p.scene.getContext('2d');
+    c.globalCompositeOperation = 'source-over';
+    c.globalAlpha = 1;
+    c.fillStyle = '#000'; c.fillRect(0, 0, W, H);
+    c.globalCompositeOperation = 'lighter';
+    return c;
+  };
+  // compone escena → salida con bloom, flash, scanlines, viñeta y grano
+  VL.post = function (out, frame, opt = {}) {
+    const p = initPost();
+    const bloom = opt.bloom ?? 1, flash = opt.flash ?? 0;
+    const b1 = p.b1.getContext('2d'), b2 = p.b2.getContext('2d');
+    b1.globalCompositeOperation = 'copy'; b1.filter = 'blur(3px)';
+    b1.drawImage(p.scene, 0, 0, p.b1.width, p.b1.height); b1.filter = 'none';
+    b2.globalCompositeOperation = 'copy'; b2.filter = 'blur(4px)';
+    b2.drawImage(p.b1, 0, 0, p.b2.width, p.b2.height); b2.filter = 'none';
+
+    out.globalCompositeOperation = 'source-over'; out.globalAlpha = 1;
+    out.drawImage(p.scene, 0, 0);
+    out.globalCompositeOperation = 'lighter';
+    out.imageSmoothingEnabled = true; out.imageSmoothingQuality = 'high';
+    out.globalAlpha = VL.clamp(0.85 * bloom, 0, 1); out.drawImage(p.b1, 0, 0, W, H);
+    out.globalAlpha = VL.clamp(0.9 * bloom, 0, 1); out.drawImage(p.b2, 0, 0, W, H);
+    if (bloom > 1.1) { out.globalAlpha = VL.clamp((bloom - 1) * 0.5, 0, 1); out.drawImage(p.b2, 0, 0, W, H); }
+    if (flash > 0) {
+      out.globalAlpha = 1;
+      out.fillStyle = opt.flashColor ? VL.rgba(opt.flashColor, flash * 0.22) : `rgba(242,240,234,${flash * 0.22})`;
+      out.fillRect(0, 0, W, H);
+    }
+    out.globalAlpha = 1;
+    out.globalCompositeOperation = 'source-over';
+    out.drawImage(p.scan, 0, 0);
+    out.drawImage(p.vig, 0, 0);
+    const g = p.grain[frame % p.grain.length];
+    out.globalCompositeOperation = 'overlay'; out.globalAlpha = 0.32;
+    out.drawImage(g, 0, 0, W, H);
+    out.globalCompositeOperation = 'lighter'; out.globalAlpha = 0.03;
+    out.drawImage(g, 0, 0, W, H);
+    out.globalAlpha = 1; out.globalCompositeOperation = 'source-over';
+  };
+
+  // ---------- primitivas de luz ----------
+  // línea luminosa: halo ancho + cuerpo + núcleo caliente
+  VL.lightLine = function (c, x1, y1, x2, y2, col, w, k = 1) {
+    c.lineCap = 'round';
+    const pass = (lw, a, cc) => { c.strokeStyle = VL.rgba(cc, a * k); c.lineWidth = lw; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); };
+    pass(w * 7, 0.06, col);
+    pass(w * 3.2, 0.16, col);
+    pass(w, 0.95, col);
+    pass(Math.max(1.2, w * 0.3), 0.55, '#FFFFFF');
+  };
+
+  // ---------- el símbolo ----------
+  // st: { threads, top, bottom, vib, open, ring, ringColor, weft, weftGlow, ghost, accent, ca, dim }
+  VL.drawSymbol = function (c, g, st, t) {
+    const acc = st.accent;
+    const R = g.R * (st.open || 0);
+    const thr = st.threads ?? 1;
+    const dim = st.dim ?? 1;
+    const top = st.top ?? g.top, bottom = st.bottom ?? g.bottom;
+    const vib = st.vib || 0;
+    const coreW = 3 * g.s;
+
+    // fantasma de los hilos dentro del vacío
+    if ((st.ghost || 0) > 0 && thr > 0) {
+      c.lineCap = 'butt';
+      c.strokeStyle = VL.rgba(VL.INK, 0.1 * st.ghost * thr * dim);
+      c.lineWidth = coreW;
+      c.beginPath();
+      for (const x of g.cols) { c.moveTo(x, Math.max(top, g.cy - R)); c.lineTo(x, Math.min(bottom, g.cy + R)); }
+      c.stroke();
+    }
+
+    // urdimbre: 7 hilos (con vibración de cuerda y corte del vacío)
+    if (thr > 0) {
+      const passes = [[coreW * 5, 0.05], [coreW * 2.2, 0.14], [coreW, 0.92], [coreW * 0.35, 0.45]];
+      for (let pi = 0; pi < passes.length; pi++) {
+        const [lw, a] = passes[pi];
+        c.lineCap = 'butt';
+        c.lineWidth = lw;
+        c.strokeStyle = pi === 3 ? `rgba(255,255,255,${a * thr * dim})` : VL.rgba(VL.INK, a * thr * dim);
+        c.beginPath();
+        for (let k = 0; k < 7; k++) {
+          const X = g.cols[k], dx = X - g.cx;
+          const h = R > Math.abs(dx) ? Math.sqrt(R * R - dx * dx) : 0;
+          const segs = h > 0 ? [[top, g.cy - h], [g.cy + h, bottom]] : [[top, bottom]];
+          for (const [ya, yb] of segs) {
+            if (yb - ya < 1) continue;
+            const n = vib > 0.3 ? 48 : 1;
+            for (let i = 0; i <= n; i++) {
+              const y = ya + (yb - ya) * (i / n);
+              const u = (y - top) / Math.max(1, bottom - top);
+              const off = vib * Math.sin(Math.PI * u) * Math.sin(t * 23 + k * 1.7 + u * 9.0) * (0.6 + 0.4 * Math.sin(k * 2.3 + t * 3));
+              if (i === 0) c.moveTo(X + off, y); else c.lineTo(X + off, y);
+            }
+          }
+        }
+        c.stroke();
+      }
+    }
+
+    // onda de choque del vacío
+    if (st.ring != null && st.ring >= 0 && st.ring < 1) {
+      const rr = g.R * (1 + 1.9 * VL.ease.out(st.ring));
+      const a = Math.pow(1 - st.ring, 2);
+      const rc = st.ringColor || acc;
+      c.strokeStyle = VL.rgba(rc, 0.9 * a); c.lineWidth = 10 * (1 - st.ring) + 1.5;
+      c.beginPath(); c.arc(g.cx, g.cy, rr, 0, Math.PI * 2); c.stroke();
+      c.strokeStyle = VL.rgba(VL.INK, 0.5 * a); c.lineWidth = 2;
+      c.beginPath(); c.arc(g.cx, g.cy, rr * 0.93, 0, Math.PI * 2); c.stroke();
+    }
+
+    // trama: el hilo de color
+    if ((st.weft || 0) > 0) {
+      const p = st.weft;
+      const [ax, ay] = g.wA, [bx, by] = g.wB;
+      const hx = VL.lerp(ax, bx, p), hy = VL.lerp(ay, by, p);
+      const gk = (st.weftGlow ?? 1) * dim;
+      const ww = 5 * g.s;
+      const ca = st.ca || 0;
+      if (ca > 0.5) {
+        VL.lightLine(c, ax - ca, ay, hx - ca, hy, '#FF2A2A', ww * 0.8, 0.45 * gk);
+        VL.lightLine(c, ax + ca, ay, hx + ca, hy, '#2AB8FF', ww * 0.8, 0.45 * gk);
+      }
+      VL.lightLine(c, ax, ay, hx, hy, acc, ww, gk);
+      if (p < 1) { // cabeza incandescente
+        const gr = c.createRadialGradient(hx, hy, 0, hx, hy, 90);
+        gr.addColorStop(0, 'rgba(255,255,255,0.95)');
+        gr.addColorStop(0.15, VL.rgba(acc, 0.8));
+        gr.addColorStop(1, VL.rgba(acc, 0));
+        c.fillStyle = gr; c.beginPath(); c.arc(hx, hy, 90, 0, Math.PI * 2); c.fill();
+      }
+    }
+  };
+
+  // ---------- texto ----------
+  const GLYPHS = 'Ø#/\\|_=+<>01X:;*%';
+  VL.decodeText = function (c, str, x, y, opt) {
+    const size = opt.size || 40, spacing = opt.spacing ?? 0.42, prog = opt.prog ?? 1;
+    const alpha = opt.alpha ?? 1, align = opt.align || 'center';
+    const weight = opt.weight || 300, t = opt.t || 0, seed = opt.seed || 1;
+    c.font = `${weight} ${size}px ${VL.FONT}`;
+    c.textBaseline = 'middle'; c.textAlign = 'left';
+    const adv = c.measureText('M').width + size * spacing;
+    const total = adv * str.length - size * spacing;
+    let x0 = align === 'center' ? x - total / 2 : align === 'right' ? x - total : x;
+    const n = str.length;
+    for (let i = 0; i < n; i++) {
+      const ch = str[i];
+      if (ch === ' ') continue;
+      const ri = VL.clamp((prog * (n + 3) - i) / 3);
+      if (ri <= 0) continue;
+      let draw = ch;
+      if (ri < 1) draw = GLYPHS[Math.floor(VL.hash(i + seed * 31, Math.floor(t * 24)) * GLYPHS.length)];
+      const isAcc = opt.accentChar && ch === opt.accentChar && ri >= 1;
+      const col = isAcc ? opt.accent : (opt.color || VL.INK);
+      c.font = `${isAcc ? 600 : weight} ${size}px ${VL.FONT}`;
+      c.fillStyle = VL.rgba(col, alpha * (ri < 1 ? 0.55 + 0.45 * ri : 1));
+      c.fillText(draw, x0 + i * adv, y);
+    }
+  };
+
+  // HUD de esquinas (telemetría)
+  VL.hud = function (c, t, opt = {}) {
+    const a = opt.alpha ?? 1;
+    if (a <= 0) return;
+    c.font = `400 22px ${VL.FONT}`;
+    c.textBaseline = 'middle';
+    c.fillStyle = VL.rgba(VL.GREY, 0.9 * a);
+    const fps = 30, tt = Math.max(0, t);
+    const tc = [Math.floor(tt / 3600), Math.floor(tt / 60) % 60, Math.floor(tt) % 60, Math.floor((tt % 1) * fps)]
+      .map((v) => String(v).padStart(2, '0')).join(':');
+    c.textAlign = 'left'; c.fillText(opt.tl || 'VØID_LOOM / SYS.01', 72, 120);
+    c.textAlign = 'right'; c.fillText(tc, W - 72, 120);
+    c.textAlign = 'left'; c.fillText(opt.bl || 'GREYFRAME LABS', 72, 1640);
+    c.textAlign = 'right'; c.fillText(opt.br || 'SEÑAL 07/07', W - 72, 1640);
+    // corchetes de encuadre
+    c.strokeStyle = VL.rgba(VL.GREY, 0.55 * a); c.lineWidth = 2;
+    const m = 48, L = 36;
+    c.beginPath();
+    c.moveTo(m, m + L); c.lineTo(m, m); c.lineTo(m + L, m);
+    c.moveTo(W - m - L, m); c.lineTo(W - m, m); c.lineTo(W - m, m + L);
+    c.moveTo(m, 1700 - L); c.lineTo(m, 1700); c.lineTo(m + L, 1700);
+    c.moveTo(W - m - L, 1700); c.lineTo(W - m, 1700); c.lineTo(W - m, 1700 - L);
+    c.stroke();
+  };
+
+  // ---------- cierre: logotipo + firma ----------
+  VL.drawSignature = function (c, g, st, t) {
+    if ((st.wordAlpha || 0) > 0)
+      VL.decodeText(c, 'VØID_LOOM', g.cx, g.bottom + 150, {
+        size: 70, spacing: 0.42, prog: st.word, alpha: st.wordAlpha, t, seed: 3,
+        accentChar: 'Ø', accent: st.accent, weight: 300,
+      });
+    if ((st.tag || 0) > 0)
+      VL.decodeText(c, 'SEÑAL · RUIDO · MOTION EXPERIMENTAL', g.cx, g.bottom + 240, {
+        size: 22, spacing: 0.5, prog: VL.clamp(st.tag * 1.6), alpha: st.tag, t, seed: 5, color: VL.GREY, weight: 400,
+      });
+    const lines = st.creditLines || ['GREYFRAME LABS', 'greyframelab.github.io/labs'];
+    if ((st.credit || 0) > 0) {
+      VL.decodeText(c, lines[0], g.cx, 1500, { size: 24, spacing: 0.34, prog: VL.clamp(st.credit * 1.5), alpha: st.credit, t, seed: 7, color: '#BDBAB3', weight: 400 });
+      if (lines[1]) VL.decodeText(c, lines[1], g.cx, 1550, { size: 22, spacing: 0.06, prog: VL.clamp(st.credit * 1.5 - 0.3), alpha: st.credit * 0.9, t, seed: 9, color: VL.GREY, weight: 400 });
+    }
+  };
+
+  // ---------- STING: firma animada reutilizable (5.5 s) ----------
+  // Llamar con t local (0 → VL.STING_DUR). opts: { accent, creditLines, skipDrop }
+  VL.STING_DUR = 5.5;
+  VL.stingState = function (t, opts = {}) {
+    const g = opts.geo || VL.geo();
+    const e = VL.ease, sg = VL.seg;
+    const drop = opts.skipDrop ? 1 : e.out(sg(t, 0.0, 0.7));
+    const tOpen = 0.75, tWeft = 1.05;
+    const out = 1 - e.inOut(sg(t, 4.7, 5.5));
+    return {
+      accent: opts.accent || VL.ACCENTS.rojo,
+      creditLines: opts.creditLines,
+      threads: drop * out,
+      top: VL.lerp(g.cy, g.top, drop), bottom: VL.lerp(g.cy, g.bottom, drop),
+      vib: 14 * (1 - sg(t, 0.2, 1.6)) * (t > 0.2 ? 1 : 0),
+      open: e.outExpo(sg(t, tOpen, tOpen + 0.35)),
+      ring: t >= tOpen ? sg(t, tOpen, tOpen + 0.9) : -1,
+      weft: e.outQuart(sg(t, tWeft, tWeft + 0.28)),
+      weftGlow: (1 + 0.12 * Math.sin(t * 2.4)) * VL.clamp(out + (1 - sg(t, 4.7, 5.4)) * 0.6),
+      ghost: sg(t, 1.2, 2.0),
+      ca: 10 * (1 - sg(t, tWeft, tWeft + 0.5)) * (t >= tWeft ? 1 : 0),
+      word: sg(t, 1.5, 2.6), wordAlpha: sg(t, 1.5, 1.7) * out,
+      tag: sg(t, 2.6, 3.2) * out,
+      credit: sg(t, 3.0, 3.6) * out,
+      flash: Math.max(t >= tOpen ? 1 - sg(t, tOpen, tOpen + 0.5) : 0, t >= tWeft ? 0.7 * (1 - sg(t, tWeft, tWeft + 0.45)) : 0),
+    };
+  };
+  // dibuja el sting completo en un contexto de escena
+  VL.drawSting = function (c, t, opts = {}) {
+    const g = opts.geo || VL.geo();
+    const st = VL.stingState(t, opts);
+    VL.drawSymbol(c, g, st, t);
+    VL.drawSignature(c, g, st, t);
+    return st;
+  };
+
+  window.VL = VL;
+})();
+
+</script>
+<script>
+/* VØID_LOOM — Lab 27 · Estratos (24,5 s, 9:16). Determinista y sin estado: renderFrame(t, frame).
+   Un volumen escaneado capa a capa. Cada lámina es una lectura distinta de algo que no se ve.
+   Cuando encajan, aparece lo que había dentro. */
+(function () {
+  const VL = window.VL, W = VL.W, H = VL.H, e = VL.ease, sg = VL.seg, clamp = VL.clamp, lerp = VL.lerp;
+  const ACC = VL.ACCENTS.verde;
+  const g = VL.geo();
+  const FPS = 60;
+  const T = { scan0: 1.6, scan1: 7.0, split: 7.0, tense: 9.2, freeze: 11.6, snap: 12.2, collapse: 16.6, sting: 19.0 };
+  const DUR = T.sting + VL.STING_DUR;
+  window.DURATION = DUR; window.FPS = FPS;
+  const NS = 26;                       // láminas
+  const PH = 1.85;                     // media altura del prisma
+  const sliceY0 = (i) => lerp(-PH * 0.88, PH * 0.88, i / (NS - 1));
+  const hsh = VL.hash;
+
+  // ---------------------------------------------------------------- matrices
+  const m4 = {
+    persp(fy, a, n, f) { const t = 1 / Math.tan(fy / 2); return [t / a, 0, 0, 0, 0, t, 0, 0, 0, 0, (f + n) / (n - f), -1, 0, 0, 2 * f * n / (n - f), 0]; },
+    look(eye, tg, up) {
+      const z = nrm(sub(eye, tg)), x = nrm(cross(up, z)), y = cross(z, x);
+      return [x[0], y[0], z[0], 0, x[1], y[1], z[1], 0, x[2], y[2], z[2], 0, -dot(x, eye), -dot(y, eye), -dot(z, eye), 1];
+    },
+    mul(a, b) { const o = new Array(16).fill(0); for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) for (let k = 0; k < 4; k++) o[c * 4 + r] += a[k * 4 + r] * b[c * 4 + k]; return o; },
+  };
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const nrm = (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+  const xf = (m, p) => { const x = p[0], y = p[1], z = p[2]; const w = m[3] * x + m[7] * y + m[11] * z + m[15];
+    return [(m[0] * x + m[4] * y + m[8] * z + m[12]) / w, (m[1] * x + m[5] * y + m[9] * z + m[13]) / w, w]; };
+
+  // ---------------------------------------------------------------- WebGL: láminas
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const gl = cv.getContext('webgl2', { alpha: false, antialias: true, preserveDrawingBuffer: true });
+  const VS = `#version 300 es
+  in vec2 aPos; uniform mat4 uMVP; uniform float uY, uRot, uScale; out vec2 vP;
+  void main(){ vP = aPos; float c = cos(uRot), s = sin(uRot);
+    vec2 q = mat2(c, -s, s, c) * aPos * uScale;
+    gl_Position = uMVP * vec4(q.x, uY, q.y, 1.); }`;
+  const FS = `#version 300 es
+  precision highp float;
+  in vec2 vP; out vec4 o;
+  uniform float uData, uY, uYk, uTime, uScan, uReveal, uHint, uMode, uAlpha, uGlitch, uWave, uSeed;
+  const vec3 G = vec3(0.224, 1.0, 0.416);
+  const vec3 INK = vec3(0.95, 0.94, 0.92);
+  float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7)) + uSeed) * 43758.5453); }
+  float n2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f);
+    return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
+  float fbm(vec2 p){ float s = 0., a = .5; for (int i = 0; i < 5; i++){ s += a*n2(p); p *= 2.03; a *= .5; } return s; }
+  // nudo de trébol: distancia de (x, uYk, z) al tubo
+  float knot(vec2 p){
+    float d = 1e3;
+    for (int i = 0; i < 72; i++){
+      float t = float(i) / 72. * 6.2832;
+      vec3 k = vec3(0.3*(sin(t) + 2.*sin(2.*t)), -sin(3.*t)*1.55, 0.3*(cos(t) - 2.*cos(2.*t)));
+      vec3 q = vec3(p.x, uYk, p.y) - k;
+      d = min(d, dot(q, q));
+    }
+    return sqrt(d) - 0.115;
+  }
+  float line(float v, float w){ return 1. - smoothstep(0., w, abs(v)); }
+  void main(){
+    vec2 p = vP;                                  // -1..1 en la lámina
+    float edge = max(abs(p.x), abs(p.y));
+    // barrido del escáner: la lámina se dibuja a medida que pasa la luz
+    float sweep = p.y * 0.5 + 0.5;
+    float vis = 1. - smoothstep(uScan, uScan + 0.02, 1. - sweep);
+    float lead = exp(-pow((1. - sweep - uScan) / 0.012, 2.)) * step(0.001, uScan) * step(uScan, 0.999);
+    // glitch: desplazamiento por bandas
+    float gb = floor(p.y * 14. + floor(uTime * 24.));
+    p.x += (h(vec2(gb, uSeed)) - .5) * 0.18 * uGlitch * step(.6, h(vec2(gb, 3.1)));
+    vec2 q = p * 1.15;
+    float c = 0.;
+    float nf = fbm(q * 1.7 + vec2(uY * 1.3, -uY));
+    if (uMode < .5) {                               // curvas de nivel
+      float v = nf * 14. + uTime * 0.25;
+      c = line(fract(v) - .5, 0.06) * 0.55 + line(fract(v * .2) - .5, 0.03) * 0.5;
+    } else if (uMode < 1.5) {                       // nube de puntos
+      vec2 gq = q * 46.; vec2 gi = floor(gq), gf = fract(gq) - .5;
+      float r = 0.08 + 0.32 * smoothstep(.35, .75, fbm(gi * .07 + uY));
+      c = smoothstep(r, r - .12, length(gf)) * 0.9;
+    } else if (uMode < 2.5) {                       // raster de líneas
+      float row = floor(q.y * 70.);
+      float k = smoothstep(.4, .7, fbm(vec2(q.x * 3., row * .11 + uY)));
+      c = line(fract(q.y * 70.) - .5, .18) * k * 0.85;
+    } else {                                        // celdas
+      vec2 gq = q * 6.; vec2 gi = floor(gq), gf = fract(gq); float d1 = 9., d2 = 9.;
+      for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+        vec2 b = vec2(i, j), pt = b + vec2(h(gi + b), h(gi + b + 7.)) - gf; float d = dot(pt, pt);
+        if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) d2 = d; }
+      c = line(sqrt(d2) - sqrt(d1), 0.05) * 0.75;
+    }
+    // la forma oculta
+    float k = (uHint + uReveal > 0.001) ? knot(vP) : 1.0;
+    float inside = 1. - smoothstep(-0.005, 0.005, k);
+    float rim = line(k, 0.018);
+    vec3 col = INK * c * (0.35 + 0.65 * vis) * uData;
+    col += INK * rim * uHint * 0.4;
+    col = mix(col, G * (c * 0.9 + 0.16), inside * uReveal);
+    col += G * rim * uReveal * (1.25 + 1.4 * uWave);
+    col += G * inside * uReveal * 0.25 * uWave;
+    // marco de la lámina
+    col += INK * line(edge - 0.995, 0.006) * 0.3;
+    col += INK * (line(abs(p.x) - .995, .006) + line(abs(p.y) - .995, .006)) * step(.9, edge) * 0.0;
+    col *= vis;
+    col += mix(INK, G, uReveal) * lead * 1.4;
+    col *= uAlpha * (1. - smoothstep(1.0, 1.02, edge));
+    o = vec4(col, 1.);
+  }`;
+  const sh = (t, s) => { const x = gl.createShader(t); gl.shaderSource(x, s); gl.compileShader(x); if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(x)); return x; };
+  const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FS));
+  gl.bindAttribLocation(pr, 0, 'aPos'); gl.linkProgram(pr);
+  if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr));
+  gl.useProgram(pr);
+  const U = {}; ['uData', 'uMVP', 'uY', 'uYk', 'uRot', 'uScale', 'uTime', 'uScan', 'uReveal', 'uHint', 'uMode', 'uAlpha', 'uGlitch', 'uWave', 'uSeed'].forEach((n) => U[n] = gl.getUniformLocation(pr, n));
+  const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); gl.disable(gl.DEPTH_TEST);
+
+  // ---------------------------------------------------------------- guion
+  const SEED = Array.from({ length: NS }, (_, i) => hsh(i, 27) * 100);
+  const ROT = Array.from({ length: NS }, (_, i) => (hsh(i, 5) - 0.5) * 2);
+  function state(t) {
+    const frozen = t >= T.freeze && t < T.snap;
+    const tt = frozen ? T.freeze : t;
+    const a = t - T.snap;
+    const ten = sg(tt, T.tense, T.freeze);
+    // cámara
+    const pull = e.inOut(sg(t, 0, 6.5));
+    const az = 0.7 + tt * 0.09 + (a > 0 ? 0.12 * e.out(sg(a, 0, 6)) : 0);
+    let dist = lerp(2.3, 9.2, pull) + (a > 0 ? -0.6 * Math.exp(-a * 3) : 0);
+    const el = lerp(0.16, 0.62, pull) + 0.05 * Math.sin(tt * 0.3);
+    const tgtY = lerp(0.35, 0, pull);
+    let eye = [Math.cos(az) * Math.cos(el) * dist, tgtY + Math.sin(el) * dist, Math.sin(az) * Math.cos(el) * dist];
+    let sh = 0; if (a > 0 && a < 1) sh = 0.06 * Math.exp(-a * 5); if (!frozen) sh += 0.012 * ten * ten;
+    const tg = [(hsh(Math.floor(t * 60), 1) - .5) * sh, tgtY + (hsh(Math.floor(t * 60), 2) - .5) * sh, 0];
+    // láminas
+    const split = e.inOut(sg(tt, T.split, T.tense + 1)) * (a > 0 ? 1 - e.outQuart(sg(a, 0, 0.22)) : 1);
+    const coll = e.in(sg(t, T.collapse, T.sting - 0.3));
+    const slices = [];
+    for (let i = 0; i < NS; i++) {
+      const y0 = sliceY0(i);
+      // la nube se abre (vista explosionada) y se cierra de golpe
+      let y = y0 * (1 + 0.32 * split);
+      y = lerp(y, 0, coll);
+      const scanP = clamp((tt - T.scan0 - (NS - 1 - i) * ((T.scan1 - T.scan0 - 0.6) / NS)) / 0.6);
+      // el gancho: la lámina central ya se está escribiendo en el segundo 0
+      const hookI = 14;
+      let scan = i === hookI ? Math.max(clamp(0.35 + tt / 1.4), scanP) : scanP;
+      let rot = ROT[i] * (0.9 * split + 0.25 * ten * Math.sin(tt * (1.3 + i * 0.37)));
+      if (a > 0) rot *= 1 - e.outQuart(sg(a, 0, 0.22));
+      const rev = a > 0 ? e.out(sg(a, 0.0, 0.15 + i * 0.006)) : 0;
+      const wave = a > 0 ? Math.max(0, Math.sin((a * 2.1 - i * 0.08) * Math.PI)) ** 3 : 0;
+      const hint = 0.18 * sg(tt, T.split + 0.5, T.tense) + (frozen ? 0.9 : 0.25 * ten);
+      const glitch = frozen ? 0 : (ten > 0 ? (hsh(i, Math.floor(tt * 14)) < 0.25 * ten ? 1 : 0) : 0) + (i === hookI && tt < 1.6 ? (hsh(i, Math.floor(tt * 20)) < 0.2 ? 0.6 : 0) : 0);
+      let alpha = (1 - coll * 0.85) * (frozen ? 0.35 : 1);
+      alpha *= 1 - sg(t, T.sting - 0.5, T.sting + 0.3);
+      slices.push({ i, y, yk: y0, rot, scan, rev, wave, hint: frozen ? 0.9 : hint, glitch, alpha, scale: 1 - 0.35 * coll });
+    }
+    return { eye, tg, slices, a, frozen, ten, coll };
+  }
+
+  // ---------------------------------------------------------------- dibujo
+  const aspect = W / H;
+  function draw(s, t) {
+    const P = m4.persp(0.62, aspect, 0.1, 60), V = m4.look(s.eye, s.tg, [0, 1, 0]), M = m4.mul(P, V);
+    gl.viewport(0, 0, W, H); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.uniformMatrix4fv(U.uMVP, false, new Float32Array(M));
+    gl.uniform1f(U.uTime, s.frozen ? T.freeze : t);
+    gl.uniform1f(U.uData, lerp(0.62, 0.13, sg(t, 2.5, 8.0)) * (t > T.snap ? lerp(1, 1.6, sg(t, T.snap, T.snap + 2)) : 1));
+    for (const L of s.slices) {
+      if (L.alpha < 0.005) continue;
+      gl.uniform1f(U.uY, L.y); gl.uniform1f(U.uYk, L.yk); gl.uniform1f(U.uRot, L.rot); gl.uniform1f(U.uScale, L.scale);
+      gl.uniform1f(U.uScan, L.scan); gl.uniform1f(U.uReveal, L.rev); gl.uniform1f(U.uHint, L.hint);
+      gl.uniform1f(U.uMode, L.i % 4); gl.uniform1f(U.uAlpha, L.alpha); gl.uniform1f(U.uGlitch, L.glitch);
+      gl.uniform1f(U.uWave, L.wave); gl.uniform1f(U.uSeed, SEED[L.i]);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
+    return M;
+  }
+  // prisma de alambre, marcas y barrido del escáner (2D sobre la proyección)
+  function overlay(c, s, M, t) {
+    const pj = (p) => { const r = xf(M, p); return [(r[0] * 0.5 + 0.5) * W, (1 - (r[1] * 0.5 + 0.5)) * H]; };
+    const a = s.a, k = (1 - s.coll) * (1 - sg(t, T.sting - 0.5, T.sting + 0.2));
+    const hY = PH * (1 + 0.3 * e.inOut(sg(t, T.split, T.tense + 1)) * (a > 0 ? 1 - e.outQuart(sg(a, 0, 0.22)) : 1));
+    const C = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+    c.lineWidth = 1.2; c.strokeStyle = VL.rgba(VL.INK, 0.28 * k);
+    c.beginPath();
+    for (const yy of [-hY, hY]) { C.forEach(([x, z], j) => { const p = pj([x * 1.06, yy, z * 1.06]); if (j === 0) c.moveTo(p[0], p[1]); else c.lineTo(p[0], p[1]); }); const p0 = pj([C[0][0] * 1.06, yy, C[0][1] * 1.06]); c.lineTo(p0[0], p0[1]); }
+    for (const [x, z] of C) { const p = pj([x * 1.06, -hY, z * 1.06]), q = pj([x * 1.06, hY, z * 1.06]); c.moveTo(p[0], p[1]); c.lineTo(q[0], q[1]); }
+    c.stroke();
+    // marcas de medida en una arista
+    c.strokeStyle = VL.rgba(VL.INK, 0.35 * k); c.beginPath();
+    for (let j = 0; j <= 36; j++) { const yy = lerp(-hY, hY, j / 36), L = j % 6 === 0 ? 0.09 : 0.04; const p = pj([1.06, yy, 1.06]), q = pj([1.06 + L, yy, 1.06]); c.moveTo(p[0], p[1]); c.lineTo(q[0], q[1]); }
+    c.stroke();
+    // plano del escáner
+    const sc = (t - T.scan0) / (T.scan1 - T.scan0);
+    if (sc > -0.05 && sc < 1.05) {
+      const yy = lerp(PH * 0.95, -PH * 0.95, clamp(sc));
+      const al = Math.sin(Math.PI * clamp(sc)) ** 0.4;
+      c.fillStyle = VL.rgba(VL.INK, 0.06 * al); c.strokeStyle = VL.rgba(VL.INK, 0.8 * al); c.lineWidth = 2;
+      c.beginPath(); C.forEach(([x, z], j) => { const p = pj([x * 1.12, yy, z * 1.12]); if (j === 0) c.moveTo(p[0], p[1]); else c.lineTo(p[0], p[1]); }); c.closePath(); c.fill(); c.stroke();
+    }
+    // columna verde que une la forma en el encaje
+    if (a > 0 && a < 4) {
+      const kk = Math.exp(-a * 1.4);
+      const top = pj([0, hY, 0]), bot = pj([0, -hY, 0]);
+      const gr = c.createLinearGradient(top[0], top[1], bot[0], bot[1]);
+      gr.addColorStop(0, VL.rgba(ACC, 0)); gr.addColorStop(0.5, VL.rgba(ACC, 0.16 * kk)); gr.addColorStop(1, VL.rgba(ACC, 0));
+      c.strokeStyle = gr; c.lineWidth = 40 * kk + 4; c.beginPath(); c.moveTo(top[0], top[1]); c.lineTo(bot[0], bot[1]); c.stroke();
+    }
+  }
+
+  let out = null;
+  window.renderFrame = function (t, frame) {
+    if (!out) out = document.getElementById('c').getContext('2d');
+    const c = VL.sceneCtx();
+    const s = state(t), ts = t - T.sting;
+    if (ts < 0.4) {
+      const M = draw(s, t);
+      c.drawImage(cv, 0, 0);
+      overlay(c, s, M, t);
+    }
+    let bloom = 0.7 + 0.3 * s.ten, flash = 0, flashColor;
+    if (s.frozen) bloom = 0.55;
+    if (s.a >= 0 && ts < 0) { flash = 0.55 * Math.max(0, 1 - s.a / 0.3); flashColor = s.a < 0.04 ? ACC : undefined; bloom = 0.75 + 0.55 * Math.exp(-s.a * 2.5); }
+    if (ts >= 0) { const st = VL.drawSting(c, ts, { accent: ACC }); flash = st.flash; bloom = 0.8 + 0.5 * st.flash; }
+    VL.post(out, frame, { bloom, flash, flashColor });
+  };
+})();
+
+</script>
+<script src="../shared/motion-timeline.js"></script>
+<script>
+(async () => {
+  await Promise.race([Promise.all([300, 400, 600].map((w) => document.fonts.load(`${w} 40px 'JetBrains Mono'`, 'VØID_LOOMÑ'))), new Promise((r) => setTimeout(r, 2500))]);
+  MotionTimeline.mount({
+    duration: window.DURATION,
+    render: (t) => window.renderFrame(t, Math.floor(t * 60)),
+    acts: [[0, 'LECTURA'], [1.6, 'ESCANEO'], [7.0, 'APERTURA'], [9.2, 'TENSIÓN'], [11.6, 'QUIETUD'], [12.2, 'ENCAJE'], [16.6, 'COLAPSO'], [19.0, 'FIRMA']],
+    accent: '#39FF6A',
+    audio: 'estratos.m4a',
+  });
+})();
+</script>
+</body>
+</html>
