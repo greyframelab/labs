@@ -6,6 +6,7 @@ Experiments in UI, motion and creative coding for games, apps and interfaces.
 
 | # | Lab | Category |
 |---|-----|----------|
+| 27 | [Estratos](lab-27-estratos/) | Motion |
 | 26 | [Masa](lab-26-masa/) | Motion |
 | 25 | [Iris](lab-25-iris/) | Motion |
 | 24 | [Turntable](lab-24-turntable/) | Creative Coding |
