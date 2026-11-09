@@ -10,20 +10,36 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&display=swap">
 <style>
 html,body{margin:0;height:100%;background:#000;overflow:hidden}
-body{display:flex;align-items:center;justify-content:center;}
-canvas{height:100vh;width:auto;max-width:100vw;aspect-ratio:9/16;object-fit:contain;display:block}
+canvas{width:100vw;height:100vh;display:block}
 </style>
 </head>
 <body>
 <canvas id="c" width="1080" height="1920" role="img" aria-label="Estratos: veintiséis láminas escaneadas dentro de un prisma de alambre que al alinearse revelan un nudo verde"></canvas>
+<script>
+// web: el lienzo ocupa toda la pantalla (apaisado en escritorio, vertical en móvil); ?render = 1080×1920 para el vídeo
+(function () {
+  if (new URLSearchParams(location.search).has('render')) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), w = innerWidth * dpr, h = innerHeight * dpr;
+  const k = Math.min(1, 1920 / Math.max(w, h));
+  window.VL_SIZE = [Math.round(w * k), Math.round(h * k)];
+  const c = document.getElementById('c'); c.width = window.VL_SIZE[0]; c.height = window.VL_SIZE[1];
+  const r0 = innerWidth / innerHeight; let tm;
+  addEventListener('resize', () => { clearTimeout(tm); tm = setTimeout(() => { const r = innerWidth / innerHeight; if (Math.abs(r - r0) / r0 > 0.12) location.reload(); }, 400); });
+})();
+</script>
 
 <script>
 /* VØID_LOOM — núcleo compartido + firma animada (sting) de cierre.
    Todo es determinista: el estado de cada frame depende solo de t.
    Uso en cualquier lab:  VL.post(...), VL.drawSymbol(...), VL.stingState(t, opts)  */
 (function () {
-  const W = 1080, H = 1920;
+  // tamaño del lienzo: 1080×1920 para el vídeo; la web puede fijar window.VL_SIZE = [w, h] antes de cargar
+  const W = (window.VL_SIZE && window.VL_SIZE[0]) || 1080, H = (window.VL_SIZE && window.VL_SIZE[1]) || 1920;
   const VL = { W, H };
+  // marco virtual de la firma (1080×1920), centrado y escalado dentro del lienzo real
+  VL.FRAME = (function () { const k = Math.min(W / 1080, H / 1920); return { k, ox: (W - 1080 * k) / 2, oy: (H - 1920 * k) / 2 }; })();
+  VL.fx = (x) => VL.FRAME.ox + x * VL.FRAME.k;
+  VL.fy = (y) => VL.FRAME.oy + y * VL.FRAME.k;
 
   // ---------- utilidades ----------
   VL.clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
@@ -348,8 +364,11 @@ canvas{height:100vh;width:auto;max-width:100vw;aspect-ratio:9/16;object-fit:cont
   VL.drawSting = function (c, t, opts = {}) {
     const g = opts.geo || VL.geo();
     const st = VL.stingState(t, opts);
+    const F = VL.FRAME, framed = W !== 1080 || H !== 1920;
+    if (framed) { c.save(); c.translate(F.ox, F.oy); c.scale(F.k, F.k); }
     VL.drawSymbol(c, g, st, t);
     VL.drawSignature(c, g, st, t);
+    if (framed) c.restore();
     return st;
   };
 
@@ -493,6 +512,7 @@ canvas{height:100vh;width:auto;max-width:100vw;aspect-ratio:9/16;object-fit:cont
     let dist = lerp(2.3, 9.2, pull) + (a > 0 ? -0.6 * Math.exp(-a * 3) : 0);
     const el = lerp(0.16, 0.62, pull) + 0.05 * Math.sin(tt * 0.3);
     const tgtY = lerp(0.35, 0, pull);
+    if (W > H) dist *= 0.74;                      // apaisado (web en escritorio): prisma más grande
     let eye = [Math.cos(az) * Math.cos(el) * dist, tgtY + Math.sin(el) * dist, Math.sin(az) * Math.cos(el) * dist];
     let sh = 0; if (a > 0 && a < 1) sh = 0.06 * Math.exp(-a * 5); if (!frozen) sh += 0.012 * ten * ten;
     const tg = [(hsh(Math.floor(t * 60), 1) - .5) * sh, tgtY + (hsh(Math.floor(t * 60), 2) - .5) * sh, 0];
