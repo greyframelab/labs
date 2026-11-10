@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eco · VØID_LOOM · Greyframe Labs</title>
+<meta name="description" content="VØID_LOOM · Eco: una sala inmensa que solo existe cuando suena. Al fondo, algo devuelve el pulso.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&display=swap">
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden}
+canvas{width:100vw;height:100vh;display:block}
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920" role="img" aria-label="Eco: una catedral en puntos de luz que se revela con pulsos de sonar; al fondo un anillo colosal devuelve el pulso en violeta"></canvas>
+<script>
+// web: el lienzo ocupa toda la pantalla (apaisado en escritorio, vertical en móvil); ?render = 1080×1920 para el vídeo
+(function () {
+  if (new URLSearchParams(location.search).has('render')) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), w = innerWidth * dpr, h = innerHeight * dpr;
+  const k = Math.min(1, 1920 / Math.max(w, h));
+  window.VL_SIZE = [Math.round(w * k), Math.round(h * k)];
+  const c = document.getElementById('c'); c.width = window.VL_SIZE[0]; c.height = window.VL_SIZE[1];
+  const r0 = innerWidth / innerHeight; let tm;
+  addEventListener('resize', () => { clearTimeout(tm); tm = setTimeout(() => { const r = innerWidth / innerHeight; if (Math.abs(r - r0) / r0 > 0.12) location.reload(); }, 400); });
+})();
+</script>
+
+<script>
+/* VØID_LOOM — núcleo compartido + firma animada (sting) de cierre.
+   Todo es determinista: el estado de cada frame depende solo de t.
+   Uso en cualquier lab:  VL.post(...), VL.drawSymbol(...), VL.stingState(t, opts)  */
+(function () {
+  // tamaño del lienzo: 1080×1920 para el vídeo; la web puede fijar window.VL_SIZE = [w, h] antes de cargar
+  const W = (window.VL_SIZE && window.VL_SIZE[0]) || 1080, H = (window.VL_SIZE && window.VL_SIZE[1]) || 1920;
+  const VL = { W, H };
+  // marco virtual de la firma (1080×1920), centrado y escalado dentro del lienzo real
+  VL.FRAME = (function () { const k = Math.min(W / 1080, H / 1920); return { k, ox: (W - 1080 * k) / 2, oy: (H - 1920 * k) / 2 }; })();
+  VL.fx = (x) => VL.FRAME.ox + x * VL.FRAME.k;
+  VL.fy = (y) => VL.FRAME.oy + y * VL.FRAME.k;
+
+  // ---------- utilidades ----------
+  VL.clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+  VL.lerp = (a, b, k) => a + (b - a) * k;
+  VL.seg = (t, a, b) => VL.clamp((t - a) / (b - a));
+  VL.ease = {
+    inOut: (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2),
+    out: (x) => 1 - Math.pow(1 - x, 3),
+    outQuart: (x) => 1 - Math.pow(1 - x, 4),
+    outExpo: (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x)),
+    in: (x) => x * x * x,
+  };
+  VL.rng = function (seed) {
+    let a = seed >>> 0;
+    return function () {
+      a |= 0; a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  };
+  VL.hash = (a, b) => {
+    let h = Math.imul(a * 374761393 + b * 668265263, 1274126177);
+    h = (h ^ (h >>> 13)) * 1103515245;
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  };
+  VL.rgba = (hex, a) => {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  };
+  VL.INK = '#F2F0EA';
+  VL.GREY = '#8F8C86';
+  VL.ACCENTS = {
+    rojo: '#FF1A1A', cian: '#00E5FF', ambar: '#FFB000', verde: '#39FF6A',
+    violeta: '#8A2BFF', magenta: '#FF2BD6', blanco: '#F2F0EA',
+  };
+  VL.FONT = "'JetBrains Mono', ui-monospace, monospace";
+
+  // ---------- geometría del símbolo (viewBox 200 → pantalla) ----------
+  VL.geo = function (cx = 540, cy = 820, s = 3.0) {
+    const cols = [];
+    for (let k = 0; k < 7; k++) cols.push(cx + (k - 3) * 20 * s);
+    return {
+      cx, cy, s, cols,
+      R: 66 * s,                 // radio del vacío
+      top: cy - 86 * s, bottom: cy + 86 * s,
+      wA: [cx - 42 * s, cy + 42 * s], wB: [cx + 42 * s, cy - 42 * s],
+    };
+  };
+
+  // ---------- capas de post-procesado ----------
+  function mk(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+  let P = null;
+  function initPost() {
+    if (P) return P;
+    P = {};
+    P.scene = mk(W, H);
+    P.b1 = mk(W / 4, H / 4);
+    P.b2 = mk(W / 12, H / 12);
+    // grano: 6 texturas precalculadas
+    P.grain = [];
+    const r = VL.rng(77);
+    for (let g = 0; g < 6; g++) {
+      const c = mk(540, 960), x = c.getContext('2d');
+      const im = x.createImageData(540, 960);
+      for (let i = 0; i < im.data.length; i += 4) {
+        const v = (r() * 255) | 0;
+        im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255;
+      }
+      x.putImageData(im, 0, 0);
+      P.grain.push(c);
+    }
+    // scanlines
+    P.scan = mk(W, H);
+    const sx = P.scan.getContext('2d');
+    sx.fillStyle = 'rgba(0,0,0,0.22)';
+    for (let y = 0; y < H; y += 4) sx.fillRect(0, y, W, 1.5);
+    // viñeta
+    P.vig = mk(W, H);
+    const vx = P.vig.getContext('2d');
+    const gr = vx.createRadialGradient(W / 2, H * 0.45, H * 0.18, W / 2, H * 0.45, H * 0.72);
+    gr.addColorStop(0, 'rgba(0,0,0,0)');
+    gr.addColorStop(1, 'rgba(0,0,0,0.78)');
+    vx.fillStyle = gr; vx.fillRect(0, 0, W, H);
+    return P;
+  }
+  VL.sceneCtx = function () {
+    const p = initPost();
+    const c = p.scene.getContext('2d');
+    c.globalCompositeOperation = 'source-over';
+    c.globalAlpha = 1;
+    c.fillStyle = '#000'; c.fillRect(0, 0, W, H);
+    c.globalCompositeOperation = 'lighter';
+    return c;
+  };
+  // compone escena → salida con bloom, flash, scanlines, viñeta y grano
+  VL.post = function (out, frame, opt = {}) {
+    const p = initPost();
+    const bloom = opt.bloom ?? 1, flash = opt.flash ?? 0;
+    const b1 = p.b1.getContext('2d'), b2 = p.b2.getContext('2d');
+    b1.globalCompositeOperation = 'copy'; b1.filter = 'blur(3px)';
+    b1.drawImage(p.scene, 0, 0, p.b1.width, p.b1.height); b1.filter = 'none';
+    b2.globalCompositeOperation = 'copy'; b2.filter = 'blur(4px)';
+    b2.drawImage(p.b1, 0, 0, p.b2.width, p.b2.height); b2.filter = 'none';
+
+    out.globalCompositeOperation = 'source-over'; out.globalAlpha = 1;
+    out.drawImage(p.scene, 0, 0);
+    out.globalCompositeOperation = 'lighter';
+    out.imageSmoothingEnabled = true; out.imageSmoothingQuality = 'high';
+    out.globalAlpha = VL.clamp(0.85 * bloom, 0, 1); out.drawImage(p.b1, 0, 0, W, H);
+    out.globalAlpha = VL.clamp(0.9 * bloom, 0, 1); out.drawImage(p.b2, 0, 0, W, H);
+    if (bloom > 1.1) { out.globalAlpha = VL.clamp((bloom - 1) * 0.5, 0, 1); out.drawImage(p.b2, 0, 0, W, H); }
+    if (flash > 0) {
+      out.globalAlpha = 1;
+      out.fillStyle = opt.flashColor ? VL.rgba(opt.flashColor, flash * 0.22) : `rgba(242,240,234,${flash * 0.22})`;
+      out.fillRect(0, 0, W, H);
+    }
+    out.globalAlpha = 1;
+    out.globalCompositeOperation = 'source-over';
+    out.drawImage(p.scan, 0, 0);
+    out.drawImage(p.vig, 0, 0);
+    const g = p.grain[frame % p.grain.length];
+    out.globalCompositeOperation = 'overlay'; out.globalAlpha = 0.32;
+    out.drawImage(g, 0, 0, W, H);
+    out.globalCompositeOperation = 'lighter'; out.globalAlpha = 0.03;
+    out.drawImage(g, 0, 0, W, H);
+    out.globalAlpha = 1; out.globalCompositeOperation = 'source-over';
+  };
+
+  // ---------- primitivas de luz ----------
+  // línea luminosa: halo ancho + cuerpo + núcleo caliente
+  VL.lightLine = function (c, x1, y1, x2, y2, col, w, k = 1) {
+    c.lineCap = 'round';
+    const pass = (lw, a, cc) => { c.strokeStyle = VL.rgba(cc, a * k); c.lineWidth = lw; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); };
+    pass(w * 7, 0.06, col);
+    pass(w * 3.2, 0.16, col);
+    pass(w, 0.95, col);
+    pass(Math.max(1.2, w * 0.3), 0.55, '#FFFFFF');
+  };
+
+  // ---------- el símbolo ----------
+  // st: { threads, top, bottom, vib, open, ring, ringColor, weft, weftGlow, ghost, accent, ca, dim }
+  VL.drawSymbol = function (c, g, st, t) {
+    const acc = st.accent;
+    const R = g.R * (st.open || 0);
+    const thr = st.threads ?? 1;
+    const dim = st.dim ?? 1;
+    const top = st.top ?? g.top, bottom = st.bottom ?? g.bottom;
+    const vib = st.vib || 0;
+    const coreW = 3 * g.s;
+
+    // fantasma de los hilos dentro del vacío
+    if ((st.ghost || 0) > 0 && thr > 0) {
+      c.lineCap = 'butt';
+      c.strokeStyle = VL.rgba(VL.INK, 0.1 * st.ghost * thr * dim);
+      c.lineWidth = coreW;
+      c.beginPath();
+      for (const x of g.cols) { c.moveTo(x, Math.max(top, g.cy - R)); c.lineTo(x, Math.min(bottom, g.cy + R)); }
+      c.stroke();
+    }
+
+    // urdimbre: 7 hilos (con vibración de cuerda y corte del vacío)
+    if (thr > 0) {
+      const passes = [[coreW * 5, 0.05], [coreW * 2.2, 0.14], [coreW, 0.92], [coreW * 0.35, 0.45]];
+      for (let pi = 0; pi < passes.length; pi++) {
+        const [lw, a] = passes[pi];
+        c.lineCap = 'butt';
+        c.lineWidth = lw;
+        c.strokeStyle = pi === 3 ? `rgba(255,255,255,${a * thr * dim})` : VL.rgba(VL.INK, a * thr * dim);
+        c.beginPath();
+        for (let k = 0; k < 7; k++) {
+          const X = g.cols[k], dx = X - g.cx;
+          const h = R > Math.abs(dx) ? Math.sqrt(R * R - dx * dx) : 0;
+          const segs = h > 0 ? [[top, g.cy - h], [g.cy + h, bottom]] : [[top, bottom]];
+          for (const [ya, yb] of segs) {
+            if (yb - ya < 1) continue;
+            const n = vib > 0.3 ? 48 : 1;
+            for (let i = 0; i <= n; i++) {
+              const y = ya + (yb - ya) * (i / n);
+              const u = (y - top) / Math.max(1, bottom - top);
+              const off = vib * Math.sin(Math.PI * u) * Math.sin(t * 23 + k * 1.7 + u * 9.0) * (0.6 + 0.4 * Math.sin(k * 2.3 + t * 3));
+              if (i === 0) c.moveTo(X + off, y); else c.lineTo(X + off, y);
+            }
+          }
+        }
+        c.stroke();
+      }
+    }
+
+    // onda de choque del vacío
+    if (st.ring != null && st.ring >= 0 && st.ring < 1) {
+      const rr = g.R * (1 + 1.9 * VL.ease.out(st.ring));
+      const a = Math.pow(1 - st.ring, 2);
+      const rc = st.ringColor || acc;
+      c.strokeStyle = VL.rgba(rc, 0.9 * a); c.lineWidth = 10 * (1 - st.ring) + 1.5;
+      c.beginPath(); c.arc(g.cx, g.cy, rr, 0, Math.PI * 2); c.stroke();
+      c.strokeStyle = VL.rgba(VL.INK, 0.5 * a); c.lineWidth = 2;
+      c.beginPath(); c.arc(g.cx, g.cy, rr * 0.93, 0, Math.PI * 2); c.stroke();
+    }
+
+    // trama: el hilo de color
+    if ((st.weft || 0) > 0) {
+      const p = st.weft;
+      const [ax, ay] = g.wA, [bx, by] = g.wB;
+      const hx = VL.lerp(ax, bx, p), hy = VL.lerp(ay, by, p);
+      const gk = (st.weftGlow ?? 1) * dim;
+      const ww = 5 * g.s;
+      const ca = st.ca || 0;
+      if (ca > 0.5) {
+        VL.lightLine(c, ax - ca, ay, hx - ca, hy, '#FF2A2A', ww * 0.8, 0.45 * gk);
+        VL.lightLine(c, ax + ca, ay, hx + ca, hy, '#2AB8FF', ww * 0.8, 0.45 * gk);
+      }
+      VL.lightLine(c, ax, ay, hx, hy, acc, ww, gk);
+      if (p < 1) { // cabeza incandescente
+        const gr = c.createRadialGradient(hx, hy, 0, hx, hy, 90);
+        gr.addColorStop(0, 'rgba(255,255,255,0.95)');
+        gr.addColorStop(0.15, VL.rgba(acc, 0.8));
+        gr.addColorStop(1, VL.rgba(acc, 0));
+        c.fillStyle = gr; c.beginPath(); c.arc(hx, hy, 90, 0, Math.PI * 2); c.fill();
+      }
+    }
+  };
+
+  // ---------- texto ----------
+  const GLYPHS = 'Ø#/\\|_=+<>01X:;*%';
+  VL.decodeText = function (c, str, x, y, opt) {
+    const size = opt.size || 40, spacing = opt.spacing ?? 0.42, prog = opt.prog ?? 1;
+    const alpha = opt.alpha ?? 1, align = opt.align || 'center';
+    const weight = opt.weight || 300, t = opt.t || 0, seed = opt.seed || 1;
+    c.font = `${weight} ${size}px ${VL.FONT}`;
+    c.textBaseline = 'middle'; c.textAlign = 'left';
+    const adv = c.measureText('M').width + size * spacing;
+    const total = adv * str.length - size * spacing;
+    let x0 = align === 'center' ? x - total / 2 : align === 'right' ? x - total : x;
+    const n = str.length;
+    for (let i = 0; i < n; i++) {
+      const ch = str[i];
+      if (ch === ' ') continue;
+      const ri = VL.clamp((prog * (n + 3) - i) / 3);
+      if (ri <= 0) continue;
+      let draw = ch;
+      if (ri < 1) draw = GLYPHS[Math.floor(VL.hash(i + seed * 31, Math.floor(t * 24)) * GLYPHS.length)];
+      const isAcc = opt.accentChar && ch === opt.accentChar && ri >= 1;
+      const col = isAcc ? opt.accent : (opt.color || VL.INK);
+      c.font = `${isAcc ? 600 : weight} ${size}px ${VL.FONT}`;
+      c.fillStyle = VL.rgba(col, alpha * (ri < 1 ? 0.55 + 0.45 * ri : 1));
+      c.fillText(draw, x0 + i * adv, y);
+    }
+  };
+
+  // HUD de esquinas (telemetría)
+  VL.hud = function (c, t, opt = {}) {
+    const a = opt.alpha ?? 1;
+    if (a <= 0) return;
+    c.font = `400 22px ${VL.FONT}`;
+    c.textBaseline = 'middle';
+    c.fillStyle = VL.rgba(VL.GREY, 0.9 * a);
+    const fps = 30, tt = Math.max(0, t);
+    const tc = [Math.floor(tt / 3600), Math.floor(tt / 60) % 60, Math.floor(tt) % 60, Math.floor((tt % 1) * fps)]
+      .map((v) => String(v).padStart(2, '0')).join(':');
+    c.textAlign = 'left'; c.fillText(opt.tl || 'VØID_LOOM / SYS.01', 72, 120);
+    c.textAlign = 'right'; c.fillText(tc, W - 72, 120);
+    c.textAlign = 'left'; c.fillText(opt.bl || 'GREYFRAME LABS', 72, 1640);
+    c.textAlign = 'right'; c.fillText(opt.br || 'SEÑAL 07/07', W - 72, 1640);
+    // corchetes de encuadre
+    c.strokeStyle = VL.rgba(VL.GREY, 0.55 * a); c.lineWidth = 2;
+    const m = 48, L = 36;
+    c.beginPath();
+    c.moveTo(m, m + L); c.lineTo(m, m); c.lineTo(m + L, m);
+    c.moveTo(W - m - L, m); c.lineTo(W - m, m); c.lineTo(W - m, m + L);
+    c.moveTo(m, 1700 - L); c.lineTo(m, 1700); c.lineTo(m + L, 1700);
+    c.moveTo(W - m - L, 1700); c.lineTo(W - m, 1700); c.lineTo(W - m, 1700 - L);
+    c.stroke();
+  };
+
+  // ---------- cierre: logotipo + firma ----------
+  VL.drawSignature = function (c, g, st, t) {
+    if ((st.wordAlpha || 0) > 0)
+      VL.decodeText(c, 'VØID_LOOM', g.cx, g.bottom + 150, {
+        size: 70, spacing: 0.42, prog: st.word, alpha: st.wordAlpha, t, seed: 3,
+        accentChar: 'Ø', accent: st.accent, weight: 300,
+      });
+    if ((st.tag || 0) > 0)
+      VL.decodeText(c, 'SEÑAL · RUIDO · MOTION EXPERIMENTAL', g.cx, g.bottom + 240, {
+        size: 22, spacing: 0.5, prog: VL.clamp(st.tag * 1.6), alpha: st.tag, t, seed: 5, color: VL.GREY, weight: 400,
+      });
+    const lines = st.creditLines || ['GREYFRAME LABS', 'greyframelab.github.io/labs'];
+    if ((st.credit || 0) > 0) {
+      VL.decodeText(c, lines[0], g.cx, 1500, { size: 24, spacing: 0.34, prog: VL.clamp(st.credit * 1.5), alpha: st.credit, t, seed: 7, color: '#BDBAB3', weight: 400 });
+      if (lines[1]) VL.decodeText(c, lines[1], g.cx, 1550, { size: 22, spacing: 0.06, prog: VL.clamp(st.credit * 1.5 - 0.3), alpha: st.credit * 0.9, t, seed: 9, color: VL.GREY, weight: 400 });
+    }
+  };
+
+  // ---------- STING: firma animada reutilizable (5.5 s) ----------
+  // Llamar con t local (0 → VL.STING_DUR). opts: { accent, creditLines, skipDrop }
+  VL.STING_DUR = 5.5;
+  VL.stingState = function (t, opts = {}) {
+    const g = opts.geo || VL.geo();
+    const e = VL.ease, sg = VL.seg;
+    const drop = opts.skipDrop ? 1 : e.out(sg(t, 0.0, 0.7));
+    const tOpen = 0.75, tWeft = 1.05;
+    const out = 1 - e.inOut(sg(t, 4.7, 5.5));
+    return {
+      accent: opts.accent || VL.ACCENTS.rojo,
+      creditLines: opts.creditLines,
+      threads: drop * out,
+      top: VL.lerp(g.cy, g.top, drop), bottom: VL.lerp(g.cy, g.bottom, drop),
+      vib: 14 * (1 - sg(t, 0.2, 1.6)) * (t > 0.2 ? 1 : 0),
+      open: e.outExpo(sg(t, tOpen, tOpen + 0.35)),
+      ring: t >= tOpen ? sg(t, tOpen, tOpen + 0.9) : -1,
+      weft: e.outQuart(sg(t, tWeft, tWeft + 0.28)),
+      weftGlow: (1 + 0.12 * Math.sin(t * 2.4)) * VL.clamp(out + (1 - sg(t, 4.7, 5.4)) * 0.6),
+      ghost: sg(t, 1.2, 2.0),
+      ca: 10 * (1 - sg(t, tWeft, tWeft + 0.5)) * (t >= tWeft ? 1 : 0),
+      word: sg(t, 1.5, 2.6), wordAlpha: sg(t, 1.5, 1.7) * out,
+      tag: sg(t, 2.6, 3.2) * out,
+      credit: sg(t, 3.0, 3.6) * out,
+      flash: Math.max(t >= tOpen ? 1 - sg(t, tOpen, tOpen + 0.5) : 0, t >= tWeft ? 0.7 * (1 - sg(t, tWeft, tWeft + 0.45)) : 0),
+    };
+  };
+  // dibuja el sting completo en un contexto de escena
+  VL.drawSting = function (c, t, opts = {}) {
+    const g = opts.geo || VL.geo();
+    const st = VL.stingState(t, opts);
+    const F = VL.FRAME, framed = W !== 1080 || H !== 1920;
+    if (framed) { c.save(); c.translate(F.ox, F.oy); c.scale(F.k, F.k); }
+    VL.drawSymbol(c, g, st, t);
+    VL.drawSignature(c, g, st, t);
+    if (framed) c.restore();
+    return st;
+  };
+
+  window.VL = VL;
+})();
+
+</script>
+<script>
+/* VØID_LOOM — Lab 28 · Eco · partitura de pulsos (compartida por imagen y sonido).
+   kind: 0 = pulso fuerte de la cámara, 1 = micro-pulso, 2 = respuesta del anillo (violeta). */
+(function (root) {
+  const T = { tense: 8.0, cut: 11.5, rupt: 12.1, sting: 19.0 };
+  // rng determinista
+  let a = 2811 >>> 0;
+  const r = () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const seg = (x, p, q) => Math.min(1, Math.max(0, (x - p) / (q - p)));
+  const euclid = (k, n, rot) => Array.from({ length: n }, (_, i) => (((i + rot) * k) % n) < k);
+  const P = [];
+  // gancho: un pulso fuerte en el segundo 0 y dos réplicas
+  P.push({ t: -0.9, s: 1.7, k: 0, v: 36, far: 1 }, { t: 0.92, s: 0.45, k: 1, v: 30 }, { t: 1.55, s: 0.7, k: 0, v: 30 });
+  // rejilla IDM: 108 → 154 BPM en la tensión
+  const A = euclid(3, 8, 0), B = euclid(7, 16, 3), C = euclid(5, 13, 1);
+  let x = 2.1, i = 0;
+  while (x < T.cut - 0.05) {
+    const ten = seg(x, T.tense, T.cut);
+    const bpm = 108 + 46 * Math.pow(ten, 1.4);
+    const st = 60 / bpm / 4;
+    const sw = (i % 2 ? 0.012 : 0) * (1 - ten) + (r() - 0.5) * 0.006;
+    if (A[i % 8] && r() < 0.92) P.push({ t: x + sw, s: 0.75 + 0.3 * r() + 0.35 * ten, k: 0, v: 24 + 10 * ten, far: (ten > 0.25 && r() < 0.35) || r() < 0.18 ? 1 : 0 });
+    if (B[i % 16] && r() < 0.6 + 0.3 * ten) P.push({ t: x + sw, s: 0.22 + 0.15 * r(), k: 1, v: 34 });
+    if (C[i % 13] && ten > 0 && r() < 0.5 * ten) { // ratchets
+      const n = 3 + Math.floor(r() * 4), d = st / 4;
+      for (let j = 0; j < n; j++) P.push({ t: x + sw + j * d, s: 0.3 * Math.pow(0.82, j), k: 1, v: 36 });
+    }
+    x += st; i++;
+  }
+  // la sala calla (11.5 → 12.1). En 12.1 el anillo contesta, y su eco rebota
+  P.push({ t: T.rupt, s: 2.2, k: 2, v: 52 });
+  for (let j = 1; j <= 4; j++) P.push({ t: T.rupt + j * 1.32, s: 1.25 * Math.pow(0.55, j), k: 2, v: 52 });
+  // la cámara responde, tímida
+  P.push({ t: T.rupt + 2.05, s: 0.42, k: 0, v: 24 }, { t: T.rupt + 3.4, s: 0.3, k: 0, v: 24 }, { t: T.rupt + 4.9, s: 0.22, k: 1, v: 30 });
+  P.sort((p, q) => p.t - q.t);
+  root.ECO = { T, PULSES: P };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+/* VØID_LOOM — Lab 28 · Eco (24,5 s). Determinista y sin estado: renderFrame(t, frame).
+   Una sala inmensa que solo existe cuando suena. Al fondo, algo devuelve el pulso. */
+(function () {
+  const VL = window.VL, W = VL.W, H = VL.H, e = VL.ease, sg = VL.seg, clamp = VL.clamp, lerp = VL.lerp;
+  const ACC = VL.ACCENTS.violeta;
+  const { T, PULSES } = window.ECO;
+  const DUR = T.sting + VL.STING_DUR;
+  window.DURATION = DUR; window.FPS = 60;
+  const RING = { x: 0, y: 17, z: -112, R: 16.5, r: 2.6 };
+
+  // ---------------------------------------------------------------- nube de puntos
+  const rnd = VL.rng(2812);
+  const pos = [], kind = [], rr = [];
+  const add = (x, y, z, k) => { pos.push(x, y, z); kind.push(k); rr.push(rnd()); };
+  // suelo de piedra mojada (tenue: lo que brilla es el reflejo)
+  for (let i = 0; i < 260000; i++) {
+    const x = (rnd() - 0.5) * 22, z = 12 - Math.pow(rnd(), 1.4) * 130;
+    add(x, 0, z, 0);
+  }
+  // nave gótica: pilares de haces, arcos apuntados y bóvedas de crucería
+  const BAY = 6.2, HW = 3.4, NB = 15, HSPR = 12.5, HV = 5.2;   // ancho medio, arranque y flecha de la bóveda
+  const pointed = (u) => Math.pow(1 - Math.abs(2 * u - 1), 0.55);       // arco apuntado 0..1
+  for (let b = 0; b <= NB; b++) {
+    const z0 = 2 - b * BAY;
+    for (const side of [-1, 1]) {
+      // pilar de haces: 4 fustes finos + núcleo
+      const offs = [[0, 0, 0.42], [0.38, 0, 0.2], [-0.38, 0, 0.2], [0, 0.38, 0.2], [0, -0.38, 0.2]];
+      const hp = b % 5 === 3 && side > 0 ? 5 + rnd() * 3 : HSPR;          // algún pilar roto
+      for (const [ox, oz, r] of offs) for (let i = 0; i < 2600; i++) {
+        const a = rnd() * Math.PI * 2, y = rnd() * hp;
+        add(side * HW + ox + Math.cos(a) * r, y, z0 + oz + Math.sin(a) * r, 1);
+      }
+      // arcada longitudinal entre pilares
+      if (b < NB) for (let i = 0; i < 2200; i++) {
+        const u = rnd(), a = rnd() * Math.PI * 2;
+        add(side * HW + Math.cos(a) * 0.18, 8.5 + 3.6 * pointed(u) + Math.sin(a) * 0.18, z0 - u * BAY, 1);
+      }
+    }
+    // nervio transversal (arco apuntado de lado a lado)
+    for (let i = 0; i < 3400; i++) {
+      const u = rnd(), a = rnd() * Math.PI * 2;
+      add(-HW + u * 2 * HW + Math.cos(a) * 0.12, HSPR + HV * pointed(u) + Math.sin(a) * 0.12, z0, 5);
+    }
+    // nervios diagonales en X y plementería tenue
+    if (b < NB) {
+      for (const d of [1, -1]) for (let i = 0; i < 3600; i++) {
+        const u = rnd(), a = rnd() * Math.PI * 2;
+        add(d * (-HW + u * 2 * HW) + Math.cos(a) * 0.1, HSPR + HV * 1.08 * pointed(u) + Math.sin(a) * 0.1, z0 - u * BAY, 5);
+      }
+      for (let i = 0; i < 2600; i++) {
+        const u = rnd(), v = rnd(); const x = -HW + u * 2 * HW;
+        add(x, HSPR + HV * pointed(u) * (0.9 + 0.15 * Math.sin(v * Math.PI)), z0 - v * BAY, 6);
+      }
+      // ventanales apuntados en los muros laterales
+      for (const side of [-1, 1]) for (let i = 0; i < 1600; i++) {
+        const u = rnd(), edge = rnd() < 0.5;
+        const wz = z0 - BAY / 2, ww = 1.3;
+        const y = 3 + u * 9, top = 12 + 2.6 * pointed(0.5 + (rnd() - 0.5));
+        if (edge) add(side * (HW + 3.2), y, wz + (rnd() < 0.5 ? -ww : ww), 1);
+        else { const q = rnd(); add(side * (HW + 3.2), 12 + 2.6 * pointed(q), wz - ww + q * 2 * ww, 1); }
+      }
+    }
+  }
+  // polvo suspendido
+  for (let i = 0; i < 9000; i++) add((rnd() - 0.5) * 20, rnd() * 20, 12 - rnd() * 130, 2);
+  // el giroscopio: tres anillos colosales (coordenadas locales + id de anillo en el tipo)
+  const RINGS = [[16.5, 2.4], [13.2, 1.7], [10.2, 1.3]];
+  RINGS.forEach(([R0, r0], id) => {
+    for (let i = 0; i < 90000 - id * 15000; i++) {
+      const u = rnd() * Math.PI * 2, v = rnd() * Math.PI * 2;
+      const r1 = r0 * (1 + 0.1 * Math.sin(u * 31 + v * 2) * Math.sin(u * 9));
+      const R = R0 + r1 * Math.cos(v);
+      add(Math.cos(u) * R, Math.sin(u) * R, r1 * Math.sin(v), 3 + id * 0.25);
+    }
+  });
+  for (let i = 0; i < 30000; i++) {
+    const u = rnd() * Math.PI * 2, d = Math.pow(rnd(), 0.35) * 2.2;
+    add(Math.cos(u) * d, Math.sin(u) * d, (rnd() - 0.5) * 2.2, 4);   // núcleo
+  }
+  const NP = kind.length;
+
+  // ---------------------------------------------------------------- WebGL
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const gl = cv.getContext('webgl2', { alpha: false, antialias: false, preserveDrawingBuffer: true });
+  const MAXP = 48;
+  const VS = `#version 300 es
+  in vec3 aPos; in float aKind; in float aR;
+  uniform mat4 uMVP; uniform vec3 uCam, uRC; uniform mat3 uR0, uR1, uR2;
+  uniform float uTime, uPx, uRingGlow, uFade, uMirror;
+  uniform vec4 uP[${MAXP}]; uniform vec4 uQ[${MAXP}]; uniform int uN;
+  out vec3 vCol; out float vA;
+  const vec3 INK = vec3(0.95, 0.94, 0.92);
+  const vec3 VIO = vec3(0.54, 0.17, 1.0);
+  void main(){
+    vec3 wp = aPos;
+    bool ring = aKind > 2.9 && aKind < 4.5;
+    if (ring) {
+      mat3 R = aKind < 3.1 ? uR0 : (aKind < 3.35 ? uR1 : (aKind < 3.6 ? uR2 : mat3(1.)));
+      wp = uRC + R * aPos;
+    }
+    float gain = aKind < 0.5 ? 0.3 : (aKind < 1.5 ? 1.0 : (aKind < 2.5 ? 0.55 : (ring ? (aKind > 3.9 ? 0.25 : 0.36) : (aKind < 5.5 ? 1.25 : 0.35))));
+    vec3 col = vec3(0.); vec3 disp = vec3(0.);
+    for (int i = 0; i < ${MAXP}; i++) {
+      if (i >= uN) break;
+      vec4 P = uP[i], Q = uQ[i];
+      float age = uTime - P.w; if (age < 0.) continue;
+      float d = distance(wp, P.xyz);
+      float rad = Q.y * age;
+      float w = 0.17 + 0.005 * d + 0.08 * aR;
+      float x = (d - rad) / w;
+      float front = exp(-x * x);
+      float trail = d < rad ? exp(-(rad - d) / (Q.y * 0.12)) : 0.;
+      float mem = d < rad ? 0.13 * exp(-age * 0.75) : 0.;
+      float att = Q.x / (1. + d * d * (Q.w > 0.5 ? 0.0005 : 0.0032));
+      float life = exp(-age * (Q.z > 1.5 ? 0.5 : 0.95));
+      vec3 c = Q.z > 1.5 ? mix(VIO * 1.25, vec3(1.), front * 0.45) : INK;
+      col += c * (front * 3.0 + trail * 0.7 + mem) * att * life * 6.5;
+      disp += normalize(wp - P.xyz + 1e-4) * exp(-x * x * 0.4) * min(att * life, 1.2) * (Q.z > 1.5 ? 0.2 : 0.07);
+    }
+    col *= gain;
+    if (ring) col += VIO * uRingGlow * (aKind > 3.9 ? 0.5 : 0.18) * (0.6 + 0.4 * sin(uTime * 1.7 + aR * 20.));
+    float dc = distance(wp, uCam);
+    col *= exp(-dc * 0.004) * uFade;
+    vec3 pp = wp + disp;
+    if (uMirror > 0.5) {
+      if (aKind < 0.5) { gl_Position = vec4(9., 9., 9., 1.); vCol = vec3(0.); vA = 0.; return; }
+      pp.y = -pp.y - 0.02;
+      pp.x += 0.035 * sin(pp.z * 2.7 + uTime * 1.3) + 0.02 * sin(pp.z * 7.1 - uTime * 2.1);
+      col *= 0.42 * exp(-max(-pp.y, 0.) * 0.04);
+    }
+    vec4 cp = uMVP * vec4(pp, 1.);
+    gl_Position = cp;
+    float L = min(dot(col, vec3(.33)), 2.);
+    gl_PointSize = clamp(uPx * 6.0 / max(cp.w, 0.1), 1.0, 2.2 * uPx) * (0.85 + 0.35 * L);
+    vA = 0.;
+    if (aKind > 1.5 && aKind < 2.5 && cp.w < 6.) { float b = (6. - cp.w) / 6.; gl_PointSize = uPx * (2.5 + 26. * b * b); col *= 1. / (1. + 40. * b * b); col += INK * 0.012 * b * uFade; L = max(L, 0.01); vA = 1.; }
+    vCol = col;
+    if (L < 0.003) gl_Position = vec4(9., 9., 9., 1.);
+  }`;
+  const FS = `#version 300 es
+  precision highp float; in vec3 vCol; in float vA; out vec4 o;
+  void main(){ vec2 q = gl_PointCoord - .5; float r = length(q); float k = vA > .5 ? smoothstep(.5, .38, r) * (0.7 + 0.3 * smoothstep(.3, .46, r)) : smoothstep(.5, .1, r); o = vec4(vCol * k, 1.); }`;
+  const sh = (t, s) => { const x = gl.createShader(t); gl.shaderSource(x, s); gl.compileShader(x); if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(x)); return x; };
+  const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FS));
+  gl.bindAttribLocation(pr, 0, 'aPos'); gl.bindAttribLocation(pr, 1, 'aKind'); gl.bindAttribLocation(pr, 2, 'aR');
+  gl.linkProgram(pr); if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr));
+  gl.useProgram(pr);
+  const buf = (data, loc, n) => { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, n, gl.FLOAT, false, 0, 0); };
+  buf(pos, 0, 3); buf(kind, 1, 1); buf(rr, 2, 1);
+  const U = {}; ['uMVP', 'uCam', 'uRC', 'uR0', 'uR1', 'uR2', 'uMirror', 'uTime', 'uPx', 'uRingGlow', 'uFade', 'uP', 'uQ', 'uN'].forEach((n) => U[n] = gl.getUniformLocation(pr, n));
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); gl.disable(gl.DEPTH_TEST);
+
+  // ---------------------------------------------------------------- cámara
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const nrm = (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+  function persp(fy, asp, n, f) { const t = 1 / Math.tan(fy / 2); return [t / asp, 0, 0, 0, 0, t, 0, 0, 0, 0, (f + n) / (n - f), -1, 0, 0, 2 * f * n / (n - f), 0]; }
+  let ROLL = 0;
+  function look(eye, tg) { const up0 = [Math.sin(ROLL), Math.cos(ROLL), 0]; const z = nrm(sub(eye, tg)), x = nrm(cross(up0, z)), y = cross(z, x);
+    return [x[0], y[0], z[0], 0, x[1], y[1], z[1], 0, x[2], y[2], z[2], 0, -dot(x, eye), -dot(y, eye), -dot(z, eye), 1]; }
+  function mul(a, b) { const o = new Array(16).fill(0); for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) for (let k = 0; k < 4; k++) o[c * 4 + r] += a[k * 4 + r] * b[c * 4 + k]; return o; }
+  function camAt(t) {
+    const tt = Math.min(t, T.cut);
+    const zt = 6 - 34 * e.inOut(sg(tt, 0, T.cut)) - 7 * (t > T.rupt ? e.out(sg(t, T.rupt, T.sting)) : 0);
+    const y = 1.15 + 0.05 * Math.sin(t * 0.9) + (t > T.rupt ? 1.6 * e.inOut(sg(t, T.rupt + 1, T.sting)) : 0);
+    const x = 0.25 * Math.sin(t * 0.37);
+    return [x, y, zt];
+  }
+  ECO.camAt = camAt;
+  function proj(M, p) { const x = p[0], y = p[1], z = p[2]; const w = M[3] * x + M[7] * y + M[11] * z + M[15]; if (w <= 0) return null;
+    return [((M[0] * x + M[4] * y + M[8] * z + M[12]) / w * 0.5 + 0.5) * W, (1 - ((M[1] * x + M[5] * y + M[9] * z + M[13]) / w * 0.5 + 0.5)) * H]; }
+  // fuente de cada pulso
+  const SRC = PULSES.map((p) => (p.k === 2 ? [RING.x, RING.y, RING.z] : (() => { const c = camAt(p.t); return [c[0], c[1] - 0.2, c[2] - 0.6]; })()));
+
+  // ---------------------------------------------------------------- composición
+  const Pv = new Float32Array(MAXP * 4), Qv = new Float32Array(MAXP * 4);
+  let out = null;
+  window.renderFrame = function (t, frame) {
+    if (!out) out = document.getElementById('c').getContext('2d');
+    const c = VL.sceneCtx();
+    const ts = t - T.sting, a = t - T.rupt;
+    const fade = 1 - e.inOut(sg(t, T.sting - 0.9, T.sting + 0.2));
+    if (fade > 0.001) {
+      const cam = camAt(t);
+      const look_y = lerp(4.5, 9.5, e.inOut(sg(t, 0.3, 9))) + (a > 0 ? 2.5 * e.inOut(sg(a, 0, 4)) : 0);
+      let tg = [cam[0] * 0.3, look_y, cam[2] - 30];
+      let shk = a > 0 && a < 1.4 ? 0.35 * Math.exp(-a * 3.5) : 0;
+      shk += 0.04 * sg(t, T.tense, T.cut) * (t < T.cut ? 1 : 0);
+      tg = [tg[0] + (VL.hash(frame, 1) - 0.5) * shk, tg[1] + (VL.hash(frame, 2) - 0.5) * shk, tg[2]];
+      ROLL = 0.035 * Math.sin(t * 0.31) + (a > 0 && a < 2 ? 0.02 * Math.exp(-a * 2) * Math.sin(a * 30) : 0);
+      const M = mul(persp(W > H ? 0.75 : 1.05, W / H, 0.1, 400), look(cam, tg));
+      // pulsos activos
+      let n = 0;
+      for (let i = PULSES.length - 1; i >= 0 && n < MAXP; i--) {
+        const p = PULSES[i]; if (p.t > t || t - p.t > 5.5) continue;
+        if (t >= T.cut && p.t < T.cut) continue;          // el silencio borra lo anterior
+        Pv.set([SRC[i][0], SRC[i][1], SRC[i][2], p.t], n * 4); Qv.set([p.s, p.v, p.k, p.far || 0], n * 4); n++;
+      }
+      gl.viewport(0, 0, W, H); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.uniformMatrix4fv(U.uMVP, false, new Float32Array(M)); gl.uniform3f(U.uCam, cam[0], cam[1], cam[2]);
+      const quiet = t >= T.cut && t < T.rupt ? 0.04 + 0.96 * (1 - e.out(sg(t, T.cut, T.cut + 0.12))) : 1;
+      gl.uniform1f(U.uTime, t); gl.uniform1f(U.uPx, Math.min(W, H) / 1080); gl.uniform1f(U.uFade, fade * quiet);
+      gl.uniform1f(U.uRingGlow, a > 0 ? 0.22 * e.out(sg(a, 0.4, 2.5)) * (1 - 0.5 * sg(t, 16, T.sting)) : 0);
+      gl.uniform4fv(U.uP, Pv); gl.uniform4fv(U.uQ, Qv); gl.uniform1i(U.uN, n);
+      // giroscopio: tres anillos inclinados que giran y se alinean en la respuesta
+      const al = a > 0 ? e.inOut(sg(a, 0, 1.4)) : 0;
+      const rot = (ax, ay) => { const cx = Math.cos(ax), sx = Math.sin(ax), cy = Math.cos(ay), sy = Math.sin(ay);
+        return new Float32Array([cy, 0, -sy, sx * sy, cx, sx * cy, cx * sy, -sx, cx * cy]); };
+      const sp = t * 0.22;
+      gl.uniform3f(U.uRC, RING.x, RING.y, RING.z);
+      gl.uniformMatrix3fv(U.uR0, false, rot((0.5 + 0.1 * sp) * (1 - al), (sp * 0.6) * (1 - al)));
+      gl.uniformMatrix3fv(U.uR1, false, rot((1.2 - 0.17 * sp) * (1 - al), (0.9 + sp) * (1 - al)));
+      gl.uniformMatrix3fv(U.uR2, false, rot((-0.8 + 0.23 * sp) * (1 - al), (-1.4 - 0.8 * sp) * (1 - al)));
+      gl.uniform1f(U.uMirror, 1); gl.drawArrays(gl.POINTS, 0, NP);
+      gl.uniform1f(U.uMirror, 0); gl.drawArrays(gl.POINTS, 0, NP);
+      c.drawImage(cv, 0, 0);
+      // rayos volumétricos: desenfoque radial hacia el anillo tras la ruptura
+      if (a > 0) {
+        const rp = proj(M, [RING.x, RING.y, RING.z]);
+        let k = 0; for (let j = 0; j <= 4; j++) { const d = a - j * 1.32; if (d >= 0) k = Math.max(k, Math.exp(-d * 1.1) * Math.pow(0.6, j)); }
+        k = Math.max(k, 0.18 * (1 - sg(t, 16, T.sting))) * fade;
+        if (rp && k > 0.01) {
+          c.save();
+          for (let n = 1; n <= 12; n++) {
+            const sc = 1 + n * 0.045;
+            c.globalAlpha = 0.1 * k * (1 - n / 13);
+            c.setTransform(sc, 0, 0, sc, rp[0] * (1 - sc), rp[1] * (1 - sc));
+            c.drawImage(cv, 0, 0);
+          }
+          c.restore();
+        }
+      }
+    }
+    let bloom = 0.85, flash = 0, flashColor;
+    if (a >= 0 && ts < 0) { flash = 0.18 * Math.max(0, 1 - a / 0.3); flashColor = a < 0.05 ? ACC : undefined; bloom = 0.9 + 0.7 * Math.exp(-a * 1.5); }
+    if (ts >= 0) { const st = VL.drawSting(c, ts, { accent: ACC }); flash = st.flash; bloom = 0.8 + 0.5 * st.flash; }
+    VL.post(out, frame, { bloom, flash, flashColor });
+  };
+})();
+
+</script>
+<script src="../shared/motion-timeline.js"></script>
+<script>
+(async () => {
+  await Promise.race([Promise.all([300, 400, 600].map((w) => document.fonts.load(`${w} 40px 'JetBrains Mono'`, 'VØID_LOOMÑ'))), new Promise((r) => setTimeout(r, 2500))]);
+  MotionTimeline.mount({
+    duration: window.DURATION,
+    render: (t) => window.renderFrame(t, Math.floor(t * 60)),
+    acts: [[0, 'PULSO'], [2.1, 'NAVE'], [8.0, 'TENSIÓN'], [11.5, 'SILENCIO'], [12.1, 'RESPUESTA'], [13.6, 'ECOS'], [19.0, 'FIRMA']],
+    accent: '#8A2BFF',
+    audio: 'eco.m4a',
+  });
+})();
+</script>
+</body>
+</html>
