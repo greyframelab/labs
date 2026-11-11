@@ -447,7 +447,7 @@ canvas{width:100vw;height:100vh;display:block}
   // pasada 1: el campo magnético (invisible) en una textura
   const FS_FIELD = `#version 300 es
   precision highp float; in vec2 vUv; out vec4 o;
-  uniform vec4 uP[${NP}]; uniform int uN; uniform vec4 uM; uniform vec3 uTw, uTint; uniform float uEnvA; uniform float uDom;
+  uniform vec4 uP[${NP}]; uniform int uN; uniform vec4 uM; uniform vec3 uTw, uTint, uGlowDir, uGlowCol; uniform float uEnvA, uGlow; uniform float uDom;
   void main(){
     vec2 q = (vUv * 2. - 1.) * uDom;
     vec2 d = q - uM.xy; float e0 = uM.z * exp(-dot(d, d) / (uM.w * uM.w)); float f = e0; vec2 gr = -2. * d / (uM.w * uM.w) * e0;
@@ -458,7 +458,7 @@ canvas{width:100vw;height:100vh;display:block}
   precision highp float; in vec2 vUv; out vec4 o;
   uniform sampler2D uF;
   uniform vec2 uRes, uShift; uniform vec3 uCam, uTgt;
-  uniform float uFov, uDom, uCy, uKey, uSeed, uTime; uniform vec3 uTw, uTint; uniform float uEnvA;
+  uniform float uFov, uDom, uCy, uKey, uSeed, uTime; uniform vec3 uTw, uTint, uGlowDir, uGlowCol; uniform float uEnvA, uGlow;
   const float SP = 0.2;
   const vec3 CY = vec3(0.0, 0.9, 1.0);
   vec3 fldT(vec2 q){ vec2 uv = q / (2. * uDom) + 0.5; return (any(lessThan(uv, vec2(0.))) || any(greaterThan(uv, vec2(1.)))) ? vec3(0.) : texture(uF, uv).rgb; }
@@ -493,13 +493,13 @@ canvas{width:100vw;height:100vh;display:block}
   vec3 env(vec3 r){
     vec3 c = vec3(0.);
     float key = smoothstep(0.5, 0.46, abs(r.x)) * smoothstep(0.1, 0.14, r.y) * smoothstep(0.62, 0.58, r.y) * smoothstep(0.2, 0.4, r.z);
-    c += uTint * key * 4.4 * uKey;
+    c += uTint * key * 6.5 * uKey;
     c += vec3(0.07) * smoothstep(-0.05, 0.9, r.y) * uKey;
     float ang = atan(r.x, r.z);
     for (int k = 0; k < 3; k++) {
       float a0 = k == 0 ? 1.95 : k == 1 ? -2.25 : 0.7;
       float da = abs(mod(ang - a0 + 3.14159, 6.28318) - 3.14159);
-      c += uTint * (smoothstep(0.09, 0.035, da) + 0.05 * smoothstep(0.3, 0.0, da)) * smoothstep(-0.08, 0.05, r.y) * smoothstep(0.75, 0.6, r.y) * (k == 2 ? 2.2 : 6.0) * uKey;
+      c += uTint * (smoothstep(0.09, 0.035, da) + 0.05 * smoothstep(0.3, 0.0, da)) * smoothstep(-0.08, 0.05, r.y) * smoothstep(0.75, 0.6, r.y) * (k == 2 ? 3.5 : 9.0) * uKey;
     }
     float top = smoothstep(0.02, 0.0, abs(r.y - 0.97)); c += vec3(0.6) * top * uKey;
     c += CY * smoothstep(0.035, 0.0, abs(r.y - 0.03)) * 5.0 * uCy;
@@ -522,6 +522,14 @@ canvas{width:100vw;height:100vh;display:block}
       t += max(d / (max(-rd.y, 0.) + (0.5 + amp * 32.) * hor + 0.05), 0.0008 + 0.0004 * t);
     }
     return false;
+  }
+  // horizonte que brilla detrás de la escena (en la dirección de la cámara): recorta las púas en silueta
+  vec3 glow(vec3 r){
+    float az = dot(normalize(vec3(r.x, 0., r.z) + 1e-5), uGlowDir);
+    float sect = smoothstep(-0.2, 0.9, az);
+    float y = r.y;
+    float g = exp(-abs(y - 0.015) * 26.) * 1.0 + exp(-max(y, 0.) * 9.) * 0.09 * step(-0.02, y) + exp(-abs(y) * 60.) * 1.4;
+    return uGlowCol * g * sect * uGlow;
   }
   vec3 envR(vec3 r){ float ca = cos(uEnvA), sa = sin(uEnvA); return env(vec3(ca * r.x - sa * r.z, r.y, sa * r.x + ca * r.z)); }
   void main(){
@@ -555,7 +563,7 @@ canvas{width:100vw;height:100vh;display:block}
       float ao = clamp(0.25 + (p.y - base) * 5., 0., 1.);
       ao = mix(ao, 1., smoothstep(0.0, 0.25, r.y));
       float flat_ = smoothstep(0.0, 0.015, p.y - base);
-      vec3 c = envR(r) * ao * mix(0.025, 1., flat_);
+      vec3 c = envR(r) * ao * mix(0.025, 1., flat_) + glow(r);
       // un rebote: el estanque y las púas reflejan a las púas vecinas
       float t2; vec3 q2;
       if (r.y > 0. && march(p + n * 0.004, r, 100, 6., t2)) {
@@ -565,7 +573,7 @@ canvas{width:100vw;height:100vh;display:block}
         vec3 r2 = reflect(r, n2);
         vec2 fb2 = fld2(q2.xz); float b2 = 0.25 * fb2.x + 0.32 * fb2.y;
         float f2 = 0.045 + 0.955 * pow(1. - max(dot(n2, -r), 0.), 5.);
-        c = envR(r2) * f2 * mix(0.025, 1., smoothstep(0.0, 0.015, q2.y - b2)) * smoothstep(8., 3., length(q2.xz));
+        c = (envR(r2) * mix(0.025, 1., smoothstep(0.0, 0.015, q2.y - b2)) + glow(r2)) * f2 * smoothstep(8., 3., length(q2.xz));
       }
       c *= fres;
       c += vec3(0.0025) * max(n.y, 0.) * uKey;
@@ -573,6 +581,7 @@ canvas{width:100vw;height:100vh;display:block}
       c *= smoothstep(8., 3., dist) * exp(-max(t - 3.5, 0.) * 0.22);
       col = c;
     }
+    if (!hit) col = glow(rd);
     // aire de la sala: un velo cian casi invisible tras la ruptura
     col += CY * uCy * 0.012 * smoothstep(0.0, 0.3, rd.y) * (1. - smoothstep(0.3, 0.8, rd.y));
     col += (ign(gl_FragCoord.xy) - 0.5) / 255.;
@@ -648,7 +657,14 @@ canvas{width:100vw;height:100vh;display:block}
       const cy = a >= 0 ? (0.6 + 0.4 * Math.exp(-a * 1.5)) * fade : 0;
       gl.uniform1f(PM.U.uCy, cy); let pump = 0;
       for (const gv of GROOVE) { if (gv.t > t) break; if (gv.v === 'k') pump = Math.max(pump, gv.s * Math.exp(-(t - gv.t) * 9)); }
-      gl.uniform1f(PM.U.uKey, fade * (a >= 0 ? 1.25 + 1.2 * Math.exp(-a * 2.5) + 0.9 * pump : 1));
+      let hp_ = 0;
+      for (const pp of PULSES) { if (pp.t > t) break; if (pp.k <= 1 && t < T.cut) hp_ = Math.max(hp_, (pp.k === 1 ? 0.8 : 0.35) * Math.min(1, pp.s) * Math.exp(-(t - pp.t) * 12)); }
+      gl.uniform1f(PM.U.uKey, fade * (a >= 0 ? 1.25 + 1.2 * Math.exp(-a * 2.5) + 0.9 * pump : 1 + 0.8 * hp_));
+      const fwd = [tg[0] - cam[0], 0, tg[2] - cam[2]]; const fl = Math.hypot(fwd[0], fwd[2]);
+      gl.uniform3f(PM.U.uGlowDir, fwd[0] / fl, 0, fwd[2] / fl);
+      const cutK = t >= T.cut && t < T.rupt ? 0 : 1;
+      if (a >= 0) { gl.uniform3f(PM.U.uGlowCol, 0.0, 0.85, 1.0); gl.uniform1f(PM.U.uGlow, fade * (0.55 + 1.6 * Math.exp(-a * 1.8) + 0.7 * pump)); }
+      else { gl.uniform3f(PM.U.uGlowCol, 1.0, 0.96, 0.9); gl.uniform1f(PM.U.uGlow, cutK * (0.07 + 0.12 * ten + 0.35 * hp_)); }
       const tk = a >= 0 ? 1 - 0.25 * e.inOut(sg(a, 3, 7)) : 0;
       gl.uniform3f(PM.U.uTint, lerp(1.0, 0.0, tk), lerp(0.97, 0.9, tk), lerp(0.92, 1.0, tk));
       gl.uniform3f(PM.U.uTw, F.TW[0], F.TW[1], 0); gl.uniform1f(PM.U.uEnvA, -(az - 0.55) * 0.7 + 0.035 * t); gl.uniform1f(PM.U.uSeed, (frame % 64) * 0.137); gl.uniform1f(PM.U.uTime, t);
