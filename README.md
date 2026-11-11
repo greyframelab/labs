@@ -6,6 +6,7 @@ Experiments in UI, motion and creative coding for games, apps and interfaces.
 
 | # | Lab | Category |
 |---|-----|----------|
+| 30 | [Campo](lab-30-campo/) | Motion |
 | 29 | [Teseracto](lab-29-teseracto/) | Motion |
 | 28 | [Eco](lab-28-eco/) | Motion |
 | 27 | [Estratos](lab-27-estratos/) | Motion |
