@@ -461,7 +461,7 @@ canvas{width:100vw;height:100vh;display:block}
   const FS = `#version 300 es
   precision highp float; in vec2 vUv; out vec4 o;
   uniform vec2 uRes, uShift; uniform vec3 uCam, uTgt, uB;
-  uniform float uSpot, uFov, uSep, uTilt, uRot, uMainY, uMainI, uGlow, uGap, uKey, uEnvA, uSeed, uTime, uFog;
+  uniform float uYaw, uSpot, uFov, uSep, uTilt, uRot, uMainY, uMainI, uGlow, uGap, uKey, uEnvA, uSeed, uTime, uFog;
   const vec3 AMB = vec3(1.0, 0.42, 0.05);
   float tri(float x){ return abs(fract(x) - 0.5) * 4. - 1.; }
   float hj(float i){ return fract(sin(i * 127.1 + 3.7) * 43758.5453); }
@@ -471,7 +471,7 @@ canvas{width:100vw;height:100vh;display:block}
   mat2 rot(float a){ float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }
   vec3 toObj(vec3 p){ p.xz = rot(uRot) * p.xz; return p; }
   // dos mitades separadas por la grieta principal (zigzag). Devuelve dist, y en id: 0 piedra, 1 cara interior (fundida)
-  vec3 halfP(vec3 p, float sgn){ vec3 q = p - vec3(sgn * uSep, 0., 0.); q.xy = rot(sgn * uTilt) * q.xy; return q; }
+  vec3 halfP(vec3 p, float sgn){ vec3 q = p - vec3(sgn * uSep, 0., 0.); q.xz = rot(-sgn * uYaw) * q.xz; q.xy = rot(sgn * uTilt) * q.xy; return q; }
   float mapO(vec3 p, out float id, out vec3 qr){
     vec3 qa = halfP(p, -1.), qb = halfP(p, 1.);
     float ba = sdBox(qa, uB - 0.018) - 0.018, bb = sdBox(qb, uB - 0.018) - 0.018;
@@ -530,7 +530,7 @@ canvas{width:100vw;height:100vh;display:block}
     // niebla: haces de luz que salen por las grietas (y por la herida abierta)
     {
       // limita la marcha a una caja alrededor del monolito
-      vec3 bb = vec3(uB.x + 1.6 + uSep, 7.5, 2.4);
+      vec3 bb = vec3(uB.x + 1.6 + uSep * 1.6, 7.5, 3.2);
       vec3 inv = 1. / rd2, t0 = (-bb - ro2) * inv, t1 = (bb - ro2) * inv;
       vec3 tmn = min(t0, t1), tmx = max(t0, t1);
       float ta = max(max(tmn.x, tmn.y), max(tmn.z, 0.)), tb = min(min(tmx.x, tmx.y), min(tmx.z, tHit));
@@ -562,13 +562,31 @@ canvas{width:100vw;height:100vh;display:block}
           if (uGap > 0.001 && abs(s.y) < uB.y + 0.05) {
             float dx = abs(s.x - jag(s.y));
             float zz = max(az, 0.);
-            float wdt = uSep * (1. + zz * 0.12) + 0.003;
-            float sheet = smoothstep(wdt, wdt * 0.15, dx) * exp(-zz * 0.55) * smoothstep(uB.y + 0.05, uB.y - 0.2, abs(s.y));
+            float wdt = uSep * (0.85 + zz * 0.35) + 0.003;
+            float sheet = (smoothstep(wdt, wdt * 0.3, dx) * 0.11 / (0.2 + uSep) * 0.2 + smoothstep(0.012 + uSep * 0.04, 0., dx) * 0.55) * exp(-zz * 0.42) * smoothstep(uB.y + 0.25, uB.y - 0.3, abs(s.y));
+            float colb = 0.55 + 0.45 * step(0.35, fract(sin(floor((s.x - jag(s.y)) / 0.03) * 91.7 + floor(uTime * 5.)) * 4375.5));
+            sheet *= mix(1., colb * colb, smoothstep(0.015, 0.06, dx));
+
             float band = 0.55 + 0.45 * step(0.4, fract(sin(floor(s.y * 40. - uTime * 6.) * 78.233) * 4375.5));
-            acc += mix(AMB, vec3(1., 0.75, 0.45), smoothstep(wdt * 0.5, 0., dx)) * sheet * uGap * 0.7 * band;
+            acc += mix(AMB, vec3(1., 0.78, 0.5), 0.35) * sheet * uGap * 0.7 * band;
           }
         }
         col += acc * dt * uFog * 14.;
+      }
+    }
+    // cortina de datos: plano z=0 entre las dos mitades (columnas de luz que corren)
+    if (uGap > 0.001 && abs(rd2.z) > 1e-4) {
+      float tz = -ro2.z / rd2.z;
+      if (tz > 0. && tz < tHit) {
+        vec3 pz = ro2 + rd2 * tz; float dx = pz.x - jag(pz.y);
+        if (abs(dx) < uSep * 0.95 && abs(pz.y) < uB.y) {
+          float ci = floor(dx / 0.055); float cx = fract(dx / 0.055);
+          float ln = smoothstep(0.32, 0.12, abs(cx - 0.5));
+          float sp = 1.5 + 4. * fract(sin(ci * 7.13) * 99.1);
+          float sg2 = step(0.42, fract(sin(floor(pz.y / 0.09 - uTime * sp) * 17.3 + ci * 91.7) * 4375.5));
+          float edgeF = smoothstep(uSep * 0.95, uSep * 0.6, abs(dx)) * smoothstep(uB.y, uB.y - 0.12, abs(pz.y));
+          col += mix(AMB, vec3(1., 0.8, 0.55), 0.4 * sg2 * ln) * (0.05 + 2.6 * ln * sg2) * uGap * edgeF;
+        }
       }
     }
     if (hit) {
@@ -714,7 +732,8 @@ canvas{width:100vw;height:100vh;display:block}
       const CR = cracks(t), M = mainY(t);
       // apertura: lenta, pesada (no explota: se abre)
       const op = a >= 0 ? e.out(clamp(a / 6.5)) : 0;
-      const sep = a >= 0 ? 0.003 + 0.13 * op : 0;
+      const sep = a >= 0 ? 0.003 + 0.07 * e.outExpo(clamp(a / 0.35)) + 0.62 * op : 0;
+      const yaw = a >= 0 ? 0.42 * e.inOut(clamp((a - 0.4) / 5.5)) : 0;
       let pulse = 0;
       for (const p of PULSE) { if (p.t > t) break; pulse = Math.max(pulse, p.s * Math.exp(-(t - p.t) * 8)); }
       const gap = a >= 0 ? (1.4 * Math.exp(-a * 1.6) + 0.7 + 0.5 * pulse) * fade : 0;
@@ -724,8 +743,8 @@ canvas{width:100vw;height:100vh;display:block}
       const glow = cut ? 0 : (a >= 0 ? 0.25 * Math.exp(-a * 0.8) : (0.75 + 0.35 * ten) * (1 + 0.35 * ck)) * fade;
       // cámara: macro sobre la cara → revela el monolito → frontal en la apertura
       const az = kf([[0, 0.25], [3, 0.55], [8, 0.9], [T.cut, 1.15], [T.rupt, 0.1], [T.sting, -0.25]], t);
-      const R = kf([[0, 1.0], [2.5, 1.6], [7, 4.2], [T.cut, 3.4], [T.rupt, 6.2], [T.rupt + 0.8, 5.6], [T.sting, 8.2]], t);
-      const y = kf([[0, 0.55], [3, 0.2], [8, -1.2], [T.cut, -1.4], [T.rupt, -1.1], [T.sting, -0.5]], t);
+      const R = kf([[0, 1.0], [2.5, 1.6], [7, 4.2], [T.cut, 3.4], [T.rupt, 6.2], [T.rupt + 0.8, 5.8], [T.sting, 10.5]], t);
+      const y = kf([[0, 0.55], [3, 0.2], [8, -1.2], [T.cut, -1.4], [T.rupt, -1.1], [T.sting, -0.9]], t);
       const ty = kf([[0, 0.7], [3, 0.55], [8, 0.35], [T.cut, 0.3], [T.rupt, 0.15], [T.sting, 0.2]], t);
       let shk = a > 0 && a < 1 ? 0.06 * Math.exp(-a * 4) : 0; shk += 0.012 * ten * ten * (t < T.cut ? 1 : 0) + (M.hot * 0.02 * (t < T.cut ? 1 : 0));
       const cam = [Math.sin(az) * R, y, Math.cos(az) * R];
@@ -740,7 +759,7 @@ canvas{width:100vw;height:100vh;display:block}
       gl.uniform2f(U.uRes, RW, RH); gl.uniform2f(U.uShift, 0, (H / 2 - VL.fy(g.cy)) / H);
       gl.uniform3f(U.uCam, ...cam); gl.uniform3f(U.uTgt, ...tg); gl.uniform3f(U.uB, ...B);
       gl.uniform1f(U.uFov, W > H ? 0.72 : 0.8);
-      gl.uniform1f(U.uSep, sep); gl.uniform1f(U.uTilt, 0.05 * op); gl.uniform1f(U.uRot, 0.05 * Math.sin(t * 0.21));
+      gl.uniform1f(U.uSep, sep); gl.uniform1f(U.uTilt, 0.07 * op); gl.uniform1f(U.uYaw, yaw); gl.uniform1f(U.uRot, 0.05 * Math.sin(t * 0.21));
             gl.uniform1f(U.uGlow, glow); gl.uniform1f(U.uGap, gap);
       gl.uniform1f(U.uKey, fade * (cut ? 0.25 : 1)); gl.uniform1f(U.uEnvA, 0.03 * t); gl.uniform1f(U.uFog, 0.07); gl.uniform1f(U.uSpot, fade * (cut ? 0 : a >= 0 ? 0.35 : 1));
       gl.uniform1f(U.uSeed, (frame % 64) * 0.137); gl.uniform1f(U.uTime, t);
