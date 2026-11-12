@@ -494,7 +494,7 @@ canvas{width:100vw;height:100vh;display:block}
         vec3 r = reflect(rd, vec3(0, 1, 0));
         float soft = smoothstep(0.55, 0.95, dot(r, normalize(vec3(-0.6, 0.35, -0.7))));
         col = vec3(0.004) + vec3(0.9, 0.92, 1.) * soft * 0.03 * uKey;
-        col += mix(vec3(0.75, 0.8, 0.95), MAG, uAcc * 0.6) * pow(abs(U(p.xz, uMb)), 2.) * uPk * 0.05;   // la onda bajo la arena
+        col += mix(vec3(0.75, 0.8, 0.95), MAG, uAcc * 0.8) * pow(abs(U(p.xz, uMb)), 2.) * uPk * 0.07 + MAG * uAcc * 0.05 * (1. - smoothstep(0., 0.25, abs(U(p.xz, uMb))));   // la onda bajo la arena
         col *= 1. - 0.5 * smoothstep(0.6, 1.0, e);
         col += vec3(1.) * smoothstep(0.996, 1.0, e) * 0.08 * uKey;                  // canto fino
         col += MAG * smoothstep(0.985, 1.0, e) * uAcc * 0.9;                         // el canto se enciende en magenta
@@ -551,13 +551,22 @@ canvas{width:100vw;height:100vh;display:block}
     p += (vec2(hs(id + floor(uTime * 30.)), hs(id * 3. + floor(uTime * 30.))) - 0.5) * 0.004 * u * (1. - uFreeze);
     float y = 0.0015;
     // salto durante la migración
-    y += uHop * 0.018 * sin(PI * kk) * (0.4 + 0.6 * hs(id * 7.1));
+    y += uHop * 0.065 * sin(PI * kk) * (0.4 + 0.6 * hs(id * 7.1));
     // bombo: la placa golpea y salta la arena que no está en una línea nodal
-    float ka = uK.x; float dust = step(0.975, hs(id * 11.3));
-    if (ka >= 0. && ka < 0.9) { float dur = mix(0.12 + 0.18 * hs(id * 9.7), 0.5 + 0.35 * hs(id * 2.9), dust); float bt = ka / dur; if (bt < 1.) y += uK.y * mix(0.022, 0.16 + 0.12 * hs(id * 4.4), dust) * u * 4. * bt * (1. - bt); }
+    float ka = uK.x; float dust = step(0.88, hs(id * 11.3));
+    if (ka >= 0. && ka < 1.5) {
+      float dur = mix(0.16 + 0.2 * hs(id * 9.7), 0.7 + 0.6 * hs(id * 2.9), dust); float bt = ka / dur;
+      if (bt < 1.) {
+        float arc = 4. * bt * (1. - bt);
+        y += uK.y * mix(0.055, 0.25 + 0.4 * hs(id * 4.4), dust) * (0.3 + u) * arc;
+        // los granos se apartan de su línea y vuelven a caer en ella (se ve también desde arriba)
+        vec2 dir = normalize(vec2(hs(id * 3.3) - 0.5, hs(id * 5.9) - 0.5) + 1e-4);
+        p += dir * uK.y * mix(0.02, 0.09, dust) * (0.3 + u) * sin(3.14159 * bt);
+      }
+    }
     // caja: un anillo que recorre la placa
     float rs = length(p - uS.zw), ring = uS.x * 2.6;
-    if (uS.x >= 0. && uS.x < 0.6) y += uS.y * 0.05 * exp(-pow((rs - ring) / 0.06, 2.)) * (1. - uS.x / 0.6);
+    if (uS.x >= 0. && uS.x < 0.7) { float rw = exp(-pow((rs - ring) / 0.09, 2.)) * (1. - uS.x / 0.7); y += uS.y * 0.14 * rw * (0.6 + 0.8 * hs(id * 6.6)); p += normalize(p - uS.zw + 1e-4) * uS.y * 0.03 * rw; }
     vec3 P = vec3(p.x, y, p.y);
     // proyección (la misma cámara que la placa)
     vec3 d = P - uCam; float z = dot(d, uFw);
@@ -565,13 +574,13 @@ canvas{width:100vw;height:100vh;display:block}
     vec2 vv = s / vec2(uRes.x / uRes.y, 1.) + 0.5 + uShift;
     gl_Position = vec4(vv * 2. - 1., 0., 1.);
     float coc = abs(z - uFocus) * uAp;
-    gl_PointSize = clamp(uPx / z + coc * uRes.y, 1.2, 40.);
+    gl_PointSize = clamp(uPx / z + coc * uRes.y, 1.2, 12.);
     vC = coc * uRes.y;
     // brillo: luz rasante + destellos de los hats + la línea del metal
     float b = 0.55 + 0.45 * hs(id * 4.3);
     if (uHh.x >= 0. && uHh.x < 0.09 && hs(id * 0.77 + uHh.z) < 0.06) b += uHh.y * 3.5 * (1. - uHh.x / 0.09);
     if (uMt.x >= 0. && uMt.x < 0.18 && abs(p.x - uMt.z) < 0.018) b += uMt.y * 2.2 * (1. - uMt.x / 0.18);
-    b += y * 40.;
+    b += min(y * 35., 2.5) + dust * step(0.02, y) * 1.2;
     // destellos: granos que reflejan la luz rasante según el ángulo de cámara
     float glin = pow(max(0., sin(hs(id * 13.1) * 40. + dot(uFw, vec3(9., 0., 7.)) * 6.)), 60.);
     b += glin * 4.;
@@ -582,7 +591,7 @@ canvas{width:100vw;height:100vh;display:block}
   const vec3 MAG = vec3(1.0, 0.17, 0.84);
   void main(){
     vec2 c = gl_PointCoord * 2. - 1.; float r2 = dot(c, c); if (r2 > 1.) discard;
-    float bok = 1. / (1. + vC * vC * 0.12);                       // el grano desenfocado reparte su luz en el disco
+    float bok = 1. / (1. + vC * vC * 0.3);                       // el grano desenfocado reparte su luz en el disco
     float sh = 0.55 + 0.45 * max(0., dot(normalize(vec3(c.x, -c.y, sqrt(max(1. - r2, 0.)))), normalize(vec3(-0.5, 0.6, 0.6))));
     vec3 col = mix(vec3(1., 0.97, 0.92), MAG, uAcc * 0.35) * vB * sh * uKey;
     o = vec4(col * mix(1. - r2 * 0.5, 0.8 + 0.2 * r2, step(2., vC)) * 0.75 * bok, 1.);
@@ -605,6 +614,22 @@ canvas{width:100vw;height:100vh;display:block}
   function last(v, t, minS) { let L = null; for (const x of EV) { if (x.t > t) break; if (x.v === v && (minS === undefined || x.s >= minS)) L = x; } return L; }
   function modeAt(t) { let i = 0; for (let k = 0; k < MODES.length; k++) if (MODES[k].t <= t) i = k; return i; }
   const mv = (m) => [m.n, m.m, m.sg, m.c];
+  // planos: macro rasante · 3/4 · cenital · a ras del canto · contrapicado lejano
+  const SHOT_DEF = [
+    { az: 0.6, d: 0.85, el: 0.16, daz: 0.05, dd: 0.03, del: 0.01, tx: 0.25, tz: 0.2 },
+    { az: 1.1, d: 1.9, el: 0.55, daz: 0.07, dd: 0.05, del: 0.0, tx: 0, tz: 0 },
+    { az: 1.4, d: 2.2, el: 1.5, daz: 0.09, dd: 0.04, del: 0.0, tx: 0, tz: 0 },
+    { az: 2.3, d: 1.4, el: 0.07, daz: -0.04, dd: 0.0, del: 0.01, tx: -0.2, tz: 0.1 },
+    { az: -0.4, d: 1.25, el: 0.32, daz: 0.06, dd: -0.03, del: 0.02, tx: 0.1, tz: -0.3 },
+  ];
+  const SHOTS = [{ t: 0, k: 0, r: 0 }];
+  { let lastT = 0, n = 0;
+    for (const x of EV) {
+      if (x.v !== 'K' || x.t >= T.cut) continue;
+      const inB = x.t >= T.tense; const minGap = inB ? 0.45 : 2.4;
+      if ((x.s >= 0.95 || (inB && x.s >= 0.5)) && x.t - lastT >= minGap) { n++; SHOTS.push({ t: x.t, k: [1, 2, 0, 3, 4, 2, 1, 3, 0, 4][n % 10], r: ((n * 7919) % 100) / 100 - 0.5 }); lastT = x.t; }
+    }
+  }
   const kf = (pts, x) => { for (let i = 1; i < pts.length; i++) if (x <= pts[i][0]) { const [t0, v0] = pts[i - 1], [t1, v1] = pts[i]; return lerp(v0, v1, e.inOut(clamp((x - t0) / (t1 - t0)))); } return pts[pts.length - 1][1]; };
 
   let out = null;
@@ -620,11 +645,13 @@ canvas{width:100vw;height:100vh;display:block}
       const mig = M1.c ? 1.1 : (M1.t >= T.tense ? 0.32 : 0.6);
       const mix = mi === 0 ? 1 : clamp((t - M1.t) / mig);
       const K = last('K', t), S = last('S', t), Hh = last('H', t), Mt = last('M', t), R = last('R', t);
-      // cámara: macro rasante → 3/4 → cenital perfecto para el mandala → se eleva
-      const az = kf([[0, 0.6], [8, 1.3], [T.cut, 1.55], [T.rupt, 1.55], [T.sting, 2.2]], tReal);
-      const dist = kf([[0, 0.9], [3, 1.6], [8, 2.3], [T.cut, 2.0], [T.rupt, 2.0], [T.rupt + 1.6, 3.1], [T.sting, 3.8]], tReal);
-      const el = kf([[0, 0.18], [3, 0.42], [8, 0.62], [T.cut, 0.75], [T.rupt, 0.75], [T.rupt + 1.6, 1.52], [T.sting, 1.55]], tReal);
-      const tg = [kf([[0, 0.25], [3, 0.0]], tReal), 0, kf([[0, 0.2], [3, 0.0]], tReal)];
+      // montaje: la cámara corta de plano en los bombos fuertes (y en B, en cada bombo); cada plano deriva despacio
+      const cutsAt = SHOTS.filter((x) => x.t <= t); const sh = cutsAt[cutsAt.length - 1]; const lt = t - sh.t;
+      let az, dist, el, tg;
+      const P_ = SHOT_DEF[sh.k];
+      az = P_.az + sh.r * 0.8 + P_.daz * lt; dist = P_.d + P_.dd * lt; el = P_.el + P_.del * lt;
+      tg = [P_.tx + sh.r * 0.25, 0, P_.tz - sh.r * 0.2];
+      if (tReal >= T.rupt) { const ar = tReal - T.rupt; az = 1.55 + 0.12 * ar; dist = kf([[0, 1.9], [1.6, 3.0], [7, 3.7]], ar); el = kf([[0, 0.8], [1.6, 1.52], [7, 1.55]], ar); tg = [0, 0, 0]; }
       const cam = [tg[0] + Math.cos(el) * Math.sin(az) * dist, Math.sin(el) * dist, tg[2] + Math.cos(el) * Math.cos(az) * dist];
       let fw = [tg[0] - cam[0], tg[1] - cam[1], tg[2] - cam[2]]; const fl = Math.hypot(...fw); fw = fw.map((v) => v / fl);
       const upW = Math.abs(fw[1]) > 0.98 ? [Math.sin(az + Math.PI), 0, Math.cos(az + Math.PI)] : [0, 1, 0];
@@ -646,14 +673,14 @@ canvas{width:100vw;height:100vh;display:block}
       const U = PG.U;
       gl.uniform4f(U.uMa, ...mv(M0)); gl.uniform4f(U.uMb, ...mv(M1)); gl.uniform1f(U.uMix, mix); gl.uniform1f(U.uHop, M1.c ? 1.6 : 1);
       const age = (x) => (x ? t - x.t : -1);
-      const kS = R && t - R.t < 0.4 ? 2.4 : (K ? K.s : 0);
-      gl.uniform4f(U.uK, R && t - R.t < 0.4 ? t - R.t : age(K), cut ? 0 : kS, 0, 0);
+      const kS = R && t - R.t < 1.4 ? 3.2 : (K ? K.s : 0);
+      gl.uniform4f(U.uK, R && t - R.t < 1.4 ? (t - R.t) * 0.85 : age(K), cut ? 0 : kS, 0, 0);
       gl.uniform4f(U.uS, age(S), S ? S.s : 0, S ? S.off * 0.6 : 0, S ? (S.axis - 1) * 0.4 : 0);
       gl.uniform4f(U.uHh, age(Hh), Hh ? Hh.s : 0, Hh ? Hh.seed * 0.618 : 0, 0);
       gl.uniform4f(U.uMt, age(Mt), Mt ? Mt.s : 0, Mt ? (Mt.col / 32 - 1) * 0.95 : 0, 0);
       gl.uniform1f(U.uTime, t); gl.uniform1f(U.uFreeze, cut ? 1 : 0);
       gl.uniform1f(U.uPx, 2.6 * RH / 1920);
-      const focus = dist; const ap = kf([[0, 0.006], [3, 0.004], [8, 0.0015], [T.rupt + 1.6, 0.0004]], tReal);
+      const focus = dist; const ap = tReal >= T.rupt ? 0.0004 : [0.004, 0.0015, 0.0006, 0.0025, 0.002][sh.k];
       gl.uniform1f(U.uFocus, focus); gl.uniform1f(U.uAp, ap); gl.uniform1f(U.uKey, key); gl.uniform1f(U.uAcc, acc);
       gl.drawArrays(gl.POINTS, 0, NG);
       gl.disable(gl.BLEND);
