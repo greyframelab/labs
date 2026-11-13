@@ -171,7 +171,7 @@ main>*{background:var(--panel);min-height:0}
 .mmeter{display:flex;flex-direction:column;gap:3px;margin-top:2px}
 
 /* ---------- efectos ---------- */
-.fx{display:grid;grid-template-columns:auto 1px auto 1px auto;gap:0 26px;align-items:end;padding:14px 22px 16px;border-top:1px solid var(--line);background:#080808}
+.fx{display:grid;grid-template-columns:auto 1px auto 1px auto 1px auto;gap:0 26px;align-items:end;padding:14px 22px 16px;border-top:1px solid var(--line);background:#080808}
 .fx .sep{background:var(--line);align-self:stretch}
 .grp{display:flex;flex-direction:column;gap:10px}
 .grp .gk{display:flex;gap:14px;align-items:flex-end}
@@ -186,6 +186,20 @@ main>*{background:var(--panel);min-height:0}
 .fx .gk{gap:12px}
 @media (max-width:1440px){.fx{gap:0 16px;padding:14px 16px}.fx .gk{gap:9px}.knob .lbl{letter-spacing:.12em}}
 
+/* ---------- deck C ---------- */
+.crow{display:flex;align-items:center;gap:12px;padding-top:4px;border-top:1px solid var(--line)}
+.crow .xl{width:14px}
+.crow .tg{min-width:0;padding:9px 12px}
+.code-dr{position:fixed;left:0;top:46px;bottom:0;width:min(780px,58vw);z-index:40;background:rgba(5,5,5,.97);border-right:1px solid var(--line2);display:flex;flex-direction:column;transform:translateX(-102%);transition:transform .35s cubic-bezier(.2,.7,.1,1);box-shadow:30px 0 60px rgba(0,0,0,.6)}
+.code-dr.on{transform:none}
+.cd-head{display:flex;align-items:center;gap:14px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.cd-head .seg{margin-left:auto}
+.cd-body{flex:1;display:flex;min-height:0;font:400 12.5px/1.6 var(--f);letter-spacing:0}
+.cd-gut{margin:0;padding:16px 10px 16px 16px;color:var(--dim);text-align:right;overflow:hidden;user-select:none;font:inherit;min-width:44px}
+.cd-gut b{color:#fff;background:var(--red);font-weight:400;padding:0 3px}
+#cdEd{flex:1;background:transparent;border:0;outline:0;resize:none;color:var(--tx);font:inherit;padding:16px 16px 16px 6px;tab-size:2;white-space:pre;overflow:auto;caret-color:var(--red)}
+#cdEd::selection{background:rgba(255,26,26,.3)}
+.cd-foot{display:flex;align-items:center;gap:10px;padding:11px 16px;border-top:1px solid var(--line);font-size:9px;letter-spacing:.18em;color:var(--tx2)}
 /* ---------- MIDI / ayuda ---------- */
 body.learn [data-ctl]{outline:1px dashed rgba(255,176,0,.5);outline-offset:2px}
 body.learn [data-ctl].armed{outline:1px solid #FFB000;box-shadow:0 0 14px rgba(255,176,0,.4)}
@@ -251,6 +265,7 @@ body.learn [data-ctl].mapped::after{content:"";position:absolute;width:4px;heigh
           <button class="cut" id="cut" data-ctl="cut">CORTE <span style="color:var(--dim)">·  ESPACIO</span></button>
           <div class="auto"><div id="kAuto"></div><button class="pb" id="autoB" data-ctl="auto" style="padding:9px 12px">AUTO →</button></div>
         </div>
+        <div class="crow"><span class="xl" style="color:var(--tx2)">C</span><div id="kC"></div><button class="pb" id="cEdit" style="padding:9px 12px">EDITAR CÓDIGO<small>`</small></button><button class="tg" id="tg-view">VER CÓDIGO<small>K</small></button><div id="kView"></div></div>
         <div class="mmeter"><span class="lbl" style="font-size:7.5px">MASTER</span><div class="meter" style="--acc:#f2f0ea"><i id="mL"></i></div><div class="meter" style="--acc:#f2f0ea"><i id="mR"></i></div></div>
       </div>
     </section>
@@ -261,6 +276,8 @@ body.learn [data-ctl].mapped::after{content:"";position:absolute;width:4px;heigh
     <div class="grp"><span class="lbl">AUDIO</span><div class="gk" id="fxAudio"></div></div>
     <div class="sep"></div>
     <div class="grp"><span class="lbl">IMAGEN</span><div class="gk" id="fxImg"></div></div>
+    <div class="sep"></div>
+    <div class="grp"><span class="lbl">PIEZA</span><div class="gk" id="fxPiece"></div></div>
     <div class="sep"></div>
     <div class="grp"><span class="lbl">SISTEMA</span><div class="gk" id="fxSys"></div></div>
   </footer>
@@ -274,12 +291,13 @@ body.learn [data-ctl].mapped::after{content:"";position:absolute;width:4px;heigh
     <div><span class="t">INTERPRETAR</span>
       <p><kbd>S</kbd>STUTTER (MANTENER)</p><p><kbd>F</kbd>CONGELAR</p><p><kbd>R</kbd>REVERSA (MANTENER)</p><p><kbd>T</kbd>CINTA · FRENAR / ARRANCAR</p><p><kbd>Z</kbd><kbd>X</kbd><kbd>C</kbd>KILL GRAVES / MEDIOS / AGUDOS</p></div>
     <div><span class="t">MEZCLA E IMAGEN</span>
-      <p><kbd>ESPACIO</kbd>CORTE AL OTRO DECK</p><p><kbd>←</kbd><kbd>→</kbd>CROSSFADER</p><p><kbd>A</kbd>AUTO-TRANSICIÓN</p><p><kbd>Q</kbd>CUANTIZACIÓN</p><p><kbd>I</kbd>INVERTIR · <kbd>V</kbd>GLITCH · <kbd>B</kbd>NEGRO</p><p><kbd>O</kbd>STROBE · <kbd>E</kbd>ESPEJO</p><p><kbd>⇧1–9</kbd>CARGAR PIEZA</p></div>
+      <p><kbd>ESPACIO</kbd>CORTE AL OTRO DECK</p><p><kbd>←</kbd><kbd>→</kbd>CROSSFADER</p><p><kbd>A</kbd>AUTO-TRANSICIÓN</p><p><kbd>Q</kbd>CUANTIZACIÓN</p><p><kbd>I</kbd>INVERTIR · <kbd>V</kbd>GLITCH · <kbd>B</kbd>NEGRO</p><p><kbd>O</kbd>STROBE · <kbd>E</kbd>ESPEJO</p><p><kbd>`</kbd>EDITOR DECK C · <kbd>K</kbd>VER CÓDIGO</p><p><kbd>⇧1–9</kbd>CARGAR PIEZA</p></div>
   </div>
 </div>
 <div id="toast"></div>
 
 <script src="core.js"></script>
 <script src="control.js"></script>
+<script src="control-code.js"></script>
 </body>
 </html>
