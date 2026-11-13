@@ -8,6 +8,7 @@ Experiments in UI, motion and creative coding for games, apps and interfaces.
 
 | # | Lab | Category |
 |---|-----|----------|
+| 34 | [Horizonte](lab-34-horizonte/) | Motion |
 | 33 | [Escarcha](lab-33-escarcha/) | Motion |
 | 32 | [Cimática](lab-32-cimatica/) | Motion |
 | 31 | [Grieta](lab-31-grieta/) | Motion |
