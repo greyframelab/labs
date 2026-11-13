@@ -14,7 +14,8 @@
   // ================================================================== estado global
   const LIB = [];
   const MIX = { xf: 0, mode: 'fundido', onAir: 'A', quality: store.get('quality', 1) };
-  const FX = { trail: 0, hits: 0, split: 0, invert: 0, black: 0, bright: 1, glitch: 0, punch: 0, lens: 0, mosaic: 0, tint: 0, scan: 0, mirror: 0, strobe: 0, tintC: '#ffffff' };
+  const FX = { trail: 0, hits: 0, split: 0, invert: 0, black: 0, bright: 1, glitch: 0, punch: 0, lens: 0, mosaic: 0, tint: 0, scan: 0, mirror: 0, strobe: 0, tintC: '#ffffff',
+    pBloom: 1, pFlash: 1, cMix: 0, view: 0, viewOp: 0.85 };
   const AFX = { filter: 0, echo: 0, echoT: 0.375, room: 0.12, master: 0.9, av: store.get('av', 0) };
   let quant = store.get('quant', 'golpe');
   let focus = 'A';
@@ -120,6 +121,7 @@
     m.lp.connect(m.rS).connect(m.cv).connect(m.lim);
     m.out = ctx.createGain(); m.lim.connect(m.out); m.out.connect(ctx.destination);
     m.split = ctx.createChannelSplitter(2); m.out.connect(m.split);
+    m.fan = ctx.createAnalyser(); m.fan.fftSize = 2048; m.fan.smoothingTimeConstant = 0.6; m.out.connect(m.fan);
     m.aL = ctx.createAnalyser(); m.aR = ctx.createAnalyser(); m.aL.fftSize = m.aR.fftSize = 1024;
     m.split.connect(m.aL, 0); m.split.connect(m.aR, 1);
     return m;
@@ -443,6 +445,7 @@
       outOK = true;
       for (const it of LIB) if (it.hits) ch.postMessage({ type: 'hits', piece: it.id, hits: it.hits });
       dirty = true; flush();
+      VLC.resend && VLC.resend();
     } else if (m.type === 'stats') {
       outOK = true; $('#stOut').textContent = m.fps + ' FPS · ' + m.w + '×' + m.h;
       $('#ledOut').className = 'led ' + (m.fps >= 50 ? 'on' : m.fps >= 30 ? 'warn' : 'err');
@@ -450,6 +453,7 @@
     else if (m.type === 'loading') { const d = DECK[m.deck]; if (d) { d.ready = false; renderDeckState(d); } }
     else if (m.type === 'preview') drawPreview(m.bmp);
     else if (m.type === 'dprev') drawDeckPrev(DECK[m.deck], m.bmp);
+    else if (m.type === 'codeRes') VLC.onCodeRes && VLC.onCodeRes(m);
   };
   const mon = $('#mon'), mctx = mon.getContext('2d');
   function drawPreview(bmp) {
@@ -710,6 +714,29 @@
     const markQ = seg($('#quant'), 'quant', quant, (v) => { quant = v; store.set('quant', v); });
     CTL.quant.mark = markQ;
   }
+  // ---------------------------------------------------------------- inputs de código (todo apagado por defecto)
+  const VLC = window.VLC = { send: (m) => ch.postMessage(m), mix: () => FX.cMix, compiled: (v) => (VLC._ok = v), isCompiled: () => !!VLC._ok };
+  function buildCode() {
+    const fp = $('#fxPiece'); fp.style.setProperty('--acc', '#f2f0ea');
+    const x2 = (v) => (v * 2).toFixed(2) + '×';
+    knob(fp, 'pBloom', 'BLOOM', 0.5, (v) => { FX.pBloom = Math.abs(v - 0.5) < 0.01 ? 1 : v * 2; sendState(); }, x2);
+    knob(fp, 'pFlash', 'FLASH', 0.5, (v) => { FX.pFlash = Math.abs(v - 0.5) < 0.01 ? 1 : v * 2; sendState(); }, x2);
+    const kc = $('#kC'); kc.style.setProperty('--acc', '#f2f0ea');
+    knob(kc, 'cMix', 'MEZCLA C', 0, (v) => { FX.cMix = v; sendState(); if (v > 0 && !VLC.isCompiled()) toast('DECK C · ABRE EL EDITOR Y COMPILA UN CÓDIGO'); });
+    btn($('#cEdit'), 'cEdit', () => VLC.openEditor && VLC.openEditor());
+    btn($('#tg-view'), 'view', () => setFxToggle('view', FX.view ? 0 : 1));
+    const kv = $('#kView'); kv.style.setProperty('--acc', '#f2f0ea');
+    knob(kv, 'viewOp', 'OPACIDAD', FX.viewOp, (v) => { FX.viewOp = v; sendState(); });
+  }
+  let lastBands = 0;
+  const fbuf = new Uint8Array(1024);
+  function sendBands() {
+    if (!ctx || !(FX.cMix > 0 || FX.view) || performance.now() - lastBands < 33) return;
+    lastBands = performance.now();
+    M.fan.getByteFrequencyData(fbuf);
+    const hz = ctx.sampleRate / M.fan.fftSize, band = (a, b) => { let s = 0, n = 0; for (let i = Math.max(1, Math.floor(a / hz)); i < Math.min(fbuf.length, Math.floor(b / hz)); i++) { s += fbuf[i]; n++; } return n ? Math.min(1, s / n / 255 * 1.5) : 0; };
+    ch.postMessage({ type: 'bands', v: [band(20, 250), band(250, 3400), band(3400, 16000)] });
+  }
   function setFxToggle(f, v) { FX[f] = v; const b = $('#tg-' + f); if (b) b.classList.toggle('on', !!v); sendState(); }
 
   // ================================================================== bucle de interfaz
@@ -717,7 +744,7 @@
   function rms(an) { an.getFloatTimeDomainData(tdata.subarray(0, an.fftSize)); let s = 0; for (let i = 0; i < an.fftSize; i++) s += tdata[i] * tdata[i]; return Math.sqrt(s / an.fftSize); }
   function tick() {
     requestAnimationFrame(tick);
-    flush();
+    flush(); sendBands();
     for (const k in DECK) {
       const d = DECK[k]; if (!d.ui) continue;
       drawStrip(d);
@@ -768,8 +795,10 @@
       case 'KeyV': setFxToggle('glitch', FX.glitch ? 0 : 1); break;
       case 'KeyB': setFxToggle('black', FX.black ? 0 : 1); break;
       case 'KeyO': setFxToggle('strobe', FX.strobe ? 0 : 1); break;
+      case 'KeyK': setFxToggle('view', FX.view ? 0 : 1); break;
+      case 'Backquote': VLC.openEditor && VLC.openEditor(); break;
       case 'KeyE': CTL.mirror.press(); toast('ESPEJO · ' + ['OFF', 'HORIZONTAL', 'CUADRANTES', 'CALEIDOSCOPIO'][FX.mirror]); break;
-      case 'Escape': if (learn) toggleLearn(); break;
+      case 'Escape': if (VLC.isOpen && VLC.isOpen()) VLC.closeEditor(); else if (learn) toggleLearn(); break;
       default: if (e.key === '?') { $('#help').classList.toggle('on'); break; } return;
     }
     e.preventDefault();
@@ -820,7 +849,7 @@
   }
 
   // ================================================================== arranque
-  mkDeck('A'); mkDeck('B'); setFocus('A'); buildCenter();
+  mkDeck('A'); mkDeck('B'); setFocus('A'); buildCenter(); buildCode();
   $('#openOut').addEventListener('click', openOutput); $('#openOut2').addEventListener('click', openOutput);
   $('#learn').addEventListener('click', toggleLearn);
   $('#helpB').addEventListener('click', () => $('#help').classList.toggle('on'));

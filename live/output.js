@@ -10,7 +10,9 @@
 
   // ------------------------------------------------------------------ estado recibido
   let MIX = { xf: 0, mode: 'fundido', onAir: 'A', quality: 1 };
-  let FX = { trail: 0, hits: 0, split: 0, invert: 0, black: 0, bright: 1, glitch: 0, punch: 0, lens: 0, mosaic: 0, tint: 0, scan: 0, mirror: 0, strobe: 0, tintC: '#ffffff' };
+  let FX = { trail: 0, hits: 0, split: 0, invert: 0, black: 0, bright: 1, glitch: 0, punch: 0, lens: 0, mosaic: 0, tint: 0, scan: 0, mirror: 0, strobe: 0, tintC: '#ffffff',
+    pBloom: 1, pFlash: 1, cMix: 0, view: 0, viewOp: 0.85 };
+  let BANDS = [0, 0, 0];
   const HITS = {};          // piece id -> [s]
   const D = {};             // deck id -> { st, pending, piece, src, frame, api, next }
   ['A', 'B'].forEach((k) => (D[k] = { st: null, pending: [], piece: null, frame: null, api: null, next: null }));
@@ -23,7 +25,25 @@
         [['frame', d.frame], ['next', d.next]].forEach(([slot, fr]) => {
           if (!fr || fr.contentWindow !== win) return;
           const canvas = win.document.getElementById('c') || win.document.querySelector('canvas');
-          const api = { render: o.render, canvas, piece: fr.dataset.piece };
+          const api = { render: o.render, canvas, piece: fr.dataset.piece, acts: o.acts || [], dur: o.duration, post: { bloom: 1, flash: 0 } };
+          // mandos dentro de la pieza: se aplican en su propio postproceso (VL.post), no encima
+          try {
+            const VLw = win.VL;
+            if (VLw && VLw.post && !VLw.__live) {
+              const orig = VLw.post; VLw.__live = true;
+              VLw.post = function (out, frame, opt = {}) {
+                const o2 = Object.assign({}, opt);
+                o2.bloom = (opt.bloom ?? 1) * (FX.pBloom ?? 1); o2.flash = (opt.flash ?? 0) * (FX.pFlash ?? 1);
+                api.post = { bloom: o2.bloom, flash: o2.flash };
+                return orig.call(this, out, frame, o2);
+              };
+            }
+            // el programa real de la pieza, para VER EL CÓDIGO
+            const scripts = [...win.document.scripts].map((x) => x.textContent || '').filter((t) => /renderFrame/.test(t));
+            const main = scripts.sort((a, b) => b.length - a.length)[0] || '';
+            api.src = main.replace(/\t/g, '  ').split('\n').map((l) => l.replace(/\s+$/, '')).filter((l, i, a) => l || (a[i - 1] || '').trim());
+            api.title = (win.document.title || '').replace(/\s*·\s*(Greyframe Labs|VØID_LOOM)/gi, '');
+          } catch (e) {}
           if (slot === 'next') { if (d.frame) d.frame.remove(); d.frame = fr; d.next = null; }
           d.api = api; d.piece = fr.dataset.piece;
           ch.postMessage({ type: 'ready', deck: k, piece: d.piece });
@@ -54,6 +74,7 @@
     if (m.type === 'state') {
       hint.classList.add('off');
       const prevQ = MIX.quality;
+      traceState(m);
       MIX = m.mix; FX = m.fx;
       for (const k in m.decks) {
         const s = m.decks[k], d = D[k];
@@ -66,6 +87,12 @@
       if (prevQ !== MIX.quality) reloadAll();
     } else if (m.type === 'hits') HITS[m.piece] = m.hits;
     else if (m.type === 'ping') ch.postMessage({ type: 'hello', w: innerWidth, h: innerHeight });
+    else if (m.type === 'bands') BANDS = m.v;
+    else if (m.type === 'code') {
+      const r = CL.compile(m.src);
+      ch.postMessage(Object.assign({ type: 'codeRes' }, r));
+      CL.trace(tstr(), 'code', r.ok ? `deck C · compilado · ${r.lines} líneas` : `deck C · error línea ${r.line}`);
+    }
   };
   ch.postMessage({ type: 'hello', w: innerWidth, h: innerHeight });
 
@@ -148,7 +175,7 @@
   }`;
   const FS_BLIT = `#version 300 es
   precision highp float; precision highp sampler2DArray; in vec2 uv; out vec4 o;
-  uniform sampler2D S; uniform sampler2DArray H; uniform float scan, head;
+  uniform sampler2D S, OV; uniform sampler2DArray H; uniform float scan, head, ovOp;
   void main(){
     vec3 c = texture(S, uv).rgb;
     // escaneo (slit-scan): cada franja horizontal llega con más retraso hacia abajo
@@ -158,6 +185,7 @@
       vec3 hc = mix(texture(H, vec3(uv, l0)).rgb, texture(H, vec3(uv, l1)).rgb, fract(d));
       c = mix(c, hc, smoothstep(0., .12, scan));
     }
+    if (ovOp > 0.) { vec4 v = texture(OV, uv); c = c * (1. - v.a * ovOp) + v.rgb * ovOp; }
     o = vec4(c, 1.);
   }`;
   function sh(type, src) { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s)); return s; }
@@ -167,18 +195,24 @@
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
   gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
   const U = {}; ['A0', 'A1', 'B0', 'B1', 'FB', 'aw', 'bw', 'ga', 'gb', 'fa', 'fb', 'trail', 'flash', 'split', 'inv', 'black', 'bright', 'time', 'aspect', 'glitch', 'env', 'punch', 'lens', 'mosaic', 'tint', 'mirror', 'strobe', 'tintC'].forEach((n) => (U[n] = gl.getUniformLocation(P, n)));
-  const UB = {}; ['S', 'H', 'scan', 'head'].forEach((n) => (UB[n] = gl.getUniformLocation(PB, n)));
+  const UB = {}; ['S', 'H', 'scan', 'head', 'OV', 'ovOp'].forEach((n) => (UB[n] = gl.getUniformLocation(PB, n)));
   function tex() { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255])); return t; }
   const T = { A0: tex(), A1: tex(), B0: tex(), B1: tex() };
+  const CL = window.VLCodeLayer(gl, VS);
+  let CF = [], ci = 0;
   let FBO = [], HIST = null, HFB = null, HW = 0, HH = 0, head = 0;
   function sizeCanvas() {
     const dpr = Math.min(devicePixelRatio || 1, 2), w = innerWidth * dpr, h = innerHeight * dpr, k = Math.min(1, 1920 / Math.max(w, h));
     cv.width = Math.round(w * k); cv.height = Math.round(h * k);
     FBO.forEach((f) => { gl.deleteFramebuffer(f.fb); gl.deleteTexture(f.t); });
     FBO = [0, 1].map(() => { const t = tex(); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, cv.width, cv.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+      gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); return { fb, t }; });
+    CF.forEach((f) => { gl.deleteFramebuffer(f.fb); gl.deleteTexture(f.t); });
+    CF = [0, 1].map(() => { const t = tex(); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, cv.width, cv.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
       const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
       gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); return { fb, t }; });
     // historial de 32 frames a media resolución para el escaneo
@@ -244,7 +278,52 @@
     }
     r.env = hitEnv(s.piece, P_.p, s.rate) * w;
     r.ok = true;
+    r.p = P_.p;
+    if (w > 0.5) traceDeck(k, d, s, P_);
     return r;
+  }
+  // ------------------------------------------------------------------ traza y datos para VER EL CÓDIGO
+  const tstr = () => { const t = (performance.now() / 1000) % 3600; return String(Math.floor(t / 60)).padStart(2, '0') + ':' + (t % 60).toFixed(2).padStart(5, '0'); };
+  const actName = (api, p) => { let n = ''; (api.acts || []).forEach(([t0, nm]) => { if (p >= t0 - 1e-4) n = nm; }); return n; };
+  function traceDeck(k, d, s, P_) {
+    const T_ = d.tr || (d.tr = {});
+    const hs = HITS[s.piece] || [];
+    let hi = -1; for (let i = 0; i < hs.length; i++) { if (hs[i] <= P_.p) hi = i; else break; }
+    const act = actName(d.api, P_.p);
+    if (T_.piece === s.piece) {
+      if (act !== T_.act) CL.trace(tstr(), 'act', `${k} · acto ${act} → t = ${P_.p.toFixed(2)}`);
+      if (s.rate > 0 && P_.p < T_.p - 0.05 && !s.freeze) CL.trace(tstr(), 'loop', `${k} · vuelta → [${(+s.a).toFixed(2)}, ${(+s.b).toFixed(2)})`);
+      if (hi > T_.hi && hi >= 0) CL.trace(tstr(), 'hit', `${k} · golpe #${hi + 1} → VL.post({ bloom: ${d.api.post.bloom.toFixed(2)}, flash: ${d.api.post.flash.toFixed(2)} })`);
+    }
+    Object.assign(T_, { piece: s.piece, act, p: P_.p, hi });
+  }
+  const FXN = { trail: 'estela', split: 'división', bright: 'brillo', punch: 'latido', lens: 'lente', mosaic: 'mosaico', tint: 'tinte', scan: 'escaneo', mirror: 'espejo', pBloom: 'pieza.bloom', pFlash: 'pieza.flash', cMix: 'deckC.mezcla', hits: 'golpes' };
+  function traceState(m) {
+    if (!FX.view) return;
+    for (const key in FXN) if (m.fx[key] !== FX[key] && typeof m.fx[key] === 'number') CL.trace(tstr(), 'fx:' + key, `fx.${FXN[key]} = ${(+m.fx[key]).toFixed(2)}`);
+    if (m.mix.xf !== MIX.xf) CL.trace(tstr(), 'fx:xf', `crossfader = ${m.mix.xf.toFixed(2)}`);
+    for (const k in m.decks) {
+      const a = m.decks[k], b = D[k].st; if (!a) continue;
+      if (!b || a.piece !== b.piece) CL.trace(tstr(), 'deck', `${k} · carga ${a.piece}`);
+      else if (a.freeze != null && b.freeze == null) CL.trace(tstr(), 'deck', `${k} · congelar en t = ${(+a.freeze).toFixed(2)}`);
+      else if (a.once && !b.once) CL.trace(tstr(), 'deck', `${k} · FIRMA`);
+      else if (a.a !== b.a || a.b !== b.b) CL.trace(tstr(), 'deck', `${k} · loop [${(+a.a).toFixed(2)}, ${(+a.b).toFixed(2)})`);
+      else if (a.rate !== b.rate || a.ramp) CL.trace(tstr(), 'deck', `${k} · rate = ${a.ramp ? 'cinta → ' + a.ramp.to.toFixed(2) : (+a.rate).toFixed(2)}`);
+    }
+  }
+  function viewData(env) {
+    const k = MIX.onAir, d = D[k], api = d.api, s = d.st;
+    const p = (d.tr && d.tr.p) || 0;
+    const vals = [];
+    if (api && s) {
+      vals.push(['t', p.toFixed(3)], ['frame', Math.floor(p * 60)], ['acto', actName(api, p), true], ['rate', (+s.rate).toFixed(2) + '×'],
+        ['bloom', api.post.bloom.toFixed(3), env > 0.25], ['flash', api.post.flash.toFixed(3), env > 0.25],
+        ['golpe', d.tr && d.tr.hi >= 0 ? '#' + (d.tr.hi + 1) + '  ' + env.toFixed(2) : '—', env > 0.25]);
+      if (s.a > 0 || s.b < api.dur - 0.01) vals.push(['loop', `[${(+s.a).toFixed(2)}, ${(+s.b).toFixed(2)})`]);
+    }
+    vals.push(['audio', BANDS.map((v) => v.toFixed(2)).join(' ')]);
+    return { w: cv.width, h: cv.height, accent: FX.tintC, head: api ? 'VØID_LOOM · ' + (api.title || s.piece).toUpperCase() : 'VØID_LOOM', sub: 'renderFrame(t, frame) · deck ' + k,
+      src: api && api.src, p, dur: api ? api.dur : 1, golpe: env, vals, shader: CL.C.prog && FX.cMix > 0.001 ? CL.C.src : '', shaderMix: FX.cMix };
   }
   function frame(now) {
     requestAnimationFrame(frame);
@@ -273,9 +352,16 @@
     gl.uniform1f(U.tint, FX.tint || 0); gl.uniform1f(U.mirror, FX.mirror || 0); gl.uniform1f(U.strobe, FX.strobe ? 1 : 0);
     gl.uniform3fv(U.tintC, hex(FX.tintC));
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    // deck C: el shader en directo se aplica sobre la imagen compuesta (solo si está activo)
+    let fin = dst;
+    if (CL.C.prog && FX.cMix > 0.001) {
+      const outF = CF[ci], prevF = CF[ci ^ 1];
+      CL.pass({ fb: outF.fb, w: cv.width, h: cv.height, img: dst.t, a: T.A0, b: T.B0, prev: prevF.t, t: now / 1000, golpe: env, bands: BANDS, mix: FX.cMix, acc: hex(FX.tintC) });
+      fin = outF; ci ^= 1;
+    }
     // historial del escaneo: solo se graba con el efecto activo; al encenderlo se rellena con el frame actual
     if (FX.scan > 0) {
-      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, dst.fb); gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, HFB);
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, fin.fb); gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, HFB);
       const layers = scanOn ? [(head + 1) % 32] : [...Array(32).keys()];
       for (const l of layers) {
         gl.framebufferTextureLayer(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, HIST, 0, l);
@@ -285,7 +371,12 @@
       gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null); gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
     } else scanOn = false;
     gl.useProgram(PB); gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, cv.width, cv.height);
-    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, dst.t); gl.uniform1i(UB.S, 0);
+    // VER EL CÓDIGO
+    const viewOn = FX.view && FX.viewOp > 0.001;
+    if (viewOn) CL.draw(viewData(env), now);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fin.t); gl.uniform1i(UB.S, 0);
+    gl.activeTexture(gl.TEXTURE10); gl.bindTexture(gl.TEXTURE_2D, CL.tex); gl.uniform1i(UB.OV, 10);
+    gl.uniform1f(UB.ovOp, viewOn ? FX.viewOp : 0);
     gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D_ARRAY, HIST); gl.uniform1i(UB.H, 5);
     gl.uniform1f(UB.scan, FX.scan || 0); gl.uniform1f(UB.head, head);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
