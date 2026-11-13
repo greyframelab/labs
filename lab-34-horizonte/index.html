@@ -630,7 +630,7 @@ canvas{width:100vw;height:100vh;display:block}
       if (TR) { gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H); gl.useProgram(PB.p); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, TR.t); gl.uniform1i(PB.U.uT, 0); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); }
       c.drawImage(cv, 0, 0, W, H);
       // 4) telemetría: radios marcados en el plano del disco y lecturas que se frenan con el tiempo
-      if (!(a >= 0 && a < 0.12)) drawHud(c, t, tReal, vp, pc, rsPx, rt, red, fade, frozen, ring);
+      // sin interfaz en la pieza: la imagen habla sola (la única tipografía es la firma del cierre)
     }
     let bloom = 0.9 + 0.5 * red, flash = 0, flashColor;
     if (a >= 0 && ts < 0) { flash = 0.85 * Math.max(0, 1 - a / 0.3); flashColor = a < 0.05 ? ACC : undefined; bloom = 1.1 + 0.8 * Math.exp(-a * 1.2); }
