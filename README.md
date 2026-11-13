@@ -6,6 +6,7 @@ Experiments in UI, motion and creative coding for games, apps and interfaces.
 
 | # | Lab | Category |
 |---|-----|----------|
+| 33 | [Escarcha](lab-33-escarcha/) | Motion |
 | 32 | [Cimática](lab-32-cimatica/) | Motion |
 | 31 | [Grieta](lab-31-grieta/) | Motion |
 | 30 | [Campo](lab-30-campo/) | Motion |
