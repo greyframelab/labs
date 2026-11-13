@@ -1,0 +1,896 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Escarcha · VØID_LOOM · Greyframe Labs</title>
+<meta name="description" content="VØID_LOOM · Escarcha: la escarcha crece sobre un cristal negro al ritmo de una pieza IDM; tras el silencio se enciende la luz y en el vacío nace una estrella de hielo.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&display=swap">
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden}
+canvas{width:100vw;height:100vh;display:block}
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920" role="img" aria-label="Escarcha: helechos de escarcha blanca crecen a golpes sobre un cristal negro y cada golpe de hielo hace nacer un cristal nuevo; tras un silencio, una luz se enciende detrás del cristal y en el vacío central crece una estrella de hielo de seis brazos"></canvas>
+<script>
+// web: el lienzo ocupa toda la pantalla (apaisado en escritorio, vertical en móvil); ?render = 1080×1920 para el vídeo
+(function () {
+  if (new URLSearchParams(location.search).has('render')) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), w = innerWidth * dpr, h = innerHeight * dpr;
+  const k = Math.min(1, 1920 / Math.max(w, h));
+  window.VL_SIZE = [Math.round(w * k), Math.round(h * k)];
+  const c = document.getElementById('c'); c.width = window.VL_SIZE[0]; c.height = window.VL_SIZE[1];
+  const r0 = innerWidth / innerHeight; let tm;
+  addEventListener('resize', () => { clearTimeout(tm); tm = setTimeout(() => { const r = innerWidth / innerHeight; if (Math.abs(r - r0) / r0 > 0.12) location.reload(); }, 400); });
+})();
+</script>
+
+
+<script>
+/* VØID_LOOM — núcleo compartido + firma animada (sting) de cierre.
+   Todo es determinista: el estado de cada frame depende solo de t.
+   Uso en cualquier lab:  VL.post(...), VL.drawSymbol(...), VL.stingState(t, opts)  */
+(function () {
+  // tamaño del lienzo: 1080×1920 para el vídeo; la web puede fijar window.VL_SIZE = [w, h] antes de cargar
+  const W = (window.VL_SIZE && window.VL_SIZE[0]) || 1080, H = (window.VL_SIZE && window.VL_SIZE[1]) || 1920;
+  const VL = { W, H };
+  // marco virtual de la firma (1080×1920), centrado y escalado dentro del lienzo real
+  VL.FRAME = (function () { const k = Math.min(W / 1080, H / 1920); return { k, ox: (W - 1080 * k) / 2, oy: (H - 1920 * k) / 2 }; })();
+  VL.fx = (x) => VL.FRAME.ox + x * VL.FRAME.k;
+  VL.fy = (y) => VL.FRAME.oy + y * VL.FRAME.k;
+
+  // ---------- utilidades ----------
+  VL.clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+  VL.lerp = (a, b, k) => a + (b - a) * k;
+  VL.seg = (t, a, b) => VL.clamp((t - a) / (b - a));
+  VL.ease = {
+    inOut: (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2),
+    out: (x) => 1 - Math.pow(1 - x, 3),
+    outQuart: (x) => 1 - Math.pow(1 - x, 4),
+    outExpo: (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x)),
+    in: (x) => x * x * x,
+  };
+  VL.rng = function (seed) {
+    let a = seed >>> 0;
+    return function () {
+      a |= 0; a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  };
+  VL.hash = (a, b) => {
+    let h = Math.imul(a * 374761393 + b * 668265263, 1274126177);
+    h = (h ^ (h >>> 13)) * 1103515245;
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  };
+  VL.rgba = (hex, a) => {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  };
+  VL.INK = '#F2F0EA';
+  VL.GREY = '#8F8C86';
+  VL.ACCENTS = {
+    rojo: '#FF1A1A', cian: '#00E5FF', ambar: '#FFB000', verde: '#39FF6A',
+    violeta: '#8A2BFF', magenta: '#FF2BD6', blanco: '#F2F0EA',
+  };
+  VL.FONT = "'JetBrains Mono', ui-monospace, monospace";
+
+  // ---------- geometría del símbolo (viewBox 200 → pantalla) ----------
+  VL.geo = function (cx = 540, cy = 820, s = 3.0) {
+    const cols = [];
+    for (let k = 0; k < 7; k++) cols.push(cx + (k - 3) * 20 * s);
+    return {
+      cx, cy, s, cols,
+      R: 66 * s,                 // radio del vacío
+      top: cy - 86 * s, bottom: cy + 86 * s,
+      wA: [cx - 42 * s, cy + 42 * s], wB: [cx + 42 * s, cy - 42 * s],
+    };
+  };
+
+  // ---------- capas de post-procesado ----------
+  function mk(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+  let P = null;
+  function initPost() {
+    if (P) return P;
+    P = {};
+    P.scene = mk(W, H);
+    P.b1 = mk(W / 4, H / 4);
+    P.b2 = mk(W / 12, H / 12);
+    // grano: 6 texturas precalculadas
+    P.grain = [];
+    const r = VL.rng(77);
+    for (let g = 0; g < 6; g++) {
+      const c = mk(540, 960), x = c.getContext('2d');
+      const im = x.createImageData(540, 960);
+      for (let i = 0; i < im.data.length; i += 4) {
+        const v = (r() * 255) | 0;
+        im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255;
+      }
+      x.putImageData(im, 0, 0);
+      P.grain.push(c);
+    }
+    // scanlines
+    P.scan = mk(W, H);
+    const sx = P.scan.getContext('2d');
+    sx.fillStyle = 'rgba(0,0,0,0.22)';
+    for (let y = 0; y < H; y += 4) sx.fillRect(0, y, W, 1.5);
+    // viñeta
+    P.vig = mk(W, H);
+    const vx = P.vig.getContext('2d');
+    const gr = vx.createRadialGradient(W / 2, H * 0.45, H * 0.18, W / 2, H * 0.45, H * 0.72);
+    gr.addColorStop(0, 'rgba(0,0,0,0)');
+    gr.addColorStop(1, 'rgba(0,0,0,0.78)');
+    vx.fillStyle = gr; vx.fillRect(0, 0, W, H);
+    return P;
+  }
+  VL.sceneCtx = function () {
+    const p = initPost();
+    const c = p.scene.getContext('2d');
+    c.globalCompositeOperation = 'source-over';
+    c.globalAlpha = 1;
+    c.fillStyle = '#000'; c.fillRect(0, 0, W, H);
+    c.globalCompositeOperation = 'lighter';
+    return c;
+  };
+  // compone escena → salida con bloom, flash, scanlines, viñeta y grano
+  VL.post = function (out, frame, opt = {}) {
+    const p = initPost();
+    const bloom = opt.bloom ?? 1, flash = opt.flash ?? 0;
+    const b1 = p.b1.getContext('2d'), b2 = p.b2.getContext('2d');
+    b1.globalCompositeOperation = 'copy'; b1.filter = 'blur(3px)';
+    b1.drawImage(p.scene, 0, 0, p.b1.width, p.b1.height); b1.filter = 'none';
+    b2.globalCompositeOperation = 'copy'; b2.filter = 'blur(4px)';
+    b2.drawImage(p.b1, 0, 0, p.b2.width, p.b2.height); b2.filter = 'none';
+
+    out.globalCompositeOperation = 'source-over'; out.globalAlpha = 1;
+    out.drawImage(p.scene, 0, 0);
+    out.globalCompositeOperation = 'lighter';
+    out.imageSmoothingEnabled = true; out.imageSmoothingQuality = 'high';
+    out.globalAlpha = VL.clamp(0.85 * bloom, 0, 1); out.drawImage(p.b1, 0, 0, W, H);
+    out.globalAlpha = VL.clamp(0.9 * bloom, 0, 1); out.drawImage(p.b2, 0, 0, W, H);
+    if (bloom > 1.1) { out.globalAlpha = VL.clamp((bloom - 1) * 0.5, 0, 1); out.drawImage(p.b2, 0, 0, W, H); }
+    if (flash > 0) {
+      out.globalAlpha = 1;
+      out.fillStyle = opt.flashColor ? VL.rgba(opt.flashColor, flash * 0.22) : `rgba(242,240,234,${flash * 0.22})`;
+      out.fillRect(0, 0, W, H);
+    }
+    out.globalAlpha = 1;
+    out.globalCompositeOperation = 'source-over';
+    out.drawImage(p.scan, 0, 0);
+    out.drawImage(p.vig, 0, 0);
+    // grano sutil: en zonas planas y luminosas (horizontes, halos) un grano fuerte ensucia la imagen
+    const g = p.grain[frame % p.grain.length], gk = opt.grain ?? 1;
+    out.globalCompositeOperation = 'overlay'; out.globalAlpha = 0.11 * gk;
+    out.drawImage(g, 0, 0, W, H);
+    out.globalCompositeOperation = 'lighter'; out.globalAlpha = 0.01 * gk;
+    out.drawImage(g, 0, 0, W, H);
+    out.globalAlpha = 1; out.globalCompositeOperation = 'source-over';
+  };
+
+  // ---------- primitivas de luz ----------
+  // línea luminosa: halo ancho + cuerpo + núcleo caliente
+  VL.lightLine = function (c, x1, y1, x2, y2, col, w, k = 1) {
+    c.lineCap = 'round';
+    const pass = (lw, a, cc) => { c.strokeStyle = VL.rgba(cc, a * k); c.lineWidth = lw; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); };
+    pass(w * 7, 0.06, col);
+    pass(w * 3.2, 0.16, col);
+    pass(w, 0.95, col);
+    pass(Math.max(1.2, w * 0.3), 0.55, '#FFFFFF');
+  };
+
+  // ---------- el símbolo ----------
+  // st: { threads, top, bottom, vib, open, ring, ringColor, weft, weftGlow, ghost, accent, ca, dim }
+  VL.drawSymbol = function (c, g, st, t) {
+    const acc = st.accent;
+    const R = g.R * (st.open || 0);
+    const thr = st.threads ?? 1;
+    const dim = st.dim ?? 1;
+    const top = st.top ?? g.top, bottom = st.bottom ?? g.bottom;
+    const vib = st.vib || 0;
+    const coreW = 3 * g.s;
+
+    // fantasma de los hilos dentro del vacío
+    if ((st.ghost || 0) > 0 && thr > 0) {
+      c.lineCap = 'butt';
+      c.strokeStyle = VL.rgba(VL.INK, 0.1 * st.ghost * thr * dim);
+      c.lineWidth = coreW;
+      c.beginPath();
+      for (const x of g.cols) { c.moveTo(x, Math.max(top, g.cy - R)); c.lineTo(x, Math.min(bottom, g.cy + R)); }
+      c.stroke();
+    }
+
+    // urdimbre: 7 hilos (con vibración de cuerda y corte del vacío)
+    if (thr > 0) {
+      const passes = [[coreW * 5, 0.05], [coreW * 2.2, 0.14], [coreW, 0.92], [coreW * 0.35, 0.45]];
+      for (let pi = 0; pi < passes.length; pi++) {
+        const [lw, a] = passes[pi];
+        c.lineCap = 'butt';
+        c.lineWidth = lw;
+        c.strokeStyle = pi === 3 ? `rgba(255,255,255,${a * thr * dim})` : VL.rgba(VL.INK, a * thr * dim);
+        c.beginPath();
+        for (let k = 0; k < 7; k++) {
+          const X = g.cols[k], dx = X - g.cx;
+          const h = R > Math.abs(dx) ? Math.sqrt(R * R - dx * dx) : 0;
+          const segs = h > 0 ? [[top, g.cy - h], [g.cy + h, bottom]] : [[top, bottom]];
+          for (const [ya, yb] of segs) {
+            if (yb - ya < 1) continue;
+            const n = vib > 0.3 ? 48 : 1;
+            for (let i = 0; i <= n; i++) {
+              const y = ya + (yb - ya) * (i / n);
+              const u = (y - top) / Math.max(1, bottom - top);
+              const off = vib * Math.sin(Math.PI * u) * Math.sin(t * 23 + k * 1.7 + u * 9.0) * (0.6 + 0.4 * Math.sin(k * 2.3 + t * 3));
+              if (i === 0) c.moveTo(X + off, y); else c.lineTo(X + off, y);
+            }
+          }
+        }
+        c.stroke();
+      }
+    }
+
+    // onda de choque del vacío
+    if (st.ring != null && st.ring >= 0 && st.ring < 1) {
+      const rr = g.R * (1 + 1.9 * VL.ease.out(st.ring));
+      const a = Math.pow(1 - st.ring, 2);
+      const rc = st.ringColor || acc;
+      c.strokeStyle = VL.rgba(rc, 0.9 * a); c.lineWidth = 10 * (1 - st.ring) + 1.5;
+      c.beginPath(); c.arc(g.cx, g.cy, rr, 0, Math.PI * 2); c.stroke();
+      c.strokeStyle = VL.rgba(VL.INK, 0.5 * a); c.lineWidth = 2;
+      c.beginPath(); c.arc(g.cx, g.cy, rr * 0.93, 0, Math.PI * 2); c.stroke();
+    }
+
+    // trama: el hilo de color
+    if ((st.weft || 0) > 0) {
+      const p = st.weft;
+      const [ax, ay] = g.wA, [bx, by] = g.wB;
+      const hx = VL.lerp(ax, bx, p), hy = VL.lerp(ay, by, p);
+      const gk = (st.weftGlow ?? 1) * dim;
+      const ww = 5 * g.s;
+      const ca = st.ca || 0;
+      if (ca > 0.5) {
+        VL.lightLine(c, ax - ca, ay, hx - ca, hy, '#FF2A2A', ww * 0.8, 0.45 * gk);
+        VL.lightLine(c, ax + ca, ay, hx + ca, hy, '#2AB8FF', ww * 0.8, 0.45 * gk);
+      }
+      VL.lightLine(c, ax, ay, hx, hy, acc, ww, gk);
+      if (p < 1) { // cabeza incandescente
+        const gr = c.createRadialGradient(hx, hy, 0, hx, hy, 90);
+        gr.addColorStop(0, 'rgba(255,255,255,0.95)');
+        gr.addColorStop(0.15, VL.rgba(acc, 0.8));
+        gr.addColorStop(1, VL.rgba(acc, 0));
+        c.fillStyle = gr; c.beginPath(); c.arc(hx, hy, 90, 0, Math.PI * 2); c.fill();
+      }
+    }
+  };
+
+  // ---------- texto ----------
+  const GLYPHS = 'Ø#/\\|_=+<>01X:;*%';
+  VL.decodeText = function (c, str, x, y, opt) {
+    const size = opt.size || 40, spacing = opt.spacing ?? 0.42, prog = opt.prog ?? 1;
+    const alpha = opt.alpha ?? 1, align = opt.align || 'center';
+    const weight = opt.weight || 300, t = opt.t || 0, seed = opt.seed || 1;
+    c.font = `${weight} ${size}px ${VL.FONT}`;
+    c.textBaseline = 'middle'; c.textAlign = 'left';
+    const adv = c.measureText('M').width + size * spacing;
+    const total = adv * str.length - size * spacing;
+    let x0 = align === 'center' ? x - total / 2 : align === 'right' ? x - total : x;
+    const n = str.length;
+    for (let i = 0; i < n; i++) {
+      const ch = str[i];
+      if (ch === ' ') continue;
+      const ri = VL.clamp((prog * (n + 3) - i) / 3);
+      if (ri <= 0) continue;
+      let draw = ch;
+      if (ri < 1) draw = GLYPHS[Math.floor(VL.hash(i + seed * 31, Math.floor(t * 24)) * GLYPHS.length)];
+      const isAcc = opt.accentChar && ch === opt.accentChar && ri >= 1;
+      const col = isAcc ? opt.accent : (opt.color || VL.INK);
+      c.font = `${isAcc ? 600 : weight} ${size}px ${VL.FONT}`;
+      c.fillStyle = VL.rgba(col, alpha * (ri < 1 ? 0.55 + 0.45 * ri : 1));
+      c.fillText(draw, x0 + i * adv, y);
+    }
+  };
+
+  // HUD de esquinas (telemetría)
+  VL.hud = function (c, t, opt = {}) {
+    const a = opt.alpha ?? 1;
+    if (a <= 0) return;
+    c.font = `400 22px ${VL.FONT}`;
+    c.textBaseline = 'middle';
+    c.fillStyle = VL.rgba(VL.GREY, 0.9 * a);
+    const fps = 30, tt = Math.max(0, t);
+    const tc = [Math.floor(tt / 3600), Math.floor(tt / 60) % 60, Math.floor(tt) % 60, Math.floor((tt % 1) * fps)]
+      .map((v) => String(v).padStart(2, '0')).join(':');
+    c.textAlign = 'left'; c.fillText(opt.tl || 'VØID_LOOM / SYS.01', 72, 120);
+    c.textAlign = 'right'; c.fillText(tc, W - 72, 120);
+    c.textAlign = 'left'; c.fillText(opt.bl || 'GREYFRAME LABS', 72, 1640);
+    c.textAlign = 'right'; c.fillText(opt.br || 'SEÑAL 07/07', W - 72, 1640);
+    // corchetes de encuadre
+    c.strokeStyle = VL.rgba(VL.GREY, 0.55 * a); c.lineWidth = 2;
+    const m = 48, L = 36;
+    c.beginPath();
+    c.moveTo(m, m + L); c.lineTo(m, m); c.lineTo(m + L, m);
+    c.moveTo(W - m - L, m); c.lineTo(W - m, m); c.lineTo(W - m, m + L);
+    c.moveTo(m, 1700 - L); c.lineTo(m, 1700); c.lineTo(m + L, 1700);
+    c.moveTo(W - m - L, 1700); c.lineTo(W - m, 1700); c.lineTo(W - m, 1700 - L);
+    c.stroke();
+  };
+
+  // ---------- cierre: logotipo + firma ----------
+  VL.drawSignature = function (c, g, st, t) {
+    if ((st.wordAlpha || 0) > 0)
+      VL.decodeText(c, 'VØID_LOOM', g.cx, g.bottom + 150, {
+        size: 70, spacing: 0.42, prog: st.word, alpha: st.wordAlpha, t, seed: 3,
+        accentChar: 'Ø', accent: st.accent, weight: 300,
+      });
+    if ((st.tag || 0) > 0)
+      VL.decodeText(c, 'SEÑAL · RUIDO · MOTION EXPERIMENTAL', g.cx, g.bottom + 240, {
+        size: 22, spacing: 0.5, prog: VL.clamp(st.tag * 1.6), alpha: st.tag, t, seed: 5, color: VL.GREY, weight: 400,
+      });
+    const lines = st.creditLines || ['GREYFRAME LABS', 'greyframelab.github.io/labs'];
+    if ((st.credit || 0) > 0) {
+      VL.decodeText(c, lines[0], g.cx, 1500, { size: 24, spacing: 0.34, prog: VL.clamp(st.credit * 1.5), alpha: st.credit, t, seed: 7, color: '#BDBAB3', weight: 400 });
+      if (lines[1]) VL.decodeText(c, lines[1], g.cx, 1550, { size: 22, spacing: 0.06, prog: VL.clamp(st.credit * 1.5 - 0.3), alpha: st.credit * 0.9, t, seed: 9, color: VL.GREY, weight: 400 });
+    }
+  };
+
+  // ---------- STING: firma animada reutilizable (5.5 s) ----------
+  // Llamar con t local (0 → VL.STING_DUR). opts: { accent, creditLines, skipDrop }
+  VL.STING_DUR = 5.5;
+  VL.stingState = function (t, opts = {}) {
+    const g = opts.geo || VL.geo();
+    const e = VL.ease, sg = VL.seg;
+    const drop = opts.skipDrop ? 1 : e.out(sg(t, 0.0, 0.7));
+    const tOpen = 0.75, tWeft = 1.05;
+    const out = 1 - e.inOut(sg(t, 4.7, 5.5));
+    return {
+      accent: opts.accent || VL.ACCENTS.rojo,
+      creditLines: opts.creditLines,
+      threads: drop * out,
+      top: VL.lerp(g.cy, g.top, drop), bottom: VL.lerp(g.cy, g.bottom, drop),
+      vib: 14 * (1 - sg(t, 0.2, 1.6)) * (t > 0.2 ? 1 : 0),
+      open: e.outExpo(sg(t, tOpen, tOpen + 0.35)),
+      ring: t >= tOpen ? sg(t, tOpen, tOpen + 0.9) : -1,
+      weft: e.outQuart(sg(t, tWeft, tWeft + 0.28)),
+      weftGlow: (1 + 0.12 * Math.sin(t * 2.4)) * VL.clamp(out + (1 - sg(t, 4.7, 5.4)) * 0.6),
+      ghost: sg(t, 1.2, 2.0),
+      ca: 10 * (1 - sg(t, tWeft, tWeft + 0.5)) * (t >= tWeft ? 1 : 0),
+      word: sg(t, 1.5, 2.6), wordAlpha: sg(t, 1.5, 1.7) * out,
+      tag: sg(t, 2.6, 3.2) * out,
+      credit: sg(t, 3.0, 3.6) * out,
+      flash: Math.max(t >= tOpen ? 1 - sg(t, tOpen, tOpen + 0.5) : 0, t >= tWeft ? 0.7 * (1 - sg(t, tWeft, tWeft + 0.45)) : 0),
+    };
+  };
+  // dibuja el sting completo en un contexto de escena
+  VL.drawSting = function (c, t, opts = {}) {
+    const g = opts.geo || VL.geo();
+    const st = VL.stingState(t, opts);
+    const F = VL.FRAME, framed = W !== 1080 || H !== 1920;
+    if (framed) { c.save(); c.translate(F.ox, F.oy); c.scale(F.k, F.k); }
+    VL.drawSymbol(c, g, st, t);
+    VL.drawSignature(c, g, st, t);
+    if (framed) c.restore();
+    return st;
+  };
+
+  window.VL = VL;
+})();
+</script>
+<script src="escarcha-score.js"></script>
+<script>
+/* VØID_LOOM — Lab 33 · Escarcha (24,9 s). Determinista y sin estado: renderFrame(t, frame).
+   La escarcha crece sobre un cristal negro. Cada voz de la partitura (escarcha-score.js) tiene su gesto:
+   bombo = la escarcha avanza un paso · golpe de hielo = nace un cristal · ticks = destellos en las puntas
+   bajo = la luz lejana respira · crujido = el cristal se tensa · stutter = la imagen repite lo que repite el audio.
+   Tras el silencio se enciende la luz detrás del cristal y en el vacío central crece una estrella de seis brazos. */
+(function () {
+  const VL = window.VL, W = VL.W, H = VL.H, e = VL.ease, sg = VL.seg, clamp = VL.clamp, lerp = VL.lerp;
+  const ACC = VL.ACCENTS.cian;
+  const { T, EV, X, warp, G } = window.ESC;
+  const DUR = T.sting + VL.STING_DUR;
+  window.DURATION = DUR; window.FPS = 60;
+  const g = VL.geo();
+
+  // ================================================================ 1 · el cristal: crecimiento precalculado
+  // Campo N×N sobre el cristal (coordenadas -1..1). Por texel: llegada efectiva del frente (eff), perfil de la rama (h) y variación.
+  const N = 2048, WT = 46, NORM = 4096;
+  const EFF = new Float32Array(N * N).fill(1e6), HH = new Float32Array(N * N).fill(-1), VAR = new Uint8Array(N * N), OWN = new Int16Array(N * N).fill(-1), BID = new Int32Array(N * N).fill(-1);
+  let nBid = 0; const PAR = [];
+  const RV = 0.37;                                  // radio del vacío central (solo lo ocupa la estrella del clímax)
+  const rng = VL.rng(3301);
+  const toPx = (u) => (u + 1) * 0.5 * N;
+  function stamp(x, y, r, a, v, own, bid) {
+    const R = r + 2.2, x0 = Math.max(0, Math.floor(x - R)), x1 = Math.min(N - 1, Math.ceil(x + R)), y0 = Math.max(0, Math.floor(y - R)), y1 = Math.min(N - 1, Math.ceil(y + R));
+    for (let j = y0; j <= y1; j++) for (let i = x0; i <= x1; i++) {
+      const d = Math.hypot(i + 0.5 - x, j + 0.5 - y); if (d > R) continue;
+      const h = 1 - d / r, k = j * N + i, ef = a + (1 - Math.min(h, 1)) * WT;
+      // los texels fuera del borde (h < 0) solo prolongan el cono para que el borde quede suave a cualquier zoom
+      if (h > 0) { if (HH[k] <= 0 || ef < EFF[k]) { EFF[k] = ef; HH[k] = h; VAR[k] = v; OWN[k] = own; BID[k] = bid; } }
+      else if (HH[k] <= 0 && h > HH[k]) { EFF[k] = ef; HH[k] = h; VAR[k] = v; }
+    }
+  }
+  // segmento continuo (cápsula) entre dos puntos de la rama: borde limpio a cualquier zoom
+  function seg(x0, y0, x1, y1, r0, r1, a0, a1, v, own, bid) {
+    const R = Math.max(r0, r1) + 2.2;
+    const xa = Math.max(0, Math.floor(Math.min(x0, x1) - R)), xb = Math.min(N - 1, Math.ceil(Math.max(x0, x1) + R));
+    const ya = Math.max(0, Math.floor(Math.min(y0, y1) - R)), yb = Math.min(N - 1, Math.ceil(Math.max(y0, y1) + R));
+    const dx = x1 - x0, dy = y1 - y0, L2 = dx * dx + dy * dy || 1e-6;
+    for (let j = ya; j <= yb; j++) for (let i = xa; i <= xb; i++) {
+      const px = i + 0.5 - x0, py = j + 0.5 - y0;
+      const u = Math.max(0, Math.min(1, (px * dx + py * dy) / L2));
+      const d = Math.hypot(px - u * dx, py - u * dy), r = r0 + (r1 - r0) * u;
+      if (d > r + 2.2) continue;
+      const h = 1 - d / r, k = j * N + i, a = a0 + (a1 - a0) * u, ef = a + (1 - Math.min(h, 1)) * WT;
+      if (h > 0) { if (HH[k] <= 0 || ef < EFF[k]) { EFF[k] = ef; HH[k] = h; VAR[k] = v; OWN[k] = own; BID[k] = bid; } }
+      else if (HH[k] <= 0 && h > HH[k]) { EFF[k] = ef; HH[k] = h; VAR[k] = v; }
+    }
+  }
+  function blocked(x, y, own, bid, pbid, aNow, gen) { const i = x | 0, j = y | 0; if (i < 1 || j < 1 || i >= N - 1 || j >= N - 1) return true; const k = j * N + i, o = OWN[k]; if (o < 0) return false; if (o !== own) return EFF[k] < aNow + 30; if (gen < 2) return false; const b = BID[k]; return b !== bid && b !== pbid; }
+  const STEMS = [];
+  // una rama: avanza curvándose y suelta ramas laterales a ±60° (el hielo crece en ejes hexagonales)
+  function branch(x, y, ang, len, w, gen, a0, own, spd, opt, pbid = -1) {
+    const bid = nBid++, ox = x, oy = y; PAR[bid] = pbid;
+    const stopR = RV * (0.5 + 0.62 * Math.pow(VL.hash(bid, 3), 0.8));
+    const path = gen === 0 ? [] : null;
+    let px = -1, py = 0, pr = 0, pa = 0;
+    const vv = gen * 70 + ((rng() * 60) | 0);
+    let s = 0, side = rng() < 0.5 ? 1 : -1, next = (opt.opposite && gen === 0 ? len * 0.14 : 4) + rng() * 6, curv = (rng() - 0.5) * (opt.curv ?? 0.004);
+    const sp = [14, 9, 4.5][gen] * (opt.spK ?? 1), stepL = Math.max(1.5, w * 1.2);
+    while (s < len) {
+      const u = x / N * 2 - 1, v2 = y / N * 2 - 1;
+      // el vacío no es un recorte: cada rama se detiene a su propia distancia, con un borde irregular que sale del crecimiento
+      if (!opt.star) { const an = Math.atan2(v2, u); if (Math.hypot(u, v2) < stopR * (1 + 0.16 * Math.sin(an * 3 + 1.3) + 0.09 * Math.sin(an * 7 + 0.4) + 0.05 * Math.sin(an * 13 + 2.1))) break; }
+      if (opt.star && Math.hypot(u, v2) > RV * 1.05) break;
+      if (!opt.star && Math.hypot(x - ox, y - oy) > w * 2 + 5 && blocked(x + Math.cos(ang) * (w + 1.5), y + Math.sin(ang) * (w + 1.5), own, bid, pbid, a0 + s * spd, gen)) break;
+      const taper = Math.max(0.12, 1 - 0.88 * Math.pow(s / len, 0.8));
+      const a = a0 + s * spd;
+      if (px < 0) stamp(x, y, w * taper, a, vv, own, bid); else seg(px, py, x, y, pr, w * taper, pa, a, vv, own, bid);
+      px = x; py = y; pr = w * taper; pa = a;
+      if (path && ((s | 0) % 6 === 0)) path.push([u, v2, a]);
+      if (gen < 2 && s >= next) {
+        const rem = len - s;
+        let bl = Math.min(rem * (gen === 0 ? 0.8 : 0.5), gen === 0 ? (opt.maxSide ?? 260) : 70) * (0.25 + 0.75 * Math.pow(rng(), 0.7)) * (opt.sideK ?? 1);
+        if (opt.star) bl = (opt.maxSide ?? 120) * Math.pow(Math.sin(Math.PI * Math.min(1, s / len * 1.15)), 1.4) * (gen === 0 ? 1 : 0.35) * (0.7 + 0.3 * rng());
+        const sides = opt.opposite ? [1, -1] : [side];
+        for (const sd of sides) if (bl > 5 && !(opt.star && gen === 1)) branch(x, y, ang + sd * Math.PI / 3 * (opt.star ? 1 : 0.92 + 0.16 * rng()), bl, w * (0.5 + 0.2 * rng()), gen + 1, a, own, spd * (gen === 0 ? 1.35 : 1.5), { star: opt.star, curv: 0.002, maxSide: opt.maxSide, spK: opt.spK, sideK: opt.sideK }, bid);
+        side = -side; next = s + (opt.star ? (gen === 0 ? 26 : 9) : sp) * (0.7 + 0.6 * rng());
+      }
+      if (!opt.star) { curv += (rng() - 0.5) * 0.0016; curv *= 0.98; ang += curv; }
+      x += Math.cos(ang) * stepL; y += Math.sin(ang) * stepL; s += stepL;
+    }
+    if (path && path.length > 4) STEMS.push(path);
+  }
+  // semillas: escarcha que entra desde los bordes (ya presente en el segundo 0), cristales que nacen con cada golpe de hielo, y la estrella
+  const seeds = [];
+  for (let k = 0; k < 44; k++) {
+    const side = k % 4, f = (k / 44 + rng() * 0.03) * 4 % 1 * 1.9 - 0.95;
+    const P = [[f, -1], [1, f], [f, 1], [-1, f]][side], ang0 = [Math.PI / 2, Math.PI, -Math.PI / 2, 0][side] + (rng() - 0.5) * 0.9;
+    seeds.push({ x: P[0] * 0.995, y: P[1] * 0.995, ang: ang0, a0: G(0) - 440 + k * 21 + rng() * 70, len: 900 + rng() * 700, w: 2.6 + rng() * 1.0, type: 'edge' });
+  }
+  const SEEDS_S = [];
+  for (const s of EV) {
+    if (s.v !== 'S' || s.star || s.t >= T.cut) continue;
+    let x = s.x, y = s.y; const d = Math.hypot(x, y); if (d < RV + 0.12) { const k = (RV + 0.12 + 0.2 * Math.abs(x)) / Math.max(d, 0.01); x *= k; y *= k; }
+    x = clamp(x, -0.9, 0.9); y = clamp(y, -0.9, 0.9);
+    const sd = { x, y, ang: (s.seed % 60) / 60 * Math.PI / 3, a0: G(s.t), len: 170 + 220 * s.s, w: 1.8, type: 'nuc', t: s.t };
+    seeds.push(sd); SEEDS_S.push(sd);
+  }
+  seeds.sort((p, q) => p.a0 - q.a0);
+  seeds.forEach((sd, i) => {
+    if (sd.type === 'edge') { const kind = VL.hash(i, 91); const needle = kind < 0.3; branch(toPx(sd.x), toPx(sd.y), sd.ang, sd.len * (needle ? 1.15 : 1), sd.w * (needle ? 1.25 : 0.8 + 0.5 * kind), 0, sd.a0, i, 1, { maxSide: needle ? 90 : 240, spK: needle ? 2.4 : 0.7 + 0.8 * kind, sideK: needle ? 0.6 : 0.8 + 0.5 * VL.hash(i, 17), curv: needle ? 0.001 : 0.004 }); }
+    else for (let k = 0; k < 6; k++) { if (rng() < 0.25) continue; branch(toPx(sd.x), toPx(sd.y), sd.ang + k * Math.PI / 3 + (rng() - 0.5) * 0.3, sd.len * (0.35 + 0.65 * rng()), sd.w, 0, sd.a0, i, 1.15, { opposite: rng() < 0.5, maxSide: 40 + 60 * rng(), curv: 0.006 }); }
+  });
+  // la estrella del clímax: seis brazos con ramas opuestas, crece desde el centro del vacío
+  const STAR_A0 = G(T.rupt) + 4;
+  for (let k = 0; k < 6; k++) branch(N / 2, N / 2, -Math.PI / 2 + k * Math.PI / 3, RV * N / 2 * 0.97, 3.4, 0, STAR_A0, 999, 0.6, { star: true, opposite: true, maxSide: 48 });
+  for (let k = 0; k < 6; k++) branch(N / 2, N / 2, k * Math.PI / 3, 34, 2.2, 1, STAR_A0, 999, 0.6, { star: true });
+  stamp(N / 2, N / 2, 4, STAR_A0, 0, 999, -2);
+  // placa central: anillos hexagonales finos, como un cristal tallado
+  for (const [rr, ww] of [[22, 1.5], [44, 1.2], [70, 1.0]]) for (let k = 0; k < 6; k++) {
+    const a1 = -Math.PI / 2 + k * Math.PI / 3, a2 = a1 + Math.PI / 3;
+    for (let u = 0; u <= 1; u += 0.6 / rr) {
+      const x = N / 2 + rr * lerp(Math.cos(a1), Math.cos(a2), u), y = N / 2 + rr * lerp(Math.sin(a1), Math.sin(a2), u);
+      stamp(x, y, ww, STAR_A0 + rr * 0.6 + 10 + Math.abs(u - 0.5) * rr * 0.6, 120, 999, -3);
+    }
+  }
+
+  // ================================================================ 2 · WebGL2
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const gl = cv.getContext('webgl2', { alpha: false, antialias: false, preserveDrawingBuffer: true });
+  gl.getExtension('EXT_color_buffer_float');
+  const field = new Float32Array(N * N * 4);
+  for (let k = 0; k < N * N; k++) { field[k * 4] = Math.min(EFF[k], 16000) / NORM; field[k * 4 + 1] = Math.max(-1, HH[k]); field[k * 4 + 2] = VAR[k] / 255; field[k * 4 + 3] = OWN[k] === 999 ? 1 : 0; }
+  const texF = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, texF);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, N, N, 0, gl.RGBA, gl.FLOAT, field);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  // capa plana del cristal (para el desenfoque de profundidad, con mipmaps)
+  const NF = 1024;
+  const texL = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, texL);
+  gl.texStorage2D(gl.TEXTURE_2D, 11, gl.RGBA8, NF, NF);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const fbL = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fbL); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texL, 0);
+
+  const COMMON = `
+  uniform sampler2D uF; uniform float uG, uKey, uBack, uFlare, uCreak, uCt, uTime, uStar;
+  uniform vec4 uHh;   // ticks: edad, fuerza, semilla, —
+  uniform vec4 uNs;   // nacimiento: x, y, edad, fuerza
+  uniform vec3 uBl;   // luz lejana: x, y, intensidad
+  uniform vec4 uLt;   // la luz fría tras el cristal: x, y, radio, intensidad
+  const vec3 ACC = vec3(0.0, 0.898, 1.0);
+  const float WT = ${WT.toFixed(1)}, NORM = ${NORM.toFixed(1)}, N = ${N.toFixed(1)};
+  float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+  float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
+    return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y); }
+  vec2 creak(vec2 p){ // el cristal se tensa: una onda fina recorre la lámina
+    float w = sin(dot(p, vec2(0.8, 0.6)) * 34. - uCt * 22.) * exp(-uCt * 3.);
+    return p + vec2(0.6, -0.8) * w * 0.0016 * uCreak;
+  }
+  // devuelve: x = luz del hielo, y = cobertura
+  vec3 ice(vec2 p, float aa, vec3 V){
+    vec2 uv = p * 0.5 + 0.5;
+    vec4 f = texture(uF, uv);
+    float eff = f.r * NORM, h = f.g, va = f.b, star = f.a;
+    float G = uG + star * uStar;
+    // borde irregular a escala micro: facetas en los ejes hexagonales
+    float fac = vn(p * 820.) * 0.6 + vn(p * 2300.) * 0.4;
+    float m = min(G - eff, h * WT) + (fac - 0.5) * WT * 0.1;
+    float cov = smoothstep(-aa, aa, m);
+    if (cov <= 0.001) return vec3(0.);
+    float age = G - eff;
+    // normal a partir del perfil de la rama
+    float e = 1.0 / N;
+    float hx = texture(uF, uv + vec2(e, 0.)).g - texture(uF, uv - vec2(e, 0.)).g;
+    float hy = texture(uF, uv + vec2(0., e)).g - texture(uF, uv - vec2(0., e)).g;
+    vec3 n0 = normalize(vec3(-hx * 4.5, -hy * 4.5, 1.));
+    // facetas: la normal se ajusta a los seis ejes del hielo → caras planas que destellan cuando gira la cámara
+    float an = atan(n0.y, n0.x), sn = floor(an / 1.0471976 + 0.5) * 1.0471976;
+    float mg = length(n0.xy), mq = mg < 0.08 ? 0. : (mg < 0.35 ? 0.3 : 0.62);
+    vec3 n = normalize(mix(n0, normalize(vec3(cos(sn) * mq, sin(sn) * mq, 1.)), 0.85));
+    vec3 L1 = normalize(vec3(-0.6, 0.7, 0.38)), L2 = normalize(vec3(0.7, -0.45, 0.55));
+    float lam = max(dot(n, L1), 0.);
+    float sp1 = pow(max(dot(reflect(-L1, n), V), 0.), 70.), sp2 = pow(max(dot(reflect(-L2, n), V), 0.), 36.);
+    float fres = pow(1. - max(dot(n, V), 0.), 4.);
+    // estrías finas a lo largo de los ejes de 60°
+    float str = 0.75 + 0.25 * sin(dot(p, vec2(0.866, 0.5)) * 1900. + va * 30.) * sin(dot(p, vec2(-0.866, 0.5)) * 1500.);
+    float hc = clamp(h, 0., 1.);
+    float rim = pow(1. - hc, 2.2);
+    float core = smoothstep(0.75, 1., hc);                       // la espina central, un hilo frío dentro del cristal
+    vec2 ce = floor(p * 900.);
+    float spk = step(0.962, h21(ce + va * 13.)) * pow(max(0., sin(h21(ce * 1.7) * 60. + dot(V.xy, vec2(9., 7.)) * 9.)), 10.);   // granos que devuelven la luz según el ángulo
+    // hielo transparente: cuerpo oscuro, aristas finas que atrapan la luz, espina interior y caras que destellan
+    float edgeL = exp(-pow((hc - 0.14) / 0.09, 2.)), spine = exp(-pow((hc - 0.93) / 0.07, 2.));
+    float L = 0.035 + 0.16 * pow(lam, 1.5) * (0.6 + 0.4 * va) * str + 0.85 * edgeL * (0.55 + 0.45 * lam) + 0.55 * spine * (0.6 + 0.4 * va) + 2.2 * sp1 * (0.3 + edgeL) + 0.7 * sp2 + 0.5 * fres + 2.2 * spk;
+    // solo se ilumina la escarcha cercana a la luz: un charco de luz recorre el hielo, el resto cae a negro
+    float dl = length(p - uLt.xy), fall = exp(-dl * dl / (uLt.z * uLt.z));
+    float lk = (0.07 + uLt.w * fall) * (1. - 0.6 * star * exp(-dot(p, p) / 0.004));
+    L *= uKey * lk;
+    float La = uKey * uLt.w * fall * 1.1 * edgeL * smoothstep(0.0, 0.6, dl / uLt.z);   // contraluz en cian: las aristas que miran a la luz se encienden
+    // el frente que crece: punta incandescente que se enfría
+    float tip = exp(-max(age, 0.) / 22.) * (1.6 + uFlare * 3.2);
+    L += tip * (0.15 + 0.9 * edgeL + 0.6 * spine + 0.5 * spk) * (1. - 0.55 * star) * (0.3 + 0.9 * lk);
+    // ticks: destellos en granos de las puntas jóvenes
+    if (uHh.x >= 0. && uHh.x < 0.1) {
+      vec2 cell = floor(p * 260.);
+      float pick = step(0.93, h21(cell + uHh.z));
+      L += pick * step(age, 220.) * uHh.y * 5. * (1. - uHh.x / 0.1) * smoothstep(0.35, 0.0, length(fract(p * 260.) - 0.5));
+    }
+    // contraluz: la luz de detrás atraviesa el hielo (más por los bordes finos)
+    float bl = uBack * (0.25 * hc + 0.9 * rim) * (0.8 + 0.2 * str);
+    L += bl;
+    float cd = 1. - 0.6 * star * exp(-dot(p, p) / 0.003);
+    L *= cd; La *= cd;
+    La += star * uBack * 1.4 * exp(-dot(p, p) / 0.01) * (0.4 + edgeL);   // el corazón de la estrella, en cian
+    return vec3(L * cov, cov, La * cov);
+  }`;
+  const VSQ = `#version 300 es
+  in vec2 aPos; out vec2 vUv; void main(){ vUv = aPos * .5 + .5; gl_Position = vec4(aPos, 0., 1.); }`;
+  // pasada A: la lámina entera, plana, para el desenfoque
+  const FSL = `#version 300 es
+  precision highp float; in vec2 vUv; out vec4 o; ${COMMON}
+  void main(){ vec2 p = creak(vUv * 2. - 1.); vec3 r = ice(p, 2.2, vec3(0., 0., 1.)); o = vec4(clamp(r.x * 0.5, 0., 1.), clamp(r.z * 0.5, 0., 1.), 0., r.y); }`;
+  // pasada B: la cámara mira la lámina en perspectiva, con profundidad de campo
+  const FSC = `#version 300 es
+  precision highp float; in vec2 vUv; out vec4 o; ${COMMON}
+  uniform sampler2D uL; uniform vec2 uRes, uShift; uniform vec3 uCam, uFw, uRt, uUp; uniform float uFov, uFocus, uAp, uSeed;
+  float ign(vec2 q){ return fract(52.9829189 * fract(dot(q + uSeed * 37., vec2(0.06711056, 0.00583715)))); }
+  void main(){
+    vec2 uv = (vUv - 0.5 - uShift) * vec2(uRes.x / uRes.y, 1.);
+    vec3 rd = normalize(uFw + (uv.x * uRt + uv.y * uUp) * uFov);
+    vec3 col = vec3(0.);
+    if (rd.z < -0.0001) {
+      float t = -uCam.z / rd.z; vec3 P = uCam + rd * t;
+      vec2 p = creak(P.xy);
+      float edge = max(abs(p.x), abs(p.y));
+      if (edge < 1.0) {
+        // luz lejana tras el cristal (desenfocada), respira con el bajo
+        float bd = length(p - uBl.xy);
+        float back = uBl.z * (exp(-bd * bd * 2.2) * 0.9 + exp(-bd * bd * 18.) * 0.6);
+        col += vec3(0.0022, 0.0024, 0.003) * back;
+        // desenfoque: tamaño del círculo de confusión en texels de la lámina
+        float fw = max(length(dFdx(p)), length(dFdy(p))) * N * 0.5;
+        float coc = abs(t - uFocus) * uAp * uRes.y;
+        float lod = log2(max(1., fw * (1. + coc)));
+        vec3 r = vec3(0.);
+        if (lod < 1.6) r = ice(p, max(fw, 0.6) * 1.3, -rd);
+        if (lod > 0.6) {
+          // desenfoque cremoso: disco de muestras en ángulo áureo sobre la lámina (mip un nivel por debajo)
+          vec4 b = vec4(0.); float rad = exp2(lod) / N * 1.1, rot = ign(gl_FragCoord.xy) * 6.283;
+          for (int i = 0; i < 16; i++) { float fi = float(i) + 0.5; float an = fi * 2.39996 + rot; vec2 o = vec2(cos(an), sin(an)) * sqrt(fi / 16.) * rad;
+            b += textureLod(uL, p * 0.5 + 0.5 + o, max(0., lod - 0.7)); }
+          b /= 16.;
+          float dk = 1.7 * mix(1., 0.5, smoothstep(1.5, 4.5, lod)); r = mix(r, vec3(b.r * dk, b.a, b.g * dk), smoothstep(0.6, 1.6, lod)); }
+        float lit = r.x * (1. + back * 1.2);
+        col += vec3(0.97, 0.985, 1.0) * lit + ACC * r.z;
+        // la propia luz, detrás del cristal: se ve por los huecos, con halo
+        { float dl = length(p - uLt.xy);
+          col += uLt.w * (vec3(0.85, 1., 1.) * exp(-dl * dl / (uLt.z * uLt.z * 0.00012)) * 2.5 + ACC * (exp(-dl * dl / (uLt.z * uLt.z * 0.002)) * 0.09 + exp(-dl * dl / (uLt.z * uLt.z * 0.12)) * 0.009)) * (1. - 0.8 * r.y); }
+        // nacimiento de un cristal: un punto de luz que se abre
+        if (uNs.z >= 0. && uNs.z < 0.6) {
+          float d = length(p - uNs.xy), a = uNs.z;
+          col += vec3(1.) * uNs.w * (exp(-d * d * 90000.) * 3. * exp(-a * 6.) + exp(-d * d * 3000.) * 0.22 * exp(-a * 5.));
+          float ring = exp(-pow((d - a * 0.16) * 260., 2.)) * (1. - a / 0.6);
+          col += vec3(0.9, 0.95, 1.) * ring * 0.5 * uNs.w;
+        }
+        // reflejo frío y casi invisible sobre el vidrio
+        col += vec3(0.008, 0.009, 0.011) * uKey * smoothstep(0.92, 1., dot(reflect(rd, vec3(0, 0, 1)), normalize(vec3(-0.4, 0.6, 0.7))));
+      }
+    }
+    float src = 0.;
+    if (rd.z < -0.0001) { float t = -uCam.z / rd.z; vec2 p = (uCam + rd * t).xy; float bd = length(p - uBl.xy);
+      vec4 b = textureLod(uL, p * 0.5 + 0.5, 3.);
+      float sm = smoothstep(0.37, 0.0, length(p));
+      src = (max(b.r * 2. - 0.25, 0.) * uBack * 0.6 * sm * smoothstep(0.015, 0.06, length(p)) + uBack * 0.35 * exp(-bd * bd * 3.) * (1. - b.a) * smoothstep(0.33, 0.45, length(p))) * step(max(abs(p.x), abs(p.y)), 1.); }
+    o = vec4(col, src);
+  }`;
+  // pasada C: rayos de luz (desenfoque radial hacia la luz), curva de tono y grado frío
+  const FSX = `#version 300 es
+  precision highp float; in vec2 vUv; out vec4 o;
+  uniform sampler2D uC; uniform vec2 uLp; uniform float uSh, uExp, uSeed, uStk, uAsp;
+  float ign(vec2 q){ return fract(52.9829189 * fract(dot(q + uSeed * 37., vec2(0.06711056, 0.00583715)))); }
+  void main(){
+    vec4 c = texture(uC, vUv); vec3 col = c.rgb;
+    if (uSh > 0.001) {
+      vec2 d = (uLp - vUv) / 56.; vec2 q = vUv + d * ign(gl_FragCoord.xy); float acc = 0., w = 1.;
+      for (int i = 0; i < 56; i++) { q += d; acc += texture(uC, q).a * w; w *= 0.975; }
+      col += vec3(0.55, 0.92, 1.0) * acc * uSh / 56.;
+    }
+    // destello horizontal fino de lente
+    { vec2 dd = vUv - uLp; col += vec3(0.25, 0.85, 1.) * uStk * exp(-abs(dd.y) * 1400.) * exp(-abs(dd.x * uAsp) * 2.6); }
+    col *= uExp;
+    col = col * (2.51 * col + 0.03) / (col * (2.43 * col + 0.59) + 0.14);
+    col = max(col, 0.) * vec3(0.985, 0.995, 1.02);
+    col += (ign(gl_FragCoord.xy + 17.) - 0.5) / 255.;
+    o = vec4(col, 1.);
+  }`;
+  // destellos: granos de hielo que devuelven la luz; fuera de foco se abren en bokeh hexagonal
+  const VSP = `#version 300 es
+  precision highp float; in vec4 aP;
+  uniform vec2 uRes, uShift; uniform vec3 uCam, uFw, uRt, uUp; uniform float uFov, uFocus, uAp, uG, uKey, uBack, uMode, uTime, uKick; uniform vec4 uHh, uLt;
+  out float vI; out float vS; out float vT;
+  void main(){
+    vec3 P = vec3(aP.xy, 0.);
+    if (uMode > 0.5) { // polvo de hielo suspendido delante y detrás del cristal; deriva lenta y un empujón con cada bombo
+      float r = aP.w; P = vec3(aP.x + 0.04 * sin(uTime * 0.21 + r * 40.), aP.y + uTime * (0.006 + 0.01 * r) + 0.03 * sin(uTime * 0.17 + r * 70.), aP.z);
+      P.xy += normalize(P.xy + 1e-3) * uKick * 0.012 * (0.3 + r);
+    }
+    vec3 d = P - uCam; float z = dot(d, uFw);
+    vec2 s = vec2(dot(d, uRt), dot(d, uUp)) / (z * uFov);
+    vec2 vv = s / vec2(uRes.x / uRes.y, 1.) + 0.5 + uShift;
+    gl_Position = z < 0.02 ? vec4(9., 9., 0., 1.) : vec4(vv * 2. - 1., 0., 1.);
+    float vis = uMode > 0.5 ? 0.3 : smoothstep(0., 40., uG - aP.z);
+    vec3 V = normalize(-d);
+    float tw = uMode > 0.5 ? 0.35 + 0.65 * pow(max(0., sin(aP.w * 60. + uTime * (0.6 + aP.w))), 6.) : pow(max(0., sin(aP.w * 60. + dot(V, vec3(9., 7., 5.)) * 7.)), 18.);
+    if (uHh.x >= 0. && uHh.x < 0.12 && fract(aP.w * 97. + uHh.z) < 0.07) tw += uHh.y * 1.6 * (1. - uHh.x / 0.12);
+    float coc = abs(length(d) - uFocus) * uAp * uRes.y;
+    float sz = clamp(2.2 + coc, 2.2, 160.);
+    gl_PointSize = sz; vS = sz;
+    if (uMode > 0.5 && sz < 18.) { gl_Position = vec4(9., 9., 0., 1.); }
+    float dl = length(P.xy - uLt.xy); float lf = uMode > 0.5 ? 0.25 + 0.75 * uLt.w * exp(-dl * dl / (uLt.z * uLt.z * 2.)) : 0.05 + uLt.w * exp(-dl * dl / (uLt.z * uLt.z));
+    vT = clamp(uLt.w * exp(-dl * dl / (uLt.z * uLt.z * 0.35)), 0., 0.7);
+    vI = lf * vis * tw * uKey * (1. + uBack * 1.5) * 7. * 14. / (14. + sz * sz * 0.035);
+  }`;
+  const FSPt = `#version 300 es
+  precision highp float; in float vI; in float vS; in float vT; out vec4 o;
+  void main(){
+    vec2 c = gl_PointCoord * 2. - 1.;
+    float hx = max(abs(c.x) * 0.866 + abs(c.y) * 0.5, abs(c.y));
+    float m = vS < 5. ? exp(-dot(c, c) * 3.) : smoothstep(1., 1. - 2.5 / vS, hx) * mix(0.7, 1.0, smoothstep(0.55, 0.95, hx));
+    if (m <= 0.) discard;
+    o = vec4(mix(vec3(0.95, 0.97, 1.), vec3(0.45, 0.93, 1.), vT) * vI * m, 0.);
+  }`;
+  function prog(vs, fs) {
+    const sh = (t, s) => { const x = gl.createShader(t); gl.shaderSource(x, s); gl.compileShader(x); if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(x)); return x; };
+    const p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
+    gl.bindAttribLocation(p, 0, vs.includes('in vec4 aP;') ? 'aP' : 'aPos'); gl.linkProgram(p); if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+    const U = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+    for (let i = 0; i < n; i++) { const nm = gl.getActiveUniform(p, i).name.replace('[0]', ''); U[nm] = gl.getUniformLocation(p, nm); }
+    return { p, U };
+  }
+  const PL = prog(VSQ, FSL), PC = prog(VSQ, FSC), PX = prog(VSQ, FSX), PPt = prog(VSP, FSPt);
+  const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  const vao = gl.createVertexArray(); gl.bindVertexArray(vao); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  // granos que destellan: muestreo determinista de la escarcha
+  const SP = [];
+  for (let j = 1; j < N - 1; j += 3) for (let i = 1; i < N - 1; i += 3) {
+    const k = j * N + i; if (HH[k] < 0.4) continue;
+    const hsh = VL.hash(i, j); if (hsh > 0.35) continue;
+    SP.push(i / N * 2 - 1, j / N * 2 - 1, EFF[k] + 20, VL.hash(j, i));
+  }
+  const NSP = SP.length / 4;
+  const DS = [], dr = VL.rng(77);
+  for (let k = 0; k < 80; k++) { const z = dr() < 0.6 ? 0.12 + dr() * 0.9 : -0.6 - dr() * 1.6; DS.push((dr() * 2 - 1) * 1.8, (dr() * 2 - 1) * 1.8, z, dr()); }
+  const vaoD = gl.createVertexArray(); gl.bindVertexArray(vaoD);
+  const vbD = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vbD); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(DS), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 0, 0);
+  const vaoP = gl.createVertexArray(); gl.bindVertexArray(vaoP);
+  const vbP = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vbP); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(SP), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 0, 0);
+  // imagen de cámara en HDR (alfa = fuente de los rayos de luz)
+  const texC = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, texC);
+  gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA16F, W, H);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const fbC = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fbC); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texC, 0);
+  window.ESC_SPARKS = NSP;
+
+  // ================================================================ 3 · partitura → estado
+  function last(v, t, f) { let L = null; for (const x of EV) { if (x.t > t) break; if (x.v === v && (!f || f(x))) L = x; } return L; }
+  // punta que crece de un tallo: el punto del tallo cuya llegada coincide con el frente
+  function tipOf(path, Gt) { let best = path[0]; for (const q of path) { if (q[2] <= Gt) best = q; else break; } return best; }
+  const liveStems = STEMS.filter((p) => p.length > 30);
+  // planos: macro siguiendo una punta · 3/4 medio · frontal entero · rasante · macro sobre el próximo nacimiento
+  const SHOTS = [{ t: 0, k: 0, i: 0 }];
+  { let lastT = 0, n = 0;
+    for (const x of EV) {
+      if (x.v !== 'K' || x.t >= T.cut || x.rat) continue;
+      const inB = x.t >= T.tense, gap = inB ? 0.9 : 1.9;
+      if (x.s >= (inB ? 0.6 : 0.84) && x.t - lastT >= gap) { n++; SHOTS.push({ t: x.t, k: [3, 1, 0, 2, 3, 1, 0, 3, 1, 0][n % 10], i: n }); lastT = x.t; }
+    }
+  }
+  function camFor(t, tReal) {
+    if (window.CAM_OVERRIDE) return window.CAM_OVERRIDE;
+    let tg, az, el, dist, roll = 0, ap, focusOff = 0;
+    if (tReal >= T.rupt) {
+      const a = tReal - T.rupt;
+      tg = [0, 0.02 * Math.sin(a * 0.4)]; az = 0.8 - 0.06 * a; el = 0.3 - 0.03 * a;
+      dist = kf([[0, 0.62], [0.5, 0.7], [4.2, 1.5], [7.2, 1.8]], a); ap = 0.007; roll = -0.15 + 0.03 * a;
+      return { tg, az, el, dist, roll, ap };
+    }
+    const sh = SHOTS.filter((x) => x.t <= t).pop(), lt = t - sh.t, Gt = G(t);
+    const st = liveStems[(sh.i * 7 + 3) % liveStems.length];
+    // la punta que se sigue: el tallo con frente vivo más cercano al plano
+    let tip = tipOf(st, Gt);
+    {
+      let bestS = st, bestD = 1e9;
+      for (let j = 0; j < liveStems.length; j++) {
+        const s2 = liveStems[(sh.i * 5 + j) % liveStems.length];
+        if (s2[0][2] < G(sh.t) - 60 && s2[s2.length - 1][2] > G(sh.t) + 160) { bestS = s2; break; }
+      }
+      const tp = tipOf(bestS, G(sh.t + Math.min(lt, 1.4) * 0.6));
+      tip = tp;
+    }
+    const r1 = VL.hash(sh.i, 7) - 0.5, r2 = VL.hash(sh.i, 13) - 0.5;
+    if (sh.k === 0) { tg = [tip[0], tip[1]]; az = 0.55 + r1 * 0.5 + 0.03 * lt; el = 0.35 + r2 * 0.3; dist = 0.3 - 0.012 * lt; ap = 0.022; }
+    else if (sh.k === 1) { tg = [tip[0] * 0.7, tip[1] * 0.7]; az = -0.75 + r1 * 0.3 + 0.02 * lt; el = 0.3 + r2 * 0.2; dist = 0.9 - 0.04 * lt; ap = 0.011; }
+    else if (sh.k === 2) { tg = [0.05 * r1, 0.05 * r2]; az = 0.03 * r1 + 0.01 * lt; el = 0.02; dist = 2.1 - 0.05 * lt; ap = 0.0008; roll = r1 * 0.05; }
+    else if (sh.k === 3) { tg = [tip[0], tip[1]]; az = 1.12 + r1 * 0.15; el = r2 * 0.6; dist = 0.42 - 0.01 * lt; ap = 0.028; roll = r2 * 0.3; focusOff = 0.0; }
+    else { const nx = SEEDS_S.find((s) => s.t > sh.t) || SEEDS_S[SEEDS_S.length - 1]; tg = [nx.x, nx.y]; az = -0.3 + r1 * 0.3; el = -0.35 + r2 * 0.2; dist = 0.5 - 0.02 * lt; ap = 0.005; }
+    return { tg, az, el, dist, roll, ap, focusOff };
+  }
+  const kf = (pts, x) => { for (let i = 1; i < pts.length; i++) if (x <= pts[i][0]) { const [t0, v0] = pts[i - 1], [t1, v1] = pts[i]; return lerp(v0, v1, e.inOut(clamp((x - t0) / (t1 - t0)))); } return pts[pts.length - 1][1]; };
+
+  let out = null;
+  window.renderFrame = function (tReal, frame) {
+    if (!out) out = document.getElementById('c').getContext('2d');
+    const t = warp(tReal);
+    const stut = X.find((x) => tReal >= x.t && tReal < x.t + x.len);
+    const c = VL.sceneCtx(); const ts = tReal - T.sting, a = tReal - T.rupt, ten = sg(tReal, T.tense, T.cut);
+    const fade = 1 - e.inOut(sg(tReal, T.sting - 0.9, T.sting + 0.2));
+    const cut = tReal >= T.cut && tReal < T.rupt;
+    if (fade > 0.002) {
+      const Gt = G(t);
+      const K = last('K', t), S = last('S', t, (x) => !x.star), Hh = last('H', t), B = last('B', t), C = last('C', t), R = last('R', t);
+      const cm = camFor(t, tReal);
+      // golpe del bombo: el plano da un pequeño tirón
+      const kAge = K ? t - K.t : 9, kS = K ? K.s : 0;
+      const jolt = cut ? 0 : kS * Math.exp(-kAge * 16) * (K && K.big ? 0.06 : 0.018);
+      const dist = cm.dist * (1 - jolt);
+      const cam = [cm.tg[0] + Math.sin(cm.az) * Math.cos(cm.el) * dist, cm.tg[1] + Math.sin(cm.el) * dist, Math.cos(cm.az) * Math.cos(cm.el) * dist];
+      let fw = [cm.tg[0] - cam[0], cm.tg[1] - cam[1], -cam[2]]; const fl = Math.hypot(...fw); fw = fw.map((v) => v / fl);
+      const upW = [Math.sin(cm.roll), Math.cos(cm.roll), 0];
+      let rt = [fw[1] * upW[2] - fw[2] * upW[1], fw[2] * upW[0] - fw[0] * upW[2], fw[0] * upW[1] - fw[1] * upW[0]]; const rl = Math.hypot(...rt); rt = rt.map((v) => v / rl);
+      const up = [rt[1] * fw[2] - rt[2] * fw[1], rt[2] * fw[0] - rt[0] * fw[2], rt[0] * fw[1] - rt[1] * fw[0]];
+      const fov = W > H ? 0.95 : 0.8;
+      const shift = (H / 2 - VL.fy(g.cy)) / H * (tReal >= T.rupt ? 1 : 0.4);
+      // estado de luz
+      const key = fade * (cut ? 0.35 : 1);
+      const back = a >= 0 ? fade * (0.1 + 0.6 * Math.exp(-a * 2.2) + 0.25 * (K && K.big ? Math.exp(-(t - K.t) * 5) : 0)) : 0;
+      const flare = cut ? 0 : kS * Math.exp(-kAge * 9);
+      const bAge = B ? t - B.t : 9;
+      const bl = (cut ? 0.2 : 1) * fade * (0.7 + 0.5 * (B ? B.s : 0) * Math.exp(-bAge * 7) + (a >= 0 ? 3 * Math.exp(-a * 1.2) + 0.8 : 0));
+      const blx = a >= 0 ? 0 : 0.35 * Math.sin(t * 0.21 + 1.3), bly = a >= 0 ? 0 : -0.2 + 0.3 * Math.cos(t * 0.17);
+      const starG = 0; // la estrella usa el mismo frente
+      // la luz: antes de la ruptura recorre cada plano (se mueve despacio, late con el bajo y el bombo); en el clímax es la estrella
+      let lt;
+      { const sh = SHOTS.filter((x) => x.t <= t).pop(); const dsh = Math.max(0.18, cm.dist);
+        const ph = t * 0.32 + (sh ? sh.i : 0) * 1.7;
+        const pulse = 0.35 * (B ? B.s : 0) * Math.exp(-bAge * 8) + 0.55 * kS * Math.exp(-kAge * 7);
+        if (a >= 0) lt = [0, 0, 0.42 + 0.35 * sg(a, 0, 4) + 0.05 * Math.sin(a * 2), fade * (0.85 + 0.9 * Math.exp(-a * 1.1) + 0.35 * (K && K.big ? Math.exp(-(t - K.t) * 5) : 0))];
+        else lt = [cm.tg[0] + Math.cos(ph) * 0.24 * dsh, cm.tg[1] + Math.sin(ph * 0.8) * 0.22 * dsh, 0.75 * dsh, (cut ? 0.12 : 1.15 + pulse) * fade];
+      }
+      const setU = (P, isC) => {
+        const U = P.U;
+        gl.uniform1i(U.uF, 0); gl.uniform1f(U.uG, Gt); gl.uniform1f(U.uKey, key); gl.uniform1f(U.uBack, back);
+        gl.uniform1f(U.uFlare, flare); gl.uniform1f(U.uStar, starG); gl.uniform1f(U.uTime, t);
+        gl.uniform1f(U.uCreak, C && t - C.t < C.len + 0.3 ? C.s : 0); gl.uniform1f(U.uCt, C ? t - C.t : 9);
+        gl.uniform4f(U.uHh, Hh ? t - Hh.t : -1, Hh ? Hh.s : 0, Hh ? (Hh.seed % 997) * 0.37 : 0, 0);
+        const ns = S && t - S.t < 0.6 ? SEEDS_S.find((z) => Math.abs(z.t - S.t) < 1e-6) : null;
+        gl.uniform4f(U.uNs, ns ? ns.x : 0, ns ? ns.y : 0, ns ? t - S.t : -1, ns ? S.s : 0);
+        gl.uniform3f(U.uBl, blx, bly, bl); gl.uniform4f(U.uLt, ...lt);
+        if (isC) {
+          gl.uniform1i(U.uL, 1); gl.uniform2f(U.uRes, W, H); gl.uniform2f(U.uShift, 0, shift);
+          gl.uniform3f(U.uCam, ...cam); gl.uniform3f(U.uFw, ...fw); gl.uniform3f(U.uRt, ...rt); gl.uniform3f(U.uUp, ...up);
+          gl.uniform1f(U.uFov, fov); gl.uniform1f(U.uFocus, fl); gl.uniform1f(U.uAp, cm.ap); gl.uniform1f(U.uSeed, (frame % 64) * 0.137);
+        }
+      };
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, texF);
+      gl.bindVertexArray(vao);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbL); gl.viewport(0, 0, NF, NF);
+      gl.useProgram(PL.p); setU(PL, false); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, texL); gl.generateMipmap(gl.TEXTURE_2D);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbC); gl.viewport(0, 0, W, H);
+      gl.useProgram(PC.p); setU(PC, true); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      // destellos / bokeh hexagonal (suman luz, no tocan la fuente de rayos)
+      { const U = PPt.U; gl.useProgram(PPt.p); gl.bindVertexArray(vaoP);
+        gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); gl.colorMask(true, true, true, false);
+        gl.uniform2f(U.uRes, W, H); gl.uniform2f(U.uShift, 0, shift);
+        gl.uniform3f(U.uCam, ...cam); gl.uniform3f(U.uFw, ...fw); gl.uniform3f(U.uRt, ...rt); gl.uniform3f(U.uUp, ...up);
+        gl.uniform1f(U.uFov, fov); gl.uniform1f(U.uFocus, fl); gl.uniform1f(U.uAp, cm.ap); gl.uniform1f(U.uG, Gt);
+        gl.uniform1f(U.uKey, key); gl.uniform1f(U.uBack, back); gl.uniform4f(U.uLt, ...lt);
+        gl.uniform4f(U.uHh, Hh ? t - Hh.t : -1, Hh ? Hh.s : 0, Hh ? (Hh.seed % 997) * 0.37 : 0, 0);
+        gl.uniform1f(U.uMode, 0); gl.uniform1f(U.uTime, t); gl.uniform1f(U.uKick, kS * Math.exp(-kAge * 6));
+        gl.drawArrays(gl.POINTS, 0, NSP);
+        gl.uniform1f(U.uMode, 1); gl.bindVertexArray(vaoD); gl.drawArrays(gl.POINTS, 0, 80);
+        gl.disable(gl.BLEND); gl.colorMask(true, true, true, true); gl.bindVertexArray(vao); }
+      // rayos de luz y tono
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      { const U = PX.U; gl.useProgram(PX.p); gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, texC); gl.uniform1i(U.uC, 2);
+        // posición de la luz en pantalla
+        const d = [lt[0] - cam[0], lt[1] - cam[1], -cam[2]], z = d[0] * fw[0] + d[1] * fw[1] + d[2] * fw[2];
+        const sx = (d[0] * rt[0] + d[1] * rt[1] + d[2] * rt[2]) / (z * fov) / (W / H) + 0.5, sy = (d[0] * up[0] + d[1] * up[1] + d[2] * up[2]) / (z * fov) + 0.5 + shift;
+        gl.uniform2f(U.uLp, sx, sy);
+        gl.uniform1f(U.uSh, fade * (a >= 0 ? 1.4 + 2.6 * Math.exp(-a * 0.8) : 0));
+        gl.uniform1f(U.uStk, lt[3] * (a >= 0 ? 0.35 : 0.12)); gl.uniform1f(U.uAsp, W / H);
+        gl.uniform1f(U.uExp, 1.45); gl.uniform1f(U.uSeed, (frame % 64) * 0.137);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); }
+      c.drawImage(cv, 0, 0, W, H);
+    }
+    let bloom = 0.9 + 0.25 * ten, flash = 0, flashColor;
+    if (stut) bloom += 0.15;
+    if (a >= 0 && ts < 0) { flash = 0.5 * Math.max(0, 1 - a / 0.35); flashColor = a < 0.06 ? ACC : undefined; bloom = 1.05 + 0.6 * Math.exp(-a * 1.4); }
+    if (ts >= 0) { const st = VL.drawSting(c, ts, { accent: ACC }); flash = st.flash; bloom = 0.8 + 0.5 * st.flash; }
+    VL.post(out, frame, { bloom, flash, flashColor, grain: 0.55 });
+  };
+})();
+</script>
+<script src="../shared/motion-timeline.js"></script>
+<script>
+(async () => {
+  if (new URLSearchParams(location.search).has('render')) return;
+  await Promise.race([Promise.all([300, 400, 600].map((w) => document.fonts.load(`${w} 40px 'JetBrains Mono'`, 'VØID_LOOMÑ'))), new Promise((r) => setTimeout(r, 2500))]);
+  const T = window.ESC.T;
+  MotionTimeline.mount({
+    duration: window.DURATION,
+    render: (t) => window.renderFrame(t, Math.floor(t * 60)),
+    acts: [[0, 'FRENTE'], [2.0, 'CRISTALES'], [+T.tense.toFixed(2), 'TENSIÓN'], [+T.cut.toFixed(2), 'SILENCIO'], [+T.rupt.toFixed(2), 'ESTRELLA'], [+T.sting.toFixed(2), 'FIRMA']],
+    accent: '#00E5FF',
+    audio: 'escarcha.m4a',
+  });
+})();
+</script>
+</body>
+</html>
