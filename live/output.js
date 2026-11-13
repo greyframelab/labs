@@ -88,7 +88,7 @@
   float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float n2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f);
     return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
-  float fbm(vec2 p){ float s = 0., a = .5; for (int i = 0; i < 5; i++) { s += a*n2(p); p *= 2.03; a *= .5; } return s; }
+  float fbm(vec2 p){ float s = 0., a = .5; for (int i = 0; i < 4; i++) { s += a*n2(p); p *= 2.03; a *= .5; } return s; }
   vec3 tap(sampler2D t0, sampler2D t1, float w, vec2 q){
     vec2 dx = vec2(split*.012, 0.) + LC;
     vec3 c0 = vec3(texture(t0, q+dx).r, texture(t0, q).g, texture(t0, q-dx).b);
@@ -194,7 +194,12 @@
   sizeCanvas();
   const hex = (h) => { h = (h || '#ffffff').replace('#', ''); if (h.length === 3) h = h.split('').map((x) => x + x).join(''); const n = parseInt(h.slice(0, 6), 16); return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]; };
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-  function upload(t, canvas) { gl.bindTexture(gl.TEXTURE_2D, t); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas); }
+  // subir el lienzo de la pieza: reutiliza la textura si no cambia de tamaño
+  function upload(t, canvas) {
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    if (t._w === canvas.width && t._h === canvas.height) gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+    else { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas); t._w = canvas.width; t._h = canvas.height; }
+  }
 
   // ------------------------------------------------------------------ bucle
   const hitEnv = (piece, p, rate) => {
@@ -205,28 +210,33 @@
     const age = (p - hs[k]) / Math.max(0.25, Math.abs(rate || 1));
     return age < 0.4 ? Math.exp(-age * 16) : 0;
   };
-  let prevTurn = 'A', lastDeckPrev = 0, now_ = 0;
+  let now_ = 0, scanOn = false;
   let cur = 0, blackS = 0, fpsN = 0, fpsT = performance.now(), lastPrev = 0, info = {};
   function drawDeck(k, w, live) {
     const d = D[k];
     while (d.pending.length && d.pending[0].wall <= VLL.now()) d.st = d.pending.shift();
     const s = d.st;
     const r = { w: 0, env: 0 };
-    if (!s || !s.piece || !d.api || d.api.piece !== s.piece) { if (prevTurn === k) prevTurn = k === 'A' ? 'B' : 'A'; return r; }
+    if (!s || !s.piece || !d.api || d.api.piece !== s.piece) return r;
     const P_ = VLL.pos(s, VLL.now());
-    if (!P_ || P_.ended) { if (prevTurn === k) prevTurn = k === 'A' ? 'B' : 'A'; return r; }
+    if (!P_ || P_.ended) return r;
     info[k] = P_.p;
     if (w > 0.001 && live) {
       try {
-        d.api.render(P_.p); upload(T[k + '0'], d.api.canvas);
-        if (P_.blend > 0) { d.api.render(P_.pin); upload(T[k + '1'], d.api.canvas); r.w = P_.blend; }
+        // en la vuelta de un loop solo se dibujan dos frames mientras los dos se ven de verdad
+        if (P_.blend > 0.97) { d.api.render(P_.pin); upload(T[k + '0'], d.api.canvas); }
+        else {
+          d.api.render(P_.p); upload(T[k + '0'], d.api.canvas);
+          if (P_.blend > 0.03) { d.api.render(P_.pin); upload(T[k + '1'], d.api.canvas); r.w = P_.blend; }
+        }
+        r.drawn = true;
       } catch (e) { console.warn(e); }
     }
-    // vista previa de cada deck para la consola (también del que no está en el aire)
-    if (prevTurn === k && now_ - lastDeckPrev > 140) {
-      lastDeckPrev = now_; prevTurn = k === 'A' ? 'B' : 'A';
+    // vista previa para la consola: solo se copia un frame que ya se ha dibujado para el proyector.
+    // El deck que no está en el aire nunca se dibuja aparte: coste cero en el frame de la salida.
+    if (r.drawn && now_ - (d.lastPrev || 0) > 160) {
+      d.lastPrev = now_;
       try {
-        if (!(w > 0.001 && live) && s.freeze == null) d.api.render(P_.p);
         const cw = d.api.canvas.width, chh = d.api.canvas.height, pw = 400;
         createImageBitmap(d.api.canvas, { resizeWidth: pw, resizeHeight: Math.round(pw * chh / cw), resizeQuality: 'low' })
           .then((bmp) => { try { ch.postMessage({ type: 'dprev', deck: k, bmp }); } catch (e) {} bmp.close(); }).catch(() => {});
@@ -263,12 +273,17 @@
     gl.uniform1f(U.tint, FX.tint || 0); gl.uniform1f(U.mirror, FX.mirror || 0); gl.uniform1f(U.strobe, FX.strobe ? 1 : 0);
     gl.uniform3fv(U.tintC, hex(FX.tintC));
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    // guarda el frame en el historial del escaneo
-    head = (head + 1) % 32;
-    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, dst.fb); gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, HFB);
-    gl.framebufferTextureLayer(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, HIST, 0, head);
-    gl.blitFramebuffer(0, 0, cv.width, cv.height, 0, 0, HW, HH, gl.COLOR_BUFFER_BIT, gl.LINEAR);
-    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null); gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+    // historial del escaneo: solo se graba con el efecto activo; al encenderlo se rellena con el frame actual
+    if (FX.scan > 0) {
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, dst.fb); gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, HFB);
+      const layers = scanOn ? [(head + 1) % 32] : [...Array(32).keys()];
+      for (const l of layers) {
+        gl.framebufferTextureLayer(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, HIST, 0, l);
+        gl.blitFramebuffer(0, 0, cv.width, cv.height, 0, 0, HW, HH, gl.COLOR_BUFFER_BIT, gl.LINEAR);
+      }
+      head = (head + 1) % 32; scanOn = true;
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null); gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+    } else scanOn = false;
     gl.useProgram(PB); gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, cv.width, cv.height);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, dst.t); gl.uniform1i(UB.S, 0);
     gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D_ARRAY, HIST); gl.uniform1i(UB.H, 5);
@@ -278,7 +293,7 @@
     // estadísticas + monitor para la consola
     fpsN++;
     if (now - fpsT > 1000) { ch.postMessage({ type: 'stats', fps: Math.round(fpsN * 1000 / (now - fpsT)), w: cv.width, h: cv.height }); fpsN = 0; fpsT = now; }
-    if (now - lastPrev > 110) {
+    if (now - lastPrev > 150) {
       lastPrev = now;
       const pw = 480, ph = Math.round(pw * cv.height / cv.width);
       createImageBitmap(cv, { resizeWidth: pw, resizeHeight: ph, resizeQuality: 'low' }).then((bmp) => {
