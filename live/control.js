@@ -14,7 +14,7 @@
   // ================================================================== estado global
   const LIB = [];
   const MIX = { xf: 0, mode: 'fundido', onAir: 'A', quality: store.get('quality', 1) };
-  const FX = { trail: 0, hits: 0.35, split: 0, invert: 0, black: 0, bright: 1, glitch: 0, punch: 0, lens: 0, mosaic: 0, tint: 0, scan: 0, mirror: 0, strobe: 0, tintC: '#ffffff' };
+  const FX = { trail: 0, hits: 0, split: 0, invert: 0, black: 0, bright: 1, glitch: 0, punch: 0, lens: 0, mosaic: 0, tint: 0, scan: 0, mirror: 0, strobe: 0, tintC: '#ffffff' };
   const AFX = { filter: 0, echo: 0, echoT: 0.375, room: 0.12, master: 0.9, av: store.get('av', 0) };
   let quant = store.get('quant', 'golpe');
   let focus = 'A';
