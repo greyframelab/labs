@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Salida · VØID_LOOM LIVE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&display=swap">
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden;cursor:none}
+#out{position:fixed;inset:0;width:100vw;height:100vh;display:block;z-index:2}
+.deck{position:fixed;left:0;top:0;border:0;opacity:0;pointer-events:none;z-index:0}
+#hint{position:fixed;left:50%;bottom:9vh;transform:translateX(-50%);z-index:3;font:400 11px 'JetBrains Mono',ui-monospace,monospace;letter-spacing:.32em;color:#8f8c86;text-align:center;transition:opacity 1.2s;white-space:nowrap}
+#hint b{color:#f2f0ea;font-weight:400}
+#hint.off{opacity:0}
+</style>
+</head>
+<body>
+<canvas id="out"></canvas>
+<div id="hint">VØID_LOOM · SALIDA<br><br><b>F</b> PANTALLA COMPLETA · <b>ESPERANDO A LA CONSOLA</b></div>
+<script src="core.js"></script>
+<script src="output.js"></script>
+</body>
+</html>

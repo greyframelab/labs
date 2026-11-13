@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VØID_LOOM LIVE · Greyframe Labs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&display=swap">
+<style>
+:root{
+  --bg:#060606;--panel:#0b0b0b;--panel2:#101010;--line:#1d1c1b;--line2:#2a2927;
+  --tx:#f2f0ea;--tx2:#bdbab3;--mute:#8f8c86;--dim:#5d5b57;
+  --red:#FF1A1A;--acc:#f2f0ea;
+  --f:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--tx);font:400 11px var(--f);letter-spacing:.06em;overflow:hidden;-webkit-font-smoothing:antialiased}
+button{all:unset;cursor:pointer;box-sizing:border-box}
+button:focus-visible,[tabindex]:focus-visible{outline:1px solid var(--acc);outline-offset:2px}
+.lbl{font-size:9px;letter-spacing:.24em;color:var(--mute);text-transform:uppercase}
+
+/* ---------- arranque ---------- */
+#boot{position:fixed;inset:0;z-index:100;background:#000;display:grid;place-items:center;transition:opacity .8s}
+#boot.off{opacity:0;pointer-events:none}
+.boot-in{display:flex;flex-direction:column;align-items:center;gap:34px;text-align:center}
+.boot-in .mark{font-size:34px;font-weight:300;letter-spacing:.42em;margin-right:-.42em}
+.boot-in .mark i{font-style:normal;color:var(--red)}
+.boot-in .sub{color:var(--mute);letter-spacing:.32em;font-size:10px;margin-top:-18px}
+#go{border:1px solid var(--line2);padding:16px 34px;letter-spacing:.36em;font-size:11px;transition:border-color .2s,color .2s,background .2s}
+#go:hover{border-color:var(--red);color:#fff;background:rgba(255,26,26,.06)}
+#go[disabled]{pointer-events:none;color:var(--dim)}
+#bootlog{height:14px;color:var(--dim);font-size:9.5px;letter-spacing:.2em}
+.bar{width:260px;height:1px;background:var(--line2);position:relative;overflow:hidden}
+.bar i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--red);box-shadow:0 0 10px var(--red);transition:width .25s}
+
+/* ---------- estructura ---------- */
+.app{display:grid;grid-template-rows:46px 1fr auto;height:100vh}
+header{display:flex;align-items:center;gap:22px;padding:0 18px;border-bottom:1px solid var(--line);background:#050505}
+.brand{display:flex;align-items:baseline;gap:12px;font-weight:400;letter-spacing:.34em;font-size:12px;white-space:nowrap}
+.brand i{font-style:normal;color:var(--red)}
+.brand span{color:var(--mute);font-size:9px;letter-spacing:.3em}
+.chips{display:flex;gap:18px;margin-left:8px}
+.chip{display:flex;align-items:center;gap:8px;font-size:9px;letter-spacing:.22em;color:var(--mute);white-space:nowrap}
+.chip b{font-weight:400;color:var(--tx2)}
+.led{width:6px;height:6px;border-radius:50%;background:#2a2927}
+.led.on{background:#39FF6A;box-shadow:0 0 8px #39FF6A}
+.led.warn{background:#FFB000;box-shadow:0 0 8px #FFB000}
+.led.err{background:var(--red);box-shadow:0 0 8px var(--red)}
+.tools{margin-left:auto;display:flex;align-items:center;gap:14px}
+.seg{display:flex;border:1px solid var(--line2)}
+.seg button{padding:7px 10px;font-size:9px;letter-spacing:.22em;color:var(--mute);transition:color .15s,background .15s}
+.seg button+button{border-left:1px solid var(--line2)}
+.seg button:hover{color:var(--tx)}
+.seg button.on{color:#000;background:var(--tx)}
+.tbtn{border:1px solid var(--line2);padding:7px 11px;font-size:9px;letter-spacing:.22em;color:var(--tx2);transition:all .15s;white-space:nowrap}
+.tbtn:hover{border-color:var(--mute);color:var(--tx)}
+.tbtn.on{border-color:var(--red);color:#fff;background:rgba(255,26,26,.1)}
+
+main{display:grid;grid-template-columns:236px minmax(0,1fr) minmax(0,1.08fr) minmax(0,1fr);gap:1px;background:var(--line);min-height:0}
+main>*{background:var(--panel);min-height:0}
+
+/* ---------- biblioteca ---------- */
+.lib{display:flex;flex-direction:column}
+.p-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 12px;border-bottom:1px solid var(--line)}
+.p-head .n{color:var(--dim);font-size:9px;letter-spacing:.2em}
+.lib-list{overflow-y:auto;flex:1;scrollbar-width:thin;scrollbar-color:#222 transparent}
+.item{display:grid;grid-template-columns:58px 1fr auto;gap:11px;align-items:center;padding:9px 12px 9px 14px;border-bottom:1px solid #141413;position:relative;transition:background .15s}
+.item::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:2px;background:var(--ia);opacity:.0;transition:opacity .2s}
+.item:hover{background:#0f0f0f}
+.item:hover::before,.item.inA::before,.item.inB::before{opacity:1}
+.item img{width:58px;height:36px;object-fit:cover;display:block;filter:saturate(.9) brightness(.9);background:#111}
+.item .nm{display:flex;flex-direction:column;gap:4px;min-width:0}
+.item .nm b{font-weight:400;letter-spacing:.2em;font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .nm span{font-size:8.5px;letter-spacing:.16em;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .ld{display:flex;gap:4px}
+.item .ld button{width:22px;height:22px;display:grid;place-items:center;border:1px solid var(--line2);font-size:9.5px;color:var(--mute);transition:all .15s}
+.item .ld button:hover{color:#000;background:var(--tx);border-color:var(--tx)}
+.item.inA .ld button[data-d=A],.item.inB .ld button[data-d=B]{color:#000;background:var(--ia);border-color:var(--ia)}
+.lib-foot{padding:12px 16px;border-top:1px solid var(--line);color:var(--dim);font-size:8.5px;letter-spacing:.18em;line-height:1.7}
+
+/* ---------- decks ---------- */
+.deck{display:flex;flex-direction:column;--acc:#f2f0ea;position:relative;transition:background .3s}
+.deck.focus{background:var(--panel2)}
+.deck.focus::after{content:"";position:absolute;left:0;right:0;top:0;height:1px;background:var(--acc);box-shadow:0 0 12px var(--acc)}
+.d-head{display:flex;align-items:center;gap:14px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.d-id{font-size:22px;font-weight:300;width:22px;color:var(--acc)}
+.d-title{display:flex;flex-direction:column;gap:3px;min-width:0}
+.d-title b{font-weight:400;font-size:12px;letter-spacing:.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.d-title span{font-size:8.5px;letter-spacing:.2em;color:var(--dim)}
+.d-state{margin-left:auto;font-size:8.5px;letter-spacing:.22em;padding:5px 8px;border:1px solid var(--line2);color:var(--mute);white-space:nowrap}
+.d-state.air{border-color:var(--red);color:#fff;background:rgba(255,26,26,.12)}
+.d-view{position:relative;background:#000;overflow:hidden;border-bottom:1px solid var(--line);flex:1 1 0;min-height:150px;width:100%}
+.d-view img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.4;filter:grayscale(.4);transition:opacity .4s}
+.d-prev{position:absolute;inset:0;width:100%;height:100%;display:block;opacity:0;transition:opacity .4s}
+.deck.live .d-prev{opacity:1}.deck.live .d-view img{opacity:0}
+.d-view .vg{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.55),transparent 35%,transparent 55%,rgba(0,0,0,.85))}
+.d-act{position:absolute;left:16px;bottom:30px;font-size:20px;font-weight:300;letter-spacing:.34em;text-shadow:0 0 18px rgba(0,0,0,.8)}
+.d-time{position:absolute;left:16px;bottom:12px;font-size:9.5px;letter-spacing:.2em;color:var(--tx2);font-variant-numeric:tabular-nums}
+.d-flags{position:absolute;right:12px;top:12px;display:flex;gap:6px}
+.d-flags span{font-size:8px;letter-spacing:.2em;padding:4px 6px;background:rgba(0,0,0,.6);border:1px solid var(--acc);color:var(--acc);display:none}
+.d-flags span.on{display:block}
+.d-queue{position:absolute;right:12px;bottom:12px;font-size:8.5px;letter-spacing:.22em;color:#000;background:var(--acc);padding:4px 7px;display:none;animation:blink .5s steps(2) infinite}
+.d-queue.on{display:block}
+@keyframes blink{50%{opacity:.35}}
+.d-empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--dim);font-size:9.5px;letter-spacing:.26em;text-align:center;line-height:2}
+.d-strip{height:58px;display:block;width:100%;cursor:pointer;border-bottom:1px solid var(--line)}
+.d-acts{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border-bottom:1px solid var(--line)}
+.d-acts button{background:var(--panel);padding:9px 10px;font-size:8.5px;letter-spacing:.18em;color:var(--mute);display:flex;gap:8px;white-space:nowrap;overflow:hidden;transition:color .12s,background .12s}
+.deck.focus .d-acts button{background:var(--panel2)}
+.d-acts button i{font-style:normal;color:var(--dim)}
+.d-acts button:hover{color:var(--tx)}
+.d-acts button.cur{color:var(--acc)}
+.d-acts button.cur i{color:var(--acc)}
+.d-acts button.firma{color:var(--tx2)}
+.d-acts button.hit{background:var(--acc)!important;color:#000}
+.d-perf{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:12px 14px}
+.pb{border:1px solid var(--line2);padding:9px 0;text-align:center;font-size:8.5px;letter-spacing:.2em;color:var(--tx2);transition:all .12s;position:relative}
+.pb small{position:absolute;right:5px;top:3px;font-size:7.5px;color:var(--dim);letter-spacing:0}
+.pb:hover{border-color:var(--mute);color:var(--tx)}
+.pb.on{border-color:var(--acc);color:#000;background:var(--acc)}
+.pb.on small{color:rgba(0,0,0,.5)}
+.d-mix{display:flex;align-items:flex-end;gap:12px;padding:4px 14px 14px}
+.eq{display:flex;gap:6px}
+.kcol{display:flex;flex-direction:column;align-items:center;gap:6px}
+.kill{font-size:7.5px;letter-spacing:.16em;border:1px solid var(--line2);padding:4px 0;width:44px;text-align:center;color:var(--mute)}
+.kill.on{background:var(--red);border-color:var(--red);color:#fff}
+.faders{flex:1;display:flex;flex-direction:column;gap:12px;min-width:0}
+
+/* ---------- controles ---------- */
+.knob{display:flex;flex-direction:column;align-items:center;gap:5px;cursor:ns-resize;user-select:none;touch-action:none}
+.knob svg{display:block;overflow:visible}
+.knob .lbl{font-size:7.5px;letter-spacing:.18em}
+.knob .val{font-size:8px;color:var(--tx2);height:10px;font-variant-numeric:tabular-nums;opacity:0;transition:opacity .2s}
+.knob:hover .val,.knob.drag .val{opacity:1}
+.fader{display:flex;flex-direction:column;gap:6px;min-width:0}
+.fader .row{display:flex;justify-content:space-between}
+.fader .row b{font-weight:400;font-size:8.5px;color:var(--tx2);font-variant-numeric:tabular-nums}
+.track{position:relative;height:16px;cursor:ew-resize;touch-action:none}
+.track .ln{position:absolute;left:0;right:0;top:7px;height:2px;background:var(--line2)}
+.track .fl{position:absolute;left:0;top:7px;height:2px;background:var(--acc)}
+.track .th{position:absolute;top:2px;width:6px;height:12px;background:var(--tx);transform:translateX(-3px)}
+.track .dt{position:absolute;top:4px;width:1px;height:8px;background:var(--dim)}
+.meter{height:3px;background:#151514;position:relative;overflow:hidden}
+.meter i{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,var(--acc) 0 70%,#FFB000 85%,var(--red))}
+
+/* ---------- centro ---------- */
+.center{display:flex;flex-direction:column}
+.mon{position:relative;background:#000;border-bottom:1px solid var(--line);flex:1 1 0;min-height:200px;width:100%}
+#mon{position:absolute;inset:0;width:100%;height:100%;display:block}
+.mon .ov{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--dim);font-size:9.5px;letter-spacing:.26em;line-height:2.2}
+.mon .ov.off{display:none}
+.mon .tag{position:absolute;left:12px;top:10px;font-size:8.5px;letter-spacing:.24em;color:var(--mute);display:flex;gap:8px;align-items:center}
+.mon .tag .led{width:5px;height:5px}
+.xsec{padding:16px 18px 10px;display:flex;flex-direction:column;gap:14px}
+.xrow{display:flex;align-items:center;gap:14px}
+.xl{font-size:16px;font-weight:300;width:14px;text-align:center;color:var(--dim);transition:color .2s}
+.xl.on{color:var(--tx)}
+.xf{flex:1;position:relative;height:30px;cursor:ew-resize;touch-action:none}
+.xf .ln{position:absolute;left:0;right:0;top:14px;height:1px;background:var(--line2)}
+.xf .tk{position:absolute;top:8px;width:1px;height:13px;background:var(--line2)}
+.xf .th{position:absolute;top:3px;width:16px;height:24px;transform:translateX(-8px);background:var(--tx);box-shadow:0 0 18px rgba(242,240,234,.25)}
+.xf .th::after{content:"";position:absolute;left:7px;top:4px;bottom:4px;width:2px;background:#000}
+.xctl{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center}
+.cut{border:1px solid var(--line2);padding:10px 14px;font-size:9px;letter-spacing:.28em;color:var(--tx);text-align:center;transition:all .12s}
+.cut:hover{border-color:var(--red);background:rgba(255,26,26,.1)}
+.cut.q{animation:blink .5s steps(2) infinite;border-color:var(--red)}
+.auto{display:flex;align-items:center;gap:10px}
+.mmeter{display:flex;flex-direction:column;gap:3px;margin-top:2px}
+
+/* ---------- efectos ---------- */
+.fx{display:grid;grid-template-columns:auto 1px auto 1px auto;gap:0 26px;align-items:end;padding:14px 22px 16px;border-top:1px solid var(--line);background:#080808}
+.fx .sep{background:var(--line);align-self:stretch}
+.grp{display:flex;flex-direction:column;gap:10px}
+.grp .gk{display:flex;gap:14px;align-items:flex-end}
+.tg{border:1px solid var(--line2);padding:9px 10px;font-size:8.5px;letter-spacing:.2em;color:var(--tx2);text-align:center;transition:all .12s;min-width:74px;position:relative}
+.tg small{position:absolute;right:4px;top:2px;font-size:7.5px;color:var(--dim)}
+.tg:hover{border-color:var(--mute)}
+.tg.on{background:var(--tx);color:#000;border-color:var(--tx)}
+.tg.red.on{background:var(--red);border-color:var(--red);color:#fff}
+.tgs{display:grid;grid-template-columns:repeat(2,auto);gap:6px}
+
+/* ---------- MIDI / ayuda ---------- */
+body.learn [data-ctl]{outline:1px dashed rgba(255,176,0,.5);outline-offset:2px}
+body.learn [data-ctl].armed{outline:1px solid #FFB000;box-shadow:0 0 14px rgba(255,176,0,.4)}
+body.learn [data-ctl].mapped::after{content:"";position:absolute;width:4px;height:4px;background:#FFB000;border-radius:50%;margin-left:-2px}
+#help{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.92);display:none;place-items:center}
+#help.on{display:grid}
+.hp{display:grid;grid-template-columns:repeat(3,auto);gap:12px 56px;font-size:10px;letter-spacing:.14em;color:var(--tx2)}
+.hp h3{grid-column:1/-1;font-weight:300;letter-spacing:.4em;font-size:14px;color:var(--tx);margin:0 0 10px}
+.hp div{display:flex;flex-direction:column;gap:9px}
+.hp p{margin:0;display:flex;gap:14px}
+.hp kbd{font:inherit;color:#000;background:var(--tx);padding:1px 6px;min-width:20px;text-align:center}
+.hp .t{color:var(--mute);font-size:9px;letter-spacing:.26em;margin-bottom:4px}
+#toast{position:fixed;left:50%;bottom:180px;transform:translateX(-50%);z-index:70;font-size:9.5px;letter-spacing:.22em;background:#000;border:1px solid var(--line2);padding:10px 16px;opacity:0;transition:opacity .3s;pointer-events:none}
+#toast.on{opacity:1}
+@media (max-width:1280px){main{grid-template-columns:196px minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)}.item{grid-template-columns:44px 1fr auto}.item img{width:44px;height:28px}}
+</style>
+</head>
+<body>
+<div id="boot">
+  <div class="boot-in">
+    <div class="mark">VØID<i>_</i>LOOM</div>
+    <div class="sub">LIVE RIG · GREYFRAME LABS</div>
+    <button id="go">ARRANCAR</button>
+    <div class="bar"><i id="bootbar"></i></div>
+    <div id="bootlog">AUDIO + SALIDA AL PROYECTOR</div>
+  </div>
+</div>
+
+<div class="app">
+  <header>
+    <div class="brand">VØID<i>_</i>LOOM <span>LIVE</span></div>
+    <div class="chips">
+      <div class="chip"><span class="led" id="ledOut"></span>SALIDA <b id="stOut">CERRADA</b></div>
+      <div class="chip"><span class="led" id="ledAud"></span>AUDIO <b id="stAud">—</b></div>
+      <div class="chip"><span class="led" id="ledMidi"></span>MIDI <b id="stMidi">—</b></div>
+    </div>
+    <div class="tools">
+      <span class="lbl">CUANTIZAR</span>
+      <div class="seg" id="quant" data-ctl="quant"><button data-v="libre">LIBRE</button><button data-v="golpe">GOLPE</button><button data-v="acto">ACTO</button></div>
+      <button class="tbtn" id="openOut">ABRIR SALIDA</button>
+      <button class="tbtn" id="learn">MIDI · APRENDER</button>
+      <button class="tbtn" id="helpB" aria-label="Atajos de teclado">?</button>
+    </div>
+  </header>
+
+  <main>
+    <aside class="lib">
+      <div class="p-head"><span class="lbl">BIBLIOTECA</span><span class="n" id="libN">—</span></div>
+      <div class="lib-list" id="lib"></div>
+      <div class="lib-foot">CADA PIEZA NUEVA DE VØID_LOOM ENTRA SOLA AL PUBLICARSE EN LABS.<br><br>⇧ 1–9 · CARGAR EN EL DECK QUE NO ESTÁ EN EL AIRE</div>
+    </aside>
+    <section class="deck" id="deckA"></section>
+    <section class="center">
+      <div class="mon">
+        <canvas id="mon"></canvas>
+        <div class="tag"><span class="led" id="ledMon"></span><span id="monTag">MONITOR</span></div>
+        <div class="ov" id="monOv">SALIDA CERRADA<br><button class="tbtn" id="openOut2">ABRIR SALIDA</button><br>ARRÁSTRALA AL PROYECTOR Y PULSA F</div>
+      </div>
+      <div class="xsec">
+        <div class="xrow"><span class="xl on" id="xlA">A</span><div class="xf" id="xf" data-ctl="xf" role="slider" tabindex="0" aria-label="Crossfader"><div class="ln"></div></div><span class="xl" id="xlB">B</span></div>
+        <div class="xctl">
+          <div class="seg" id="xmode" data-ctl="xmode"><button data-v="fundido">FUNDIDO</button><button data-v="congelar">DISOLVER</button></div>
+          <button class="cut" id="cut" data-ctl="cut">CORTE <span style="color:var(--dim)">·  ESPACIO</span></button>
+          <div class="auto"><div id="kAuto"></div><button class="pb" id="autoB" data-ctl="auto" style="padding:9px 12px">AUTO →</button></div>
+        </div>
+        <div class="mmeter"><span class="lbl" style="font-size:7.5px">MASTER</span><div class="meter" style="--acc:#f2f0ea"><i id="mL"></i></div><div class="meter" style="--acc:#f2f0ea"><i id="mR"></i></div></div>
+      </div>
+    </section>
+    <section class="deck" id="deckB"></section>
+  </main>
+
+  <footer class="fx">
+    <div class="grp"><span class="lbl">AUDIO</span><div class="gk" id="fxAudio"></div></div>
+    <div class="sep"></div>
+    <div class="grp"><span class="lbl">IMAGEN</span><div class="gk" id="fxImg"></div></div>
+    <div class="sep"></div>
+    <div class="grp"><span class="lbl">SISTEMA</span><div class="gk" id="fxSys"></div></div>
+  </footer>
+</div>
+
+<div id="help" role="dialog" aria-label="Atajos">
+  <div class="hp">
+    <h3>ATAJOS · VØID_LOOM LIVE</h3>
+    <div><span class="t">DECK CON FOCO</span>
+      <p><kbd>TAB</kbd>CAMBIAR DE DECK</p><p><kbd>1–8</kbd>SALTAR A UN ACTO</p><p><kbd>L</kbd>LOOP DEL ACTO</p><p><kbd>[</kbd><kbd>]</kbd>LOOP ÷2 / ×2</p><p><kbd>G</kbd>FIRMA · CIERRE</p></div>
+    <div><span class="t">INTERPRETAR</span>
+      <p><kbd>S</kbd>STUTTER (MANTENER)</p><p><kbd>F</kbd>CONGELAR</p><p><kbd>R</kbd>REVERSA (MANTENER)</p><p><kbd>T</kbd>CINTA · FRENAR / ARRANCAR</p><p><kbd>Z</kbd><kbd>X</kbd><kbd>C</kbd>KILL GRAVES / MEDIOS / AGUDOS</p></div>
+    <div><span class="t">MEZCLA E IMAGEN</span>
+      <p><kbd>ESPACIO</kbd>CORTE AL OTRO DECK</p><p><kbd>←</kbd><kbd>→</kbd>CROSSFADER</p><p><kbd>A</kbd>AUTO-TRANSICIÓN</p><p><kbd>Q</kbd>CUANTIZACIÓN</p><p><kbd>I</kbd>INVERTIR · <kbd>V</kbd>GLITCH · <kbd>B</kbd>NEGRO</p><p><kbd>⇧1–9</kbd>CARGAR PIEZA</p></div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script src="core.js"></script>
+<script src="control.js"></script>
+</body>
+</html>
