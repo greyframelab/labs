@@ -10,7 +10,7 @@
 
   // ------------------------------------------------------------------ estado recibido
   let MIX = { xf: 0, mode: 'fundido', onAir: 'A', quality: 1 };
-  let FX = { trail: 0, hits: 0.35, split: 0, invert: 0, black: 0, bright: 1, glitch: 0, punch: 0, lens: 0, mosaic: 0, tint: 0, scan: 0, mirror: 0, strobe: 0, tintC: '#ffffff' };
+  let FX = { trail: 0, hits: 0, split: 0, invert: 0, black: 0, bright: 1, glitch: 0, punch: 0, lens: 0, mosaic: 0, tint: 0, scan: 0, mirror: 0, strobe: 0, tintC: '#ffffff' };
   const HITS = {};          // piece id -> [s]
   const D = {};             // deck id -> { st, pending, piece, src, frame, api, next }
   ['A', 'B'].forEach((k) => (D[k] = { st: null, pending: [], piece: null, frame: null, api: null, next: null }));
