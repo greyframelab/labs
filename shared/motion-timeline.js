@@ -33,6 +33,11 @@
   @media (max-width:520px){.mtl-act span{display:none}.mtl{padding:14px 16px 18px}}`;
 
   function mount(o) {
+    // VØID_LOOM LIVE: dentro del rig (?live) la pieza no monta controles ni bucle propio;
+    // se entrega al rig, que la dibuja con su propio reloj.
+    if (/[?&]live\b/.test(location.search) && window.parent !== window) {
+      try { if (window.parent.VL_LIVE) { window.parent.VL_LIVE.register(window, o); return { seek() {}, get time() { return 0; } }; } } catch (e) {}
+    }
     const D = o.duration, acts = o.acts || [], acc = o.accent || '#F2F0EA';
     const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
     const ui = document.createElement('div'); ui.className = 'mtl'; ui.style.setProperty('--mtl-acc', acc);
