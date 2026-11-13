@@ -728,6 +728,8 @@
         [...d.ui.acts.children].forEach((b, i) => b.classList.toggle('cur', i === ai));
         d.el.classList.toggle('playing', !d.stopped);
       }
+      const w = k === 'A' ? Math.cos(MIX.xf * Math.PI / 2) : Math.sin(MIX.xf * Math.PI / 2);
+      d.el.classList.toggle('cue', !!d.item && w < 0.01);
       const q = d.queueUntil > now(); d.ui.q.classList.toggle('on', q); if (q) d.ui.q.textContent = 'EN COLA · ' + ((d.queueUntil - now()) / 1000).toFixed(1) + 's';
       if (ctx && d.aud) d.ui.meter.style.width = Math.min(100, rms(d.aud.an) * 260) + '%';
     }
