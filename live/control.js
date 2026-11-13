@@ -14,7 +14,7 @@
   // ================================================================== estado global
   const LIB = [];
   const MIX = { xf: 0, mode: 'fundido', onAir: 'A', quality: store.get('quality', 1) };
-  const FX = { trail: 0, hits: 0.35, split: 0, invert: 0, black: 0, bright: 1, glitch: 0 };
+  const FX = { trail: 0, hits: 0.35, split: 0, invert: 0, black: 0, bright: 1, glitch: 0, punch: 0, lens: 0, mosaic: 0, tint: 0, scan: 0, mirror: 0, strobe: 0, tintC: '#ffffff' };
   const AFX = { filter: 0, echo: 0, echoT: 0.375, room: 0.12, master: 0.9, av: store.get('av', 0) };
   let quant = store.get('quant', 'golpe');
   let focus = 'A';
@@ -434,6 +434,7 @@
     if (!dirty) return; dirty = false;
     const decks = {};
     for (const k in DECK) decks[k] = DECK[k].state;
+    const air = DECK[MIX.onAir]; FX.tintC = air && air.item ? air.item.accent : '#ffffff';
     ch.postMessage({ type: 'state', decks, mix: MIX, fx: FX });
   }
   ch.onmessage = (ev) => {
@@ -687,8 +688,17 @@
     knob(fi, 'hits', 'GOLPES', FX.hits, (v) => { FX.hits = v; sendState(); });
     knob(fi, 'split', 'DIVISIÓN', FX.split, (v) => { FX.split = v; sendState(); });
     knob(fi, 'bright', 'BRILLO', FX.bright / 1.5, (v) => { FX.bright = v * 1.5; sendState(); });
+    knob(fi, 'punch', 'LATIDO', FX.punch, (v) => { FX.punch = v; sendState(); });
+    knob(fi, 'lens', 'LENTE', FX.lens, (v) => { FX.lens = v; sendState(); });
+    knob(fi, 'mosaic', 'MOSAICO', FX.mosaic, (v) => { FX.mosaic = v; sendState(); });
+    knob(fi, 'tint', 'TINTE', FX.tint, (v) => { FX.tint = v; sendState(); });
+    knob(fi, 'scan', 'ESCANEO', FX.scan, (v) => { FX.scan = v; sendState(); });
     const tgs = document.createElement('div'); tgs.className = 'tgs'; fi.appendChild(tgs);
-    [['INVERTIR', 'I', 'invert', ''], ['GLITCH', 'V', 'glitch', ''], ['NEGRO', 'B', 'black', 'red']].forEach(([t, k, f, cls]) => {
+    const mir = document.createElement('div'); mir.className = 'mir';
+    mir.innerHTML = '<span class="lbl" style="font-size:7.5px">ESPEJO <span style="color:var(--dim)">· E</span></span><div class="seg" id="mirror"><button data-v="0">OFF</button><button data-v="1">◧</button><button data-v="2">⊞</button><button data-v="3">✳</button></div>';
+    fi.insertBefore(mir, tgs);
+    CTL.mirrorMark = seg($('#mirror'), 'mirror', '0', (v) => { FX.mirror = +v; sendState(); });
+    [['INVERTIR', 'I', 'invert', ''], ['GLITCH', 'V', 'glitch', ''], ['STROBE', 'O', 'strobe', ''], ['NEGRO', 'B', 'black', 'red']].forEach(([t, k, f, cls]) => {
       const b = document.createElement('button'); b.className = 'tg ' + cls; b.innerHTML = t + `<small>${k}</small>`; b.id = 'tg-' + f; tgs.appendChild(b);
       btn(b, f, () => { FX[f] = FX[f] ? 0 : 1; b.classList.toggle('on', !!FX[f]); sendState(); });
     });
@@ -755,6 +765,8 @@
       case 'KeyI': setFxToggle('invert', FX.invert ? 0 : 1); break;
       case 'KeyV': setFxToggle('glitch', FX.glitch ? 0 : 1); break;
       case 'KeyB': setFxToggle('black', FX.black ? 0 : 1); break;
+      case 'KeyO': setFxToggle('strobe', FX.strobe ? 0 : 1); break;
+      case 'KeyE': CTL.mirror.press(); toast('ESPEJO · ' + ['OFF', 'HORIZONTAL', 'CUADRANTES', 'CALEIDOSCOPIO'][FX.mirror]); break;
       case 'Escape': if (learn) toggleLearn(); break;
       default: if (e.key === '?') { $('#help').classList.toggle('on'); break; } return;
     }

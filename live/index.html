@@ -179,6 +179,10 @@ main>*{background:var(--panel);min-height:0}
 .tg.on{background:var(--tx);color:#000;border-color:var(--tx)}
 .tg.red.on{background:var(--red);border-color:var(--red);color:#fff}
 .tgs{display:grid;grid-template-columns:repeat(2,auto);gap:6px}
+.mir{display:flex;flex-direction:column;gap:6px;align-self:flex-end}
+.mir .seg button{padding:8px 9px;min-width:30px;text-align:center}
+.fx .gk{gap:12px}
+@media (max-width:1440px){.fx{gap:0 16px;padding:14px 16px}.fx .gk{gap:9px}.knob .lbl{letter-spacing:.12em}}
 
 /* ---------- MIDI / ayuda ---------- */
 body.learn [data-ctl]{outline:1px dashed rgba(255,176,0,.5);outline-offset:2px}
@@ -268,7 +272,7 @@ body.learn [data-ctl].mapped::after{content:"";position:absolute;width:4px;heigh
     <div><span class="t">INTERPRETAR</span>
       <p><kbd>S</kbd>STUTTER (MANTENER)</p><p><kbd>F</kbd>CONGELAR</p><p><kbd>R</kbd>REVERSA (MANTENER)</p><p><kbd>T</kbd>CINTA · FRENAR / ARRANCAR</p><p><kbd>Z</kbd><kbd>X</kbd><kbd>C</kbd>KILL GRAVES / MEDIOS / AGUDOS</p></div>
     <div><span class="t">MEZCLA E IMAGEN</span>
-      <p><kbd>ESPACIO</kbd>CORTE AL OTRO DECK</p><p><kbd>←</kbd><kbd>→</kbd>CROSSFADER</p><p><kbd>A</kbd>AUTO-TRANSICIÓN</p><p><kbd>Q</kbd>CUANTIZACIÓN</p><p><kbd>I</kbd>INVERTIR · <kbd>V</kbd>GLITCH · <kbd>B</kbd>NEGRO</p><p><kbd>⇧1–9</kbd>CARGAR PIEZA</p></div>
+      <p><kbd>ESPACIO</kbd>CORTE AL OTRO DECK</p><p><kbd>←</kbd><kbd>→</kbd>CROSSFADER</p><p><kbd>A</kbd>AUTO-TRANSICIÓN</p><p><kbd>Q</kbd>CUANTIZACIÓN</p><p><kbd>I</kbd>INVERTIR · <kbd>V</kbd>GLITCH · <kbd>B</kbd>NEGRO</p><p><kbd>O</kbd>STROBE · <kbd>E</kbd>ESPEJO</p><p><kbd>⇧1–9</kbd>CARGAR PIEZA</p></div>
   </div>
 </div>
 <div id="toast"></div>
