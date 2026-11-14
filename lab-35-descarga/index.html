@@ -466,21 +466,47 @@ canvas{width:100vw;height:100vh;display:block}
   seg([STRIKE[0], 0, STRIKE[2]], MAIN[NS], T.rupt - 0.002, 1, 1);
   const NSEG = SEG.length / 10;
 
-  // nube: puntos en la base, solo visibles cuando la luz los toca
-  const NCL = 120000, CL = new Float32Array(NCL * 4);
-  { const r = VL.rng(77);
-    for (let i = 0; i < NCL; i++) {
-      const x = (r() * 2 - 1) * 6, z = (r() * 2 - 1) * 4;
-      const bump = 0.25 * Math.sin(x * 1.3 + z * 0.7) + 0.18 * Math.sin(x * 2.9 - z * 1.7) + 0.1 * Math.sin(x * 5.1 + z * 4.3);
-      CL.set([x, YC + 0.05 + bump + Math.pow(r(), 1.5) * 1.6, z, r()], i * 4);
-    }
-  }
-
   // lluvia: cae siempre (periodo de medio compás → loops perfectos) y solo se ve cuando la ilumina un destello
   const NR = 26000, RA = new Float32Array(NR * 2 * 4);
   { const r = VL.rng(909);
     for (let i = 0; i < NR; i++) { const x = (r() * 2 - 1) * 5, z = -3.5 + r() * 9, s0 = r(), len = 0.18 + r() * 0.2;
       RA.set([x, z, s0, 0], i * 8); RA.set([x, z, s0, len], i * 8 + 4); } }
+
+  // ruido 3D periódico (64³) para la nube volumétrica
+  const NV = 64, NOI = new Uint8Array(NV * NV * NV);
+  { const r = VL.rng(4242), base = [];
+    for (const g of [4, 8, 16, 32]) { const L = new Float32Array(g * g * g); for (let i = 0; i < L.length; i++) L[i] = r(); base.push([g, L]); }
+    const sm = (x) => x * x * (3 - 2 * x);
+    for (let z = 0; z < NV; z++) for (let y = 0; y < NV; y++) for (let x = 0; x < NV; x++) {
+      let v = 0, amp = 0.55, tot = 0;
+      for (const [g, L] of base) {
+        const fx = x / NV * g, fy = y / NV * g, fz = z / NV * g, x0 = Math.floor(fx), y0 = Math.floor(fy), z0 = Math.floor(fz), tx = sm(fx - x0), ty = sm(fy - y0), tz = sm(fz - z0);
+        const at = (a, b, c) => L[((a % g + g) % g) + ((b % g + g) % g) * g + ((c % g + g) % g) * g * g];
+        const l = (a, b, t) => a + (b - a) * t;
+        const c00 = l(at(x0, y0, z0), at(x0 + 1, y0, z0), tx), c10 = l(at(x0, y0 + 1, z0), at(x0 + 1, y0 + 1, z0), tx), c01 = l(at(x0, y0, z0 + 1), at(x0 + 1, y0, z0 + 1), tx), c11 = l(at(x0, y0 + 1, z0 + 1), at(x0 + 1, y0 + 1, z0 + 1), tx);
+        v += l(l(c00, c10, ty), l(c01, c11, ty), tz) * amp; tot += amp; amp *= 0.5;
+      }
+      NOI[x + y * NV + z * NV * NV] = Math.round(v / tot * 255);
+    } }
+
+  // nube: partículas repartidas por el mismo ruido 3D → grumos y huecos reales; solo se ven cuando la luz las toca
+  const nz3 = (x, y, z) => { // trilineal sobre el ruido periódico
+    const fx = ((x % 1) + 1) % 1 * NV, fy = ((y % 1) + 1) % 1 * NV, fz = ((z % 1) + 1) % 1 * NV;
+    const x0 = Math.floor(fx), y0 = Math.floor(fy), z0 = Math.floor(fz), tx = fx - x0, ty = fy - y0, tz = fz - z0;
+    const at = (a, b, c) => NOI[(a % NV) + (b % NV) * NV + (c % NV) * NV * NV] / 255, l = (a, b, t) => a + (b - a) * t;
+    return l(l(l(at(x0, y0, z0), at(x0 + 1, y0, z0), tx), l(at(x0, y0 + 1, z0), at(x0 + 1, y0 + 1, z0), tx), ty), l(l(at(x0, y0, z0 + 1), at(x0 + 1, y0, z0 + 1), tx), l(at(x0, y0 + 1, z0 + 1), at(x0 + 1, y0 + 1, z0 + 1), tx), ty), tz);
+  };
+  const NCL = 150000, CL = new Float32Array(NCL * 4);
+  { const r = VL.rng(77); let i = 0, guard = 0;
+    while (i < NCL && guard++ < 4e6) {
+      const x = (r() * 2 - 1) * 6.5, z = (r() * 2 - 1) * 4.5 - 0.5, h = Math.pow(r(), 1.3) * 2.0, y = YC + h;
+      const n = nz3(x * 0.12, y * 0.17, z * 0.12) * 0.7 + nz3(x * 0.05 + 0.71, y * 0.07 + 0.71, z * 0.05 + 0.71) * 0.3;
+      const e2 = nz3(x * 0.26 + 0.37, y * 0.3 + 0.37, z * 0.26 + 0.37);
+      const sh = Math.min(1, h / 0.12) * Math.min(1, (2.0 - h) / 1.0) * Math.min(1, (7.5 - Math.abs(x)) / 2) * Math.min(1, (6 - Math.abs(z + 0.5)) / 2);
+      const d = Math.max(0, (n - 0.46) / 0.09 * sh - e2 * 0.55);
+      if (r() < d * 0.9) CL.set([x, y, z, r() * 0.6 + 0.4 * Math.min(1, d)], 4 * i++);
+    }
+  }
 
   // ================================================================ 2 · WebGL2
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
@@ -505,8 +531,8 @@ canvas{width:100vw;height:100vh;display:block}
   const VSL = `#version 300 es
   precision highp float;
   in vec4 aA; in vec4 aB; in vec4 aC;     // A.xyz tA · B.xyz kind · side end w seed
-  uniform mat4 uVP; uniform vec2 uRes; uniform float uT, uRupt, uRet, uKf, uHalo, uMir, uWob, uFrz;
-  out float vI; out float vX; out float vHot;
+  uniform mat4 uVP; uniform vec2 uRes; uniform float uT, uRupt, uRet, uKf, uHalo, uMir, uWob, uFrz, uFoc, uAp;
+  out float vI; out float vX; out float vHot; out float vY; out float vE;
   void main(){
     float tA = aA.w, kind = aB.w, side = aC.x, endp = aC.y, w = aC.z, sd = aC.w;
     float age = uT - tA;
@@ -523,7 +549,7 @@ canvas{width:100vw;height:100vh;display:block}
         I = 0.16 + 3.0 * exp(-age / 0.05) + 0.8 * uKf;
         if (post >= 0.) I = 0.06 * exp(-post * 1.6) + uRet * 0.75 * exp(-post * 0.35) * (0.5 + sd);
       } else if (kind < 1.5) {     // canal principal
-        I = 0.3 + 4.0 * exp(-age / 0.06) + 1.0 * uKf;
+        I = 0.45 + 6.0 * exp(-age / 0.07) + 1.2 * uKf;
         if (post >= 0.) I = 0.55 + 0.5 * exp(-post * 0.6) + uRet * 6.5;   // el canal sigue incandescente entre re-descargas
       } else if (kind < 2.5) {     // relámpago en la nube
         I = (3.2 * exp(-age / 0.1) + 0.45 * exp(-age / 0.55)) * step(age, 1.8);
@@ -532,30 +558,38 @@ canvas{width:100vw;height:100vh;display:block}
         if (post >= 0.) I = uRet * 1.4 * exp(-post * 0.5);
       }
     }
-    float ww = uHalo > 1.5 ? (60. + 120. * w) * (kind > 0.5 && kind < 1.5 ? 1. : 0.5) : uHalo > 0.5 ? (10. + 24. * w) * (kind > 0.5 && kind < 1.5 && uT >= uRupt ? 1.8 : 1.) : (1.1 + 1.6 * w) * (kind > 0.5 && kind < 1.5 && uT >= uRupt ? 1.9 : 1.);
-    ww *= clamp(6.5 / ca.w, 1., 5.);   // de cerca, el canal tiene cuerpo
+    float ww = uHalo > 1.5 ? (60. + 120. * w) * (kind > 0.5 && kind < 1.5 ? 1. : 0.5) : uHalo > 0.5 ? (13. + 30. * w) * (kind > 0.5 && kind < 1.5 && uT >= uRupt ? 1.8 : 1.) : (1.6 + 2.3 * w) * (kind > 0.5 && kind < 1.5 && uT >= uRupt ? 1.9 : 1.);
+    if (uHalo < 0.5) ww *= clamp(6.5 / ca.w, 1., 3.);   // de cerca, el canal tiene cuerpo
+    // profundidad de campo: fuera de foco la descarga se abre y se apaga
+    float coc = abs(0.5 * (ca.w + cb.w) - uFoc) * uAp * uRes.y;
+    float ww0 = ww; ww = sqrt(ww * ww + coc * coc * (uHalo > 0.5 ? 0.3 : 1.)); I *= ww0 / ww;
     vec4 c = endp < 0.5 ? ca : cb;
-    c.xy += nrm * side * ww / uRes * c.w;
+    float lenPx = length((sb - sa) * uRes * 0.5) + 1e-3, ext = ww * 0.7;
+    c.xy += nrm * side * ww / uRes * c.w + dir * (endp < 0.5 ? -1. : 1.) * ext / uRes * c.w * 2.;
+    vY = endp < 0.5 ? -ext * 2. / lenPx : 1. + ext * 2. / lenPx; vE = ext * 2. / lenPx;
     gl_Position = age >= 0. ? c : vec4(9., 9., 9., 1.);
+    I *= 0.78 + 0.22 * fract(sin(sd * 91.7 + floor(uT * 40.) * 13.1) * 43758.5);   // parpadeo eléctrico
     vI = I * (uMir > 0.5 ? 0.28 : 1.); vX = side; vHot = kind;
   }`;
   const FSL = `#version 300 es
-  precision highp float; in float vI; in float vX; in float vHot; out vec4 o; uniform float uHalo;
+  precision highp float; in float vI; in float vX; in float vHot; in float vY; in float vE; out vec4 o; uniform float uHalo;
   void main(){
-    float g = exp(-vX * vX * (uHalo > 1.5 ? 2.5 : uHalo > 0.5 ? 3.5 : 2.2));
+    float out_ = max(-vY, vY - 1.) / max(vE, 1e-4);   // remates redondos y suaves: sin pinchos en las uniones
+    float g = exp(-vX * vX * (uHalo > 1.5 ? 2.5 : uHalo > 0.5 ? 3.5 : 2.2)) * (out_ > 0. ? exp(-out_ * out_ * 3.) * 0.55 : 1.);
     vec3 core = vec3(0.92, 0.9, 1.0), halo = vec3(0.54, 0.17, 1.0);
     o = vec4((uHalo > 1.5 ? halo * 0.018 * step(0.5, vHot) * step(vHot, 1.5) : uHalo > 0.5 ? halo * 0.1 : core * 1.25) * vI * g, 0.);
   }`;
   // nube: puntos iluminados por las descargas cercanas
   const VSC = `#version 300 es
-  precision highp float; in vec4 aP; uniform mat4 uVP; uniform vec4 uL[6]; uniform float uGain; out vec3 vC;
+  precision highp float; in vec4 aP; uniform mat4 uVP; uniform vec4 uL[6]; uniform float uGain, uAmb, uFoc, uAp; uniform vec3 uCam; uniform vec2 uRes; out vec3 vC;
   void main(){
     vec4 cp = uVP * vec4(aP.xyz, 1.); gl_Position = cp;
-    float I = 0.;
-    for (int i = 0; i < 6; i++) { vec3 d = aP.xyz - uL[i].xyz; I += uL[i].w * exp(-dot(d, d) * 0.55); }
-    float ps = clamp(520. / cp.w, 2., 46.);
+    float I = uAmb * (0.25 + 0.75 * smoothstep(2.1, 0.2, aP.y - ${YC.toFixed(2)}));   // el destello enciende toda la base de la nube
+    for (int i = 0; i < 6; i++) { vec3 d = aP.xyz - uL[i].xyz; I += uL[i].w * exp(-dot(d, d) * 0.9) * 1.4; }
+    float coc = abs(length(aP.xyz - uCam) - uFoc) * uAp * uRes.y;
+    float ps = clamp(260. / cp.w + coc, 1.5, 60.);
     vC = mix(vec3(0.55, 0.42, 0.85), vec3(0.85, 0.82, 0.95), aP.w) * I * uGain * (0.5 + aP.w) * 30. / (ps * ps);
-    gl_PointSize = clamp(520. / cp.w, 2., 46.);
+    gl_PointSize = ps;
   }`;
   const FSC = `#version 300 es
   precision highp float; in vec3 vC; out vec4 o; void main(){ vec2 c = gl_PointCoord * 2. - 1.; o = vec4(vC * exp(-dot(c, c) * 2.), 0.); }`;
@@ -563,7 +597,7 @@ canvas{width:100vw;height:100vh;display:block}
   in vec2 aPos; out vec2 vUv; void main(){ vUv = aPos * .5 + .5; gl_Position = vec4(aPos, 0., 1.); }`;
   // composición: suelo mojado que recoge el destello, tono y grado
   const FST = `#version 300 es
-  precision highp float; in vec2 vUv; out vec4 o; uniform sampler2D uH; uniform float uExp, uSeed, uFlash, uHor; uniform vec2 uSp, uRes;
+  precision highp float; in vec2 vUv; out vec4 o; uniform sampler2D uH, uV; uniform float uExp, uSeed, uFlash, uHor; uniform vec2 uSp, uRes;
   float ign(vec2 q){ return fract(52.9829189 * fract(dot(q + uSeed * 37., vec2(0.06711056, 0.00583715)))); }
   void main(){
     vec3 c = texture(uH, vUv).rgb;
@@ -575,7 +609,7 @@ canvas{width:100vw;height:100vh;display:block}
     c *= uExp; c = c * (2.51 * c + 0.03) / (c * (2.43 * c + 0.59) + 0.14); c += (ign(gl_FragCoord.xy) - 0.5) / 255.; o = vec4(c, 1.);
   }`;
   const VSR = `#version 300 es
-  precision highp float; in vec4 aR; uniform mat4 uVP; uniform vec3 uCam; uniform float uT, uP, uFl, uYC; uniform vec4 uL[6]; out float vI;
+  precision highp float; in vec4 aR; uniform mat4 uVP; uniform vec3 uCam; uniform float uT, uP, uFl, uYC, uFoc, uAp, uPt, uBk; uniform vec2 uRes; uniform vec4 uL[6]; out float vI; out float vS;
   void main(){
     float y = uYC * fract(aR.z - uT / uP) + aR.w;
     vec3 P = vec3(aR.x + (y - uYC * 0.5) * 0.08, y, aR.y);
@@ -583,11 +617,69 @@ canvas{width:100vw;height:100vh;display:block}
     float I = uFl * 0.55;
     for (int i = 0; i < 6; i++) { vec3 d = P - uL[i].xyz; I += uL[i].w * 0.06 / (1. + dot(d, d) * 0.5); }
     float dc = length(P - uCam);
-    vI = I * smoothstep(0.3, 1.2, dc) * exp(-dc * 0.08) * (aR.w > 0. ? 0.25 : 1.);
+    float coc = abs(dc - uFoc) * uAp * uRes.y;
+    if (uPt > 0.5) {   // gotas cercanas como discos de bokeh
+      float sz = clamp(coc * 1.4, 0., 120.); if (uBk < 0.5 || fract(aR.z * 97.3) > 0.12 || dc > 2.2 || sz < 10.) { gl_Position = vec4(9., 9., 9., 1.); gl_PointSize = 0.; vI = 0.; vS = 0.; return; } gl_PointSize = sz; vS = sz;
+      vI = I * 22. * 36. / (sz * sz) * smoothstep(0.15, 0.5, dc);
+      return;
+    }
+    vS = 0.;
+    vI = I * smoothstep(0.3, 1.2, dc) * exp(-dc * 0.08) * (aR.w > 0. ? 0.25 : 1.) / (1. + coc * 0.25);
   }`;
   const FSR = `#version 300 es
-  precision highp float; in float vI; out vec4 o; void main(){ o = vec4(vec3(0.75, 0.7, 1.) * vI * 0.2, 0.); }`;
+  precision highp float; in float vI; in float vS; out vec4 o; void main(){ float m = 1.; if (vS > 0.) { vec2 c = gl_PointCoord * 2. - 1.; float d = dot(c, c); m = smoothstep(1., 0.8, d) * (0.6 + 0.4 * d); if (m <= 0.) discard; } o = vec4(vec3(0.75, 0.7, 1.) * vI * 0.2 * m, 0.); }`;
   const PR = prog(VSR, FSR, ['aR']);
+  // nube volumétrica: se traza a media resolución; la luz de cada descarga se dispersa dentro y se absorbe según su espesor
+  const FSV = `#version 300 es
+  precision highp float; precision highp sampler3D; in vec2 vUv; out vec4 o;
+  uniform sampler3D uN; uniform vec3 uCam, uFw, uRt, uUp; uniform float uFov, uAsp, uYC, uSeed, uAmb; uniform vec4 uL[6];
+  float ign(vec2 q){ return fract(52.9829189 * fract(dot(q + uSeed * 37., vec2(0.06711056, 0.00583715)))); }
+  float dens(vec3 p){
+    float h = (p.y - uYC) / 2.1;
+    if (h < 0. || h > 1.) return 0.;
+    float sh = smoothstep(0., 0.08, h) * smoothstep(1., 0.45, h) * smoothstep(7.5, 4.5, abs(p.x)) * smoothstep(6., 3.5, abs(p.z + 0.5));
+    float n = texture(uN, p * vec3(0.12, 0.17, 0.12)).r * 0.7 + texture(uN, p * vec3(0.05, 0.07, 0.05) + 0.71).r * 0.3;
+    float e = texture(uN, p * vec3(0.26, 0.3, 0.26) + 0.37).r;
+    return max(0., smoothstep(0.42, 0.62, n) * sh - e * 0.3) * 7.;
+  }
+  void main(){
+    vec2 uv = (vUv - 0.5) * vec2(uAsp, 1.);
+    vec3 rd = normalize(uFw + (uv.x * uRt + uv.y * uUp) * uFov);
+    float y0 = uYC, y1 = uYC + 2.1;
+    float t0, t1;
+    if (abs(rd.y) < 1e-4) { if (uCam.y < y0 || uCam.y > y1) { o = vec4(0., 0., 0., 1.); return; } t0 = 0.; t1 = 30.; }
+    else { float a = (y0 - uCam.y) / rd.y, b = (y1 - uCam.y) / rd.y; t0 = max(0., min(a, b)); t1 = min(30., max(a, b)); }
+    if (t1 <= t0) { o = vec4(0., 0., 0., 1.); return; }
+    const int NS = 40; float dt = (t1 - t0) / float(NS);
+    float t = t0 + dt * ign(gl_FragCoord.xy);
+    vec3 col = vec3(0.); float T = 1.;
+    for (int i = 0; i < NS; i++) {
+      vec3 p = uCam + rd * t; float d = dens(p);
+      if (d > 0.001) {
+        // sombra propia hacia la luz principal: los grumos se modelan con luz y sombra
+        vec3 ld = uL[0].xyz - p; float lL = length(ld); ld /= max(lL, 1e-3);
+        float sd = dens(p + ld * 0.18) + dens(p + ld * 0.45);
+        float shd = exp(-sd * 0.55);
+        vec3 Li = vec3(0.78, 0.66, 1.) * uAmb * (0.35 + 0.65 * shd);
+        for (int k = 0; k < 6; k++) { vec3 q = p - uL[k].xyz; float dd = dot(q, q); Li += uL[k].w * vec3(0.78, 0.66, 1.) / (1. + dd * 1.2) * exp(-dd * 0.06) * (k == 0 ? shd : 0.7); }
+        float a = 1. - exp(-d * dt * 1.6);
+        col += T * a * Li; T *= 1. - a;
+        if (T < 0.02) break;
+      }
+      t += dt;
+    }
+    o = vec4(col, T);
+  }`;
+  const PV = prog(VSQ, FSV, ['aPos']);
+  const texN = gl.createTexture(); gl.bindTexture(gl.TEXTURE_3D, texN);
+  gl.texImage3D(gl.TEXTURE_3D, 0, gl.R8, NV, NV, NV, 0, gl.RED, gl.UNSIGNED_BYTE, NOI);
+  for (const p of [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T, gl.TEXTURE_WRAP_R]) gl.texParameteri(gl.TEXTURE_3D, p, gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  const VW = Math.round(W / 2), VH = Math.round(H / 2);
+  const VOL = (() => { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA16F, VW, VH);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0); return { t, f }; })();
   const PL = prog(VSL, FSL, ['aA', 'aB', 'aC']), PC = prog(VSC, FSC, ['aP']), PT = prog(VSQ, FST, ['aPos']);
   // cintas: 6 vértices por segmento
   const VA = new Float32Array(NSEG * 6 * 4), VB = new Float32Array(NSEG * 6 * 4), VC2 = new Float32Array(NSEG * 6 * 4);
@@ -615,31 +707,38 @@ canvas{width:100vw;height:100vh;display:block}
     const P = [k / asp, 0, 0, 0, 0, k, 0, 0, 0, 0, (fa + n) / (n - fa), -1, 0, 0, 2 * fa * n / (n - fa), 0];
     const M = new Float32Array(16);
     for (let c = 0; c < 4; c++) for (let rr = 0; rr < 4; rr++) { let s = 0; for (let k2 = 0; k2 < 4; k2++) s += P[k2 * 4 + rr] * V[c * 4 + k2]; M[c * 4 + rr] = s; }
-    return M;
+    M.basis = { f, r, u, k }; return M;
   }
   function project(M, P) { const x = M[0] * P[0] + M[4] * P[1] + M[8] * P[2] + M[12], y = M[1] * P[0] + M[5] * P[1] + M[9] * P[2] + M[13], w = M[3] * P[0] + M[7] * P[1] + M[11] * P[2] + M[15]; return [x / w * 0.5 + 0.5, y / w * 0.5 + 0.5, w]; }
   const kf = (pts, x) => { for (let i = 1; i < pts.length; i++) if (x <= pts[i][0]) { const [t0, v0] = pts[i - 1], [t1, v1] = pts[i]; return lerp(v0, v1, e.inOut(clamp((x - t0) / (t1 - t0)))); } return pts[pts.length - 1][1]; };
   const portrait = H >= W;
   const tipAt = (t) => { let k = 0; while (k < NS && STEPS[k] <= t) k++; return MAIN[k]; };
-  function camAt(t) {
+  const dist3 = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  function shot(t) {
     const fov = portrait ? 1.0 : 0.8;
     if (t < T.leader) {      // NUBE: desde abajo, mirando la base de la nube (periódico con el loop)
       const ph = 2 * Math.PI * t / T.leader;
-      return { cam: [0.4 * Math.sin(ph), 1.1, 2.4 + 0.25 * Math.cos(ph)], tgt: [0.1 * Math.sin(ph), YC + 0.2, -0.6], roll: 0.25 * Math.sin(ph) + 0.1, fov: fov * 1.15 };
+      return { cam: [0.4 * Math.sin(ph), 1.1, 2.4 + 0.25 * Math.cos(ph)], tgt: [0.1 * Math.sin(ph), YC + 0.2, -0.6], roll: 0.25 * Math.sin(ph) + 0.1, fov: fov * 1.15, ap: 0.002 };
     }
-    if (t < T.rupt) {        // LÍDER: plano general / la punta de cerca / a ras del suelo mojado
+    if (t < T.rupt) {        // LÍDER: plano general / la punta de cerca con poca profundidad / a ras del suelo mojado, a foco en el suelo
       const tt = Math.min(t, T.cut - 1e-4), b = Math.floor((tt - T.leader) / T.bar), lt = tt - (T.leader + b * T.bar);
-      if (b % 3 === 0) return { cam: [1.2 - 0.1 * lt, 1.6, 8.2 - 0.25 * lt], tgt: [0, 2.0, 0], roll: -0.03, fov };
-      if (b % 3 === 1) { const tp = tipAt(tt); return { cam: [tp[0] + 1.1, tp[1] - 0.4 + 0.05 * lt, tp[2] + 2.3], tgt: [tp[0], tp[1] - 0.25, tp[2]], roll: 0.12, fov: fov * 0.85 }; }
-      return { cam: [-1.6 + 0.12 * lt, 0.18, 4.8 - 0.2 * lt], tgt: [0, 1.6, 0], roll: -0.08, fov };
+      if (b % 3 === 0) return { cam: [1.2 - 0.1 * lt, 1.6, 8.2 - 0.25 * lt], tgt: [0, 2.0, 0], roll: -0.03, fov, ap: 0.0015 };
+      if (b % 3 === 1) { const tp = tipAt(tt); return { cam: [tp[0] + 0.9, tp[1] - 0.35 + 0.05 * lt, tp[2] + 1.7], tgt: [tp[0], tp[1] - 0.2, tp[2]], roll: 0.12, fov: fov * 0.8, ap: 0.01, focT: tp }; }
+      return { cam: [-1.6 + 0.12 * lt, 0.14, 4.8 - 0.2 * lt], tgt: [0, 1.6, 0], roll: -0.08, fov, ap: 0.004, focD: 3.2 };
     }
     const a = t - T.rupt, ph = 2 * Math.PI * (t - T.rupt - T.bar) / (2 * T.bar);
-    if (a > T.bar) {   // a partir del 2.º compás: cada re-descarga corta a otro plano (abierto · a ras del suelo · el canal de cerca)
+    if (a > T.bar) {   // cada re-descarga corta: a través de la lluvia (foco en las gotas → en el rayo) · a ras del suelo · el canal de cerca
       const lb = (a - T.bar) % T.bar, sh = lb < 6 * T.st ? 0 : (lb < 12 * T.st ? 1 : 2), mid = MAIN[Math.floor(NS * 0.55)];
-      if (sh === 1) return { cam: [-1.9 + 0.1 * lb, 0.16, 3.6], tgt: [STRIKE[0], 2.4, STRIKE[2]], roll: -0.1, fov: fov * 1.1 };
-      if (sh === 2) return { cam: [mid[0] + 1.3, mid[1] - 0.3 + 0.1 * lb, mid[2] + 1.6], tgt: [mid[0], mid[1] + 0.2, mid[2]], roll: 0.18, fov: fov * 0.9 };
+      if (sh === 0) { const c0 = [1.0, 1.3, 3.0], dB = dist3(c0, [STRIKE[0], 1.6, STRIKE[2]]); return { cam: [c0[0] - 0.05 * lb, c0[1], c0[2]], tgt: [STRIKE[0], 2.0, STRIKE[2]], roll: 0.03, fov: fov * 0.85, ap: 0.008, bk: 1, focD: lerp(0.7, dB, e.inOut(clamp((lb - 0.12) / 0.3))) }; }
+      if (sh === 1) return { cam: [-1.9 + 0.1 * lb, 0.16, 3.6], tgt: [STRIKE[0], 2.4, STRIKE[2]], roll: -0.1, fov: fov * 1.1, ap: 0.005, focD: 2.6 };
+      return { cam: [mid[0] + 1.3, mid[1] - 0.3 + 0.1 * lb, mid[2] + 1.6], tgt: [mid[0], mid[1] + 0.2, mid[2]], roll: 0.18, fov: fov * 0.9, ap: 0.007 };
     }
-    return { cam: [kf([[0, 0.6], [1.5, 1.4]], a) + 0.12 * Math.sin(ph), kf([[0, 0.7], [2, 1.3]], a), kf([[0, 6.0], [1.8, 8.6]], a) + 0.15 * Math.cos(ph)], tgt: [0, 2.1, 0], roll: 0.02 * Math.sin(ph), fov };
+    return { cam: [kf([[0, 0.6], [1.5, 1.4]], a) + 0.12 * Math.sin(ph), kf([[0, 0.7], [2, 1.3]], a), kf([[0, 6.0], [1.8, 8.6]], a) + 0.15 * Math.cos(ph)], tgt: [0, 2.1, 0], roll: 0.02 * Math.sin(ph), fov, ap: 0.002 };
+  }
+  function camAt(t) {
+    const s = shot(t);
+    s.foc = s.focD ?? (s.focT ? dist3(s.cam, s.focT) : dist3(s.cam, s.tgt));
+    return s;
   }
 
   // ================================================================ 4 · partitura → estado
@@ -673,21 +772,24 @@ canvas{width:100vw;height:100vh;display:block}
         if (a >= 0) { L.push([MAIN[0][0], YC + 0.2, MAIN[0][2], ret * 3]); L.push([1.2, YC + 0.4, 0, ret * 1.2]); L.push([-1.4, YC + 0.4, 0.5, ret * 1.2]); }
         L.sort((p, q) => q[3] - p[3]); while (L.length < 6) L.push([0, -99, 0, 0]);
         const U = PC.U; gl.useProgram(PC.p); gl.bindVertexArray(vaoC); gl.uniformMatrix4fv(U.uVP, false, M);
-        gl.uniform4fv(U.uL, new Float32Array(L.slice(0, 6).flat())); gl.uniform1f(U.uGain, 0.13 * fade);
-        gl.drawArrays(gl.POINTS, 0, NCL); }
+        gl.uniform4fv(U.uL, new Float32Array(L.slice(0, 6).flat())); gl.uniform1f(U.uGain, 0.13 * fade); gl.uniform1f(U.uAmb, ret * 1.2 + kf2 * 0.1);
+        gl.uniform3f(U.uCam, ...cm.cam); gl.uniform1f(U.uFoc, cm.foc); gl.uniform1f(U.uAp, cm.ap); gl.uniform2f(U.uRes, W, H);
+        gl.drawArrays(gl.POINTS, 0, NCL);
+      }
       { const U = PR.U; gl.useProgram(PR.p); gl.bindVertexArray(vaoR); gl.uniformMatrix4fv(U.uVP, false, M); gl.uniform3f(U.uCam, ...cm.cam);
         gl.uniform1f(U.uT, t); gl.uniform1f(U.uP, T.bar / 2); gl.uniform1f(U.uFl, (ret * 1.6 + kf2 * 0.35) * fade); gl.uniform1f(U.uYC, YC);
-        gl.uniform4fv(U.uL, new Float32Array(L.slice(0, 6).flat())); gl.drawArrays(gl.LINES, 0, NR * 2); }
+        gl.uniform4fv(U.uL, new Float32Array(L.slice(0, 6).flat())); gl.uniform1f(U.uFoc, cm.foc); gl.uniform1f(U.uAp, cm.ap); gl.uniform2f(U.uRes, W, H);
+        gl.uniform1f(U.uBk, cm.bk ? 1 : 0); gl.uniform1f(U.uPt, 0); gl.drawArrays(gl.LINES, 0, NR * 2); gl.uniform1f(U.uPt, 1); gl.drawArrays(gl.POINTS, 0, NR * 2); }
       // descargas: reflejo, halo y núcleo
       { const U = PL.U; gl.useProgram(PL.p); gl.bindVertexArray(vaoL);
         gl.uniformMatrix4fv(U.uVP, false, M); gl.uniform2f(U.uRes, W, H); gl.uniform1f(U.uT, t); gl.uniform1f(U.uRupt, T.rupt);
-        gl.uniform1f(U.uRet, ret); gl.uniform1f(U.uKf, kf2); gl.uniform1f(U.uWob, t * 2.0); gl.uniform1f(U.uFrz, frozen ? 1 : 0);
+        gl.uniform1f(U.uRet, ret); gl.uniform1f(U.uKf, kf2); gl.uniform1f(U.uWob, t * 2.0); gl.uniform1f(U.uFrz, frozen ? 1 : 0); gl.uniform1f(U.uFoc, cm.foc); gl.uniform1f(U.uAp, cm.ap);
         for (const [mir, halo] of [[1, 1], [1, 0], [0, 2], [0, 1], [0, 0]]) { gl.uniform1f(U.uMir, mir); gl.uniform1f(U.uHalo, halo); gl.drawArrays(gl.TRIANGLES, 0, NSEG * 6); } }
       gl.disable(gl.BLEND);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H);
-      { const U = PT.U; gl.useProgram(PT.p); gl.bindVertexArray(vaoQ); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, HDR.t);
+      { const U = PT.U; gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, VOL.t); gl.useProgram(PT.p); gl.bindVertexArray(vaoQ); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, HDR.t);
         const sp = project(M, STRIKE), hz = project(M, [0, 0, -60]);
-        gl.uniform1i(U.uH, 0); gl.uniform1f(U.uExp, 1.15); gl.uniform1f(U.uSeed, (frame % 64) * 0.137);
+        gl.uniform1i(U.uH, 0); gl.uniform1i(U.uV, 2); gl.uniform1f(U.uExp, 1.15); gl.uniform1f(U.uSeed, (frame % 64) * 0.137);
         gl.uniform1f(U.uFlash, ret * 2.2 + kf2 * 0.25); gl.uniform1f(U.uHor, clamp(hz[1], 0, 1)); gl.uniform2f(U.uSp, sp[0], sp[1]); gl.uniform2f(U.uRes, W, H);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); }
       c.drawImage(cv, 0, 0, W, H);
