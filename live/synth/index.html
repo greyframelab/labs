@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prueba · audio en vivo · VØID_LOOM LIVE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&display=swap">
+<style>
+:root{--bg:#060606;--panel:#0b0b0b;--line:#1d1c1b;--line2:#2a2927;--tx:#f2f0ea;--tx2:#bdbab3;--mute:#8f8c86;--dim:#5d5b57;--red:#FF1A1A;--acc:#B48CFF}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--tx);font:400 11px 'JetBrains Mono',ui-monospace,monospace;letter-spacing:.06em;overflow:hidden}
+button{all:unset;cursor:pointer;box-sizing:border-box}
+button:focus-visible{outline:1px solid var(--acc);outline-offset:2px}
+.lbl{font-size:9px;letter-spacing:.24em;color:var(--mute)}
+.app{display:grid;grid-template-columns:minmax(0,1fr) 380px;height:100vh}
+.stage{position:relative;background:#000;display:flex;flex-direction:column;min-width:0}
+.view{position:relative;flex:1;min-height:0;display:grid;place-items:center}
+#piece{width:100%;height:100%;border:0;display:block;background:#000}
+.ov{position:absolute;inset:0;display:grid;place-items:center;background:#000;text-align:center;gap:22px;transition:opacity .6s}
+.ov.off{opacity:0;pointer-events:none}
+.ov .t{font-size:22px;font-weight:300;letter-spacing:.4em;margin-right:-.4em}
+.ov .t i{font-style:normal;color:var(--red)}
+.ov .s{color:var(--mute);letter-spacing:.28em;font-size:10px;line-height:2}
+#go{border:1px solid var(--line2);padding:15px 30px;letter-spacing:.34em;font-size:11px;transition:all .2s}
+#go:hover{border-color:var(--red);background:rgba(255,26,26,.06)}
+.bar{height:62px;border-top:1px solid var(--line);position:relative;cursor:pointer;background:#070707}
+#tl{width:100%;height:100%;display:block}
+aside{border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;overflow-y:auto}
+.sec{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:12px}
+.hd{display:flex;align-items:baseline;justify-content:space-between}
+.hd b{font-weight:400;font-size:12px;letter-spacing:.3em}
+.row{display:flex;gap:6px;flex-wrap:wrap}
+.b{border:1px solid var(--line2);padding:9px 11px;font-size:9px;letter-spacing:.2em;color:var(--tx2);transition:all .12s;text-align:center}
+.b:hover{border-color:var(--mute);color:var(--tx)}
+.b.on{background:var(--tx);color:#000;border-color:var(--tx)}
+.b.red.on{background:var(--red);border-color:var(--red);color:#fff}
+.b.big{flex:1;padding:12px}
+.seg{display:flex;border:1px solid var(--line2)}
+.seg button{flex:1;padding:9px 6px;font-size:9px;letter-spacing:.2em;color:var(--mute);text-align:center}
+.seg button+button{border-left:1px solid var(--line2)}
+.seg button.on{background:var(--tx);color:#000}
+.sl{display:flex;flex-direction:column;gap:6px}
+.sl .r{display:flex;justify-content:space-between}
+.sl .r span:last-child{color:var(--tx2);font-variant-numeric:tabular-nums}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:16px;background:transparent;cursor:ew-resize}
+input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--line2)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:6px;height:12px;background:var(--tx);margin-top:-5px;border-radius:0}
+.meters{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line)}
+.m{background:var(--panel);padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.m .v{font-size:20px;font-weight:300;font-variant-numeric:tabular-nums}
+.m .v small{font-size:10px;color:var(--mute);margin-left:4px}
+.m.ok .v{color:#39FF6A}.m.warn .v{color:#FFB000}.m.err .v{color:var(--red)}
+.verdict{padding:12px;border:1px solid var(--line2);font-size:10px;letter-spacing:.18em;line-height:1.7;color:var(--tx2)}
+.verdict b{font-weight:400;color:var(--tx)}
+.note{color:var(--dim);font-size:9.5px;letter-spacing:.14em;line-height:1.7}
+</style>
+</head>
+<body>
+<div class="app">
+  <section class="stage">
+    <div class="view">
+      <iframe id="piece" title="Descarga" tabindex="-1"></iframe>
+      <div class="ov" id="ov"><div style="display:grid;gap:22px;justify-items:center">
+        <div class="t">VØID<i>_</i>LOOM · AUDIO EN VIVO</div>
+        <div class="s">DESCARGA SINTETIZADA EN EL NAVEGADOR<br>SIN ARCHIVOS DE AUDIO · CADA SONIDO SE CALCULA AL SONAR</div>
+        <button id="go">EMPEZAR LA PRUEBA</button>
+        <div class="s" id="ovlog">&nbsp;</div>
+      </div></div>
+    </div>
+    <div class="bar"><canvas id="tl"></canvas></div>
+  </section>
+  <aside>
+    <div class="sec">
+      <div class="hd"><b>DESCARGA · LAB 35</b><span class="lbl" id="pos">00:00:00</span></div>
+      <div class="row"><button class="b big" id="play">PLAY · ESPACIO</button></div>
+      <span class="lbl">ESCUCHAR</span>
+      <div class="seg" id="ab"><button data-v="synth" class="on">SINTETIZADO EN VIVO</button><button data-v="orig">ORIGINAL .M4A</button></div>
+      <span class="lbl">LOOP</span>
+      <div class="seg" id="loop"><button data-v="off" class="on">OFF</button><button data-v="0">NUBE</button><button data-v="1">RETORNO</button></div>
+    </div>
+    <div class="sec">
+      <div class="hd"><b>MANDOS DE SONIDO</b><span class="lbl">SOLO EN VIVO</span></div>
+      <div class="sl"><div class="r"><span class="lbl">TENSIÓN DEL DRON</span><span id="vT">50</span></div><input type="range" id="tension" min="0" max="100" value="50"></div>
+      <div class="sl"><div class="r"><span class="lbl">DENSIDAD DE TICKS</span><span id="vD">100</span></div><input type="range" id="density" min="0" max="100" value="100"></div>
+      <div class="sl"><div class="r"><span class="lbl">SALA</span><span id="vR">35</span></div><input type="range" id="room" min="0" max="100" value="35"></div>
+    </div>
+    <div class="sec">
+      <div class="hd"><b>ESTRÉS</b><span class="lbl">COPIAS MUDAS DE CADA SONIDO</span></div>
+      <div class="seg" id="stress"><button data-v="1" class="on">×1</button><button data-v="2">×2</button><button data-v="4">×4</button><button data-v="8">×8</button><button data-v="16">×16</button></div>
+      <span class="lbl">IMAGEN</span>
+      <div class="seg" id="img"><button data-v="0">APAGADA</button><button data-v="1" class="on">1 PIEZA</button><button data-v="2">2 PIEZAS</button></div>
+      <p class="note">2 PIEZAS dibuja la imagen dos veces por fotograma: la carga de un FUNDIDO en el rig.</p>
+    </div>
+    <div class="sec">
+      <div class="hd"><b>MEDIDORES</b><button class="b" id="reset" style="padding:5px 8px">RESET</button></div>
+      <div class="meters">
+        <div class="m" id="mV"><span class="lbl">VOCES SONANDO</span><span class="v">0</span></div>
+        <div class="m" id="mM"><span class="lbl">MARGEN MÍNIMO</span><span class="v">—</span></div>
+        <div class="m" id="mL"><span class="lbl">GOLPES TARDE</span><span class="v">0</span></div>
+        <div class="m" id="mJ"><span class="lbl">RETRASO DEL RELOJ</span><span class="v">0</span></div>
+        <div class="m" id="mF"><span class="lbl">IMAGEN</span><span class="v">—</span></div>
+        <div class="m" id="mC"><span class="lbl">CARGA DEL AUDIO</span><span class="v">—</span></div>
+      </div>
+      <div class="verdict" id="verdict">Pulsa PLAY y sube el estrés poco a poco.</div>
+      <p class="note">MARGEN: antelación con la que se programa cada golpe; por debajo de 20 ms hay riesgo. GOLPES TARDE: sonidos que no llegaron a tiempo (debe ser 0). CARGA DEL AUDIO solo aparece si tu Chrome la expone.</p>
+    </div>
+  </aside>
+</div>
+<script src="../core.js"></script>
+<script src="../../lab-35-descarga/descarga-score.js"></script>
+<script src="vl-synth.js"></script>
+<script src="synth-test.js"></script>
+</body>
+</html>
