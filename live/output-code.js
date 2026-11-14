@@ -75,6 +75,7 @@ void main(){ vec3 base = img(uv); o = vec4(mix(base, code(uv), mezcla), 1.); }`;
     const W = D.w, H = D.h;
     if (ov.width !== W || ov.height !== H) { ov.width = W; ov.height = H; }
     g.clearRect(0, 0, W, H);
+    if (D.mode === 'win') { drawWin(D, W, H); return upload(); }
     const fs = Math.max(10, Math.round(H / 54)), lh = Math.round(fs * 1.42), m = Math.round(H * 0.055);
     const acc = D.accent || '#f2f0ea';
     g.textBaseline = 'top';
@@ -128,11 +129,52 @@ void main(){ vec3 base = img(uv); o = vec4(mix(base, code(uv), mezcla), 1.); }`;
       g.fillStyle = 'rgba(242,240,234,0.38)'; g.fillText('// deck C · ' + (D.shaderMix * 100).toFixed(0) + '%', rx, sy - lh * 1.3);
       D.shader.split('\n').slice(-(shaderRows - 2)).forEach((l, i) => { g.fillStyle = 'rgba(242,240,234,0.75)'; g.fillText(l.slice(0, Math.floor(rw / (fs * 0.6))), rx, sy + i * lh); });
     }
+    return upload();
+  }
+  function upload() {
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ov);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     return true;
+  }
+  // ---- modo VENTANA: una consola pequeña tipo PowerShell en una esquina; el vídeo se sigue viendo entero
+  function drawWin(D, W, H) {
+    const fs = Math.max(10, Math.round(H / 66)), lh = Math.round(fs * 1.38), cw = fs * 0.6;
+    const m = Math.round(H * 0.045), ww = Math.round(Math.max(W * 0.38, 62 * cw)), wh = Math.round(H * 0.4);
+    const x0 = m, y0 = H - m - wh, pad = Math.round(fs * 0.9), tb = Math.round(lh * 1.5);
+    const acc = D.accent || '#f2f0ea', cols = Math.floor((ww - 2 * pad) / cw);
+    const fit = (t) => (t.length > cols ? t.slice(0, cols - 1) + '…' : t);
+    g.textBaseline = 'top'; g.font = `400 ${fs}px ${F}`;
+    // ventana
+    g.fillStyle = 'rgba(6,6,9,0.84)'; g.fillRect(x0, y0, ww, wh);
+    g.fillStyle = 'rgba(242,240,234,0.07)'; g.fillRect(x0, y0, ww, tb);
+    g.strokeStyle = 'rgba(242,240,234,0.22)'; g.lineWidth = 1; g.strokeRect(x0 + 0.5, y0 + 0.5, ww - 1, wh - 1);
+    g.fillStyle = 'rgba(242,240,234,0.72)'; g.fillText(fit('VØID_LOOM — pwsh · ' + (D.head || '').replace('VØID_LOOM · ', '').toLowerCase()), x0 + pad, y0 + (tb - fs) / 2);
+    // controles de ventana: — □ ✕
+    const cy = y0 + tb / 2, bx = x0 + ww - pad;
+    g.strokeStyle = 'rgba(242,240,234,0.5)';
+    g.beginPath(); g.moveTo(bx - fs * 0.7, cy - fs * 0.35); g.lineTo(bx, cy + fs * 0.35); g.moveTo(bx, cy - fs * 0.35); g.lineTo(bx - fs * 0.7, cy + fs * 0.35); g.stroke();
+    g.strokeRect(bx - fs * 2.2, cy - fs * 0.35, fs * 0.7, fs * 0.7);
+    g.beginPath(); g.moveTo(bx - fs * 3.7, cy); g.lineTo(bx - fs * 3.0, cy); g.stroke();
+    let y = y0 + tb + pad * 0.7;
+    const line = (t, c) => { g.fillStyle = c; g.fillText(fit(t), x0 + pad, y); y += lh; };
+    const v = Object.fromEntries((D.vals || []).map(([k, val]) => [k, val]));
+    line('PS C:\\VØID_LOOM> render --live', 'rgba(242,240,234,0.45)');
+    line(`t=${v.t || '0.000'}  frame=${v.frame ?? 0}  acto=${v.acto || '—'}  rate=${v.rate || '1.00×'}`, acc);
+    line(`bloom=${v.bloom || '—'}  flash=${v.flash || '—'}  golpe=${v.golpe || '—'}`, D.golpe > 0.25 ? acc : 'rgba(242,240,234,0.8)');
+    // el programa: la línea que avanza con t y sus vecinas
+    const src = D.src || [];
+    if (src.length) {
+      const cur = Math.floor(VLL.clamp(D.p / D.dur, 0, 0.9999) * src.length);
+      for (let k = -1; k <= 1; k++) { const n = cur + k; if (n < 0 || n >= src.length) { y += lh; continue; } line((k === 0 ? '› ' : '  ') + String(n + 1).padStart(4, ' ') + '  ' + src[n].trim(), k === 0 ? 'rgba(242,240,234,0.95)' : 'rgba(242,240,234,0.32)'); }
+    }
+    // traza: lo último que ha pasado
+    const room = Math.max(1, Math.floor((y0 + wh - pad - y) / lh) - 1), list = TRACE.slice(-room), tnow = performance.now();
+    for (const e of list) line(e.time + '  ' + e.txt, tnow - e.born < 700 ? acc : 'rgba(242,240,234,0.6)');
+    // prompt con cursor que parpadea
+    g.fillStyle = 'rgba(242,240,234,0.45)'; g.fillText('PS C:\\VØID_LOOM> ', x0 + pad, y);
+    if (Math.floor(tnow / 530) % 2 === 0) { g.fillStyle = acc; g.fillRect(x0 + pad + cw * 18, y + 2, cw * 0.9, fs); }
   }
   return { compile, pass, C, draw, tex, trace };
 };

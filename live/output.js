@@ -11,7 +11,7 @@
   // ------------------------------------------------------------------ estado recibido
   let MIX = { xf: 0, mode: 'fundido', onAir: 'A', quality: 1 };
   let FX = { trail: 0, hits: 0, split: 0, invert: 0, black: 0, bright: 1, glitch: 0, punch: 0, lens: 0, mosaic: 0, tint: 0, scan: 0, mirror: 0, strobe: 0, tintC: '#ffffff',
-    pBloom: 1, pFlash: 1, cMix: 0, view: 0, viewOp: 0.85 };
+    pBloom: 1, pFlash: 1, cMix: 0, view: 0, viewOp: 0.85, viewMode: 'full' };
   let BANDS = [0, 0, 0];
   const HITS = {};          // piece id -> [s]
   const D = {};             // deck id -> { st, pending, piece, src, frame, api, next }
@@ -88,6 +88,7 @@
     } else if (m.type === 'hits') HITS[m.piece] = m.hits;
     else if (m.type === 'ping') ch.postMessage({ type: 'hello', w: innerWidth, h: innerHeight });
     else if (m.type === 'bands') BANDS = m.v;
+    else if (m.type === 'wake') wakeLock();
     else if (m.type === 'code') {
       const r = CL.compile(m.src);
       ch.postMessage(Object.assign({ type: 'codeRes' }, r));
@@ -96,7 +97,12 @@
   };
   ch.postMessage({ type: 'hello', w: innerWidth, h: innerHeight });
 
+  // pantalla siempre encendida (instalación desatendida)
+  let wl = null;
+  async function wakeLock() { try { if (navigator.wakeLock && !wl) { wl = await navigator.wakeLock.request('screen'); wl.addEventListener('release', () => (wl = null)); } } catch (e) {} }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') wakeLock(); });
   addEventListener('keydown', (e) => {
+    wakeLock();
     if (e.code === 'KeyF') { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); }
   });
   let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { sizeCanvas(); reloadAll(); }, 500); });
@@ -323,7 +329,7 @@
     }
     vals.push(['audio', BANDS.map((v) => v.toFixed(2)).join(' ')]);
     return { w: cv.width, h: cv.height, accent: FX.tintC, head: api ? 'VØID_LOOM · ' + (api.title || s.piece).toUpperCase() : 'VØID_LOOM', sub: 'renderFrame(t, frame) · deck ' + k,
-      src: api && api.src, p, dur: api ? api.dur : 1, golpe: env, vals, shader: CL.C.prog && FX.cMix > 0.001 ? CL.C.src : '', shaderMix: FX.cMix };
+      src: api && api.src, p, dur: api ? api.dur : 1, golpe: env, vals, shader: CL.C.prog && FX.cMix > 0.001 ? CL.C.src : '', shaderMix: FX.cMix, mode: FX.viewMode };
   }
   function frame(now) {
     requestAnimationFrame(frame);
