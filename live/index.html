@@ -58,7 +58,7 @@ header{display:flex;align-items:center;gap:22px;padding:0 18px;border-bottom:1px
 .tbtn.on{border-color:var(--red);color:#fff;background:rgba(255,26,26,.1)}
 
 main{display:grid;grid-template-columns:236px minmax(0,1fr) minmax(0,1.08fr) minmax(0,1fr);gap:1px;background:var(--line);min-height:0}
-main>*{background:var(--panel);min-height:0}
+main>*{background:var(--panel);min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:#2a2927 transparent}
 
 /* ---------- biblioteca ---------- */
 .lib{display:flex;flex-direction:column}
@@ -90,7 +90,7 @@ main>*{background:var(--panel);min-height:0}
 .d-title span{font-size:8.5px;letter-spacing:.2em;color:var(--dim)}
 .d-state{margin-left:auto;font-size:8.5px;letter-spacing:.22em;padding:5px 8px;border:1px solid var(--line2);color:var(--mute);white-space:nowrap}
 .d-state.air{border-color:var(--red);color:#fff;background:rgba(255,26,26,.12)}
-.d-view{position:relative;background:#000;overflow:hidden;border-bottom:1px solid var(--line);flex:1 1 0;min-height:150px;width:100%}
+.d-view{position:relative;background:#000;overflow:hidden;border-bottom:1px solid var(--line);flex:1 1 0;min-height:84px;width:100%}
 .d-view img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.4;filter:grayscale(.4);transition:opacity .4s}
 .d-prev{position:absolute;inset:0;width:100%;height:100%;display:block;opacity:0;transition:opacity .4s}
 .deck.live .d-prev{opacity:1}.deck.live .d-view img{opacity:0}
@@ -148,7 +148,7 @@ main>*{background:var(--panel);min-height:0}
 
 /* ---------- centro ---------- */
 .center{display:flex;flex-direction:column}
-.mon{position:relative;background:#000;border-bottom:1px solid var(--line);flex:1 1 0;min-height:200px;width:100%}
+.mon{position:relative;background:#000;border-bottom:1px solid var(--line);flex:1 1 0;min-height:120px;width:100%}
 #mon{position:absolute;inset:0;width:100%;height:100%;display:block}
 .mon .ov{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--dim);font-size:9.5px;letter-spacing:.26em;line-height:2.2}
 .mon .ov.off{display:none}
@@ -216,6 +216,26 @@ body.learn [data-ctl].mapped::after{content:"";position:absolute;width:4px;heigh
 .hp .t{color:var(--mute);font-size:9px;letter-spacing:.26em;margin-bottom:4px}
 #toast{position:fixed;left:50%;bottom:180px;transform:translateX(-50%);z-index:70;font-size:9.5px;letter-spacing:.22em;background:#000;border:1px solid var(--line2);padding:10px 16px;opacity:0;transition:opacity .3s;pointer-events:none}
 #toast.on{opacity:1}
+/* pantallas bajas: todo más compacto para que nada pise el pie de efectos */
+@media (max-height:860px){
+  .d-head{padding:8px 14px}.d-id{font-size:18px}
+  .d-strip{height:44px}
+  .d-acts button{padding:6px 8px}
+  .d-perf{padding:8px 12px;gap:5px}.pb{padding:6px 0}
+  .d-mix{padding:2px 12px 10px;gap:10px}.faders{gap:8px}
+  .kcol{gap:4px}.kill{padding:3px 0}
+  .knob .val{display:none}
+  .xsec{padding:10px 14px 8px;gap:8px}
+  .crow{gap:8px}
+  .fx{padding:10px 16px 12px}.grp{gap:6px}
+  .lib-foot{display:none}
+  .p-head{padding:10px 14px 8px}
+}
+@media (max-height:700px){
+  .d-acts{grid-template-columns:repeat(8,1fr)}.d-acts button{padding:5px 4px;font-size:8px}.d-acts button i{display:none}
+  .knob svg{width:32px;height:32px}
+  .mmeter{display:none}
+}
 @media (max-width:1280px){main{grid-template-columns:196px minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)}.item{grid-template-columns:44px 1fr auto}.item img{width:44px;height:28px}}
 </style>
 </head>
