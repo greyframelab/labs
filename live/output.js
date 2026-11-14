@@ -88,6 +88,7 @@
     } else if (m.type === 'hits') HITS[m.piece] = m.hits;
     else if (m.type === 'ping') ch.postMessage({ type: 'hello', w: innerWidth, h: innerHeight });
     else if (m.type === 'bands') BANDS = m.v;
+    else if (m.type === 'wake') wakeLock();
     else if (m.type === 'code') {
       const r = CL.compile(m.src);
       ch.postMessage(Object.assign({ type: 'codeRes' }, r));
@@ -96,7 +97,12 @@
   };
   ch.postMessage({ type: 'hello', w: innerWidth, h: innerHeight });
 
+  // pantalla siempre encendida (instalación desatendida)
+  let wl = null;
+  async function wakeLock() { try { if (navigator.wakeLock && !wl) { wl = await navigator.wakeLock.request('screen'); wl.addEventListener('release', () => (wl = null)); } } catch (e) {} }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') wakeLock(); });
   addEventListener('keydown', (e) => {
+    wakeLock();
     if (e.code === 'KeyF') { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); }
   });
   let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { sizeCanvas(); reloadAll(); }, 500); });

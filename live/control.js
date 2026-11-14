@@ -722,7 +722,7 @@
     xf.addEventListener('pointerdown', (e) => { if (learnArm('xf')) return; drag = true; xf.setPointerCapture(e.pointerId); at(e); });
     xf.addEventListener('pointermove', (e) => drag && at(e)); xf.addEventListener('pointerup', () => (drag = false));
     reg('xf', xf, { kind: 'cc', set: (v) => manualXf(v), get: () => MIX.xf });
-    seg($('#xmode'), 'xmode', MIX.mode, (v) => { MIX.mode = v; sendState(); });
+    const markMode = seg($('#xmode'), 'xmode', MIX.mode, (v) => { MIX.mode = v; sendState(); }); CTL.xmode.mark = markMode;
     btn($('#cut'), 'cut', cut);
     const ka = document.createElement('div'); $('#kAuto').appendChild(ka); ka.style.setProperty('--acc', '#f2f0ea');
     const autoK = knob(ka, 'autoT', 'SEG', (autoDur - 1) / 15, (v) => { autoDur = 1 + v * 15; store.set('auto', autoDur); }, (v) => (1 + v * 15).toFixed(1) + 's');
@@ -776,6 +776,8 @@
     btn($('#tg-view'), 'view', () => setFxToggle('view', FX.view ? 0 : 1));
     const kv = $('#kView'); kv.style.setProperty('--acc', '#f2f0ea');
     knob(kv, 'viewOp', 'OPACIDAD', FX.viewOp, (v) => { FX.viewOp = v; sendState(); });
+    btn($('#apB'), 'autoplay', () => apToggle());
+    seg($('#apLaps'), 'apLaps', String(AP.laps), (v) => { AP.laps = +v; store.set('apLaps', AP.laps); });
     seg($('#viewMode'), 'viewMode', FX.viewMode, (v) => { FX.viewMode = v; if (!FX.view) setFxToggle('view', 1); else sendState(); });
   }
   let lastBands = 0;
@@ -792,9 +794,67 @@
   // ================================================================== bucle de interfaz
   const tdata = new Float32Array(1024);
   function rms(an) { an.getFloatTimeDomainData(tdata.subarray(0, an.fftSize)); let s = 0; for (let i = 0; i < an.fftSize; i++) s += tdata[i] * tdata[i]; return Math.sqrt(s / an.fftSize); }
+  // ---------------------------------------------------------------- AUTOPLAY: instalación desatendida
+  // Recorre todas las piezas en orden aleatorio (sin repetir hasta agotar la bolsa) y pasa de una a otra
+  // con AUTO. Pensado para dejarlo solo durante horas: se recupera si una pieza falla o se queda parada.
+  const AP = { on: false, bag: [], laps: store.get('apLaps', 1), lap: 0, lastP: 0, stage: 0, next: null, since: 0 };
+  function apBagNext(exclude) {
+    const ok = LIB.filter((it) => it.meta && it.buf);
+    if (!ok.length) return null;
+    if (!AP.bag.length) AP.bag = ok.slice().sort(() => Math.random() - 0.5);
+    let i = AP.bag.findIndex((it) => it !== exclude);
+    if (i < 0) { AP.bag = ok.slice().sort(() => Math.random() - 0.5); i = AP.bag.findIndex((it) => it !== exclude); }
+    return i < 0 ? ok[0] : AP.bag.splice(i, 1)[0];
+  }
+  function apClean(d) { if (!d.state) return; d.loop = false; d.stopped = false; d.slip = null; d.rev_ = false; clearTimeout(d.rampT); d.speed = 1; d.fSpeed && d.fSpeed.set(spdToV(1), true); }
+  function apToggle(v) {
+    AP.on = v == null ? !AP.on : v;
+    $('#apB').classList.toggle('on', AP.on);
+    if (AP.on) {
+      const d = DECK[MIX.onAir];
+      AP.stage = 0; AP.lap = 0; AP.next = null; AP.since = performance.now();
+      if (!d.state || !d.item) { const it = apBagNext(null); if (it) load(MIX.onAir, it); }
+      else { apClean(d); commit(d, { a: 0, b: end(d), x: X0, once: false, freeze: null, rate: 1 }); uiFlags(d); }
+      wakeLock();
+      ch.postMessage({ type: 'wake' });
+      toast('AUTOPLAY · PIEZAS EN ORDEN ALEATORIO');
+    } else { $('#apNext').textContent = '—'; toast('AUTOPLAY · APAGADO'); }
+  }
+  let wl = null;
+  async function wakeLock() { try { if (navigator.wakeLock && !wl) { wl = await navigator.wakeLock.request('screen'); wl.addEventListener('release', () => (wl = null)); } } catch (e) {} }
+  document.addEventListener('visibilitychange', () => { if (AP.on && document.visibilityState === 'visible') wakeLock(); });
+  function apTick() {
+    if (!AP.on) return;
+    const air = DECK[MIX.onAir], other = DECK[MIX.onAir === 'A' ? 'B' : 'A'];
+    // pieza en el aire parada, terminada o sin cargar: pasar a la siguiente ya
+    const P = air.state ? VLL.pos(air.state, now()) : null;
+    if (!air.item || !P || P.ended || air.stopped || Math.abs(air.state.rate) < 0.01) {
+      if (performance.now() - AP.since > 3000 && !autoAnim) { const it = apBagNext(air.item); if (it) { apClean(air); load(MIX.onAir, it); AP.since = performance.now(); AP.stage = 0; AP.lap = 0; } }
+      return;
+    }
+    if (air.state.freeze != null || air.slip) return;               // alguien está tocando: esperar
+    const p = P.p;
+    if (p < AP.lastP - 1) AP.lap++;                                  // ha dado la vuelta
+    AP.lastP = p;
+    const remain = (end(air) - p) / Math.abs(air.state.rate), lastLap = AP.lap >= AP.laps - 1;
+    if (AP.stage === 0 && lastLap && remain < autoDur + 4) {         // 1 · precargar la siguiente en el deck que no está en el aire
+      const it = apBagNext(air.item); if (!it) return;
+      AP.next = it; apClean(other); load(other.id, it); other.state && commit(other, { a: 0, b: end(other), x: X0, rate: 1 });
+      $('#apNext').textContent = it.title; AP.stage = 1;
+    } else if (AP.stage === 1 && remain < autoDur + 0.3) {           // 2 · arrancarla desde el principio y fundir
+      if (other.state) commit(other, { pos: 0, a: 0, b: end(other), x: X0, once: false, freeze: null, rate: 1 });
+      MIX.mode = Math.random() < 0.5 ? 'fundido' : 'congelar'; CTL.xmode && CTL.xmode.mark && CTL.xmode.mark(MIX.mode);
+      if (!autoAnim) auto();
+      AP.stage = 2;
+    } else if (AP.stage === 2 && !autoAnim) {                        // 3 · transición hecha: empieza otra cuenta
+      if (MIX.xf > 0.001 && MIX.xf < 0.999) setXf(MIX.xf < 0.5 ? 0 : 1);
+      AP.stage = 0; AP.lap = 0; AP.lastP = 0; AP.since = performance.now();
+      $('#apNext').textContent = '—';
+    }
+  }
   function tick() {
     requestAnimationFrame(tick);
-    flush(); sendBands(); ddjLeds();
+    flush(); sendBands(); ddjLeds(); apTick();
     for (const k in DECK) {
       const d = DECK[k]; if (!d.ui) continue;
       drawStrip(d);
@@ -846,6 +906,7 @@
       case 'KeyV': setFxToggle('glitch', FX.glitch ? 0 : 1); break;
       case 'KeyB': setFxToggle('black', FX.black ? 0 : 1); break;
       case 'KeyO': setFxToggle('strobe', FX.strobe ? 0 : 1); break;
+      case 'KeyP': apToggle(); break;
       case 'KeyK': if (e.shiftKey) { CTL.viewMode.press(); toast('VER CÓDIGO · ' + (FX.viewMode === 'win' ? 'VENTANA' : 'PANTALLA')); } else setFxToggle('view', FX.view ? 0 : 1); break;
       case 'Backquote': VLC.openEditor && VLC.openEditor(); break;
       case 'KeyE': CTL.mirror.press(); toast('ESPEJO · ' + ['OFF', 'HORIZONTAL', 'CUADRANTES', 'CALEIDOSCOPIO'][FX.mirror]); break;
