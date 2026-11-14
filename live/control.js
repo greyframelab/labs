@@ -744,7 +744,7 @@
   function rms(an) { an.getFloatTimeDomainData(tdata.subarray(0, an.fftSize)); let s = 0; for (let i = 0; i < an.fftSize; i++) s += tdata[i] * tdata[i]; return Math.sqrt(s / an.fftSize); }
   function tick() {
     requestAnimationFrame(tick);
-    flush(); sendBands();
+    flush(); sendBands(); ddjLeds();
     for (const k in DECK) {
       const d = DECK[k]; if (!d.ui) continue;
       drawStrip(d);
@@ -832,18 +832,108 @@
       CTL[armed].el.classList.remove('armed'); CTL[armed].el.classList.add('mapped');
       toast('MIDI · ' + key.toUpperCase() + ' → ' + armed.toUpperCase()); armed = null; return;
     }
-    const c = CTL[MAP[key]]; if (!c) return;
+    const c = CTL[MAP[key]];
+    if (!c) { if (isDDJ(e.target)) ddj(st, n, v); return; }   // lo aprendido a mano manda sobre el mapeo por defecto
     const down = type === 0x90 ? v > 0 : type === 0xb0 ? v > 63 : false;
     if (c.kind === 'cc') { if (type === 0xb0) c.set(v / 127); else if (down) c.set(c.get ? 0 : 1); }
     else if (c.kind === 'hold') { if (down) c.press(); else c.release(); }
     else if (down) c.press();
   }
+  // ---------------------------------------------------------------- Pioneer DDJ-200: mapeo por defecto
+  // Mensajes según el mapeo publicado del DDJ-200 (Mixxx). Decks: canal 1 = A, canal 2 = B; pads en modo hot cue.
+  let ddjOut = null;
+  const ddjLed = {};
+  const isDDJ = (port) => !!port && /DDJ-?200/i.test(port.name || '');
+  function scrub(d, secs) {
+    if (!d.state || !d.meta) return;
+    d.scrubAcc = (d.scrubAcc || 0) + secs;
+    if (d.scrubT) return;
+    d.scrubT = setTimeout(() => {
+      d.scrubT = null; const s = d.state, acc = d.scrubAcc; d.scrubAcc = 0;
+      if (!s) return;
+      const p = VLL.clamp(curPos(d) + acc, s.a, s.b - 0.02);
+      commit(d, { pos: p, freeze: s.freeze != null ? p : null });
+    }, 40);
+  }
+  function ddj(st, n, v) {
+    const type = st & 0xf0, ch = st & 0x0f, on = type === 0x90 && v > 0, off = type === 0x80 || (type === 0x90 && v === 0);
+    const set = (id, x) => CTL[id] && CTL[id].set(VLL.clamp(x, 0, 1));
+    if (type === 0xb0) {
+      if (ch === 6) {
+        if (n === 0x1f) return set('xf', v / 127);                       // crossfader
+        if (n === 0x17) return set('filter', v / 127);                   // CFX A → filtro (centro = apagado)
+        if (n === 0x18) { const x = (v - 64) / 63; set('trail', x < -0.04 ? -x : 0); set('scan', x > 0.04 ? x : 0); return; } // CFX B → estela ← · → escaneo
+        return;
+      }
+      const id = ch === 0 ? 'A' : ch === 1 ? 'B' : null, d = DECK[id]; if (!d) return;
+      if (n === 0x07) return set(id + '.eq2', v / 127);                  // HI → agudos
+      if (n === 0x0b) return set(id + '.eq1', v / 127);                  // MID → medios
+      if (n === 0x0f) return set(id + '.eq0', v / 127);                  // LOW → graves
+      if (n === 0x13) return set(id + '.vol', v / 127 / 1.2);            // fader de canal → volumen
+      if (n === 0x00) return set(id + '.speed', Math.abs(v - 64) <= 2 ? 0.5 : v / 127); // tempo → velocidad (abajo = más rápido)
+      if (n === 0x21) return scrub(d, (v - 64) / 120);                   // jog por el borde: empuje fino
+      if (n === 0x22) return scrub(d, (v - 64) / 60);                    // jog tocado por arriba: scratch
+      if (n === 0x29) return scrub(d, (v - 64) * 0.2);                   // SHIFT + jog: búsqueda rápida
+      return;
+    }
+    if (ch === 6) {
+      if (!on) return;
+      if (n === 0x63) setFxToggle('view', FX.view ? 0 : 1);              // botón de auriculares master → VER EL CÓDIGO
+      else if (n === 0x78) setFxToggle('black', FX.black ? 0 : 1);       // + SHIFT → NEGRO
+      else if (n === 0x59) auto();                                        // AUTO transición
+      else if (n === 0x5a) cut();                                         // CORTE
+      return;
+    }
+    if (ch >= 7 && ch <= 10) {                                            // pads
+      const id = ch <= 8 ? 'A' : 'B', shifted = ch === 8 || ch === 10, d = DECK[id];
+      if (n > 7) return;
+      if (!shifted) { if (on) { setFocus(id); jumpAct(d, n); } return; }
+      const holds = { 0: (x) => stutter(d, x), 2: (x) => reverse(d, x) };
+      if (holds[n]) { if (on) holds[n](true); else if (off) holds[n](false); return; }
+      if (!on) return;
+      [null, () => freeze(d), null, () => tape(d), () => toggleLoop(d), () => resizeLoop(d, 0.5), () => resizeLoop(d, 2), () => firma(d)][n]();
+      return;
+    }
+    const id = ch === 0 ? 'A' : ch === 1 ? 'B' : null, d = DECK[id]; if (!d) return;
+    if (n === 0x3f || !on) return;                                        // SHIFT lo resuelve el propio controlador
+    switch (n) {
+      case 0x0b: tape(d); break;                                          // PLAY → cinta (frenar / arrancar)
+      case 0x0c: jumpAct(d, 0); break;                                    // CUE → primer acto
+      case 0x47: freeze(d); break;                                        // SHIFT + PLAY → congelar
+      case 0x48: firma(d); break;                                         // SHIFT + CUE → FIRMA
+      case 0x58: toggleLoop(d); break;                                    // BEAT SYNC → loop del acto
+      case 0x60: resizeLoop(d, 0.5); break;                               // SHIFT + SYNC → loop ÷2
+      case 0x54: setFocus(id); break;                                     // auriculares del canal → foco
+      case 0x68: resizeLoop(d, 2); break;                                 // SHIFT + auriculares → loop ×2
+    }
+  }
+  // luces del controlador: PLAY, SYNC (loop), auriculares (foco) y pads de los actos que existen
+  let ddjT = 0;
+  function ddjLeds() {
+    if (!ddjOut || performance.now() - ddjT < 150) return; ddjT = performance.now();
+    const send = (st, n, on) => { const k = st + ':' + n, v = on ? 0x7f : 0; if (ddjLed[k] === v) return; ddjLed[k] = v; try { ddjOut.send([st, n, v]); } catch (e) {} };
+    ['A', 'B'].forEach((id, i) => {
+      const d = DECK[id], st = 0x90 + i, pad = 0x97 + i * 2;
+      send(st, 0x0b, !!d.state && !d.stopped);
+      send(st, 0x58, !!d.loop);
+      send(st, 0x54, focus === id);
+      const nActs = d.meta ? d.meta.acts.length : 0, cur = d.meta && d.state ? VLL.actAt(d.meta, curPos(d)) : -1;
+      for (let p = 0; p < 8; p++) send(pad, p, p < nActs && (p !== cur || (performance.now() % 600) < 300));
+    });
+  }
   async function initMidi() {
     if (!navigator.requestMIDIAccess) { $('#stMidi').textContent = 'NO DISPONIBLE'; return; }
     try {
       const acc = await navigator.requestMIDIAccess();
-      const bind = () => { let n = 0, name = ''; acc.inputs.forEach((i) => { i.onmidimessage = onMidi; n++; name = name || i.name; });
-        $('#stMidi').textContent = n ? name.toUpperCase().slice(0, 22) : 'SIN CONTROLADOR'; $('#ledMidi').className = 'led' + (n ? ' on' : ''); };
+      const bind = () => {
+        let n = 0, name = '', ddjIn = false;
+        acc.inputs.forEach((i) => { i.onmidimessage = onMidi; n++; name = name || i.name; if (isDDJ(i)) ddjIn = true; });
+        ddjOut = null; acc.outputs.forEach((o) => { if (isDDJ(o)) ddjOut = o; });
+        Object.keys(ddjLed).forEach((k) => delete ddjLed[k]);
+        $('#stMidi').textContent = ddjIn ? 'DDJ-200 · MAPEO LISTO' : n ? name.toUpperCase().slice(0, 22) : 'SIN CONTROLADOR';
+        $('#ledMidi').className = 'led' + (n ? ' on' : '');
+        if (ddjIn) toast('PIONEER DDJ-200 CONECTADO · MAPEO POR DEFECTO');
+      };
       acc.onstatechange = bind; bind();
     } catch (e) { $('#stMidi').textContent = 'SIN PERMISO'; }
   }
