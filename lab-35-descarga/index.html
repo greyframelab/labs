@@ -1,0 +1,826 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Descarga · VØID_LOOM · Greyframe Labs</title>
+<meta name="description" content="VØID_LOOM · Descarga: un rayo baja a tientas, paso a paso, al ritmo de una pieza IDM; se congela a un palmo del suelo y estalla en el retorno.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&display=swap">
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden}
+canvas{width:100vw;height:100vh;display:block}
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920" role="img" aria-label="Descarga: un rayo violeta baja a tientas desde una nube oscura, ramificándose paso a paso hacia un suelo negro y mojado que lo refleja; se queda congelado a un palmo del suelo y estalla en un canal blanco cegador que parpadea con cada golpe"></canvas>
+<script>
+// web: el lienzo ocupa toda la pantalla (apaisado en escritorio, vertical en móvil); ?render = 1080×1920 para el vídeo
+(function () {
+  if (new URLSearchParams(location.search).has('render')) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), w = innerWidth * dpr, h = innerHeight * dpr;
+  const k = Math.min(1, 1920 / Math.max(w, h));
+  window.VL_SIZE = [Math.round(w * k), Math.round(h * k)];
+  const c = document.getElementById('c'); c.width = window.VL_SIZE[0]; c.height = window.VL_SIZE[1];
+  const r0 = innerWidth / innerHeight; let tm;
+  addEventListener('resize', () => { clearTimeout(tm); tm = setTimeout(() => { const r = innerWidth / innerHeight; if (Math.abs(r - r0) / r0 > 0.12) location.reload(); }, 400); });
+})();
+</script>
+<script>
+/* VØID_LOOM — núcleo compartido + firma animada (sting) de cierre.
+   Todo es determinista: el estado de cada frame depende solo de t.
+   Uso en cualquier lab:  VL.post(...), VL.drawSymbol(...), VL.stingState(t, opts)  */
+(function () {
+  // tamaño del lienzo: 1080×1920 para el vídeo; la web puede fijar window.VL_SIZE = [w, h] antes de cargar
+  const W = (window.VL_SIZE && window.VL_SIZE[0]) || 1080, H = (window.VL_SIZE && window.VL_SIZE[1]) || 1920;
+  const VL = { W, H };
+  // marco virtual de la firma (1080×1920), centrado y escalado dentro del lienzo real
+  VL.FRAME = (function () { const k = Math.min(W / 1080, H / 1920); return { k, ox: (W - 1080 * k) / 2, oy: (H - 1920 * k) / 2 }; })();
+  VL.fx = (x) => VL.FRAME.ox + x * VL.FRAME.k;
+  VL.fy = (y) => VL.FRAME.oy + y * VL.FRAME.k;
+
+  // ---------- utilidades ----------
+  VL.clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+  VL.lerp = (a, b, k) => a + (b - a) * k;
+  VL.seg = (t, a, b) => VL.clamp((t - a) / (b - a));
+  VL.ease = {
+    inOut: (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2),
+    out: (x) => 1 - Math.pow(1 - x, 3),
+    outQuart: (x) => 1 - Math.pow(1 - x, 4),
+    outExpo: (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x)),
+    in: (x) => x * x * x,
+  };
+  VL.rng = function (seed) {
+    let a = seed >>> 0;
+    return function () {
+      a |= 0; a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  };
+  VL.hash = (a, b) => {
+    let h = Math.imul(a * 374761393 + b * 668265263, 1274126177);
+    h = (h ^ (h >>> 13)) * 1103515245;
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  };
+  VL.rgba = (hex, a) => {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  };
+  VL.INK = '#F2F0EA';
+  VL.GREY = '#8F8C86';
+  VL.ACCENTS = {
+    rojo: '#FF1A1A', cian: '#00E5FF', ambar: '#FFB000', verde: '#39FF6A',
+    violeta: '#8A2BFF', magenta: '#FF2BD6', blanco: '#F2F0EA',
+  };
+  VL.FONT = "'JetBrains Mono', ui-monospace, monospace";
+
+  // ---------- geometría del símbolo (viewBox 200 → pantalla) ----------
+  VL.geo = function (cx = 540, cy = 820, s = 3.0) {
+    const cols = [];
+    for (let k = 0; k < 7; k++) cols.push(cx + (k - 3) * 20 * s);
+    return {
+      cx, cy, s, cols,
+      R: 66 * s,                 // radio del vacío
+      top: cy - 86 * s, bottom: cy + 86 * s,
+      wA: [cx - 42 * s, cy + 42 * s], wB: [cx + 42 * s, cy - 42 * s],
+    };
+  };
+
+  // ---------- capas de post-procesado ----------
+  function mk(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+  let P = null;
+  function initPost() {
+    if (P) return P;
+    P = {};
+    P.scene = mk(W, H);
+    P.b1 = mk(W / 4, H / 4);
+    P.b2 = mk(W / 12, H / 12);
+    // grano: 6 texturas precalculadas
+    P.grain = [];
+    const r = VL.rng(77);
+    for (let g = 0; g < 6; g++) {
+      const c = mk(540, 960), x = c.getContext('2d');
+      const im = x.createImageData(540, 960);
+      for (let i = 0; i < im.data.length; i += 4) {
+        const v = (r() * 255) | 0;
+        im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255;
+      }
+      x.putImageData(im, 0, 0);
+      P.grain.push(c);
+    }
+    // scanlines
+    P.scan = mk(W, H);
+    const sx = P.scan.getContext('2d');
+    sx.fillStyle = 'rgba(0,0,0,0.22)';
+    for (let y = 0; y < H; y += 4) sx.fillRect(0, y, W, 1.5);
+    // viñeta
+    P.vig = mk(W, H);
+    const vx = P.vig.getContext('2d');
+    const gr = vx.createRadialGradient(W / 2, H * 0.45, H * 0.18, W / 2, H * 0.45, H * 0.72);
+    gr.addColorStop(0, 'rgba(0,0,0,0)');
+    gr.addColorStop(1, 'rgba(0,0,0,0.78)');
+    vx.fillStyle = gr; vx.fillRect(0, 0, W, H);
+    return P;
+  }
+  VL.sceneCtx = function () {
+    const p = initPost();
+    const c = p.scene.getContext('2d');
+    c.globalCompositeOperation = 'source-over';
+    c.globalAlpha = 1;
+    c.fillStyle = '#000'; c.fillRect(0, 0, W, H);
+    c.globalCompositeOperation = 'lighter';
+    return c;
+  };
+  // compone escena → salida con bloom, flash, scanlines, viñeta y grano
+  VL.post = function (out, frame, opt = {}) {
+    const p = initPost();
+    const bloom = opt.bloom ?? 1, flash = opt.flash ?? 0;
+    const b1 = p.b1.getContext('2d'), b2 = p.b2.getContext('2d');
+    b1.globalCompositeOperation = 'copy'; b1.filter = 'blur(3px)';
+    b1.drawImage(p.scene, 0, 0, p.b1.width, p.b1.height); b1.filter = 'none';
+    b2.globalCompositeOperation = 'copy'; b2.filter = 'blur(4px)';
+    b2.drawImage(p.b1, 0, 0, p.b2.width, p.b2.height); b2.filter = 'none';
+
+    out.globalCompositeOperation = 'source-over'; out.globalAlpha = 1;
+    out.drawImage(p.scene, 0, 0);
+    out.globalCompositeOperation = 'lighter';
+    out.imageSmoothingEnabled = true; out.imageSmoothingQuality = 'high';
+    out.globalAlpha = VL.clamp(0.85 * bloom, 0, 1); out.drawImage(p.b1, 0, 0, W, H);
+    out.globalAlpha = VL.clamp(0.9 * bloom, 0, 1); out.drawImage(p.b2, 0, 0, W, H);
+    if (bloom > 1.1) { out.globalAlpha = VL.clamp((bloom - 1) * 0.5, 0, 1); out.drawImage(p.b2, 0, 0, W, H); }
+    if (flash > 0) {
+      out.globalAlpha = 1;
+      out.fillStyle = opt.flashColor ? VL.rgba(opt.flashColor, flash * 0.22) : `rgba(242,240,234,${flash * 0.22})`;
+      out.fillRect(0, 0, W, H);
+    }
+    out.globalAlpha = 1;
+    out.globalCompositeOperation = 'source-over';
+    out.drawImage(p.scan, 0, 0);
+    out.drawImage(p.vig, 0, 0);
+    // grano sutil: en zonas planas y luminosas (horizontes, halos) un grano fuerte ensucia la imagen
+    const g = p.grain[frame % p.grain.length], gk = opt.grain ?? 1;
+    out.globalCompositeOperation = 'overlay'; out.globalAlpha = 0.11 * gk;
+    out.drawImage(g, 0, 0, W, H);
+    out.globalCompositeOperation = 'lighter'; out.globalAlpha = 0.01 * gk;
+    out.drawImage(g, 0, 0, W, H);
+    out.globalAlpha = 1; out.globalCompositeOperation = 'source-over';
+  };
+
+  // ---------- primitivas de luz ----------
+  // línea luminosa: halo ancho + cuerpo + núcleo caliente
+  VL.lightLine = function (c, x1, y1, x2, y2, col, w, k = 1) {
+    c.lineCap = 'round';
+    const pass = (lw, a, cc) => { c.strokeStyle = VL.rgba(cc, a * k); c.lineWidth = lw; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); };
+    pass(w * 7, 0.06, col);
+    pass(w * 3.2, 0.16, col);
+    pass(w, 0.95, col);
+    pass(Math.max(1.2, w * 0.3), 0.55, '#FFFFFF');
+  };
+
+  // ---------- el símbolo ----------
+  // st: { threads, top, bottom, vib, open, ring, ringColor, weft, weftGlow, ghost, accent, ca, dim }
+  VL.drawSymbol = function (c, g, st, t) {
+    const acc = st.accent;
+    const R = g.R * (st.open || 0);
+    const thr = st.threads ?? 1;
+    const dim = st.dim ?? 1;
+    const top = st.top ?? g.top, bottom = st.bottom ?? g.bottom;
+    const vib = st.vib || 0;
+    const coreW = 3 * g.s;
+
+    // fantasma de los hilos dentro del vacío
+    if ((st.ghost || 0) > 0 && thr > 0) {
+      c.lineCap = 'butt';
+      c.strokeStyle = VL.rgba(VL.INK, 0.1 * st.ghost * thr * dim);
+      c.lineWidth = coreW;
+      c.beginPath();
+      for (const x of g.cols) { c.moveTo(x, Math.max(top, g.cy - R)); c.lineTo(x, Math.min(bottom, g.cy + R)); }
+      c.stroke();
+    }
+
+    // urdimbre: 7 hilos (con vibración de cuerda y corte del vacío)
+    if (thr > 0) {
+      const passes = [[coreW * 5, 0.05], [coreW * 2.2, 0.14], [coreW, 0.92], [coreW * 0.35, 0.45]];
+      for (let pi = 0; pi < passes.length; pi++) {
+        const [lw, a] = passes[pi];
+        c.lineCap = 'butt';
+        c.lineWidth = lw;
+        c.strokeStyle = pi === 3 ? `rgba(255,255,255,${a * thr * dim})` : VL.rgba(VL.INK, a * thr * dim);
+        c.beginPath();
+        for (let k = 0; k < 7; k++) {
+          const X = g.cols[k], dx = X - g.cx;
+          const h = R > Math.abs(dx) ? Math.sqrt(R * R - dx * dx) : 0;
+          const segs = h > 0 ? [[top, g.cy - h], [g.cy + h, bottom]] : [[top, bottom]];
+          for (const [ya, yb] of segs) {
+            if (yb - ya < 1) continue;
+            const n = vib > 0.3 ? 48 : 1;
+            for (let i = 0; i <= n; i++) {
+              const y = ya + (yb - ya) * (i / n);
+              const u = (y - top) / Math.max(1, bottom - top);
+              const off = vib * Math.sin(Math.PI * u) * Math.sin(t * 23 + k * 1.7 + u * 9.0) * (0.6 + 0.4 * Math.sin(k * 2.3 + t * 3));
+              if (i === 0) c.moveTo(X + off, y); else c.lineTo(X + off, y);
+            }
+          }
+        }
+        c.stroke();
+      }
+    }
+
+    // onda de choque del vacío
+    if (st.ring != null && st.ring >= 0 && st.ring < 1) {
+      const rr = g.R * (1 + 1.9 * VL.ease.out(st.ring));
+      const a = Math.pow(1 - st.ring, 2);
+      const rc = st.ringColor || acc;
+      c.strokeStyle = VL.rgba(rc, 0.9 * a); c.lineWidth = 10 * (1 - st.ring) + 1.5;
+      c.beginPath(); c.arc(g.cx, g.cy, rr, 0, Math.PI * 2); c.stroke();
+      c.strokeStyle = VL.rgba(VL.INK, 0.5 * a); c.lineWidth = 2;
+      c.beginPath(); c.arc(g.cx, g.cy, rr * 0.93, 0, Math.PI * 2); c.stroke();
+    }
+
+    // trama: el hilo de color
+    if ((st.weft || 0) > 0) {
+      const p = st.weft;
+      const [ax, ay] = g.wA, [bx, by] = g.wB;
+      const hx = VL.lerp(ax, bx, p), hy = VL.lerp(ay, by, p);
+      const gk = (st.weftGlow ?? 1) * dim;
+      const ww = 5 * g.s;
+      const ca = st.ca || 0;
+      if (ca > 0.5) {
+        VL.lightLine(c, ax - ca, ay, hx - ca, hy, '#FF2A2A', ww * 0.8, 0.45 * gk);
+        VL.lightLine(c, ax + ca, ay, hx + ca, hy, '#2AB8FF', ww * 0.8, 0.45 * gk);
+      }
+      VL.lightLine(c, ax, ay, hx, hy, acc, ww, gk);
+      if (p < 1) { // cabeza incandescente
+        const gr = c.createRadialGradient(hx, hy, 0, hx, hy, 90);
+        gr.addColorStop(0, 'rgba(255,255,255,0.95)');
+        gr.addColorStop(0.15, VL.rgba(acc, 0.8));
+        gr.addColorStop(1, VL.rgba(acc, 0));
+        c.fillStyle = gr; c.beginPath(); c.arc(hx, hy, 90, 0, Math.PI * 2); c.fill();
+      }
+    }
+  };
+
+  // ---------- texto ----------
+  const GLYPHS = 'Ø#/\\|_=+<>01X:;*%';
+  VL.decodeText = function (c, str, x, y, opt) {
+    const size = opt.size || 40, spacing = opt.spacing ?? 0.42, prog = opt.prog ?? 1;
+    const alpha = opt.alpha ?? 1, align = opt.align || 'center';
+    const weight = opt.weight || 300, t = opt.t || 0, seed = opt.seed || 1;
+    c.font = `${weight} ${size}px ${VL.FONT}`;
+    c.textBaseline = 'middle'; c.textAlign = 'left';
+    const adv = c.measureText('M').width + size * spacing;
+    const total = adv * str.length - size * spacing;
+    let x0 = align === 'center' ? x - total / 2 : align === 'right' ? x - total : x;
+    const n = str.length;
+    for (let i = 0; i < n; i++) {
+      const ch = str[i];
+      if (ch === ' ') continue;
+      const ri = VL.clamp((prog * (n + 3) - i) / 3);
+      if (ri <= 0) continue;
+      let draw = ch;
+      if (ri < 1) draw = GLYPHS[Math.floor(VL.hash(i + seed * 31, Math.floor(t * 24)) * GLYPHS.length)];
+      const isAcc = opt.accentChar && ch === opt.accentChar && ri >= 1;
+      const col = isAcc ? opt.accent : (opt.color || VL.INK);
+      c.font = `${isAcc ? 600 : weight} ${size}px ${VL.FONT}`;
+      c.fillStyle = VL.rgba(col, alpha * (ri < 1 ? 0.55 + 0.45 * ri : 1));
+      c.fillText(draw, x0 + i * adv, y);
+    }
+  };
+
+  // HUD de esquinas (telemetría)
+  VL.hud = function (c, t, opt = {}) {
+    const a = opt.alpha ?? 1;
+    if (a <= 0) return;
+    c.font = `400 22px ${VL.FONT}`;
+    c.textBaseline = 'middle';
+    c.fillStyle = VL.rgba(VL.GREY, 0.9 * a);
+    const fps = 30, tt = Math.max(0, t);
+    const tc = [Math.floor(tt / 3600), Math.floor(tt / 60) % 60, Math.floor(tt) % 60, Math.floor((tt % 1) * fps)]
+      .map((v) => String(v).padStart(2, '0')).join(':');
+    c.textAlign = 'left'; c.fillText(opt.tl || 'VØID_LOOM / SYS.01', 72, 120);
+    c.textAlign = 'right'; c.fillText(tc, W - 72, 120);
+    c.textAlign = 'left'; c.fillText(opt.bl || 'GREYFRAME LABS', 72, 1640);
+    c.textAlign = 'right'; c.fillText(opt.br || 'SEÑAL 07/07', W - 72, 1640);
+    // corchetes de encuadre
+    c.strokeStyle = VL.rgba(VL.GREY, 0.55 * a); c.lineWidth = 2;
+    const m = 48, L = 36;
+    c.beginPath();
+    c.moveTo(m, m + L); c.lineTo(m, m); c.lineTo(m + L, m);
+    c.moveTo(W - m - L, m); c.lineTo(W - m, m); c.lineTo(W - m, m + L);
+    c.moveTo(m, 1700 - L); c.lineTo(m, 1700); c.lineTo(m + L, 1700);
+    c.moveTo(W - m - L, 1700); c.lineTo(W - m, 1700); c.lineTo(W - m, 1700 - L);
+    c.stroke();
+  };
+
+  // ---------- cierre: logotipo + firma ----------
+  VL.drawSignature = function (c, g, st, t) {
+    if ((st.wordAlpha || 0) > 0)
+      VL.decodeText(c, 'VØID_LOOM', g.cx, g.bottom + 150, {
+        size: 70, spacing: 0.42, prog: st.word, alpha: st.wordAlpha, t, seed: 3,
+        accentChar: 'Ø', accent: st.accent, weight: 300,
+      });
+    if ((st.tag || 0) > 0)
+      VL.decodeText(c, 'SEÑAL · RUIDO · MOTION EXPERIMENTAL', g.cx, g.bottom + 240, {
+        size: 22, spacing: 0.5, prog: VL.clamp(st.tag * 1.6), alpha: st.tag, t, seed: 5, color: VL.GREY, weight: 400,
+      });
+    const lines = st.creditLines || ['GREYFRAME LABS', 'greyframelab.github.io/labs'];
+    if ((st.credit || 0) > 0) {
+      VL.decodeText(c, lines[0], g.cx, 1500, { size: 24, spacing: 0.34, prog: VL.clamp(st.credit * 1.5), alpha: st.credit, t, seed: 7, color: '#BDBAB3', weight: 400 });
+      if (lines[1]) VL.decodeText(c, lines[1], g.cx, 1550, { size: 22, spacing: 0.06, prog: VL.clamp(st.credit * 1.5 - 0.3), alpha: st.credit * 0.9, t, seed: 9, color: VL.GREY, weight: 400 });
+    }
+  };
+
+  // ---------- STING: firma animada reutilizable (5.5 s) ----------
+  // Llamar con t local (0 → VL.STING_DUR). opts: { accent, creditLines, skipDrop }
+  VL.STING_DUR = 5.5;
+  VL.stingState = function (t, opts = {}) {
+    const g = opts.geo || VL.geo();
+    const e = VL.ease, sg = VL.seg;
+    const drop = opts.skipDrop ? 1 : e.out(sg(t, 0.0, 0.7));
+    const tOpen = 0.75, tWeft = 1.05;
+    const out = 1 - e.inOut(sg(t, 4.7, 5.5));
+    return {
+      accent: opts.accent || VL.ACCENTS.rojo,
+      creditLines: opts.creditLines,
+      threads: drop * out,
+      top: VL.lerp(g.cy, g.top, drop), bottom: VL.lerp(g.cy, g.bottom, drop),
+      vib: 14 * (1 - sg(t, 0.2, 1.6)) * (t > 0.2 ? 1 : 0),
+      open: e.outExpo(sg(t, tOpen, tOpen + 0.35)),
+      ring: t >= tOpen ? sg(t, tOpen, tOpen + 0.9) : -1,
+      weft: e.outQuart(sg(t, tWeft, tWeft + 0.28)),
+      weftGlow: (1 + 0.12 * Math.sin(t * 2.4)) * VL.clamp(out + (1 - sg(t, 4.7, 5.4)) * 0.6),
+      ghost: sg(t, 1.2, 2.0),
+      ca: 10 * (1 - sg(t, tWeft, tWeft + 0.5)) * (t >= tWeft ? 1 : 0),
+      word: sg(t, 1.5, 2.6), wordAlpha: sg(t, 1.5, 1.7) * out,
+      tag: sg(t, 2.6, 3.2) * out,
+      credit: sg(t, 3.0, 3.6) * out,
+      flash: Math.max(t >= tOpen ? 1 - sg(t, tOpen, tOpen + 0.5) : 0, t >= tWeft ? 0.7 * (1 - sg(t, tWeft, tWeft + 0.45)) : 0),
+    };
+  };
+  // dibuja el sting completo en un contexto de escena
+  VL.drawSting = function (c, t, opts = {}) {
+    const g = opts.geo || VL.geo();
+    const st = VL.stingState(t, opts);
+    const F = VL.FRAME, framed = W !== 1080 || H !== 1920;
+    if (framed) { c.save(); c.translate(F.ox, F.oy); c.scale(F.k, F.k); }
+    VL.drawSymbol(c, g, st, t);
+    VL.drawSignature(c, g, st, t);
+    if (framed) c.restore();
+    return st;
+  };
+
+  window.VL = VL;
+})();
+</script>
+<script src="descarga-score.js"></script>
+<script>
+/* VØID_LOOM — Lab 35 · Descarga (24,4 s). Determinista y sin estado: renderFrame(t, frame) depende solo de t.
+   La electricidad buscando su camino: un líder escalonado baja a tientas desde la nube hacia un suelo negro y mojado.
+   tick = un paso del líder · bombo = salto del líder / relámpago dentro de la nube / re-descarga · arco = chispa que sube del suelo
+   bajo = la nube se carga · stutter = el líder repite sus pasos · silencio = el líder se congela a un palmo del suelo
+   ruptura = el retorno: el canal se enciende de suelo a nube. */
+(function () {
+  const VL = window.VL, W = VL.W, H = VL.H, e = VL.ease, sg = VL.seg, clamp = VL.clamp, lerp = VL.lerp;
+  const ACC = VL.ACCENTS.violeta;
+  const Z = window.DSC, { T, EV, X, warp, STEPS } = Z;
+  const DUR = T.sting + VL.STING_DUR;
+  window.DURATION = DUR; window.FPS = 60;
+  const YC = 4.3;                      // base de la nube
+  const STRIKE = [-0.25, 0, 0.1];      // punto de impacto
+
+  // ================================================================ 1 · la geometría eléctrica (precalculada, con su instante de aparición)
+  const SEG = [];   // ax ay az bx by bz tA kind w seed
+  const rng = VL.rng(3535);
+  const seg = (a, b, tA, kind, w) => SEG.push(a[0], a[1], a[2], b[0], b[1], b[2], tA, kind, w, rng());
+  const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+  const nrm = (v) => { const l = Math.hypot(...v) || 1; return v.map((x) => x / l); };
+  const rnd3 = () => [rng() * 2 - 1, rng() * 2 - 1, rng() * 2 - 1];
+  // líder principal: un paso por cada tiempo del reloj STEPS; zigzag guiado hacia el punto de impacto
+  const NS = STEPS.length, MAIN = [[0.35, YC, -0.1]];
+  for (let k = 1; k <= NS; k++) {
+    const p = MAIN[k - 1], rem = NS - k + 1;
+    const tgt = [STRIKE[0], 0.07, STRIKE[2]];
+    const to = nrm([tgt[0] - p[0], tgt[1] - p[1], tgt[2] - p[2]]);
+    const j = rnd3(); const wgt = rem < 6 ? 0.2 : 1.05;
+    const d = nrm([to[0] + j[0] * wgt, to[1] + j[1] * wgt * 0.5 - 0.15, to[2] + j[2] * wgt * 0.7]);
+    const L = Math.hypot(tgt[0] - p[0], tgt[1] - p[1], tgt[2] - p[2]) / rem * 1.35;
+    let np = add(p, d.map((x) => x * L));
+    if (rem === 1) np = tgt;
+    MAIN.push(np);
+  }
+  for (let k = 1; k <= NS; k++) seg(MAIN[k - 1], MAIN[k], STEPS[k - 1], 1, 1);
+  // ramas: brotan del canal y crecen con el mismo reloj; se apagan sin llegar
+  function branch(p0, k0, n, dir, gen, kind) {
+    let p = p0, d = dir;
+    for (let j = 0; j < n && k0 + j < NS; j++) {
+      const jj = rnd3(); d = nrm([dir[0] + jj[0] * 0.9, dir[1] + jj[1] * 0.5 - 0.1, dir[2] + jj[2] * 0.7]);
+      const np = add(p, d.map((x) => x * (0.05 + 0.02 * rng())));
+      seg(p, np, STEPS[k0 + j], kind, gen === 0 ? 0.6 : 0.4);
+      if (gen === 0 && rng() < 0.12 && j > 2) branch(np, k0 + j + 1, 3 + Math.floor(rng() * 8), nrm([d[0] + (rng() - 0.5) * 1.6, d[1], d[2] + (rng() - 0.5)]), 1, kind);
+      p = np;
+    }
+  }
+  for (let k = 3; k < NS - 6; k++) if (rng() < 0.2) branch(MAIN[k], k, 4 + Math.floor(rng() * 26), nrm([(rng() - 0.5) * 2, -0.5, (rng() - 0.5) * 1.2]), 0, 0);
+  // líderes rivales: nacen en otros puntos de la nube y se quedan a medio camino
+  for (const [x0, z0, k0, n] of [[-1.7, 0.6, 8, 70], [1.9, -0.8, 22, 62], [-0.9, -1.4, 40, 40]]) {
+    let p = [x0, YC, z0], d = [0, -1, 0];
+    for (let j = 0; j < n && k0 + j < NS; j++) {
+      const jj = rnd3(); d = nrm([jj[0] * 0.95, -0.8, jj[2] * 0.75]);
+      const np = add(p, d.map((x) => x * 0.05)); seg(p, np, STEPS[k0 + j], 0, 0.75);
+      if (rng() < 0.14) branch(np, k0 + j + 1, 3 + Math.floor(rng() * 12), nrm([(rng() - 0.5) * 2, -0.4, (rng() - 0.5)]), 1, 0);
+      p = np;
+    }
+  }
+  // relámpagos dentro de la base de la nube (bombos de NUBE y de LÍDER): crecen en horizontal en 0,2 s
+  const CRAWL = [];
+  for (const k of EV) {
+    if (k.v !== 'K' || k.rat || k.big || k.t >= T.cut) continue;
+    const r2 = VL.rng(k.seed * 13 + 7);
+    const c0 = k.t < 0.05 ? [0.15, YC + 0.15, -0.7] : [(r2() - 0.5) * 3.2, YC + 0.1 + r2() * 0.3, (r2() - 0.5) * 2.4 - 0.4]; CRAWL.push({ t: k.t, p: c0, s: k.s });
+    const arms = 2 + Math.floor(r2() * 2);
+    for (let a = 0; a < arms; a++) {
+      // brazo de araña: rumbo fijo con quiebros secos y ramitas cortas
+      const base = nrm([r2() - 0.5, 0, r2() - 0.5]); let p = c0;
+      const n = 28 + Math.floor(r2() * 26);
+      for (let j = 0; j < n; j++) {
+        const d = nrm([base[0] + (r2() - 0.5) * 1.5, (r2() - 0.5) * 0.15, base[2] + (r2() - 0.5) * 1.5]);
+        const np = add(p, d.map((x) => x * (0.05 + 0.05 * r2()))); seg(p, np, k.t + j * 0.006, 2, 1.0 * k.s); p = np;
+        if (r2() < 0.22) { let q = np; const bd = nrm([base[2] * (r2() < 0.5 ? 1 : -1) + base[0] * 0.5, 0, -base[0] * (r2() < 0.5 ? 1 : -1) + base[2] * 0.5]);
+          const m2 = 3 + Math.floor(r2() * 9);
+          for (let m = 0; m < m2; m++) { const dd = nrm([bd[0] + (r2() - 0.5) * 1.4, (r2() - 0.5) * 0.15, bd[2] + (r2() - 0.5) * 1.4]); const nq = add(q, dd.map((x) => x * 0.045)); seg(q, nq, k.t + (j + m) * 0.006, 2, 0.6 * k.s); q = nq; } }
+      }
+    }
+  }
+  // chispas que suben desde el suelo a su encuentro (golpes de arco en la segunda mitad del LÍDER)
+  for (const s of EV) {
+    if (s.v !== 'S' || s.t < T.leader + 2 * T.bar || s.t >= T.cut) continue;
+    const r2 = VL.rng(s.seed * 31 + 3);
+    let p = [STRIKE[0] + (r2() - 0.5) * 1.6, 0, STRIKE[2] + (r2() - 0.5) * 1.0], d = [0, 1, 0];
+    const n = 5 + Math.floor(r2() * 9 * s.s);
+    for (let j = 0; j < n; j++) { d = nrm([d[0] + (r2() - 0.5) * 0.9, 1, d[2] + (r2() - 0.5) * 0.7]); const np = add(p, d.map((x) => x * 0.045)); seg(p, np, s.t + j * 0.012, 3, 0.55); p = np; }
+  }
+  // la chispa final que une el suelo con el líder: aparece en el instante del retorno
+  seg([STRIKE[0], 0, STRIKE[2]], MAIN[NS], T.rupt - 0.002, 1, 1);
+  const NSEG = SEG.length / 10;
+
+  // lluvia: cae siempre (periodo de medio compás → loops perfectos) y solo se ve cuando la ilumina un destello
+  const NR = 26000, RA = new Float32Array(NR * 2 * 4);
+  { const r = VL.rng(909);
+    for (let i = 0; i < NR; i++) { const x = (r() * 2 - 1) * 5, z = -3.5 + r() * 9, s0 = r(), len = 0.18 + r() * 0.2;
+      RA.set([x, z, s0, 0], i * 8); RA.set([x, z, s0, len], i * 8 + 4); } }
+
+  // ruido 3D periódico (64³) para la nube volumétrica
+  const NV = 64, NOI = new Uint8Array(NV * NV * NV);
+  { const r = VL.rng(4242), base = [];
+    for (const g of [4, 8, 16, 32]) { const L = new Float32Array(g * g * g); for (let i = 0; i < L.length; i++) L[i] = r(); base.push([g, L]); }
+    const sm = (x) => x * x * (3 - 2 * x);
+    for (let z = 0; z < NV; z++) for (let y = 0; y < NV; y++) for (let x = 0; x < NV; x++) {
+      let v = 0, amp = 0.55, tot = 0;
+      for (const [g, L] of base) {
+        const fx = x / NV * g, fy = y / NV * g, fz = z / NV * g, x0 = Math.floor(fx), y0 = Math.floor(fy), z0 = Math.floor(fz), tx = sm(fx - x0), ty = sm(fy - y0), tz = sm(fz - z0);
+        const at = (a, b, c) => L[((a % g + g) % g) + ((b % g + g) % g) * g + ((c % g + g) % g) * g * g];
+        const l = (a, b, t) => a + (b - a) * t;
+        const c00 = l(at(x0, y0, z0), at(x0 + 1, y0, z0), tx), c10 = l(at(x0, y0 + 1, z0), at(x0 + 1, y0 + 1, z0), tx), c01 = l(at(x0, y0, z0 + 1), at(x0 + 1, y0, z0 + 1), tx), c11 = l(at(x0, y0 + 1, z0 + 1), at(x0 + 1, y0 + 1, z0 + 1), tx);
+        v += l(l(c00, c10, ty), l(c01, c11, ty), tz) * amp; tot += amp; amp *= 0.5;
+      }
+      NOI[x + y * NV + z * NV * NV] = Math.round(v / tot * 255);
+    } }
+
+  // nube: partículas repartidas por el mismo ruido 3D → grumos y huecos reales; solo se ven cuando la luz las toca
+  const nz3 = (x, y, z) => { // trilineal sobre el ruido periódico
+    const fx = ((x % 1) + 1) % 1 * NV, fy = ((y % 1) + 1) % 1 * NV, fz = ((z % 1) + 1) % 1 * NV;
+    const x0 = Math.floor(fx), y0 = Math.floor(fy), z0 = Math.floor(fz), tx = fx - x0, ty = fy - y0, tz = fz - z0;
+    const at = (a, b, c) => NOI[(a % NV) + (b % NV) * NV + (c % NV) * NV * NV] / 255, l = (a, b, t) => a + (b - a) * t;
+    return l(l(l(at(x0, y0, z0), at(x0 + 1, y0, z0), tx), l(at(x0, y0 + 1, z0), at(x0 + 1, y0 + 1, z0), tx), ty), l(l(at(x0, y0, z0 + 1), at(x0 + 1, y0, z0 + 1), tx), l(at(x0, y0 + 1, z0 + 1), at(x0 + 1, y0 + 1, z0 + 1), tx), ty), tz);
+  };
+  const NCL = 150000, CL = new Float32Array(NCL * 4);
+  { const r = VL.rng(77); let i = 0, guard = 0;
+    while (i < NCL && guard++ < 4e6) {
+      const x = (r() * 2 - 1) * 6.5, z = (r() * 2 - 1) * 4.5 - 0.5, h = Math.pow(r(), 1.3) * 2.0, y = YC + h;
+      const n = nz3(x * 0.12, y * 0.17, z * 0.12) * 0.7 + nz3(x * 0.05 + 0.71, y * 0.07 + 0.71, z * 0.05 + 0.71) * 0.3;
+      const e2 = nz3(x * 0.26 + 0.37, y * 0.3 + 0.37, z * 0.26 + 0.37);
+      const sh = Math.min(1, h / 0.12) * Math.min(1, (2.0 - h) / 1.0) * Math.min(1, (7.5 - Math.abs(x)) / 2) * Math.min(1, (6 - Math.abs(z + 0.5)) / 2);
+      const d = Math.max(0, (n - 0.46) / 0.09 * sh - e2 * 0.55);
+      if (r() < d * 0.9) CL.set([x, y, z, r() * 0.6 + 0.4 * Math.min(1, d)], 4 * i++);
+    }
+  }
+
+  // ================================================================ 2 · WebGL2
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const gl = cv.getContext('webgl2', { alpha: false, antialias: false, preserveDrawingBuffer: true });
+  gl.getExtension('EXT_color_buffer_float');
+  function prog(vs, fs, attrs) {
+    const sh = (t, s) => { const x = gl.createShader(t); gl.shaderSource(x, s); gl.compileShader(x); if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(x)); return x; };
+    const p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
+    attrs.forEach((a, i) => gl.bindAttribLocation(p, i, a)); gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+    const U = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+    for (let i = 0; i < n; i++) { const nm = gl.getActiveUniform(p, i).name.replace('[0]', ''); U[nm] = gl.getUniformLocation(p, nm); }
+    return { p, U };
+  }
+  const HDR = (() => {
+    const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA16F, W, H);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+    return { t, f };
+  })();
+  // segmentos como cintas en pantalla: núcleo fino + halo ancho; y su reflejo en el suelo mojado
+  const VSL = `#version 300 es
+  precision highp float;
+  in vec4 aA; in vec4 aB; in vec4 aC;     // A.xyz tA · B.xyz kind · side end w seed
+  uniform mat4 uVP; uniform vec2 uRes; uniform float uT, uRupt, uRet, uKf, uHalo, uMir, uWob, uFrz, uFoc, uAp;
+  out float vI; out float vX; out float vHot; out float vY; out float vE;
+  void main(){
+    float tA = aA.w, kind = aB.w, side = aC.x, endp = aC.y, w = aC.z, sd = aC.w;
+    float age = uT - tA;
+    vec3 A = aA.xyz, B = aB.xyz;
+    if (uMir > 0.5) { A.y = -A.y; B.y = -B.y; A.x += sin(A.y * 23. + uWob) * 0.03 * A.y; B.x += sin(B.y * 23. + uWob) * 0.03 * B.y; }
+    vec4 ca = uVP * vec4(A, 1.), cb = uVP * vec4(B, 1.);
+    vec2 sa = ca.xy / ca.w, sb = cb.xy / cb.w;
+    vec2 dir = normalize((sb - sa) * uRes + 1e-5), nrm = vec2(-dir.y, dir.x);
+    // brillo según el tipo de descarga y su edad
+    float I = 0.;
+    if (age >= 0.) {
+      float post = uT - uRupt;
+      if (kind < 0.5) {            // ramas y líderes rivales: canal tenue + punta que se enciende al nacer
+        I = 0.16 + 3.0 * exp(-age / 0.05) + 0.8 * uKf;
+        if (post >= 0.) I = 0.06 * exp(-post * 1.6) + uRet * 0.75 * exp(-post * 0.35) * (0.5 + sd);
+      } else if (kind < 1.5) {     // canal principal
+        I = 0.45 + 6.0 * exp(-age / 0.07) + 1.2 * uKf;
+        if (post >= 0.) I = 0.55 + 0.5 * exp(-post * 0.6) + uRet * 6.5;   // el canal sigue incandescente entre re-descargas
+      } else if (kind < 2.5) {     // relámpago en la nube
+        I = (3.2 * exp(-age / 0.1) + 0.45 * exp(-age / 0.55)) * step(age, 1.8);
+      } else {                     // chispa que sube del suelo
+        I = 0.12 + 2.0 * exp(-age / 0.05);
+        if (post >= 0.) I = uRet * 1.4 * exp(-post * 0.5);
+      }
+    }
+    float ww = uHalo > 1.5 ? (60. + 120. * w) * (kind > 0.5 && kind < 1.5 ? 1. : 0.5) : uHalo > 0.5 ? (13. + 30. * w) * (kind > 0.5 && kind < 1.5 && uT >= uRupt ? 1.8 : 1.) : (1.6 + 2.3 * w) * (kind > 0.5 && kind < 1.5 && uT >= uRupt ? 1.9 : 1.);
+    if (uHalo < 0.5) ww *= clamp(6.5 / ca.w, 1., 3.);   // de cerca, el canal tiene cuerpo
+    // profundidad de campo: fuera de foco la descarga se abre y se apaga
+    float coc = abs(0.5 * (ca.w + cb.w) - uFoc) * uAp * uRes.y;
+    float ww0 = ww; ww = sqrt(ww * ww + coc * coc * (uHalo > 0.5 ? 0.3 : 1.)); I *= ww0 / ww;
+    vec4 c = endp < 0.5 ? ca : cb;
+    float lenPx = length((sb - sa) * uRes * 0.5) + 1e-3, ext = ww * 0.7;
+    c.xy += nrm * side * ww / uRes * c.w + dir * (endp < 0.5 ? -1. : 1.) * ext / uRes * c.w * 2.;
+    vY = endp < 0.5 ? -ext * 2. / lenPx : 1. + ext * 2. / lenPx; vE = ext * 2. / lenPx;
+    gl_Position = age >= 0. ? c : vec4(9., 9., 9., 1.);
+    I *= 0.78 + 0.22 * fract(sin(sd * 91.7 + floor(uT * 40.) * 13.1) * 43758.5);   // parpadeo eléctrico
+    vI = I * (uMir > 0.5 ? 0.28 : 1.); vX = side; vHot = kind;
+  }`;
+  const FSL = `#version 300 es
+  precision highp float; in float vI; in float vX; in float vHot; in float vY; in float vE; out vec4 o; uniform float uHalo;
+  void main(){
+    float out_ = max(-vY, vY - 1.) / max(vE, 1e-4);   // remates redondos y suaves: sin pinchos en las uniones
+    float g = exp(-vX * vX * (uHalo > 1.5 ? 2.5 : uHalo > 0.5 ? 3.5 : 2.2)) * (out_ > 0. ? exp(-out_ * out_ * 3.) * 0.55 : 1.);
+    vec3 core = vec3(0.92, 0.9, 1.0), halo = vec3(0.54, 0.17, 1.0);
+    o = vec4((uHalo > 1.5 ? halo * 0.018 * step(0.5, vHot) * step(vHot, 1.5) : uHalo > 0.5 ? halo * 0.1 : core * 1.25) * vI * g, 0.);
+  }`;
+  // nube: puntos iluminados por las descargas cercanas
+  const VSC = `#version 300 es
+  precision highp float; in vec4 aP; uniform mat4 uVP; uniform vec4 uL[6]; uniform float uGain, uAmb, uFoc, uAp; uniform vec3 uCam; uniform vec2 uRes; out vec3 vC;
+  void main(){
+    vec4 cp = uVP * vec4(aP.xyz, 1.); gl_Position = cp;
+    float I = uAmb * (0.25 + 0.75 * smoothstep(2.1, 0.2, aP.y - ${YC.toFixed(2)}));   // el destello enciende toda la base de la nube
+    for (int i = 0; i < 6; i++) { vec3 d = aP.xyz - uL[i].xyz; I += uL[i].w * exp(-dot(d, d) * 0.9) * 1.4; }
+    float coc = abs(length(aP.xyz - uCam) - uFoc) * uAp * uRes.y;
+    float ps = clamp(260. / cp.w + coc, 1.5, 60.);
+    vC = mix(vec3(0.55, 0.42, 0.85), vec3(0.85, 0.82, 0.95), aP.w) * I * uGain * (0.5 + aP.w) * 30. / (ps * ps);
+    gl_PointSize = ps;
+  }`;
+  const FSC = `#version 300 es
+  precision highp float; in vec3 vC; out vec4 o; void main(){ vec2 c = gl_PointCoord * 2. - 1.; o = vec4(vC * exp(-dot(c, c) * 2.), 0.); }`;
+  const VSQ = `#version 300 es
+  in vec2 aPos; out vec2 vUv; void main(){ vUv = aPos * .5 + .5; gl_Position = vec4(aPos, 0., 1.); }`;
+  // composición: suelo mojado que recoge el destello, tono y grado
+  const FST = `#version 300 es
+  precision highp float; in vec2 vUv; out vec4 o; uniform sampler2D uH, uV; uniform float uExp, uSeed, uFlash, uHor; uniform vec2 uSp, uRes;
+  float ign(vec2 q){ return fract(52.9829189 * fract(dot(q + uSeed * 37., vec2(0.06711056, 0.00583715)))); }
+  void main(){
+    vec3 c = texture(uH, vUv).rgb;
+    if (vUv.y < uHor) {   // el suelo mojado: un brillo violeta que nace del punto de impacto
+      vec2 d = (vUv - uSp) * vec2(uRes.x / uRes.y, 3.5);
+      c += vec3(0.42, 0.16, 1.) * uFlash * 0.07 * exp(-dot(d, d) * 5.) * smoothstep(uHor + 0.02, uHor - 0.3, vUv.y);
+    }
+    c += vec3(0.5, 0.35, 1.) * uFlash * 0.0015;   // el aire entero se enciende un instante
+    c *= uExp; c = c * (2.51 * c + 0.03) / (c * (2.43 * c + 0.59) + 0.14); c += (ign(gl_FragCoord.xy) - 0.5) / 255.; o = vec4(c, 1.);
+  }`;
+  const VSR = `#version 300 es
+  precision highp float; in vec4 aR; uniform mat4 uVP; uniform vec3 uCam; uniform float uT, uP, uFl, uYC, uFoc, uAp, uPt, uBk; uniform vec2 uRes; uniform vec4 uL[6]; out float vI; out float vS;
+  void main(){
+    float y = uYC * fract(aR.z - uT / uP) + aR.w;
+    vec3 P = vec3(aR.x + (y - uYC * 0.5) * 0.08, y, aR.y);
+    gl_Position = uVP * vec4(P, 1.);
+    float I = uFl * 0.55;
+    for (int i = 0; i < 6; i++) { vec3 d = P - uL[i].xyz; I += uL[i].w * 0.06 / (1. + dot(d, d) * 0.5); }
+    float dc = length(P - uCam);
+    float coc = abs(dc - uFoc) * uAp * uRes.y;
+    if (uPt > 0.5) {   // gotas cercanas como discos de bokeh
+      float sz = clamp(coc * 1.4, 0., 120.); if (uBk < 0.5 || fract(aR.z * 97.3) > 0.12 || dc > 2.2 || sz < 10.) { gl_Position = vec4(9., 9., 9., 1.); gl_PointSize = 0.; vI = 0.; vS = 0.; return; } gl_PointSize = sz; vS = sz;
+      vI = I * 22. * 36. / (sz * sz) * smoothstep(0.15, 0.5, dc);
+      return;
+    }
+    vS = 0.;
+    vI = I * smoothstep(0.3, 1.2, dc) * exp(-dc * 0.08) * (aR.w > 0. ? 0.25 : 1.) / (1. + coc * 0.25);
+  }`;
+  const FSR = `#version 300 es
+  precision highp float; in float vI; in float vS; out vec4 o; void main(){ float m = 1.; if (vS > 0.) { vec2 c = gl_PointCoord * 2. - 1.; float d = dot(c, c); m = smoothstep(1., 0.8, d) * (0.6 + 0.4 * d); if (m <= 0.) discard; } o = vec4(vec3(0.75, 0.7, 1.) * vI * 0.2 * m, 0.); }`;
+  const PR = prog(VSR, FSR, ['aR']);
+  // nube volumétrica: se traza a media resolución; la luz de cada descarga se dispersa dentro y se absorbe según su espesor
+  const FSV = `#version 300 es
+  precision highp float; precision highp sampler3D; in vec2 vUv; out vec4 o;
+  uniform sampler3D uN; uniform vec3 uCam, uFw, uRt, uUp; uniform float uFov, uAsp, uYC, uSeed, uAmb; uniform vec4 uL[6];
+  float ign(vec2 q){ return fract(52.9829189 * fract(dot(q + uSeed * 37., vec2(0.06711056, 0.00583715)))); }
+  float dens(vec3 p){
+    float h = (p.y - uYC) / 2.1;
+    if (h < 0. || h > 1.) return 0.;
+    float sh = smoothstep(0., 0.08, h) * smoothstep(1., 0.45, h) * smoothstep(7.5, 4.5, abs(p.x)) * smoothstep(6., 3.5, abs(p.z + 0.5));
+    float n = texture(uN, p * vec3(0.12, 0.17, 0.12)).r * 0.7 + texture(uN, p * vec3(0.05, 0.07, 0.05) + 0.71).r * 0.3;
+    float e = texture(uN, p * vec3(0.26, 0.3, 0.26) + 0.37).r;
+    return max(0., smoothstep(0.42, 0.62, n) * sh - e * 0.3) * 7.;
+  }
+  void main(){
+    vec2 uv = (vUv - 0.5) * vec2(uAsp, 1.);
+    vec3 rd = normalize(uFw + (uv.x * uRt + uv.y * uUp) * uFov);
+    float y0 = uYC, y1 = uYC + 2.1;
+    float t0, t1;
+    if (abs(rd.y) < 1e-4) { if (uCam.y < y0 || uCam.y > y1) { o = vec4(0., 0., 0., 1.); return; } t0 = 0.; t1 = 30.; }
+    else { float a = (y0 - uCam.y) / rd.y, b = (y1 - uCam.y) / rd.y; t0 = max(0., min(a, b)); t1 = min(30., max(a, b)); }
+    if (t1 <= t0) { o = vec4(0., 0., 0., 1.); return; }
+    const int NS = 40; float dt = (t1 - t0) / float(NS);
+    float t = t0 + dt * ign(gl_FragCoord.xy);
+    vec3 col = vec3(0.); float T = 1.;
+    for (int i = 0; i < NS; i++) {
+      vec3 p = uCam + rd * t; float d = dens(p);
+      if (d > 0.001) {
+        // sombra propia hacia la luz principal: los grumos se modelan con luz y sombra
+        vec3 ld = uL[0].xyz - p; float lL = length(ld); ld /= max(lL, 1e-3);
+        float sd = dens(p + ld * 0.18) + dens(p + ld * 0.45);
+        float shd = exp(-sd * 0.55);
+        vec3 Li = vec3(0.78, 0.66, 1.) * uAmb * (0.35 + 0.65 * shd);
+        for (int k = 0; k < 6; k++) { vec3 q = p - uL[k].xyz; float dd = dot(q, q); Li += uL[k].w * vec3(0.78, 0.66, 1.) / (1. + dd * 1.2) * exp(-dd * 0.06) * (k == 0 ? shd : 0.7); }
+        float a = 1. - exp(-d * dt * 1.6);
+        col += T * a * Li; T *= 1. - a;
+        if (T < 0.02) break;
+      }
+      t += dt;
+    }
+    o = vec4(col, T);
+  }`;
+  const PV = prog(VSQ, FSV, ['aPos']);
+  const texN = gl.createTexture(); gl.bindTexture(gl.TEXTURE_3D, texN);
+  gl.texImage3D(gl.TEXTURE_3D, 0, gl.R8, NV, NV, NV, 0, gl.RED, gl.UNSIGNED_BYTE, NOI);
+  for (const p of [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T, gl.TEXTURE_WRAP_R]) gl.texParameteri(gl.TEXTURE_3D, p, gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  const VW = Math.round(W / 2), VH = Math.round(H / 2);
+  const VOL = (() => { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA16F, VW, VH);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0); return { t, f }; })();
+  const PL = prog(VSL, FSL, ['aA', 'aB', 'aC']), PC = prog(VSC, FSC, ['aP']), PT = prog(VSQ, FST, ['aPos']);
+  // cintas: 6 vértices por segmento
+  const VA = new Float32Array(NSEG * 6 * 4), VB = new Float32Array(NSEG * 6 * 4), VC2 = new Float32Array(NSEG * 6 * 4);
+  { const corners = [[-1, 0], [1, 0], [-1, 1], [1, 0], [1, 1], [-1, 1]];
+    for (let i = 0; i < NSEG; i++) { const o = i * 10;
+      for (let v = 0; v < 6; v++) { const j = (i * 6 + v) * 4;
+        VA.set([SEG[o], SEG[o + 1], SEG[o + 2], SEG[o + 6]], j); VB.set([SEG[o + 3], SEG[o + 4], SEG[o + 5], SEG[o + 7]], j); VC2.set([corners[v][0], corners[v][1], SEG[o + 8], SEG[o + 9]], j); } } }
+  const vaoL = gl.createVertexArray(); gl.bindVertexArray(vaoL);
+  for (const [i, arr] of [[0, VA], [1, VB], [2, VC2]]) { const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW); gl.enableVertexAttribArray(i); gl.vertexAttribPointer(i, 4, gl.FLOAT, false, 0, 0); }
+  const vaoR = gl.createVertexArray(); gl.bindVertexArray(vaoR);
+  { const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, RA, gl.STATIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 0, 0); }
+  const vaoC = gl.createVertexArray(); gl.bindVertexArray(vaoC);
+  { const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, CL, gl.STATIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 0, 0); }
+  const vaoQ = gl.createVertexArray(); gl.bindVertexArray(vaoQ);
+  { const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0); }
+
+  // ================================================================ 3 · cámara
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  function viewProj(cam, tgt, roll, fovY) {
+    const f = nrm(sub(tgt, cam)); let r = nrm(cross(f, [0, 1, 0])); let u = cross(r, f);
+    const cr = Math.cos(roll), sr = Math.sin(roll); [r, u] = [r.map((v, i) => v * cr + u[i] * sr), u.map((v, i) => u[i] * cr - r[i] * sr)];
+    const asp = W / H, n = 0.05, fa = 200, k = 1 / Math.tan(fovY / 2);
+    const V = [r[0], u[0], -f[0], 0, r[1], u[1], -f[1], 0, r[2], u[2], -f[2], 0, -dot(r, cam), -dot(u, cam), dot(f, cam), 1];
+    const P = [k / asp, 0, 0, 0, 0, k, 0, 0, 0, 0, (fa + n) / (n - fa), -1, 0, 0, 2 * fa * n / (n - fa), 0];
+    const M = new Float32Array(16);
+    for (let c = 0; c < 4; c++) for (let rr = 0; rr < 4; rr++) { let s = 0; for (let k2 = 0; k2 < 4; k2++) s += P[k2 * 4 + rr] * V[c * 4 + k2]; M[c * 4 + rr] = s; }
+    M.basis = { f, r, u, k }; return M;
+  }
+  function project(M, P) { const x = M[0] * P[0] + M[4] * P[1] + M[8] * P[2] + M[12], y = M[1] * P[0] + M[5] * P[1] + M[9] * P[2] + M[13], w = M[3] * P[0] + M[7] * P[1] + M[11] * P[2] + M[15]; return [x / w * 0.5 + 0.5, y / w * 0.5 + 0.5, w]; }
+  const kf = (pts, x) => { for (let i = 1; i < pts.length; i++) if (x <= pts[i][0]) { const [t0, v0] = pts[i - 1], [t1, v1] = pts[i]; return lerp(v0, v1, e.inOut(clamp((x - t0) / (t1 - t0)))); } return pts[pts.length - 1][1]; };
+  const portrait = H >= W;
+  const tipAt = (t) => { let k = 0; while (k < NS && STEPS[k] <= t) k++; return MAIN[k]; };
+  const dist3 = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  function shot(t) {
+    const fov = portrait ? 1.0 : 0.8;
+    if (t < T.leader) {      // NUBE: desde abajo, mirando la base de la nube (periódico con el loop)
+      const ph = 2 * Math.PI * t / T.leader;
+      return { cam: [0.4 * Math.sin(ph), 1.1, 2.4 + 0.25 * Math.cos(ph)], tgt: [0.1 * Math.sin(ph), YC + 0.2, -0.6], roll: 0.25 * Math.sin(ph) + 0.1, fov: fov * 1.15, ap: 0.002 };
+    }
+    if (t < T.rupt) {        // LÍDER: plano general / la punta de cerca con poca profundidad / a ras del suelo mojado, a foco en el suelo
+      const tt = Math.min(t, T.cut - 1e-4), b = Math.floor((tt - T.leader) / T.bar), lt = tt - (T.leader + b * T.bar);
+      if (b % 3 === 0) return { cam: [1.2 - 0.1 * lt, 1.6, 8.2 - 0.25 * lt], tgt: [0, 2.0, 0], roll: -0.03, fov, ap: 0.0015 };
+      if (b % 3 === 1) { const tp = tipAt(tt); return { cam: [tp[0] + 0.9, tp[1] - 0.35 + 0.05 * lt, tp[2] + 1.7], tgt: [tp[0], tp[1] - 0.2, tp[2]], roll: 0.12, fov: fov * 0.8, ap: 0.01, focT: tp }; }
+      return { cam: [-1.6 + 0.12 * lt, 0.14, 4.8 - 0.2 * lt], tgt: [0, 1.6, 0], roll: -0.08, fov, ap: 0.004, focD: 3.2 };
+    }
+    const a = t - T.rupt, ph = 2 * Math.PI * (t - T.rupt - T.bar) / (2 * T.bar);
+    if (a > T.bar) {   // cada re-descarga corta: a través de la lluvia (foco en las gotas → en el rayo) · a ras del suelo · el canal de cerca
+      const lb = (a - T.bar) % T.bar, sh = lb < 6 * T.st ? 0 : (lb < 12 * T.st ? 1 : 2), mid = MAIN[Math.floor(NS * 0.55)];
+      if (sh === 0) { const c0 = [1.0, 1.3, 3.0], dB = dist3(c0, [STRIKE[0], 1.6, STRIKE[2]]); return { cam: [c0[0] - 0.05 * lb, c0[1], c0[2]], tgt: [STRIKE[0], 2.0, STRIKE[2]], roll: 0.03, fov: fov * 0.85, ap: 0.008, bk: 1, focD: lerp(0.7, dB, e.inOut(clamp((lb - 0.12) / 0.3))) }; }
+      if (sh === 1) return { cam: [-1.9 + 0.1 * lb, 0.16, 3.6], tgt: [STRIKE[0], 2.4, STRIKE[2]], roll: -0.1, fov: fov * 1.1, ap: 0.005, focD: 2.6 };
+      return { cam: [mid[0] + 1.3, mid[1] - 0.3 + 0.1 * lb, mid[2] + 1.6], tgt: [mid[0], mid[1] + 0.2, mid[2]], roll: 0.18, fov: fov * 0.9, ap: 0.007 };
+    }
+    return { cam: [kf([[0, 0.6], [1.5, 1.4]], a) + 0.12 * Math.sin(ph), kf([[0, 0.7], [2, 1.3]], a), kf([[0, 6.0], [1.8, 8.6]], a) + 0.15 * Math.cos(ph)], tgt: [0, 2.1, 0], roll: 0.02 * Math.sin(ph), fov, ap: 0.002 };
+  }
+  function camAt(t) {
+    const s = shot(t);
+    s.foc = s.focD ?? (s.focT ? dist3(s.cam, s.focT) : dist3(s.cam, s.tgt));
+    return s;
+  }
+
+  // ================================================================ 4 · partitura → estado
+  function last(v, t, f) { let L = null; for (const x of EV) { if (x.t > t) break; if (x.v === v && (!f || f(x))) L = x; } return L; }
+  let out = null;
+  window.renderFrame = function (tReal, frame) {
+    if (!out) out = document.getElementById('c').getContext('2d');
+    const frozen = tReal >= T.cut && tReal < T.rupt;
+    const t = frozen ? T.cut - 1e-4 : warp(tReal);
+    const c = VL.sceneCtx(); const ts = tReal - T.sting, a = tReal - T.rupt;
+    const fade = 1 - e.inOut(sg(tReal, T.sting - 0.9, T.sting + 0.2));
+    if (fade > 0.002) {
+      const cm = camAt(t);
+      { const Kb0 = last('K', t, (x) => x.big); const sh = (a >= 0 ? Math.exp(-a / 0.12) : 0) + (Kb0 && Kb0.t >= T.rupt ? 0.5 * Kb0.s * Math.exp(-(t - Kb0.t) / 0.08) : 0);
+        if (sh > 0.001) { const j = (k) => Math.sin(t * (97 + k * 31) + k) * sh * 0.035; cm.cam = [cm.cam[0] + j(1), cm.cam[1] + j(2), cm.cam[2] + j(3)]; cm.roll += j(4) * 0.5; } }
+      const M = viewProj(cm.cam, cm.tgt, cm.roll, cm.fov);
+      const K = last('K', t, (x) => !x.rat);
+      const kf2 = K && !frozen ? K.s * Math.exp(-(t - K.t) / 0.06) : 0;
+      // retorno y re-descargas: el canal parpadea como los rayos reales
+      const Kb = last('K', t, (x) => x.big);
+      let ret = 0;
+      if (a >= 0) { ret = 1.0 * Math.exp(-a / 0.12) + 0.18 * Math.exp(-a / 1.2); if (Kb && Kb.t >= T.rupt) { const g = t - Kb.t; ret += Kb.s * (0.85 * Math.exp(-g / 0.07) + 0.25 * Math.exp(-g / 0.4)) * (g < 0.05 ? 1 : 0.85 + 0.15 * Math.cos(g * 90)); } }
+      ret *= fade;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, HDR.f); gl.viewport(0, 0, W, H); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+      // nube iluminada por las descargas
+      let L = [];
+      {
+        for (const cr of CRAWL) { const g = t - cr.t; if (g >= 0 && g < 1.2) L.push([...cr.p, cr.s * (14 * Math.exp(-g / 0.1) + 1.2 * Math.exp(-g / 0.5))]); }
+        const tp = tipAt(t); if (t >= T.leader && t < T.rupt) L.push([MAIN[0][0], YC + 0.1, MAIN[0][2], 0.25 + 0.6 * kf2]);
+        if (a >= 0) { L.push([MAIN[0][0], YC + 0.2, MAIN[0][2], ret * 3]); L.push([1.2, YC + 0.4, 0, ret * 1.2]); L.push([-1.4, YC + 0.4, 0.5, ret * 1.2]); }
+        L.sort((p, q) => q[3] - p[3]); while (L.length < 6) L.push([0, -99, 0, 0]);
+        const U = PC.U; gl.useProgram(PC.p); gl.bindVertexArray(vaoC); gl.uniformMatrix4fv(U.uVP, false, M);
+        gl.uniform4fv(U.uL, new Float32Array(L.slice(0, 6).flat())); gl.uniform1f(U.uGain, 0.13 * fade); gl.uniform1f(U.uAmb, ret * 1.2 + kf2 * 0.1);
+        gl.uniform3f(U.uCam, ...cm.cam); gl.uniform1f(U.uFoc, cm.foc); gl.uniform1f(U.uAp, cm.ap); gl.uniform2f(U.uRes, W, H);
+        gl.drawArrays(gl.POINTS, 0, NCL);
+      }
+      { const U = PR.U; gl.useProgram(PR.p); gl.bindVertexArray(vaoR); gl.uniformMatrix4fv(U.uVP, false, M); gl.uniform3f(U.uCam, ...cm.cam);
+        gl.uniform1f(U.uT, t); gl.uniform1f(U.uP, T.bar / 2); gl.uniform1f(U.uFl, (ret * 1.6 + kf2 * 0.35) * fade); gl.uniform1f(U.uYC, YC);
+        gl.uniform4fv(U.uL, new Float32Array(L.slice(0, 6).flat())); gl.uniform1f(U.uFoc, cm.foc); gl.uniform1f(U.uAp, cm.ap); gl.uniform2f(U.uRes, W, H);
+        gl.uniform1f(U.uBk, cm.bk ? 1 : 0); gl.uniform1f(U.uPt, 0); gl.drawArrays(gl.LINES, 0, NR * 2); gl.uniform1f(U.uPt, 1); gl.drawArrays(gl.POINTS, 0, NR * 2); }
+      // descargas: reflejo, halo y núcleo
+      { const U = PL.U; gl.useProgram(PL.p); gl.bindVertexArray(vaoL);
+        gl.uniformMatrix4fv(U.uVP, false, M); gl.uniform2f(U.uRes, W, H); gl.uniform1f(U.uT, t); gl.uniform1f(U.uRupt, T.rupt);
+        gl.uniform1f(U.uRet, ret); gl.uniform1f(U.uKf, kf2); gl.uniform1f(U.uWob, t * 2.0); gl.uniform1f(U.uFrz, frozen ? 1 : 0); gl.uniform1f(U.uFoc, cm.foc); gl.uniform1f(U.uAp, cm.ap);
+        for (const [mir, halo] of [[1, 1], [1, 0], [0, 2], [0, 1], [0, 0]]) { gl.uniform1f(U.uMir, mir); gl.uniform1f(U.uHalo, halo); gl.drawArrays(gl.TRIANGLES, 0, NSEG * 6); } }
+      gl.disable(gl.BLEND);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H);
+      { const U = PT.U; gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, VOL.t); gl.useProgram(PT.p); gl.bindVertexArray(vaoQ); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, HDR.t);
+        const sp = project(M, STRIKE), hz = project(M, [0, 0, -60]);
+        gl.uniform1i(U.uH, 0); gl.uniform1i(U.uV, 2); gl.uniform1f(U.uExp, 1.15); gl.uniform1f(U.uSeed, (frame % 64) * 0.137);
+        gl.uniform1f(U.uFlash, ret * 2.2 + kf2 * 0.25); gl.uniform1f(U.uHor, clamp(hz[1], 0, 1)); gl.uniform2f(U.uSp, sp[0], sp[1]); gl.uniform2f(U.uRes, W, H);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); }
+      c.drawImage(cv, 0, 0, W, H);
+    }
+    let bloom = 0.95, flash = 0, flashColor;
+    if (a >= 0 && ts < 0) { flash = 0.95 * Math.max(0, 1 - a / 0.18); flashColor = a < 0.04 ? ACC : undefined; bloom = 1.1 + 0.9 * Math.exp(-a * 1.2); }
+    if (ts >= 0) { const st = VL.drawSting(c, ts, { accent: ACC }); flash = st.flash; bloom = 0.8 + 0.5 * st.flash; }
+    VL.post(out, frame, { bloom, flash, flashColor, grain: 0.45 });
+  };
+})();
+</script>
+<script src="../shared/motion-timeline.js"></script>
+<script>
+(async () => {
+  if (new URLSearchParams(location.search).has('render')) return;
+  await Promise.race([Promise.all([300, 400, 600].map((w) => document.fonts.load(`${w} 40px 'JetBrains Mono'`, 'VØID_LOOMÑ'))), new Promise((r) => setTimeout(r, 2500))]);
+  const Z = window.DSC, T = Z.T;
+  MotionTimeline.mount({
+    duration: window.DURATION,
+    render: (t) => window.renderFrame(t, Math.floor(t * 60)),
+    acts: [[0, 'NUBE'], [+T.leader.toFixed(3), 'LÍDER'], [+T.cut.toFixed(3), 'SILENCIO'], [+T.rupt.toFixed(3), 'RETORNO'], [+T.sting.toFixed(3), 'FIRMA']],
+    accent: '#8A2BFF',
+    audio: 'descarga.m4a',
+    live: {
+      loops: Z.LOOPS.map(([a, b]) => [+a.toFixed(4), +b.toFixed(4)]),
+      hits: Z.EV.filter((x) => x.v === 'K' && !x.rat || x.v === 'R').map((x) => +x.t.toFixed(4)),
+      bpm: T.bpm,
+      stems: { dron: 'descarga-stems/dron.m4a', golpes: 'descarga-stems/golpes.m4a', ritmo: 'descarga-stems/ritmo.m4a', ruptura: 'descarga-stems/ruptura.m4a' },
+    },
+  });
+})();
+</script>
+</body>
+</html>
