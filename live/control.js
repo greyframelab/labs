@@ -34,7 +34,10 @@
         if (!/VØID_LOOM/.test(html) || !/MotionTimeline\.mount/.test(html)) return;
         const audio = (html.match(/audio:\s*'([^']+)'/) || [])[1];
         if (!audio) return;
-        out.push({ id: dir.replace(/\/$/, ''), n: +n, title: title.toUpperCase(), dir: '../' + dir, src: '../' + dir + 'index.html',
+        let code = html;
+        for (const [, f] of html.matchAll(/<script src="([^"/]+-score\.js)"/g)) { try { code += await fetch('../' + dir + f, { cache: 'no-cache' }).then((r) => r.text()); } catch (e) {} }
+        const bpm = +((code.match(/const\s+bpm\s*=\s*(\d+(?:\.\d+)?)/i) || code.match(/(\d{2,3})\s?bpm/i) || [])[1]) || null;
+        out.push({ id: dir.replace(/\/$/, ''), n: +n, title: title.toUpperCase(), dir: '../' + dir, src: '../' + dir + 'index.html', bpm,
           audio: '../' + dir + audio, thumb: '../' + dir + 'thumb.jpg', accent: (html.match(/accent:\s*'(#[0-9a-f]{3,8})'/i) || [])[1] || '#f2f0ea' });
       } catch (e) {}
     }));
@@ -167,7 +170,7 @@
     const t = at ? Math.max(ctx.currentTime, wallToCtx(at)) : ctx.currentTime;
     const ga = Math.cos(MIX.xf * Math.PI / 2), gb = Math.sin(MIX.xf * Math.PI / 2);
     if (at) { DECK.A.aud.xf.gain.setValueAtTime(ga, t); DECK.B.aud.xf.gain.setValueAtTime(gb, t); }
-    else { DECK.A.aud.xf.gain.setTargetAtTime(ga, t, 0.012); DECK.B.aud.xf.gain.setTargetAtTime(gb, t, 0.012); }
+    else { ['A', 'B'].forEach((k) => DECK[k].aud.xf.gain.cancelScheduledValues(t)); DECK.A.aud.xf.gain.setTargetAtTime(ga, t, 0.012); DECK.B.aud.xf.gain.setTargetAtTime(gb, t, 0.012); }
   }
   const CURVE_IN = new Float32Array(64).map((_, i) => Math.sin(i / 63 * Math.PI / 2));
   const CURVE_OUT = new Float32Array(64).map((_, i) => Math.cos(i / 63 * Math.PI / 2));
@@ -385,25 +388,69 @@
     commit(d, { pos: f, a: f, b: d.meta.duration, x: 0, once: true, freeze: null, rate: Math.abs(d.speed) }, wall);
     queued(d, wall); uiFlags(d);
   }
+  // ---------------------------------------------------------------- SYNC: tempo y compás del otro deck
+  // La rejilla de compases de cada acto arranca en su primer golpe (tras un SILENCIO la rejilla se desplaza).
+  function barGrid(d, p) {
+    const bar = 4 * 60 / d.item.bpm, i = VLL.actAt(d.meta, p), t0 = d.meta.acts[i][0];
+    const h = d.hits.find((x) => x >= t0 - 0.01 && x < t0 + 0.3);
+    return { anchor: h != null ? h : t0, bar };
+  }
+  function nearestBar(d, p) { const g = barGrid(d, p); return g.anchor + Math.round((p - g.anchor) / g.bar) * g.bar; }
+  function nextBar(d, p) { const g = barGrid(d, p); return g.anchor + Math.ceil((p - g.anchor + 1e-3) / g.bar) * g.bar; }
+  function sync(d) {
+    const m = DECK[d.id === 'A' ? 'B' : 'A'];
+    if (!d.state || !m.state || !d.item || !m.item) return toast('SYNC · CARGA UNA PIEZA EN CADA DECK');
+    if (!d.item.bpm || !m.item.bpm) return toast('SYNC · ' + (!d.item.bpm ? d.item.title : m.item.title) + ' NO TIENE TEMPO FIJO');
+    if (m.stopped || m.state.freeze != null || m.state.ramp || Math.abs(m.state.rate) < 0.01) return toast('SYNC · EL DECK ' + m.id + ' TIENE QUE ESTAR SONANDO');
+    // tempo: la relación más cercana (½, ⅔, 1, 3⁄2, 2) para que el cambio sea mínimo
+    const bm = m.item.bpm * Math.abs(m.state.rate);
+    const k = [0.5, 2 / 3, 1, 1.5, 2].reduce((a, b) => (Math.abs(Math.log(bm * b / d.item.bpm)) < Math.abs(Math.log(bm * a / d.item.bpm)) ? b : a));
+    const rate = VLL.clamp(bm * k / d.item.bpm, 0.25, 2);
+    // fase: en el próximo compás del otro deck, este entra en su compás más cercano
+    const base = now() + LEAD, pm = curPos(m, base);
+    let target = nextBar(m, pm);
+    if (target >= m.state.b) target = m.state.b;                 // si el otro va a dar la vuelta, en la vuelta
+    const wall = base + (target - pm) / Math.abs(m.state.rate) * 1000;
+    let pd = nearestBar(d, curPos(d, wall));
+    const s = d.state;
+    if (pd < s.a || pd >= s.b) pd = VLL.clamp(pd, s.a, s.b - 0.05);
+    d.speed = rate; d.rev_ = false; d.stopped = false; d.slip = null;
+    d.fSpeed && d.fSpeed.set(spdToV(rate), true);
+    clearTimeout(d.rampT);
+    commit(d, { rate, pos: pd, freeze: null, ramp: null }, wall);
+    queued(d, wall); uiFlags(d);
+    const kTxt = k === 1 ? '' : ' (' + ({ 0.5: '½', 0.6667: '⅔', 1.5: '3:2', 2: '×2' })[+k.toFixed(4)] + ')';
+    toast(`SYNC · ${d.id} ${d.item.bpm} → ${(d.item.bpm * rate).toFixed(1)} BPM CON ${m.id}${kTxt} · ${rate.toFixed(3)}×`);
+    d.syncFlash = performance.now();
+  }
   function setSpeed(d, v) {
     d.speed = v;
     if (d.state && !d.stopped && d.state.freeze == null && !d.slip) commit(d, { rate: signedRate(d) });
   }
 
   // ---------------------------------------------------------------- mezcla
+  // un movimiento a mano del crossfader (ratón, teclado o controlador) manda: cancela AUTO y un CORTE en cola
+  function manualXf(v) { cancelAuto(); cancelCut(); setXf(v); }
   function setXf(v, at) {
     MIX.xf = VLL.clamp(v, 0, 1);
     if (MIX.xf <= 0.001) MIX.onAir = 'A'; else if (MIX.xf >= 0.999) MIX.onAir = 'B';
     applyXfAudio(at); sendState(); uiMix();
+    if (hwPos.xf != null) markHw(hwPos.xf);
   }
-  let cutPending = null;
+  let cutPending = null, cutTimer = null;
+  function cancelCut() {
+    if (!cutPending) return;
+    clearTimeout(cutTimer); cutPending = null; $('#cut').classList.remove('q');
+    if (ctx) ['A', 'B'].forEach((k) => DECK[k].aud.xf.gain.cancelScheduledValues(ctx.currentTime));
+  }
   function cut() {
     if (cutPending) return;
+    cancelAuto();
     const target = MIX.onAir === 'A' ? 1 : 0;
     const wall = qWall(DECK[MIX.onAir]);
     cutPending = wall; $('#cut').classList.add('q');
     applyXfAudioAt(target, wall);
-    setTimeout(() => {
+    cutTimer = setTimeout(() => {
       cutPending = null; $('#cut').classList.remove('q');
       MIX.xf = target; MIX.onAir = target ? 'B' : 'A';
       FX.glitch = 1; sendState(); uiMix();
@@ -416,8 +463,10 @@
     DECK.A.aud.xf.gain.setValueAtTime(target ? 0 : 1, t); DECK.B.aud.xf.gain.setValueAtTime(target ? 1 : 0, t);
   }
   let autoAnim = null, autoDur = store.get('auto', 6);
+  function cancelAuto() { if (!autoAnim) return; cancelAnimationFrame(autoAnim.raf); autoAnim = null; $('#autoB').classList.remove('on'); }
   function auto() {
-    if (autoAnim) { cancelAnimationFrame(autoAnim.raf); autoAnim = null; $('#autoB').classList.remove('on'); return; }
+    if (autoAnim) return cancelAuto();
+    cancelCut();
     const from = MIX.xf, to = MIX.onAir === 'A' ? 1 : 0, t0 = performance.now();
     $('#autoB').classList.add('on');
     const step = () => {
@@ -503,7 +552,7 @@
     el.addEventListener('dblclick', () => set(def));
     el.addEventListener('wheel', (e) => { e.preventDefault(); set(v - e.deltaY / 1500); }, { passive: false });
     draw();
-    reg(id, el, { kind: 'cc', set: (x) => set(x) });
+    reg(id, el, { kind: 'cc', set: (x) => set(x), get: () => v });
     return { set, get: () => v };
   }
   function fader(host, id, label, def, onChange, fmt, detents = []) {
@@ -521,7 +570,7 @@
     tr.addEventListener('pointerup', () => (drag = false));
     el.addEventListener('dblclick', () => set(def));
     draw();
-    reg(id, tr, { kind: 'cc', set: (x) => set(x) });
+    reg(id, tr, { kind: 'cc', set: (x) => set(x), get: () => v });
     return { set, get: () => v };
   }
   function btn(el, id, onPress, onRelease) {
@@ -542,7 +591,7 @@
     const el = d.el, it = d.item, id = d.id;
     el.style.setProperty('--acc', it ? it.accent : '#5d5b57');
     el.innerHTML = `
-      <div class="d-head"><span class="d-id">${id}</span><div class="d-title"><b>${it ? it.title : 'VACÍO'}</b><span>${it ? 'LAB ' + String(it.n).padStart(2, '0') + ' · ' + d.meta.duration.toFixed(1).replace('.', ',') + ' S · ' + d.meta.acts.length + ' ACTOS' : 'CARGA UNA PIEZA DESDE LA BIBLIOTECA'}</span></div><span class="d-state">—</span></div>
+      <div class="d-head"><span class="d-id">${id}</span><div class="d-title"><b>${it ? it.title : 'VACÍO'}</b><span>${it ? 'LAB ' + String(it.n).padStart(2, '0') + ' · ' + (it.bpm ? it.bpm + ' BPM' : 'TEMPO LIBRE') + ' · ' + d.meta.acts.length + ' ACTOS' : 'CARGA UNA PIEZA DESDE LA BIBLIOTECA'}</span></div><span class="d-state">—</span></div>
       <div class="d-view">${it ? `<img src="${it.thumb}" alt=""><canvas class="d-prev"></canvas>` : ''}<div class="vg"></div>${it ? '' : '<div class="d-empty">SIN PIEZA</div>'}
         <div class="d-act"></div><div class="d-time"></div>
         <div class="d-flags"><span data-f="loop">LOOP</span><span data-f="stut">STUTTER</span><span data-f="frz">CONGELADO</span><span data-f="rev">REVERSA</span><span data-f="tape">CINTA</span><span data-f="firma">FIRMA</span></div>
@@ -560,10 +609,10 @@
     });
     // interpretación
     const perf = $('.d-perf', el);
-    [['LOOP', 'L', 'loop', () => toggleLoop(d)], ['/2', '[', 'half', () => resizeLoop(d, 0.5)], ['×2', ']', 'dbl', () => resizeLoop(d, 2)], ['FIRMA', 'G', 'firma', () => firma(d)],
+    [['SYNC', 'Y', 'sync', () => sync(d)], ['LOOP', 'L', 'loop', () => toggleLoop(d)], ['/2', '[', 'half', () => resizeLoop(d, 0.5)], ['×2', ']', 'dbl', () => resizeLoop(d, 2)],
      ['STUTTER', 'S', 'stut', () => stutter(d, true), () => stutter(d, false)], ['CONGELAR', 'F', 'frz', () => freeze(d)],
-     ['REVERSA', 'R', 'rev', () => reverse(d, true), () => reverse(d, false)], ['CINTA', 'T', 'tape', () => tape(d)]]
-      .forEach(([t, k, f, p, r]) => { const b = document.createElement('button'); b.className = 'pb'; b.dataset.f = f; b.innerHTML = t + `<small>${k}</small>`; perf.appendChild(b); btn(b, `${id}.${f}`, p, r); });
+     ['REVERSA', 'R', 'rev', () => reverse(d, true), () => reverse(d, false)], ['CINTA', 'T', 'tape', () => tape(d)], ['FIRMA · CIERRE', 'G', 'firma', () => firma(d)]]
+      .forEach(([t, k, f, p, r]) => { const b = document.createElement('button'); b.className = 'pb'; b.dataset.f = f; if (f === 'firma') b.style.gridColumn = 'span 4'; b.innerHTML = t + `<small>${k}</small>`; perf.appendChild(b); btn(b, `${id}.${f}`, p, r); });
     d.ui.perf = perf;
     // ecualizador + kills
     const eq = $('.eq', el);
@@ -667,12 +716,12 @@
   }
   function buildCenter() {
     const xf = $('#xf');
-    xf.insertAdjacentHTML('beforeend', [0, 0.25, 0.5, 0.75, 1].map((t) => `<div class="tk" style="left:${t * 100}%"></div>`).join('') + '<div class="th"></div>');
+    xf.insertAdjacentHTML('beforeend', [0, 0.25, 0.5, 0.75, 1].map((t) => `<div class="tk" style="left:${t * 100}%"></div>`).join('') + '<div class="hw" id="xfHw" title="Posición del crossfader del controlador: llévalo hasta aquí para recogerlo"></div><div class="th"></div>');
     let drag = false;
-    const at = (e) => { const r = xf.getBoundingClientRect(); setXf((e.clientX - r.left) / r.width); };
+    const at = (e) => { const r = xf.getBoundingClientRect(); manualXf((e.clientX - r.left) / r.width); };
     xf.addEventListener('pointerdown', (e) => { if (learnArm('xf')) return; drag = true; xf.setPointerCapture(e.pointerId); at(e); });
     xf.addEventListener('pointermove', (e) => drag && at(e)); xf.addEventListener('pointerup', () => (drag = false));
-    reg('xf', xf, { kind: 'cc', set: (v) => setXf(v) });
+    reg('xf', xf, { kind: 'cc', set: (v) => manualXf(v), get: () => MIX.xf });
     seg($('#xmode'), 'xmode', MIX.mode, (v) => { MIX.mode = v; sendState(); });
     btn($('#cut'), 'cut', cut);
     const ka = document.createElement('div'); $('#kAuto').appendChild(ka); ka.style.setProperty('--acc', '#f2f0ea');
@@ -781,15 +830,16 @@
       case 'BracketLeft': resizeLoop(d, 0.5); break;
       case 'BracketRight': resizeLoop(d, 2); break;
       case 'KeyG': firma(d); break;
+      case 'KeyY': sync(d); break;
       case 'KeyS': HOLD.add(k); stutter(d, true); break;
       case 'KeyF': freeze(d); break;
       case 'KeyR': HOLD.add(k); reverse(d, true); break;
       case 'KeyT': tape(d); break;
       case 'KeyZ': case 'KeyX': case 'KeyC': { const i = { KeyZ: 0, KeyX: 1, KeyC: 2 }[k]; d.kill[i] ^= 1; d['kb' + i] && d['kb' + i].classList.toggle('on', !!d.kill[i]); applyDeckAudio(d); break; }
       case 'Space': cut(); break;
-      case 'ArrowLeft': setXf(MIX.xf - 0.04); break;
-      case 'ArrowRight': setXf(MIX.xf + 0.04); break;
-      case 'KeyA': auto(); break;
+      case 'ArrowLeft': manualXf(MIX.xf - 0.04); break;
+      case 'ArrowRight': manualXf(MIX.xf + 0.04); break;
+      case 'KeyA': if (e.shiftKey) auto(); else return; break;   // AUTO solo con ⇧A: una A suelta no mueve el crossfader
       case 'KeyQ': CTL.quant.press(); toast('CUANTIZAR · ' + quant.toUpperCase()); break;
       case 'KeyI': setFxToggle('invert', FX.invert ? 0 : 1); break;
       case 'KeyV': setFxToggle('glitch', FX.glitch ? 0 : 1); break;
@@ -835,10 +885,27 @@
     const c = CTL[MAP[key]];
     if (!c) { if (isDDJ(e.target)) ddj(st, n, v); return; }   // lo aprendido a mano manda sobre el mapeo por defecto
     const down = type === 0x90 ? v > 0 : type === 0xb0 ? v > 63 : false;
-    if (c.kind === 'cc') { if (type === 0xb0) c.set(v / 127); else if (down) c.set(c.get ? 0 : 1); }
+    if (c.kind === 'cc') { if (type === 0xb0) soft(MAP[key], v / 127); return; }
     else if (c.kind === 'hold') { if (down) c.press(); else c.release(); }
     else if (down) c.press();
   }
+  // ---------------------------------------------------------------- recogida suave
+  // Si un control se movió desde la pantalla (o lo movió AUTO o un CORTE), el físico no lo arrastra de golpe:
+  // primero tiene que llegar a donde está el de la pantalla (o cruzarlo). Así nada «vuelve solo».
+  const hwPos = {};
+  function soft(id, x) {
+    const c = CTL[id]; if (!c) return;
+    const prev = hwPos[id]; hwPos[id] = x;
+    if (id === 'xf') markHw(x);
+    if (!c.get) return c.set(x);
+    const cur = c.get();
+    if (Math.abs(x - cur) < 0.06 || (prev != null && (prev - cur) * (x - cur) <= 0)) c.set(x);
+  }
+  function markHw(x) {
+    const m = $('#xfHw'); if (!m) return;
+    m.style.left = x * 100 + '%'; m.classList.toggle('on', Math.abs(x - MIX.xf) > 0.06);
+  }
+
   // ---------------------------------------------------------------- Pioneer DDJ-200: mapeo por defecto
   // Mensajes según el mapeo publicado del DDJ-200 (Mixxx). Decks: canal 1 = A, canal 2 = B; pads en modo hot cue.
   let ddjOut = null;
@@ -857,7 +924,7 @@
   }
   function ddj(st, n, v) {
     const type = st & 0xf0, ch = st & 0x0f, on = type === 0x90 && v > 0, off = type === 0x80 || (type === 0x90 && v === 0);
-    const set = (id, x) => CTL[id] && CTL[id].set(VLL.clamp(x, 0, 1));
+    const set = (id, x) => soft(id, VLL.clamp(x, 0, 1));
     if (type === 0xb0) {
       if (ch === 6) {
         if (n === 0x1f) return set('xf', v / 127);                       // crossfader
@@ -880,8 +947,7 @@
       if (!on) return;
       if (n === 0x63) setFxToggle('view', FX.view ? 0 : 1);              // botón de auriculares master → VER EL CÓDIGO
       else if (n === 0x78) setFxToggle('black', FX.black ? 0 : 1);       // + SHIFT → NEGRO
-      else if (n === 0x59) auto();                                        // AUTO transición
-      else if (n === 0x5a) cut();                                         // CORTE
+      // 0x59 / 0x5A (botones sin identificar en el aparato real) ya no mueven el crossfader
       return;
     }
     if (ch >= 7 && ch <= 10) {                                            // pads
@@ -901,8 +967,8 @@
       case 0x0c: jumpAct(d, 0); break;                                    // CUE → primer acto
       case 0x47: freeze(d); break;                                        // SHIFT + PLAY → congelar
       case 0x48: firma(d); break;                                         // SHIFT + CUE → FIRMA
-      case 0x58: toggleLoop(d); break;                                    // BEAT SYNC → loop del acto
-      case 0x60: resizeLoop(d, 0.5); break;                               // SHIFT + SYNC → loop ÷2
+      case 0x58: sync(d); break;                                          // BEAT SYNC → tempo y compás del otro deck
+      case 0x60: toggleLoop(d); break;                                    // SHIFT + SYNC → loop del acto
       case 0x54: setFocus(id); break;                                     // auriculares del canal → foco
       case 0x68: resizeLoop(d, 2); break;                                 // SHIFT + auriculares → loop ×2
     }

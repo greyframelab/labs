@@ -162,6 +162,8 @@ main>*{background:var(--panel);min-height:0}
 .xf .ln{position:absolute;left:0;right:0;top:14px;height:1px;background:var(--line2)}
 .xf .tk{position:absolute;top:8px;width:1px;height:13px;background:var(--line2)}
 .xf .th{position:absolute;top:3px;width:16px;height:24px;transform:translateX(-8px);background:var(--tx);box-shadow:0 0 18px rgba(242,240,234,.25)}
+.xf .hw{position:absolute;top:0;width:2px;height:30px;transform:translateX(-1px);background:#FFB000;opacity:0;transition:opacity .2s}
+.xf .hw.on{opacity:.8}
 .xf .th::after{content:"";position:absolute;left:7px;top:4px;bottom:4px;width:2px;background:#000}
 .xctl{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center}
 .cut{border:1px solid var(--line2);padding:10px 14px;font-size:9px;letter-spacing:.28em;color:var(--tx);text-align:center;transition:all .12s}
@@ -287,13 +289,13 @@ body.learn [data-ctl].mapped::after{content:"";position:absolute;width:4px;heigh
   <div class="hp">
     <h3>ATAJOS · VØID_LOOM LIVE</h3>
     <div><span class="t">DECK CON FOCO</span>
-      <p><kbd>TAB</kbd>CAMBIAR DE DECK</p><p><kbd>1–8</kbd>SALTAR A UN ACTO</p><p><kbd>L</kbd>LOOP DEL ACTO</p><p><kbd>[</kbd><kbd>]</kbd>LOOP ÷2 / ×2</p><p><kbd>G</kbd>FIRMA · CIERRE</p></div>
+      <p><kbd>TAB</kbd>CAMBIAR DE DECK</p><p><kbd>1–8</kbd>SALTAR A UN ACTO</p><p><kbd>L</kbd>LOOP DEL ACTO</p><p><kbd>[</kbd><kbd>]</kbd>LOOP ÷2 / ×2</p><p><kbd>G</kbd>FIRMA · CIERRE</p><p><kbd>Y</kbd>SYNC CON EL OTRO DECK</p></div>
     <div><span class="t">INTERPRETAR</span>
       <p><kbd>S</kbd>STUTTER (MANTENER)</p><p><kbd>F</kbd>CONGELAR</p><p><kbd>R</kbd>REVERSA (MANTENER)</p><p><kbd>T</kbd>CINTA · FRENAR / ARRANCAR</p><p><kbd>Z</kbd><kbd>X</kbd><kbd>C</kbd>KILL GRAVES / MEDIOS / AGUDOS</p></div>
     <div><span class="t">MEZCLA E IMAGEN</span>
-      <p><kbd>ESPACIO</kbd>CORTE AL OTRO DECK</p><p><kbd>←</kbd><kbd>→</kbd>CROSSFADER</p><p><kbd>A</kbd>AUTO-TRANSICIÓN</p><p><kbd>Q</kbd>CUANTIZACIÓN</p><p><kbd>I</kbd>INVERTIR · <kbd>V</kbd>GLITCH · <kbd>B</kbd>NEGRO</p><p><kbd>O</kbd>STROBE · <kbd>E</kbd>ESPEJO</p><p><kbd>`</kbd>EDITOR DECK C · <kbd>K</kbd>VER CÓDIGO</p><p><kbd>⇧1–9</kbd>CARGAR PIEZA</p></div>
+      <p><kbd>ESPACIO</kbd>CORTE AL OTRO DECK</p><p><kbd>←</kbd><kbd>→</kbd>CROSSFADER</p><p><kbd>⇧A</kbd>AUTO-TRANSICIÓN</p><p><kbd>Q</kbd>CUANTIZACIÓN</p><p><kbd>I</kbd>INVERTIR · <kbd>V</kbd>GLITCH · <kbd>B</kbd>NEGRO</p><p><kbd>O</kbd>STROBE · <kbd>E</kbd>ESPEJO</p><p><kbd>`</kbd>EDITOR DECK C · <kbd>K</kbd>VER CÓDIGO</p><p><kbd>⇧1–9</kbd>CARGAR PIEZA</p></div>
     <div><span class="t">PIONEER DDJ-200 · POR DEFECTO</span>
-      <p><kbd>PADS</kbd>ACTOS 1–8</p><p><kbd>⇧ PADS</kbd>STUTTER · CONGELAR · REVERSA · CINTA · LOOP · ÷2 · ×2 · FIRMA</p><p><kbd>PLAY</kbd>CINTA · <kbd>⇧</kbd>CONGELAR</p><p><kbd>CUE</kbd>PRIMER ACTO · <kbd>⇧</kbd>FIRMA</p><p><kbd>SYNC</kbd>LOOP · <kbd>⇧</kbd>÷2</p><p><kbd>JOG</kbd>SCRATCH · <kbd>⇧</kbd>BÚSQUEDA</p><p><kbd>EQ · FADER · TEMPO</kbd>GRAV/MED/AGUD · VOLUMEN · VELOCIDAD</p><p><kbd>CFX</kbd>A FILTRO · B ESTELA ← → ESCANEO</p><p><kbd>AURICULARES</kbd>FOCO · MASTER: VER CÓDIGO</p></div>
+      <p><kbd>PADS</kbd>ACTOS 1–8</p><p><kbd>⇧ PADS</kbd>STUTTER · CONGELAR · REVERSA · CINTA · LOOP · ÷2 · ×2 · FIRMA</p><p><kbd>PLAY</kbd>CINTA · <kbd>⇧</kbd>CONGELAR</p><p><kbd>CUE</kbd>PRIMER ACTO · <kbd>⇧</kbd>FIRMA</p><p><kbd>SYNC</kbd>TEMPO Y COMPÁS DEL OTRO DECK · <kbd>⇧</kbd>LOOP</p><p><kbd>JOG</kbd>SCRATCH · <kbd>⇧</kbd>BÚSQUEDA</p><p><kbd>EQ · FADER · TEMPO</kbd>GRAV/MED/AGUD · VOLUMEN · VELOCIDAD</p><p><kbd>CFX</kbd>A FILTRO · B ESTELA ← → ESCANEO</p><p><kbd>AURICULARES</kbd>FOCO · MASTER: VER CÓDIGO</p></div>
   </div>
 </div>
 <div id="toast"></div>
