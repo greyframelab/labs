@@ -232,15 +232,18 @@
     for (const k in DECK) {
       const d = DECK[k], sc = d.aud && d.aud.sched;
       if (!sc) continue;
+      const s0 = sc.s, per = (sc.fwd ? Math.max(0.02, (s0.b - s0.a - sc.x) / sc.r) : Math.max(0.02, (s0.b - s0.a) / -sc.r)) * 1000;
+      while (sc.wrapW + per < VLL.now()) sc.wrapW += per;            // vueltas perdidas: se saltan, no se apilan
       while (sc.wrapW < horizon) {
-        const t = wallToCtx(sc.wrapW), s = sc.s;
+        let t = wallToCtx(sc.wrapW); const s = sc.s, late = Math.max(0, ctx.currentTime + 0.005 - t);
+        t += late;                                                    // si llega tarde, entra ya en su sitio, no en el pasado
         if (sc.fwd) {
-          const fade = Math.max(0.006, sc.x / sc.r);
-          const nv = voice(d, d.buf, s.a, t, sc.r, fade, sc.x > 0.02);
+          const fade = Math.max(0.006, sc.x / sc.r - late);
+          const nv = voice(d, d.buf, s.a + late * sc.r, t, sc.r, fade, sc.x > 0.02 && fade > 0.02);
           vOut(sc.cur, t, fade, sc.x > 0.02);
           sc.cur = nv; sc.wrapW += Math.max(0.02, (s.b - s.a - sc.x) / sc.r) * 1000;
         } else {
-          const nv = voice(d, d.rev, d.buf.duration - s.b, t, sc.r, 0.006, false);
+          const nv = voice(d, d.rev, d.buf.duration - s.b + late * -sc.r, t, -sc.r, 0.006, false);
           vOut(sc.cur, t, 0.006, false);
           sc.cur = nv; sc.wrapW += Math.max(0.02, (s.b - s.a) / -sc.r) * 1000;
         }
@@ -463,18 +466,20 @@
     DECK.A.aud.xf.gain.setValueAtTime(target ? 0 : 1, t); DECK.B.aud.xf.gain.setValueAtTime(target ? 1 : 0, t);
   }
   let autoAnim = null, autoDur = store.get('auto', 6);
-  function cancelAuto() { if (!autoAnim) return; cancelAnimationFrame(autoAnim.raf); autoAnim = null; $('#autoB').classList.remove('on'); }
+  function cancelAuto() { if (!autoAnim) return; autoAnim = null; $('#autoB').classList.remove('on'); }
   function auto() {
     if (autoAnim) return cancelAuto();
     cancelCut();
     const from = MIX.xf, to = MIX.onAir === 'A' ? 1 : 0, t0 = performance.now();
     $('#autoB').classList.add('on');
-    const step = () => {
-      const k = VLL.clamp((performance.now() - t0) / (autoDur * 1000), 0, 1), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
-      setXf(from + (to - from) * e);
-      if (k < 1) autoAnim.raf = requestAnimationFrame(step); else { autoAnim = null; $('#autoB').classList.remove('on'); }
-    };
-    autoAnim = { raf: requestAnimationFrame(step) };
+    autoAnim = { from, to, t0 };
+  }
+  function autoStep() {
+    if (!autoAnim) return;
+    const { from, to, t0 } = autoAnim;
+    const k = VLL.clamp((performance.now() - t0) / (autoDur * 1000), 0, 1), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+    setXf(from + (to - from) * e);
+    if (k >= 1) { autoAnim = null; $('#autoB').classList.remove('on'); }
   }
   const anyHold = () => Object.values(DECK).some((d) => d.slip);
 
@@ -854,7 +859,7 @@
   }
   function tick() {
     requestAnimationFrame(tick);
-    flush(); sendBands(); ddjLeds(); apTick();
+    sendBands();
     for (const k in DECK) {
       const d = DECK[k]; if (!d.ui) continue;
       drawStrip(d);
@@ -1085,6 +1090,8 @@
     applyXfAudio();
     $('#stAud').textContent = (ctx.sampleRate / 1000).toFixed(1) + ' kHz'; $('#ledAud').className = 'led on';
     setInterval(schedTick, 40);
+    // con audio sonando, Chrome no frena los temporizadores de la pestaña aunque quede detrás de la salida
+    setInterval(() => { autoStep(); apTick(); flush(); ddjLeds(); }, 30);
     initMidi();
     log('BUSCANDO PIEZAS VØID_LOOM…');
     let items = [];
