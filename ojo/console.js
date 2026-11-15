@@ -15,14 +15,16 @@
   try {
     const sv = JSON.parse(localStorage.getItem(KEY) || 'null');
     if (sv) {
-      ['mode', 'analysis', 'bloom', 'grain', 'ca', 'mirror', 'contactSens', 'device', 'res'].forEach((k) => { if (sv[k] != null) S[k] = sv[k]; });
+      // v2: el bloom, el grano y la aberración bajaron; los ajustes guardados antes vuelven al nuevo valor
+      const keys = sv.v >= 2 ? ['mode', 'analysis', 'bloom', 'grain', 'ca', 'mirror', 'contactSens', 'device', 'res'] : ['mode', 'analysis', 'mirror', 'contactSens', 'device', 'res'];
+      keys.forEach((k) => { if (sv[k] != null) S[k] = sv[k]; });
       if (sv.p) OJO.MODES.forEach((m) => { if (Array.isArray(sv.p[m.id]) && sv.p[m.id].length === m.params.length) S.p[m.id] = sv.p[m.id]; });
       if (sv.acc) OJO.MODES.forEach((m) => { if (OJO.ACCENTS[sv.acc[m.id]]) S.acc[m.id] = sv.acc[m.id]; });
       if (sv.quality) quality = sv.quality;
     }
   } catch (e) {}
   S.freeze = false; S.black = false; S.firma = 0; S.trail = null;
-  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(Object.assign({}, S, { quality, firma: 0 }))); } catch (e) {} };
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(Object.assign({}, S, { quality, firma: 0, v: 2 }))); } catch (e) {} };
 
   const prev = $('prev');
   const rt = OJO.runtime(prev);
@@ -92,9 +94,9 @@
   }
   const gl = $('gList');
   const gShows = [
-    slider(gl, 'BLOOM', () => S.bloom, (v) => (S.bloom = v), { reset: 0.6 }),
-    slider(gl, 'GRANO', () => S.grain, (v) => (S.grain = v), { reset: 0.25 }),
-    slider(gl, 'ABERRACIÓN', () => S.ca, (v) => (S.ca = v), { reset: 0.3 }),
+    slider(gl, 'BLOOM', () => S.bloom, (v) => (S.bloom = v), { reset: 0.3 }),
+    slider(gl, 'GRANO', () => S.grain, (v) => (S.grain = v), { reset: 0.22 }),
+    slider(gl, 'ABERRACIÓN', () => S.ca, (v) => (S.ca = v), { reset: 0.25 }),
     slider(gl, 'CONTACTO', () => S.contactSens, (v) => (S.contactSens = v), { reset: 0.5 }),
   ];
 

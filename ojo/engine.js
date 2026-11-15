@@ -21,7 +21,7 @@
       params: [['orbita', 'ÓRBITA', 0.4], ['relieve', 'RELIEVE', 0.55], ['densidad', 'DENSIDAD', 0.65], ['sonar', 'SONAR', 0.5]] },
     { id: 'bordes', name: 'BORDES', accent: 'blanco', trail: 0.35,
       idea: 'Solo contornos, y los puntos que usa para seguirte.',
-      params: [['umbral', 'UMBRAL', 0.25], ['puntos', 'PUNTOS CLAVE', 0.6], ['fondo', 'FONDO', 0.12], ['grosor', 'GROSOR', 0.4]] },
+      params: [['umbral', 'UMBRAL', 0.3], ['puntos', 'PUNTOS CLAVE', 0.4], ['fondo', 'FONDO', 0.12], ['grosor', 'GROSOR', 0.4]] },
     { id: 'flujo', name: 'FLUJO', accent: 'violeta', trail: 0.82,
       idea: 'Lo quieto desaparece. Lo que se mueve deja corrientes.',
       params: [['arrastre', 'ARRASTRE', 0.55], ['cantidad', 'PARTÍCULAS', 0.7], ['fantasma', 'FANTASMA', 0.25], ['turbulencia', 'TURBULENCIA', 0.3]] },
@@ -46,7 +46,7 @@
       p: {}, acc: {},
       analysis: 2,          // 0 nada · 1 geometría · 2 geometría + datos
       trail: null,          // null = la del modo
-      bloom: 0.6, grain: 0.25, ca: 0.3,
+      bloom: 0.3, grain: 0.22, ca: 0.25,
       mirror: true, freeze: false, black: false,
       contactSens: 0.5,
       firma: 0,             // instante (reloj compartido, ms) en que arrancó la firma; 0 = no
@@ -213,7 +213,7 @@ void main(){
   float zs = mix(-1.2, 1.2, ph) * rel * .7;
   float ring = exp(-pow((p.z - zs) / (.018 + .03 * uP.w), 2.)) * smoothstep(0., .1, ph) * smoothstep(1., .85, ph);
   float base = .025 + F.r * .75 + L.r * .1;
-  vCol = vec3(.93, .92, .9) * base * .45 + uAcc * ring * (.35 + F.r * 1.6 + L.r * .4) + uAcc * fm * (.12 + .25 * F.r) + uAcc * uContact * fm * 1.2;
+  vCol = vec3(.93, .92, .9) * base * .45 + uAcc * ring * (.35 + F.r * 1.6 + L.r * .4) + uAcc * fm * (.12 + .25 * F.r) + uAcc * uContact * fm * .45;
   vCol *= 1. - uContact * (1. - fm) * .75;
   gl_PointSize = uPx * (dist / z) * (1. + ring * 1.4);
 }`;
@@ -241,9 +241,9 @@ void main(){
   float thr = .08 + uP.x * .45;
   float e = smoothstep(thr, thr + .35, s0.x) * thin;
   vec4 F = texture(uFeat, cuv);
-  vec3 col = vec3(.94, .93, .9) * e * .7;
-  col = mix(col, uAcc * 1.4 * e, smoothstep(.1, .6, F.a));
-  col += uAcc * e * faceMask(vUV) * .6;
+  vec3 col = vec3(.94, .93, .9) * e * .5;
+  col = mix(col, uAcc * .9 * e, smoothstep(.1, .6, F.a));
+  col += uAcc * e * faceMask(vUV) * .35;
   col += cam(cuv) * uP.z * uP.z * .3;
   // puntos clave: cruz fina en el máximo de cada celda
   vec2 kc = cuv * uKeyRes;
@@ -258,7 +258,7 @@ void main(){
     float cross = (step(abs(dd.x), .6) + step(abs(dd.y), .6)) * step(max(abs(dd.x), abs(dd.y)), s) * step(1.5, max(abs(dd.x), abs(dd.y)));
     kp = max(kp, cross * on);
   }
-  col += uAcc * kp * 1.1;
+  col += uAcc * kp * .7;
   col *= 1. - uContact * (1. - faceMask(vUV)) * .7;
   o = vec4(col, 1.);
 }`;
@@ -349,7 +349,7 @@ void main(){
   vec3 col = ink * glyph * (.045 + v * .95);
   col = mix(col, uAcc * glyph * (.25 + v * 1.4), clamp(smoothstep(.15, .6, F.r) * .7 + F.a * .8 + fm * .6, 0., 1.));
   col *= 1. - uContact * (1. - fm) * .75;
-  col += uAcc * glyph * uContact * fm * .8;
+  col += uAcc * glyph * uContact * fm * .35;
   o = vec4(col, 1.);
 }`;
 
@@ -368,7 +368,7 @@ void main(){
   float line = (1. - clamp(d, 0., 1.)) * smoothstep(.3, .55, s);
   col += mix(vec3(.9) * .08, uAcc * .95, smoothstep(.45, .95, s)) * line;
   col += uAcc * pow(s, 3.) * uP.w * .45;
-  col += uAcc * faceMask(vUV) * .12 * (1. + uContact * 2.);
+  col += uAcc * faceMask(vUV) * .04 * (1. + uContact);
   float fm = faceMask(vUV);
   col *= 1. - uContact * (1. - fm) * .7;
   o = vec4(col, 1.);
@@ -483,7 +483,7 @@ void main(){
     c = mix(c, pc, uTransK);
   }
   vec4 ov = texture(uOver, uv);
-  c += ov.rgb * ov.a * uOverK * 1.25;
+  c += ov.rgb * ov.a * uOverK;
   c *= 1. - uStingK;
   vec4 st = texture(uSting, uv);
   c += st.rgb * st.a * 1.15;
@@ -497,7 +497,7 @@ void main(){
   c += texture(uSrc, vUV + uTx * vec2(-1, -1)).rgb + texture(uSrc, vUV + uTx * vec2(1, -1)).rgb
      + texture(uSrc, vUV + uTx * vec2(-1, 1)).rgb + texture(uSrc, vUV + uTx * vec2(1, 1)).rgb;
   c /= 8.;
-  if (uFirst > .5) { float l = max(c.r, max(c.g, c.b)); c *= smoothstep(.12, .7, l); }
+  if (uFirst > .5) { float l = max(c.r, max(c.g, c.b)); c *= smoothstep(.45, 1.1, l); }
   o = vec4(c, 1.);
 }`;
   const FS_UP = `#version 300 es
@@ -518,7 +518,7 @@ void main(){
   vec2 dc = uv - .5;
   vec2 ca = dc * (.0025 + uCA * .006) * (.4 + dot(dc, dc) * 2.);
   vec3 c = vec3(texture(uComp, uv + ca).r, texture(uComp, uv).g, texture(uComp, uv - ca).b);
-  c += texture(uBloom, uv).rgb * (uBloomK * 1.4 + uContact * .5);
+  c += texture(uBloom, uv).rgb * uBloomK * .9;
   c = aces(c * 1.05);
   c *= 1. - smoothstep(.35, 1.15, length(dc * vec2(1., .85))) * .55;
   float l = dot(c, vec3(.299, .587, .114));
@@ -721,10 +721,29 @@ void main(){
     let pendingCapture = null;
 
     const cover = new Float32Array(4);
+    // encuadre: "cover" de la cámara + acercamiento lento a la cara durante el CONTACTO (la máquina se inclina hacia ti)
+    let zoomK = 0, fcx = 0.5, fcy = 0.5, coverDy = 0;
     function computeCover() {
       const A2 = W / H, a = camW / camH || 16 / 9;
-      if (A2 > a) { cover[0] = 1; cover[1] = a / A2; } else { cover[0] = A2 / a; cover[1] = 1; }
-      cover[2] = (1 - cover[0]) / 2; cover[3] = (1 - cover[1]) / 2;
+      let sx, sy;
+      if (A2 > a) { sx = 1; sy = a / A2; } else { sx = A2 / a; sy = 1; }
+      const ox = (1 - sx) / 2, oy = (1 - sy) / 2;
+      const f = vis.focus;
+      const target = f && (vis.contact || 0) > 0.25 ? 1 : 0;
+      zoomK += (target - zoomK) * (target ? 0.012 : 0.03);
+      if (f) {
+        const cu = S.mirror ? 1 - f[0] : f[0], cvu = 1 - f[1];
+        fcx += ((cu - ox) / sx - fcx) * 0.08; fcy += ((cvu - oy) / sy - fcy) * 0.08;
+      }
+      const z = 1 + 0.42 * (zoomK * zoomK * (3 - 2 * zoomK));
+      const k = Math.min(1, zoomK * 1.2);
+      // centro de la vista: hacia la cara, sin salirse de la imagen
+      let cx = 0.5 + (fcx - 0.5) * k, cy = 0.5 + (fcy - 0.5) * k;
+      const hw = 0.5 / z;
+      cx = Math.max(hw, Math.min(1 - hw, cx)); cy = Math.max(hw, Math.min(1 - hw, cy));
+      cover[0] = sx / z; cover[1] = sy / z;
+      cover[2] = (cx - hw) * sx + ox; cover[3] = (cy - hw) * sy + oy;
+      coverDy = 1 - cover[3] - cover[1];   // desplazamiento vertical en coordenadas hacia abajo
     }
 
     // uniformes comunes de los pases de modo
@@ -892,7 +911,7 @@ void main(){
       // final
       pr = use(P.final); target(null);
       bindT(pr, 'uComp', R.comp.t); bindT(pr, 'uBloom', R.bl[0].t);
-      u2(pr, 'uRes', W, H); u1(pr, 'uBloomK', S.bloom); u1(pr, 'uGrain', S.grain); u1(pr, 'uCA', S.ca + (vis.contact || 0) * 0.4); u1(pr, 'uFrame', frame);
+      u2(pr, 'uRes', W, H); u1(pr, 'uBloomK', S.bloom); u1(pr, 'uGrain', S.grain); u1(pr, 'uCA', S.ca + (vis.contact || 0) * 0.15); u1(pr, 'uFrame', frame);
       u1(pr, 'uContact', vis.contact || 0); u1(pr, 'uT', t);
       quad();
     }
@@ -922,13 +941,14 @@ void main(){
       markOverlay() { overDirty = true; },
       // imagen (u,v ∈ 0..1, v hacia abajo, sin espejo) → píxeles del lienzo
       toImage(x, y) {
-        const uu = (x / W) * cover[0] + cover[2], v = (y / H) * cover[1] + cover[3];
+        const uu = (x / W) * cover[0] + cover[2], v = (y / H) * cover[1] + coverDy;
         return [S.mirror ? 1 - uu : uu, v];
       },
       get energy() { return energy; },
+      get zoom() { return zoomK; },
       toScreen(u, v) {
         const uu = S.mirror ? 1 - u : u;
-        return [((uu - cover[2]) / cover[0]) * W, ((v - cover[3]) / cover[1]) * H];
+        return [((uu - cover[2]) / cover[0]) * W, ((v - coverDy) / cover[1]) * H];
       },
       capture() { return new Promise((res) => { pendingCapture = res; }); },
       resize(w, h) { canvas.width = w; canvas.height = h; allocRender(w, h); },

@@ -66,7 +66,7 @@
           let model = visionOn ? V.update(now, eng, S) : remote;
           if (!visionOn && remote && now - remoteAt > 4000) model = null;
           // cara principal para los modos: la que tiene contacto o la más grande
-          let face = null;
+          let face = null, focus = null;
           if (model && model.subjects && model.subjects.length) {
             let best = null;
             model.subjects.forEach((s) => { if ((s.gone || 0) > 0.5) return; const sc = s.box[2] * s.box[3] + (s.contact || 0) * 10; if (!best || sc > best.sc) best = { s, sc }; });
@@ -76,9 +76,10 @@
               const q = eng.toScreen(b[0] + b[2], b[1]);
               const r = Math.abs(q[0] - p[0]) / H * 1.5;
               face = [p[0] / W, 1 - p[1] / H, r];
+              focus = [b[0] + b[2] / 2, b[1] + b[3] * 0.45];
             }
           }
-          eng.setVision({ face, contact: model ? model.contact || 0 : 0 });
+          eng.setVision({ face, focus, contact: model ? model.contact || 0 : 0 });
           OJO.drawAnalysis(eng, model, S, wall, OJO.ACCENTS[S.acc[S.mode]] || '#F2F0EA');
           eng.frame(wall, now / 1000);
           if (self.onFrame) self.onFrame(now, model);
