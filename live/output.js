@@ -117,18 +117,33 @@
   in vec2 uv; out vec4 o;
   uniform sampler2D A0, A1, B0, B1, FB;
   uniform float aw, bw, ga, gb, fa, fb, trail, flash, split, inv, black, bright, time, aspect, glitch;
-  uniform float env, punch, lens, mosaic, tint, mirror, strobe;
+  uniform float env, punch, lens, mosaic, tint, mirror, strobe, up;
   uniform vec3 tintC;
   vec2 LC = vec2(0.);   // aberración radial de la lente
   float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float n2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f);
     return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
   float fbm(vec2 p){ float s = 0., a = .5; for (int i = 0; i < 4; i++) { s += a*n2(p); p *= 2.03; a *= .5; } return s; }
+  // escalado nítido (Catmull-Rom, 5 lecturas) cuando la pieza se pinta a menos resolución que la salida
+  vec3 cr(sampler2D t, vec2 q){
+    vec2 ts = vec2(textureSize(t, 0)), sp = q * ts, tc = floor(sp - .5) + .5, f = sp - tc;
+    vec2 w0 = f * (-.5 + f * (1. - .5 * f)), w1 = 1. + f * f * (-2.5 + 1.5 * f), w2 = f * (.5 + f * (2. - 1.5 * f)), w3 = f * f * (-.5 + .5 * f);
+    vec2 w12 = w1 + w2, t0 = (tc - 1.) / ts, t3 = (tc + 2.) / ts, t12 = (tc + w2 / w12) / ts;
+    vec3 c = texture(t, vec2(t12.x, t0.y)).rgb * w12.x * w0.y
+           + texture(t, vec2(t0.x, t12.y)).rgb * w0.x * w12.y + texture(t, t12).rgb * w12.x * w12.y + texture(t, vec2(t3.x, t12.y)).rgb * w3.x * w12.y
+           + texture(t, vec2(t12.x, t3.y)).rgb * w12.x * w3.y;
+    return max(c / (w12.x * w0.y + w0.x * w12.y + w12.x * w12.y + w3.x * w12.y + w12.x * w3.y), 0.);
+  }
+  vec3 tx(sampler2D t, vec2 q){ return up > .5 ? cr(t, q) : texture(t, q).rgb; }
+  vec3 tap1(sampler2D t, vec2 q, vec2 dx){
+    if (dot(dx, dx) < 1e-10) return tx(t, q);
+    return vec3(texture(t, q+dx).r, tx(t, q).g, texture(t, q-dx).b);
+  }
   vec3 tap(sampler2D t0, sampler2D t1, float w, vec2 q){
     vec2 dx = vec2(split*.012, 0.) + LC;
-    vec3 c0 = vec3(texture(t0, q+dx).r, texture(t0, q).g, texture(t0, q-dx).b);
+    vec3 c0 = tap1(t0, q, dx);
     if (w <= 0.) return c0;
-    vec3 c1 = vec3(texture(t1, q+dx).r, texture(t1, q).g, texture(t1, q-dx).b);
+    vec3 c1 = tap1(t1, q, dx);
     return mix(c0, c1, w);
   }
   // un deck: si está congelado (f>0) se deshace en polvo hacia arriba según su peso
@@ -244,7 +259,7 @@
   const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
   gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-  const U = {}; ['A0', 'A1', 'B0', 'B1', 'FB', 'aw', 'bw', 'ga', 'gb', 'fa', 'fb', 'trail', 'flash', 'split', 'inv', 'black', 'bright', 'time', 'aspect', 'glitch', 'env', 'punch', 'lens', 'mosaic', 'tint', 'mirror', 'strobe', 'tintC'].forEach((n) => (U[n] = gl.getUniformLocation(P, n)));
+  const U = {}; ['A0', 'A1', 'B0', 'B1', 'FB', 'aw', 'bw', 'ga', 'gb', 'fa', 'fb', 'trail', 'flash', 'split', 'inv', 'black', 'bright', 'time', 'aspect', 'glitch', 'env', 'punch', 'lens', 'mosaic', 'tint', 'mirror', 'strobe', 'tintC', 'up'].forEach((n) => (U[n] = gl.getUniformLocation(P, n)));
   const UB = {}; ['S', 'H', 'scan', 'head', 'OV', 'ovOp', 'GA', 'TX', 'maq', 'mt', 'menv', 'mlen', 'mrows', 'mlod', 'mres', 'macc', 'moff'].forEach((n) => (UB[n] = gl.getUniformLocation(PB, n)));
   function tex() { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
@@ -361,14 +376,14 @@
       else if (a.rate !== b.rate || a.ramp) CL.trace(tstr(), 'deck', `${k} · rate = ${a.ramp ? 'cinta → ' + a.ramp.to.toFixed(2) : (+a.rate).toFixed(2)}`);
     }
   }
-  // VER CÓDIGO · ALTERNAR: pasa de PANTALLA a VENTANA y vuelta (nunca las dos), cada 7–16 s, siempre en un golpe
+  // VER CÓDIGO · ALTERNAR: va pasando entre PANTALLA, VENTANA y MÁQUINA (nunca dos a la vez), cada 6–12 s, en un golpe
   const ALT = { m: 'full', until: 0, k: 1, want: 1 };
   function viewModeNow(now, env) {
     if (FX.viewMode !== 'alt') { ALT.until = 0; ALT.k = 1; ALT.want = 1; return FX.viewMode; }
-    if (!ALT.until) ALT.until = now + 7000 + Math.random() * 9000;
-    if (ALT.want && now > ALT.until && (env > 0.35 || now > ALT.until + 4000)) ALT.want = 0;
+    if (!ALT.until) ALT.until = now + 3000 + Math.random() * 2000;
+    if (ALT.want && now > ALT.until && (env > 0.35 || now > ALT.until + 1500)) ALT.want = 0;
     ALT.k += (ALT.want - ALT.k) * (ALT.want ? 0.12 : 0.3);
-    if (!ALT.want && ALT.k < 0.02) { ALT.m = ALT.m === 'full' ? 'win' : 'full'; ALT.want = 1; ALT.until = now + 7000 + Math.random() * 9000; }
+    if (!ALT.want && ALT.k < 0.02) { const o = ['full', 'win', 'maq'].filter((m) => m !== ALT.m); ALT.m = o[Math.random() < 0.5 ? 0 : 1]; ALT.want = 1; ALT.until = now + 6000 + Math.random() * 6000; }
     return ALT.m;
   }
   let maqS = 0, maqOff = 0, maqHit = false;
@@ -412,6 +427,7 @@
     gl.uniform1f(U.env, env); gl.uniform1f(U.punch, FX.punch || 0); gl.uniform1f(U.lens, FX.lens || 0); gl.uniform1f(U.mosaic, FX.mosaic || 0);
     gl.uniform1f(U.tint, FX.tint || 0); gl.uniform1f(U.mirror, FX.mirror || 0); gl.uniform1f(U.strobe, FX.strobe ? 1 : 0);
     gl.uniform3fv(U.tintC, hex(FX.tintC));
+    gl.uniform1f(U.up, (MIX.quality || 1) < 0.99 ? 1 : 0);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     // deck C: el shader en directo se aplica sobre la imagen compuesta (solo si está activo)
     let fin = dst;
@@ -437,7 +453,7 @@
     const vMode = viewModeNow(now, env), isMaq = vMode === 'maq';
     if (viewOn && !isMaq) CL.draw(viewData(env, vMode), now);
     // VISTA MÁQUINA: entra y sale con un fundido corto; apagada no cuesta nada
-    maqS += ((viewOn && isMaq ? Math.min(1, FX.viewOp / 0.85) : 0) - maqS) * 0.14;
+    maqS += ((viewOn && isMaq ? Math.min(1, FX.viewOp / 0.85) * ALT.k : 0) - maqS) * 0.14;
     if (maqS < 0.002) maqS = 0;
     if (maqS > 0) {
       const api = D[MIX.onAir].api; CL.machineSrc(api && api.src);
