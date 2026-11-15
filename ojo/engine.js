@@ -30,7 +30,7 @@
       params: [['celda', 'TAMAÑO', 0.35], ['contraste', 'CONTRASTE', 0.55], ['reescritura', 'REESCRITURA', 0.6], ['lectura', 'VELOCIDAD', 0.35]] },
     { id: 'atencion', name: 'ATENCIÓN', accent: 'ambar', trail: 0.3,
       idea: 'Un mapa de lo que le interesa, con isolíneas.',
-      params: [['niveles', 'ISOLÍNEAS', 0.35], ['foco', 'FOCO', 0.6], ['fondo', 'FONDO', 0.45], ['calor', 'CALOR', 0.4]] },
+      params: [['niveles', 'ISOLÍNEAS', 0.3], ['foco', 'FOCO', 0.55], ['fondo', 'FONDO', 0.6], ['calor', 'CALOR', 0.35]] },
     { id: 'neuronas', name: 'NEURONAS', accent: 'rojo', trail: 0.15,
       idea: 'Cada casilla es un filtro de la red viéndote a su manera.',
       params: [['capas', 'CASILLAS', 0.35], ['ganancia', 'GANANCIA', 0.55], ['zoom', 'ZOOM', 0], ['frecuencia', 'FRECUENCIA', 0.45]] },
@@ -308,7 +308,7 @@ void main(){
   float mot = texture(uFeat, cuv).a;
   vec3 c = mix(vec3(.9, .9, .88) * .35, uAcc * 1.5, smoothstep(.3, 2.5, sp));
   float fm = 0.; if (uFace.z > 0.) fm = smoothstep(uFace.z * .8, uFace.z * .3, length((s.xy - uFace.xy) * vec2(uRes.x / uRes.y, 1.)));
-  vCol = c * fade * (.25 + mot * 1.2 + sp * .2) * (1. + fm * uContact * 2.);
+  vCol = c * fade * (.16 + mot * .7 + min(sp, 4.) * .1) * (1. + fm * uContact * 2.);
   gl_Position = vec4(s.xy * 2. - 1., 0., 1.);
   gl_PointSize = uPx * (1. + smoothstep(.5, 4., sp));
 }`;
@@ -334,7 +334,7 @@ void main(){
   vec4 L = texture(uLuma, cuv), F = texture(uFeat, cuv);
   float ch = floor(texture(uChars, (cell + .5) / uGridC).r * 255. + .5);
   // reescritura: donde te mueves el código cambia a hexadecimal cada pocos frames
-  float rw = F.a * (.2 + uP.z * 1.2);
+  float rw = F.a * (.05 + uP.z * .6);
   float tick = floor(uT * (8. + 22. * uP.z));
   if (h1(cell + tick) < rw) { ch = 48. + floor(h1(cell * 1.3 + tick) * 16.); if (ch > 57.) ch += 7.; }
   float g = clamp(ch - 32., 0., 95.);
@@ -360,14 +360,15 @@ void main(){
   s = clamp(s, 0., 1.);
   float sf = pow(s, 1.0 + uP.y * 2.);
   float lum = dot(cam(cuv), vec3(.299, .587, .114));
-  vec3 col = vec3(lum) * (uP.z * .55) * (.12 + .88 * sf);
+  vec3 col = vec3(lum) * (uP.z * .6) * (.2 + .8 * sf);
   // isolíneas
   float lv = 3. + floor(uP.x * 10.);
   float f = s * lv;
   float d = abs(fract(f + .5) - .5) / max(fwidth(f), 1e-4);
-  float line = (1. - clamp(d, 0., 1.)) * smoothstep(.22, .45, s);
-  col += mix(vec3(.9) * .12, uAcc * 1.1, smoothstep(.35, .9, s)) * line;
-  col += uAcc * pow(s, 3.) * uP.w * .6;
+  float line = (1. - clamp(d, 0., 1.)) * smoothstep(.3, .55, s);
+  col += mix(vec3(.9) * .08, uAcc * .95, smoothstep(.45, .95, s)) * line;
+  col += uAcc * pow(s, 3.) * uP.w * .45;
+  col += uAcc * faceMask(vUV) * .12 * (1. + uContact * 2.);
   float fm = faceMask(vUV);
   col *= 1. - uContact * (1. - fm) * .7;
   o = vec4(col, 1.);
@@ -418,6 +419,7 @@ void main(){
   int k = int(cell.y * N + cell.x);
   vec2 cuv = C(lc);
   float a = act(k, cuv) * (.3 + uP.y * 1.4);
+  a = 1.6 * (1. - exp(-a * 1.1));   // compresión: ninguna casilla se quema
   float pulse = (float(k) == uFocus) ? 1. : 0.;
   vec3 col = uAcc * smoothstep(.02, .8, a) * .85 + vec3(1., .97, .94) * smoothstep(.85, 1.8, a) * .8;
   col *= .55 + .45 * pulse + uEnergy * .3;
@@ -451,7 +453,7 @@ void main(){
   float a = mod(uHead - l0 + uLayers * 2., uLayers), b = mod(uHead - l0 - 1. + uLayers * 2., uLayers);
   vec3 c = mix(texture(uHist, vec3(cuv, a)).rgb, texture(uHist, vec3(cuv, b)).rgb, fr);
   float lum = dot(c, vec3(.299, .587, .114));
-  float k = .7 + uP.w * 1.6;
+  float k = .8 + uP.w * 1.2;
   lum = pow(clamp(lum, 0., 1.), k);
   vec3 col = mix(vec3(lum) * vec3(.95, .93, .9), c, uP.z * .25) * .62;
   col = mix(col, uAcc * lum * 1.6, smoothstep(.35, 1., d) * uP.z);

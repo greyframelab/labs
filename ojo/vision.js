@@ -86,7 +86,7 @@
           best.dist = f.distance || null; best.score = f.score || 0;
           // ¿me está mirando?
           const s = S.contactSens != null ? S.contactSens : 0.5;
-          const look = Math.abs(best.yaw) < 0.12 + 0.3 * s && Math.abs(best.pitch) < 0.16 + 0.3 * s && best.gaze[1] < 0.18 + 0.4 * s;
+          const look = Math.abs(best.yaw) < 0.08 + 0.22 * s && Math.abs(best.pitch) < 0.12 + 0.26 * s && best.gaze[1] < 0.14 + 0.32 * s;
           best.contactT = look ? best.contactT + 1 / 60 : Math.max(0, best.contactT - 3 / 60);
         }
       }
