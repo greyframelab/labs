@@ -176,5 +176,43 @@ void main(){ vec3 base = img(uv); o = vec4(mix(base, code(uv), mezcla), 1.); }`;
     g.fillStyle = 'rgba(242,240,234,0.45)'; g.fillText('PS C:\\VØID_LOOM> ', x0 + pad, y);
     if (Math.floor(tnow / 530) % 2 === 0) { g.fillStyle = acc; g.fillRect(x0 + pad + cw * 18, y + 2, cw * 0.9, fs); }
   }
-  return { compile, pass, C, draw, tex, trace };
+  // ---- modo MÁQUINA: la imagen leída como la ve la máquina, escrita con el código real de la pieza.
+  // Atlas de glifos + el programa como texto en una textura; lo dibuja el paso final de la salida (GPU).
+  const GL = ' ' + Array.from({ length: 94 }, (_, i) => String.fromCharCode(33 + i)).join('') + 'ØáéíóúñÁÉÍÓÚÑ·×→←½ΘΔλ∑√∞≈≠≤≥';
+  const GMAP = new Map([...GL].map((c, i) => [c, i]));
+  const AW = 40, AH = 64;
+  const ac = document.createElement('canvas'); ac.width = AW * 16; ac.height = AH * 8;
+  const ax = ac.getContext('2d');
+  const atlas = gl.createTexture();
+  function drawAtlas() {
+    ax.fillStyle = '#000'; ax.fillRect(0, 0, ac.width, ac.height);
+    ax.fillStyle = '#fff'; ax.textAlign = 'center'; ax.textBaseline = 'middle'; ax.font = `500 ${Math.round(AH * 0.74)}px ${F}`;
+    [...GL].forEach((c, i) => { if (i < 128) ax.fillText(c, (i % 16) * AW + AW / 2, Math.floor(i / 16) * AH + AH * 0.54); });
+    gl.bindTexture(gl.TEXTURE_2D, atlas);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, ac.width, ac.height, 0, gl.RED, gl.UNSIGNED_BYTE, ac);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  }
+  drawAtlas();
+  if (document.fonts) document.fonts.ready.then(drawAtlas);
+  const text = gl.createTexture();
+  const M = { atlas, text, len: 1, src: null, aw: AW, ah: AH };
+  function machineSrc(lines) {
+    if (lines === M.src) return;
+    M.src = lines;
+    const str = ((lines && lines.length ? lines.join(' ') : 'VØID_LOOM renderFrame(t, frame) VL.post(out, frame, { bloom, flash })').replace(/\s+/g, ''));
+    const n = Math.max(1, str.length), w = 1024, h = Math.ceil(n / w), a = new Uint8Array(w * h);
+    let i = 0; for (const c of str) { if (i >= n) break; a[i++] = GMAP.get(c) ?? GMAP.get('·'); }
+    M.len = i || 1;
+    gl.bindTexture(gl.TEXTURE_2D, text);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false); gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, w, h, 0, gl.RED, gl.UNSIGNED_BYTE, a);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  }
+  machineSrc(null);
+  return { compile, pass, C, draw, tex, trace, M, machineSrc };
 };

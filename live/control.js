@@ -928,7 +928,7 @@
       case 'KeyB': setFxToggle('black', FX.black ? 0 : 1); break;
       case 'KeyO': setFxToggle('strobe', FX.strobe ? 0 : 1); break;
       case 'KeyP': apToggle(); break;
-      case 'KeyK': if (e.shiftKey) { CTL.viewMode.press(); toast('VER CÓDIGO · ' + (FX.viewMode === 'win' ? 'VENTANA' : 'PANTALLA')); } else setFxToggle('view', FX.view ? 0 : 1); break;
+      case 'KeyK': if (e.shiftKey) { CTL.viewMode.press(); toast('VER CÓDIGO · ' + ({ full: 'PANTALLA', win: 'VENTANA', alt: 'ALTERNAR', maq: 'MÁQUINA' }[FX.viewMode] || FX.viewMode)); } else setFxToggle('view', FX.view ? 0 : 1); break;
       case 'Backquote': VLC.openEditor && VLC.openEditor(); break;
       case 'KeyE': CTL.mirror.press(); toast('ESPEJO · ' + ['OFF', 'HORIZONTAL', 'CUADRANTES', 'CALEIDOSCOPIO'][FX.mirror]); break;
       case 'Escape': if (VLC.isOpen && VLC.isOpen()) VLC.closeEditor(); else if (learn) toggleLearn(); break;
