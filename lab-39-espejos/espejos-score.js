@@ -58,6 +58,6 @@
 
   // warp: dentro de un stutter, el tiempo vuelve una y otra vez al principio del trozo
   function warp(t) { for (const x of X) if (t >= x.t && t < x.t + x.len) return x.t + ((t - x.t) % x.div); return t; }
-  const LOOPS = [[0, 2 * BAR], [T.rupt + BAR, T.rupt + 3 * BAR]];
+  const LOOPS = [[T.rupt + BAR, T.rupt + 3 * BAR]];   // REFLEJO: dos compases idénticos, cámara y muro periódicos en 5 s
   root.EDD = { T, EV: ev, X, warp, LOOPS, BARS };
 })(typeof window !== 'undefined' ? window : globalThis);

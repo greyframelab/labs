@@ -393,8 +393,12 @@ canvas{width:100vw;height:100vh;display:block}
 
   const ofV = (v) => EV.filter((x) => x.v === v);
   const KS = ofV("K"), SN = ofV("S"), HS = ofV('h'), GS = ofV('G'), BS = ofV('B');
-  const recent = (arr, t, n, maxAge) => { const o = []; for (const x of arr) { if (x.t > t) break; if (t - x.t < maxAge) o.push(x); } return o.slice(-n); };
-  function twist(t) { let v = 0, tp = 0, tg = 0; for (const x of BS) { if (x.t > t) break; v += (tg - v) * (1 - Math.exp(-(x.t - tp) / 0.3)); tp = x.t; tg = x.note * 0.35; } return v + (tg - v) * (1 - Math.exp(-(t - tp) / 0.3)); }
+  // en las zonas de loop, lo que precede al inicio es lo mismo que precede al final: así la vuelta del directo no salta
+  const LP = Z.LOOPS;
+  const seam = (arr, t) => { for (const [a, b] of LP) if (t >= a && t < a + 3) { const L = b - a;
+      return arr.filter((x) => x.t >= a).concat(arr.filter((x) => x.t >= b - 3 && x.t < b).map((x) => Object.assign({}, x, { t: x.t - L }))).sort((p, q) => p.t - q.t); } return arr; };
+  const recent = (arr, t, n, maxAge) => { const o = []; for (const x of seam(arr, t)) { if (x.t > t) break; if (t - x.t < maxAge) o.push(x); } return o.slice(-n); };
+  function twist(t) { let v = 0, tp = 0, tg = 0; for (const x of seam(BS, t)) { if (x.t > t) break; v += (tg - v) * (1 - Math.exp(-(x.t - tp) / 0.3)); tp = x.t; tg = x.note * 0.35; } return v + (tg - v) * (1 - Math.exp(-(t - tp) / 0.3)); }
   const W0 = TAU / 5;
 
   // ================================================================ 1 · WebGL2
@@ -441,6 +445,7 @@ canvas{width:100vw;height:100vh;display:block}
   uniform mat4 uVP; uniform float uT, uMir, uAl, uPh, uStill; uniform vec4 uW[4]; uniform vec4 uC[3]; uniform vec4 uRw[2]; uniform vec4 uH[4];
   uniform vec3 uCam2, uLc;
   out vec3 vW, vN; out float vEdge;
+  const float W0 = 1.2566371;
   const float NC = ${NC}., NR = ${NR}., RW = ${RW}., PH0 = ${PH0}, Y0 = ${Y0}, DY = ${DY};
   void main() {
     float u = aI.x / (NC - 1.), v = aI.y / NR;
@@ -449,10 +454,10 @@ canvas{width:100vw;height:100vh;display:block}
     vec3 n = vec3(-sin(ph), 0., cos(ph)), tg = vec3(cos(ph), 0., sin(ph));
     // campo de giro: dos ondas lentas que viajan + ondas de golpe que salen de un punto del muro
     float s = ph * RW;
-    float th = (0.5 * sin(0.3 * s - 2.4 * uT + 0.12 * y + uPh) + 0.22 * sin(0.13 * s + 1.3 * uT - 0.2 * y + 1.3 - uPh * 0.5) + 0.05 * sin(1.9 * s + 0.4 * y + uT * 3.1)) * (1. - uStill);
+    float th = (0.5 * sin(0.3 * s - 2. * W0 * uT + 0.12 * y + uPh) + 0.22 * sin(0.13 * s + W0 * uT - 0.2 * y + 1.3 - uPh * 0.5) + 0.05 * sin(1.9 * s + 0.4 * y + uT * 3. * W0)) * (1. - uStill);
     for (int i = 0; i < 4; i++) { vec4 w = uW[i]; if (w.w <= 0.) continue;          // bombo: una ola que cruza el muro
       float d = length(vec2(s - w.x, (y - w.y) * 1.4)), fr = w.z * 16., x = d - fr;
-      th += w.w * 0.9 * sin(x * 0.35) * exp(-x * x * 0.03) * exp(-w.z / 0.9);
+      th += w.w * 0.9 * sin(x * 0.35) * exp(-x * x * 0.03) * exp(-w.z / 0.9) * (1. - exp(-w.z / 0.03));
       if (w.w > 0.9 && w.z < 1.8) th += 6.2831853 * smoothstep(0., 1., clamp((w.z * 22. - d) / 5., 0., 1.)) * step(d, w.z * 22. + 0.01); }   // golpe fuerte: una cascada de lamas que dan la vuelta entera
     for (int i = 0; i < 3; i++) { vec4 c = uC[i]; if (c.z <= 0.) continue;           // golpe grave: una columna gira de golpe
       float d = abs(s - c.x); th += c.z * c.w * 1.1 * exp(-d * d * 0.35) * (1. - exp(-c.y / 0.02)) * exp(-c.y / 0.35); }
@@ -460,7 +465,7 @@ canvas{width:100vw;height:100vh;display:block}
       float d = abs(y - r.x); th -= r.z * 1.3 * exp(-d * d * 1.5) * (1. - exp(-r.y / 0.03)) * exp(-r.y / 0.4); }
     float spk = 0.;
     for (int i = 0; i < 4; i++) { vec4 h = uH[i]; if (h.w <= 0.) continue;            // ticks: destellos sueltos
-      float d = length(vec2(s - h.x, y - h.y)); spk += h.w * exp(-d * d * 0.6) * exp(-h.z / 0.12); }
+      float d = length(vec2(s - h.x, y - h.y)); spk += h.w * exp(-d * d * 0.6) * exp(-h.z / 0.12) * (1. - exp(-h.z / 0.01)); }
     // alineación: cada lama busca el ángulo que lleva la luz exactamente a la cámara
     vec3 hv = normalize(normalize(uCam2 - P) + normalize(uLc - P));
     float thA = atan(dot(hv, tg), dot(hv, n));
@@ -616,15 +621,15 @@ canvas{width:100vw;height:100vh;display:block}
       const a = tReal - T.rupt, frozen = tReal >= T.cut && tReal < T.rupt;
       const still = frozen ? e.inOut(sg(tReal, T.cut, T.cut + 1.6)) : 0;
       const kp = a >= 0 ? recent(KS, t, 1, 2).pop() : null;
-      const al = a >= 0 ? clamp(e.out(sg(a, 0, 0.12)) * (1 - 0.68 * e.inOut(sg(a, 0.5, 2.2))) + (a > 2.2 && kp ? 0.18 * Math.exp(-(t - kp.t) / 0.15) : 0)) : 0;
-      const LI = (1.0 + 2.2 * (a >= 0 ? Math.exp(-a / 0.5) : 0)) * (1 - 0.88 * still);
+      const al = a >= 0 ? clamp(e.out(sg(a, 0, 0.12)) * (1 - 0.68 * e.inOut(sg(a, 0.5, 2.2))) + (a > 2.2 && kp ? 0.18 * Math.exp(-(t - kp.t) / 0.15) * (1 - Math.exp(-(t - kp.t) / 0.02)) : 0)) : 0;
+      const LI = (1.0 + 2.2 * (a >= 0 ? Math.exp(-a / 0.5) * (1 - sg(a, 1.5, 2.4)) : 0)) * (1 - 0.88 * still);
       const S2 = (x) => (x - 0.5) * 2 * PH0 * RW, HY = Y0 + NR * DY;
       const waves = new Float32Array(16); recent(KS, t, 4, 2.4).forEach((x, i) => waves.set([S2(x.px ?? 0.5), (x.py ?? 0.5) * HY, t - x.t, x.s], i * 4));
       const cols = new Float32Array(12); recent(SN, t, 3, 1.5).forEach((x, i) => cols.set([S2(x.px ?? 0.5), t - x.t, x.s, x.side], i * 4));
       const rows = new Float32Array(8); recent(GS, t, 2, 1.5).forEach((x, i) => rows.set([(0.15 + 0.7 * (((x.seed * 37) % 100) / 100)) * HY, t - x.t, x.s, 0], i * 4));
       const hs = new Float32Array(16); recent(HS, t, 4, 0.5).forEach((x, i) => hs.set([S2(((x.seed * 53) % 100) / 100), ((x.seed * 29) % 100) / 100 * HY, t - x.t, x.s], i * 4));
       const lc = [(BAR_A[0] + BAR_B[0]) / 2, BAR_A[1], BAR_A[2]];
-      { const kk = recent(KS, t, 1, 0.3).pop(), kf = frozen || !kk ? 0 : kk.s * Math.exp(-(t - kk.t) / 0.07), hit = a >= 0 ? Math.exp(-a / 0.12) : 0, shk = 0.12 * kf + 0.6 * hit;
+      { const kk = recent(KS, t, 1, 0.3).pop(), kf = frozen || !kk ? 0 : kk.s * Math.exp(-(t - kk.t) / 0.07) * (1 - Math.exp(-(t - kk.t) / 0.008)), hit = a >= 0 ? Math.exp(-a / 0.12) : 0, shk = 0.12 * kf + 0.6 * hit;
         if (shk > 0.001) { const j = (k) => Math.sin(tReal * (83 + k * 31) + k) * shk * 0.15; cm.cam = [cm.cam[0] + j(1), cm.cam[1] + j(2), cm.cam[2] + j(3)]; } }
       const M2 = viewProj(cm.cam, cm.tgt, cm.fov, cm.roll); M.set(M2);
       const setL = (U) => { gl.uniform3f(U.uA, ...BAR_A); gl.uniform3f(U.uB, ...BAR_B); gl.uniform3f(U.uCam, ...cm.cam); gl.uniform1f(U.uLI, LI); gl.uniform1f(U.uWI, 1); };
