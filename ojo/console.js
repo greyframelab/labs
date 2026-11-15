@@ -203,7 +203,7 @@
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const solo = document.body.classList.contains('solo');
     let w = view.clientWidth * dpr, h = view.clientHeight * dpr;
-    const k = Math.min(1, (solo ? 1920 : 1280) / Math.max(w, h));
+    const k = Math.min(1, (solo ? 1920 : outAlive() ? 880 : 1280) / Math.max(w, h));
     if (w > 0 && h > 0) rt.eng.resize(Math.round(w * k), Math.round(h * k));
   }
   new ResizeObserver(sizePrev).observe(view);
@@ -225,6 +225,7 @@
     if (now - lastUI < 120) return;
     lastUI = now;
     const alive = outAlive();
+    if (rt.throttle !== (alive ? 2 : 1)) { rt.throttle = alive ? 2 : 1; sizePrev(); }
     $('cFps').textContent = Math.round(rt.fps) + (alive && outInfo ? ' / ' + Math.round(outInfo.fps) : '');
     $('ledOut').className = 'led' + (alive ? ' on' : '');
     $('cOut').textContent = alive && outInfo ? outInfo.size.join('×') : 'CERRADA';

@@ -1,5 +1,6 @@
-/* VØID_LOOM · OJO — sonido (v2). Referencia principal: Autechre.
-   La máquina piensa en voz alta: un groove a 96 BPM que muta por plantillas según lo que ve.
+/* VØID_LOOM · OJO — sonido (v3). Referencia principal: Lanark Artefax.
+   Dinámica extrema y cinemática: un groove a medio tiempo (84 BPM) contenido, sobre el que caen golpes esculpidos;
+   silencios con peso, transitorios en alta definición, swells casi orquestales hechos de materia digital.
    · Dron en Re de tres capas: sub con batido (Re1 + La1), parciales con formante que barre y wow lento, quintas al fondo.
    · Bombo diseñado (cuerpo, click, cola) + bajo con armónicos 2–9 (se oye en el móvil) + hats 909 bajos en mezcla.
    · Cada modo tiene su groove; la energía elige variantes escritas (no azar); el azar solo toca velocidad y microtiming.
@@ -11,24 +12,25 @@
 (function (root) {
   'use strict';
   const OJO = root.OJO || (root.OJO = {});
-  const BPM = 96, SD = 60 / BPM / 4, BAR = SD * 16;
+  const BPM = 84, SD = 60 / BPM / 4, BAR = SD * 16;
   const D1 = 36.71, A1 = 55, D2 = 73.42, EB2 = 77.78, F2 = 87.31, A2 = 110, D3 = 146.83, A3 = 220;
 
   const euclid = (k, n, rot = 0) => { const r = []; for (let i = 0; i < n; i++) r.push(((i + rot) * k) % n < k ? 1 : 0); return r; };
   const at = (arr) => { const r = new Array(16).fill(0); arr.forEach((i) => (r[i] = 1)); return r; };
 
-  // grooves: k = bombo, g = fantasmas, b = bajo [paso, nota, duración en pasos], p = placa de metal (contratiempo grave)
+  // grooves (medio tiempo): k = bombo, h = golpe esculpido (el contratiempo, sin caja), g = fantasmas,
+  // b = bajo [paso, nota, duración en pasos], p = placa de metal grave
   const GROOVES = {
-    pulso:     { k: at([0, 4, 8, 12]), g: at([14]), b: [[2, D2, 1.5], [6, D2, 1.5], [10, D2, 1.5], [14, EB2, 1.5]], p: [] },
-    quebrado:  { k: at([0, 3, 6, 10, 13]), g: at([7, 15]), b: [[0, D2, 3], [7, F2, 2], [11, EB2, 3]], p: [8] },
-    arrastrado:{ k: at([0, 10]), g: at([6, 15]), b: [[0, D2, 6], [9, D2, 3], [13, A1 * 2, 2]], p: [4, 12] },
-    siete:     { k: at([0, 3, 6, 8, 11, 14]), g: at([5]), b: [[3, D2, 2], [8, F2, 2], [14, EB2, 2]], p: [12] },
-    contacto:  { k: at([0, 8]), g: at([11]), b: [[0, D2, 7], [8, F2, 7]], p: [4, 12] },
-    buscando:  { k: at([0, 8]), g: [], b: [], p: [] },
+    pulso:     { k: at([0, 10]), h: at([8]), g: at([6, 15]), b: [[0, D2, 6], [10, F2, 4]], p: [] },
+    quebrado:  { k: at([0, 7, 10]), h: at([4, 12]), g: at([3, 15]), b: [[0, D2, 3], [7, EB2, 2], [10, D2, 4]], p: [] },
+    arrastrado:{ k: at([0]), h: at([8]), g: at([11, 14]), b: [[0, D2, 8]], p: [12] },
+    siete:     { k: at([0, 3, 6, 11]), h: at([8]), g: at([14]), b: [[0, D2, 2], [6, F2, 2], [11, EB2, 3]], p: [] },
+    contacto:  { k: at([0]), h: at([8]), g: at([11]), b: [[0, D2, 15]], p: [4, 12] },
+    buscando:  { k: at([0]), h: [], g: [], b: [], p: [] },
   };
   const MODE_GROOVE = { profundidad: 'arrastrado', bordes: 'quebrado', flujo: 'siete', codigo: 'quebrado', atencion: 'arrastrado',
     neuronas: 'pulso', memoria: 'arrastrado', malla: 'pulso', objetos: 'quebrado', entrada: 'pulso' };
-  const MODE_HAT = { profundidad: [5, 1], bordes: [7, 2], flujo: [9, 1], codigo: [11, 3], atencion: [5, 2], neuronas: [7, 0], memoria: [3, 1], malla: [6, 2], objetos: [9, 3], entrada: [8, 0] };
+  const MODE_HAT = { profundidad: [3, 1], bordes: [5, 2], flujo: [7, 1], codigo: [9, 3], atencion: [3, 2], neuronas: [5, 0], memoria: [2, 1], malla: [4, 2], objetos: [7, 3], entrada: [6, 0] };
 
   // ---------------------------------------------------------------- motor (sirve para tiempo real y para render offline)
   function Machine(ac) {
@@ -39,40 +41,41 @@
     const wave = (n, fn) => { const re = new Float32Array(n + 1), im = new Float32Array(n + 1); for (let k = 1; k <= n; k++) im[k] = fn(k); return ac.createPeriodicWave(re, im); };
 
     // ---- master: HP 24 Hz → pegamento → limitador
-    const out = G(0.55);
-    const lim = ac.createDynamicsCompressor(); lim.threshold.value = -4; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.001; lim.release.value = 0.06;
-    const glue = ac.createDynamicsCompressor(); glue.threshold.value = -20; glue.knee.value = 8; glue.ratio.value = 2.2; glue.attack.value = 0.012; glue.release.value = 0.18;
+    const out = G(0.6);
+    const lim = ac.createDynamicsCompressor(); lim.threshold.value = -1.2; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.001; lim.release.value = 0.06;
+    const glue = ac.createDynamicsCompressor(); glue.threshold.value = -16; glue.knee.value = 10; glue.ratio.value = 1.6; glue.attack.value = 0.012; glue.release.value = 0.18;
     const hp = F('highpass', 24, 0.6);
-    hp.connect(glue).connect(lim).connect(out).connect(ac.destination);
+    const silG = G(1);
+    hp.connect(silG).connect(glue).connect(lim).connect(out).connect(ac.destination);
 
     // ---- sala oscura y corta (Autechre: poca)
     const verb = ac.createConvolver();
-    { const L = Math.floor(ac.sampleRate * 2.2), pre = Math.floor(ac.sampleRate * 0.02), b = ac.createBuffer(2, L, ac.sampleRate);
+    { const L = Math.floor(ac.sampleRate * 1.6), pre = Math.floor(ac.sampleRate * 0.012), b = ac.createBuffer(2, L, ac.sampleRate);
       for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); let lp = 0; let s = 1234 + ch * 77;
-        for (let i = pre; i < L; i++) { s = (s * 16807) % 2147483647; const r = s / 2147483647 * 2 - 1; lp += (r - lp) * 0.28; d[i] = lp * Math.exp(-(i - pre) / (ac.sampleRate * 0.42)); } }
+        for (let i = pre; i < L; i++) { s = (s * 16807) % 2147483647; const r = s / 2147483647 * 2 - 1; lp += (r - lp) * 0.2; d[i] = lp * Math.exp(-(i - pre) / (ac.sampleRate * 0.22)); } }
       verb.buffer = b; }
-    const verbHP = F('highpass', 280); const verbOut = G(0.55);
+    const verbHP = F('highpass', 320); const verbOut = G(0.35);
     verbHP.connect(verb).connect(verbOut).connect(hp);
     const send = (node, amt) => { const g = G(amt); node.connect(g).connect(verbHP); return g; };
 
     // ---- flanger (gesto: subida al CONTACTO y disolución), con el grave fuera
-    const flIn = F('highpass', 220), flDel = ac.createDelay(0.03), flFb = G(0.78), flWet = G(0);
+    const flIn = F('highpass', 220), flDel = ac.createDelay(0.03), flFb = G(0.45), flWet = G(0);
     flDel.delayTime.value = 0.004;
     const flLfo = ac.createOscillator(), flDepth = G(0.0032); flLfo.frequency.value = 0.11; flLfo.connect(flDepth).connect(flDel.delayTime); flLfo.start();
     flIn.connect(flDel); flDel.connect(flFb).connect(flDel); flDel.connect(flWet).connect(hp);
 
     // ---- batería: filtro de bus (se cierra en la subida) + saturación paralela filtrada (para altavoz de móvil)
-    const drums = G(1), drumsLP = F('lowpass', 16000, 0.5), drumsOut = G(1);
-    drums.connect(drumsLP).connect(drumsOut).connect(hp);
-    const satHP = F('highpass', 180), sat = shaper(3.2), satG = G(0.3);
+    const drums = G(0.58), drumsLP = F('lowpass', 16000, 0.5), drumsOut = G(1), gate = G(1);
+    drums.connect(gate).connect(drumsLP).connect(drumsOut).connect(hp);
+    const satHP = F('highpass', 180), sat = shaper(3.2), satG = G(0.55);
     drumsLP.connect(satHP).connect(sat).connect(satG).connect(hp);
     drumsLP.connect(flIn);
     const bassBus = G(1); bassBus.connect(drumsLP);
-    const tex = G(1); tex.connect(hp); send(tex, 0.18); tex.connect(flIn);
+    const tex = G(1.6); tex.connect(hp); send(tex, 0.05);
 
     // ---- dron (tres capas) con ducking del bombo
     const duck = G(1), droneLP = F('lowpass', 900, 0.4), droneG = G(0);
-    droneG.connect(droneLP).connect(duck).connect(hp); send(duck, 0.22);
+    droneG.connect(droneLP).connect(duck).connect(hp); send(duck, 0.06);
     const sub1 = ac.createOscillator(), sub2 = ac.createOscillator(), subG = G(0.34);
     sub1.frequency.value = D1; sub2.frequency.value = A1; sub2.detune.value = 3;
     sub1.connect(subG); sub2.connect(G(0.6)).connect(subG); subG.connect(droneG);
@@ -88,7 +91,7 @@
     const wow = ac.createOscillator(), wowD = G(6); wow.frequency.value = 0.27; wow.connect(wowD); wowD.connect(p1.detune); wowD.connect(p2.detune); wow.start();
     const atm = G(0.0001);
     [D3, A3, D3 * 2].forEach((f, i) => { const o = ac.createOscillator(), pn = ac.createStereoPanner(); pn.pan.value = [-0.7, 0.7, 0][i]; o.frequency.value = f; o.detune.value = (i - 1) * 4; o.connect(G(i === 2 ? 0.3 : 1)).connect(pn).connect(atm); o.start(); });
-    atm.connect(F('lowpass', 1200)).connect(hp); send(atm, 1.2);
+    atm.connect(F('lowpass', 1200)).connect(hp); send(atm, 0.4);
     [sub1, sub2, p1, p2].forEach((o) => o.start());
 
     // ---- metal físico precalculado (Karplus-Strong)
@@ -125,7 +128,7 @@
       const o = ac.createOscillator(), lp = F('lowpass', 140, 3), sh = shaper(1.6), g = G(0);
       o.setPeriodicWave(bassW); o.frequency.value = f;
       lp.frequency.setValueAtTime(140, t); lp.frequency.linearRampToValueAtTime(900 + vel * 500, t + 0.006); lp.frequency.setTargetAtTime(220, t + 0.006, 0.09);
-      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.42 * vel, t + 0.004);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.32 * vel, t + 0.004);
       g.gain.setTargetAtTime(0.25 * vel, t + 0.004, 0.08); g.gain.setTargetAtTime(0, t + dur, 0.03);
       o.connect(lp).connect(sh).connect(g).connect(bassBus); o.start(t); o.stop(t + dur + 0.25);
     }
@@ -150,12 +153,50 @@
       t = Math.max(t, now());
       const s = ac.createBufferSource(), g = G(vel), p = ac.createStereoPanner(), lp = F('lowpass', 1500);
       s.buffer = METAL[i % METAL.length]; s.playbackRate.value = rate; p.pan.value = pan;
-      s.connect(lp).connect(g).connect(p).connect(tex); s.start(t); s.stop(t + 2.2);
+      g.gain.setValueAtTime(vel, t); g.gain.setTargetAtTime(0, t + 0.08, 0.2);
+      s.connect(lp).connect(g).connect(p).connect(tex); s.start(t); s.stop(t + 1.2);
     }
     function plate(t, vel, rate = 1) {
       t = Math.max(t, now());
-      const s = ac.createBufferSource(), g = G(vel), lp = F('lowpass', 900);
-      s.buffer = PLATE; s.playbackRate.value = rate; s.connect(lp).connect(g); g.connect(drums); send(g, 0.3); s.start(t); s.stop(t + 3.2);
+      const s = ac.createBufferSource(), g = G(vel), lp = F('lowpass', 1400);
+      s.buffer = PLATE; s.playbackRate.value = rate; s.connect(lp).connect(g); g.connect(drums); g.gain.setValueAtTime(vel, t); g.gain.setTargetAtTime(0, t + 0.15, 0.25); s.start(t); s.stop(t + 1.4);
+    }
+
+    // golpe esculpido: transitorio FM (alta definición, sin ruido) + caída de sub + placa con cola oscura y ancha
+    const hits = G(1); hits.connect(hp); send(hits, 0.14);
+    function golpe(t, vel = 1, big = false) {
+      t = Math.max(t, now());
+      const c = ac.createOscillator(), m = ac.createOscillator(), mg = G(0), g = G(0), lp = F('lowpass', big ? 2600 : 2100, 0.7);
+      c.frequency.value = big ? 180 : 240; m.frequency.value = (big ? 180 : 240) * 1.41;
+      mg.gain.setValueAtTime(900, t); mg.gain.setTargetAtTime(20, t, 0.006);
+      m.connect(mg).connect(c.frequency);
+      env(g, t, 0.0005, 0.75 * vel, big ? 0.05 : 0.022);
+      c.connect(g).connect(lp).connect(hits); c.start(t); m.start(t); c.stop(t + 0.5); m.stop(t + 0.5);
+      const s1 = ac.createOscillator(), sg = G(0); s1.frequency.setValueAtTime(big ? 92 : 120, t); s1.frequency.setTargetAtTime(big ? 34 : 48, t, big ? 0.09 : 0.05);
+      env(sg, t, 0.001, 0.95 * vel, big ? 0.45 : 0.16); s1.connect(sg).connect(hits); s1.start(t); s1.stop(t + (big ? 3 : 1));
+      // dos placas a los lados: el golpe se abre en estéreo
+      [-0.7, 0.7].forEach((pn, i) => { const sbs = ac.createBufferSource(), pg = G(vel * (big ? 0.42 : 0.2)), pp = ac.createStereoPanner(), plp = F('lowpass', 1100);
+        sbs.buffer = PLATE; sbs.playbackRate.value = (big ? 0.55 : 0.8) * (1 + i * 0.021); pp.pan.value = pn; pg.gain.setValueAtTime(vel * (big ? 0.42 : 0.2), t); pg.gain.setTargetAtTime(0, t + (big ? 0.35 : 0.1), big ? 0.4 : 0.18); sbs.connect(plp).connect(pg).connect(pp).connect(hits); sbs.start(t); sbs.stop(t + (big ? 2.2 : 1)); });
+      duck.gain.setValueAtTime(1 - 0.55 * vel, t); duck.gain.setTargetAtTime(1, t + 0.004, big ? 0.4 : 0.15);
+    }
+    // swell casi orquestal: clúster grave en Re menor de sierras detunadas que se abre y crece
+    const swW = wave(18, (k) => 1 / k);
+    function swell(t, dur, peak = 0.07) {
+      t = Math.max(t, now());
+      const bus = G(0), lp = F('lowpass', 180, 0.9);
+      [D2, F2, A2, D3, A2 * 1.003, F2 * 2].forEach((f, i) => { const o = ac.createOscillator(), pn = ac.createStereoPanner();
+        o.setPeriodicWave(swW); o.frequency.value = f; o.detune.value = (i % 3 - 1) * 9; pn.pan.value = (i / 5 - 0.5) * 1.4;
+        o.connect(pn).connect(bus); o.start(t); o.stop(t + dur + 0.6); });
+      bus.gain.setValueAtTime(0, t); bus.gain.linearRampToValueAtTime(peak * 0.15, t + dur * 0.3); bus.gain.exponentialRampToValueAtTime(peak, t + dur);
+      bus.gain.setTargetAtTime(0, t + dur, 0.06);
+      lp.frequency.setValueAtTime(180, t); lp.frequency.exponentialRampToValueAtTime(1400, t + dur);
+      bus.connect(lp).connect(hp); send(lp, 0.08);
+    }
+    // puerta a 1/64 escrita (micro-edición): corta la batería en un patrón fijo
+    function gate64(t, len, pattern) {
+      const st = SD / 4;
+      for (let i = 0; i * st < len; i++) { const on = pattern[i % pattern.length]; gate.gain.setTargetAtTime(on ? 1 : 0, t + i * st, 0.0012); }
+      gate.gain.setTargetAtTime(1, t + len, 0.0012);
     }
 
     // ---- estado y secuenciador
@@ -177,6 +218,12 @@
       // bombo
       if (gr.k[s16]) kick(t + hum(0.0015), (s16 === 0 ? 1 : 0.86) * (0.92 + rnd() * 0.08), inContact ? 0.34 : 0.24);
       if (gr.g[s16] && tr >= 1) kick(t + hum(0.002), 0.32 + rnd() * 0.1, 0.12);
+      // golpe esculpido en el contratiempo; el de final de frase, más grande
+      if (gr.h && gr.h[s16]) golpe(t + hum(0.001), (0.75 + rnd() * 0.15) * (inContact ? 1.1 : 1), inContact || (bar % 4 === 3 && s16 === 8));
+      // micro-edición escrita: último tiempo de cada 4.º compás con puerta a 1/64
+      if (s16 === 12 && bar % 4 === 3 && tr >= 1 && !inContact) gate64(t, SD * 4, tr === 2 ? [1, 0, 1, 1, 0, 0, 1, 0] : [1, 1, 0, 1, 0, 1, 1, 0]);
+      // swell que prepara cada frase de 8 compases
+      if (s16 === 0 && bar % 8 === 6 && st.subs && !inContact) swell(t, BAR * 2 - SD, 0.05 + st.energy * 0.04);
       // bajo
       if (st.subs || inContact) gr.b.forEach(([p, f, d]) => { if (p === s16) bass(t, f, d * SD, 0.85 + rnd() * 0.15); });
       // placa grave en contratiempo
@@ -201,8 +248,8 @@
 
     function setDrone(t) {
       const c = st.contact;
-      droneG.gain.setTargetAtTime(0.2 + c * 0.1 + (st.subs ? 0 : 0.06), t, 0.6);
-      formG.gain.setTargetAtTime(0.4 + st.energy * 0.35 + c * 0.3, t, 0.5);
+      droneG.gain.setTargetAtTime(0.13 + c * 0.08 + (st.subs ? 0 : 0.05), t, 0.6);
+      formG.gain.setTargetAtTime(0.75 + st.energy * 0.4 + c * 0.3, t, 0.5);
       form.frequency.setTargetAtTime(380 + st.energy * 420 + c * 600, t, 0.8);
       formB.frequency.setTargetAtTime(460 + st.energy * 380 + c * 520, t, 0.9);
       p2.detune.setTargetAtTime(5 + st.energy * 16, t, 0.9);
@@ -218,10 +265,14 @@
       drumsLP.frequency.exponentialRampToValueAtTime(380, impactAt - 0.02);
       drumsLP.frequency.setValueAtTime(380, impactAt - 0.02); drumsLP.frequency.exponentialRampToValueAtTime(16000, impactAt + 0.06);
       flWet.gain.cancelScheduledValues(t); flWet.gain.setValueAtTime(flWet.gain.value, t);
-      flWet.gain.linearRampToValueAtTime(0.85, impactAt - 0.05); flWet.gain.setTargetAtTime(0.12, impactAt, 0.6);
+      flWet.gain.linearRampToValueAtTime(0.35, impactAt - 0.5); flWet.gain.setTargetAtTime(0, impactAt - 0.45, 0.01);
       flLfo.frequency.setValueAtTime(0.11, t); flLfo.frequency.linearRampToValueAtTime(0.6, impactAt);
-      // impacto: el bombo y el bajo los pone el groove de CONTACTO en ese mismo compás
-      plate(impactAt, 0.5, 0.6); metal(impactAt, 0, 0.3, 0, 0.5);
+      // la subida: clúster que crece; luego 0,45 s de silencio total (la máquina contiene el aliento) y el impacto
+      swell(t, impactAt - 0.45 - t, 0.12);
+      const sil = impactAt - 0.45;
+      silG.gain.cancelScheduledValues(t); silG.gain.setValueAtTime(1, t);
+      silG.gain.setTargetAtTime(0, sil, 0.006); silG.gain.setValueAtTime(0, impactAt - 0.004); silG.gain.linearRampToValueAtTime(1, impactAt);
+      golpe(impactAt, 1.25, true); plate(impactAt, 0.5, 0.6); metal(impactAt, 0, 0.3, 0, 0.5);
       contactPhase = 1;
       building1 = [t, impactAt];
     }
@@ -229,7 +280,7 @@
       if (contactPhase === 0) return;
       contactPhase = 0; impactAt = -1; building1 = null;
       flWet.gain.cancelScheduledValues(t); flWet.gain.setValueAtTime(flWet.gain.value, t);
-      flWet.gain.linearRampToValueAtTime(0.7, t + 0.8); flWet.gain.linearRampToValueAtTime(0, t + 3);
+      flWet.gain.linearRampToValueAtTime(0.25, t + 0.6); flWet.gain.linearRampToValueAtTime(0, t + 1.6);
       flLfo.frequency.setValueAtTime(0.6, t); flLfo.frequency.linearRampToValueAtTime(0.08, t + 3);
       plate(t, 0.22, 0.8);
     }
