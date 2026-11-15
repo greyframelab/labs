@@ -53,6 +53,7 @@ header{display:flex;align-items:center;gap:22px;padding:0 18px;border-bottom:1px
 .seg button+button{border-left:1px solid var(--line2)}
 .seg button:hover{color:var(--tx)}
 .seg button.on{color:#000;background:var(--tx)}
+.tbtn.on{color:#000;background:var(--tx);border-color:var(--tx)}
 .tbtn{border:1px solid var(--line2);padding:7px 11px;font-size:9px;letter-spacing:.22em;color:var(--tx2);transition:all .15s;white-space:nowrap}
 .tbtn:hover{border-color:var(--mute);color:var(--tx)}
 .tbtn.on{border-color:var(--red);color:#fff;background:rgba(255,26,26,.1)}
@@ -269,6 +270,7 @@ body.learn [data-ctl].mapped::after{content:"";position:absolute;width:4px;heigh
       <span class="lbl">CUANTIZAR</span>
       <div class="seg" id="quant" data-ctl="quant"><button data-v="libre">LIBRE</button><button data-v="golpe">GOLPE</button><button data-v="acto">ACTO</button></div>
       <button class="tbtn" id="openOut">ABRIR SALIDA</button>
+      <button class="tbtn" id="tg-ojo" title="Que LIVE reaccione a la gente que ve OJO (abre OJO en otra ventana del mismo navegador)">OJO · APAGADO</button>
       <button class="tbtn" id="learn">MIDI · APRENDER</button>
       <button class="tbtn" id="helpB" aria-label="Atajos de teclado">?</button>
     </div>

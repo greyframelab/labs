@@ -136,10 +136,11 @@
     const hpF = f > 0.02 ? 20 * Math.pow(400, f) : 10;
     M.lp.frequency.setTargetAtTime(lpF, t, 0.02); M.hp.frequency.setTargetAtTime(hpF, t, 0.02);
     M.lp.Q.setTargetAtTime(f < -0.02 ? 1.4 : 0.7, t, 0.05); M.hp.Q.setTargetAtTime(f > 0.02 ? 1.4 : 0.7, t, 0.05);
-    M.eS.gain.setTargetAtTime(AFX.echo * 0.8, t, 0.03);
+    const pa = presAudio();
+    M.eS.gain.setTargetAtTime(Math.min(1, AFX.echo + pa.echo) * 0.8, t, 0.08);
     M.dl.delayTime.setTargetAtTime(AFX.echoT, t, 0.08); M.dr.delayTime.setTargetAtTime(AFX.echoT, t, 0.08);
-    M.rS.gain.setTargetAtTime(AFX.room * 0.9, t, 0.03);
-    M.out.gain.setTargetAtTime(AFX.master, t, 0.02);
+    M.rS.gain.setTargetAtTime(Math.min(1, AFX.room + pa.room) * 0.9, t, 0.08);
+    M.out.gain.setTargetAtTime(AFX.master * (pa.mute ? 0.02 : 1), t, pa.mute ? 0.05 : 0.02);
   }
   function buildDeckAudio(d) {
     const a = {};
@@ -491,7 +492,46 @@
     const decks = {};
     for (const k in DECK) decks[k] = DECK[k].state;
     const air = DECK[MIX.onAir]; FX.tintC = air && air.item ? air.item.accent : '#ffffff';
-    ch.postMessage({ type: 'state', decks, mix: MIX, fx: FX });
+    ch.postMessage({ type: 'state', decks, mix: MIX, fx: presFx(), pres: presOut() });
+  }
+
+  // ---------------------------------------------------------------- OJO · PRESENCIA (apagado por defecto)
+  // OJO (otra ventana o pestaña del mismo sitio) envía cuánta gente hay, dónde y si alguien mira a la cámara.
+  // Sala vacía: LIVE sigue a lo suyo. Alguien entra: VER CÓDIGO pasa a MÁQUINA y la sala suena más abierta,
+  // más eco cuanto más se mueve. Contacto (te mira): negro y silencio; al apartar la mirada, impacto y vuelve.
+  const PRES = { on: store.get('ojoPres', false), n: 0, energy: 0, contact: 0, x: 0.5, y: 0.5, size: 0, at: 0, k: 0, seenAt: -1e9, cont: false, hit: 0, lastAFX: 0, sent: '' };
+  const presCh = new BroadcastChannel('voidloom-presencia');
+  presCh.onmessage = (e) => { const m = e.data; if (!m || m.type !== 'presencia') return; Object.assign(PRES, { n: m.n | 0, energy: +m.energy || 0, contact: +m.contact || 0, x: +m.x, y: +m.y, size: +m.size || 0, at: performance.now() }); };
+  const presLive = () => PRES.on && performance.now() - PRES.at < 2000;
+  function presFx() {
+    if (!presLive() || PRES.k < 0.5) return FX;
+    const o = Object.assign({}, FX, { view: 1, viewMode: 'maq' });
+    if (PRES.cont) o.black = 1;
+    return o;
+  }
+  function presOut() {
+    if (!presLive()) return null;
+    return { k: +PRES.k.toFixed(3), n: PRES.n, e: +PRES.energy.toFixed(3), c: PRES.cont ? 1 : +PRES.contact.toFixed(3), x: +PRES.x.toFixed(3), y: +PRES.y.toFixed(3), s: +PRES.size.toFixed(3), hit: PRES.hit };
+  }
+  function presTick() {
+    const now = performance.now(), live = presLive();
+    if (live && PRES.n > 0) PRES.seenAt = now;
+    const want = live && now - PRES.seenAt < 3000 ? 1 : 0;           // aguanta 3 s después de que se vaya
+    PRES.k += (want - PRES.k) * (want ? 0.12 : 0.02);
+    const was = PRES.cont;
+    if (!PRES.cont && live && PRES.contact > 0.6) PRES.cont = true;
+    if (PRES.cont && (!live || PRES.contact < 0.25)) { PRES.cont = false; PRES.hit++; }    // el impacto al apartar la mirada
+    if (was !== PRES.cont) toast(PRES.cont ? 'OJO · CONTACTO' : 'OJO · FIN DEL CONTACTO');
+    if (now - PRES.lastAFX > 90) { PRES.lastAFX = now; applyAFX(); }
+    const key = live ? [PRES.k > 0.5, PRES.cont, PRES.hit, Math.round(PRES.x * 40), Math.round(PRES.y * 40), Math.round(PRES.energy * 20), PRES.n].join() : 'off';
+    if (key !== PRES.sent) { PRES.sent = key; sendState(); }
+    const st = $('#tg-ojo');
+    if (st) { const tx = 'OJO · ' + (!PRES.on ? 'APAGADO' : !live ? 'SIN SEÑAL' : PRES.cont ? 'CONTACTO' : PRES.n ? PRES.n + (PRES.n === 1 ? ' PERSONA' : ' PERSONAS') : 'SALA VACÍA'); if (st.textContent !== tx) st.textContent = tx; }
+  }
+  // el sonido de la sala: más abierto con gente, más eco con movimiento, silencio en el contacto
+  function presAudio() {
+    if (!presLive()) return { room: 0, echo: 0, mute: 0 };
+    return { room: PRES.k * 0.18, echo: PRES.k * Math.min(1, PRES.energy * 1.4) * 0.3, mute: PRES.cont ? 1 : 0 };
   }
   ch.onmessage = (ev) => {
     const m = ev.data; lastOutMsg = performance.now();
@@ -779,6 +819,8 @@
     const fs = $('#fxSys'); fs.style.setProperty('--acc', '#f2f0ea');
     knob(fs, 'av', 'SINCRO A/V', AFX.av / 250, (v) => { AFX.av = Math.round(v * 250); store.set('av', AFX.av); for (const k in DECK) play(DECK[k]); }, (v) => '+' + Math.round(v * 250) + 'ms');
     const qc = document.createElement('div'); qc.className = 'grp'; qc.innerHTML = '<span class="lbl" style="font-size:7.5px">CALIDAD</span><div class="seg" id="qual"><button data-v="0" title="Cada pieza a la resolución que el ordenador aguanta con fluidez">AUTO</button><button data-v="1">100</button><button data-v="0.75">75</button><button data-v="0.5">50</button></div>'; fs.appendChild(qc);
+    const ob = $('#tg-ojo'); ob.classList.toggle('on', PRES.on);
+    ob.addEventListener('click', () => { PRES.on = !PRES.on; store.set('ojoPres', PRES.on); ob.classList.toggle('on', PRES.on); toast(PRES.on ? 'OJO · PRESENCIA ACTIVADA · ABRE OJO EN OTRA VENTANA' : 'OJO · PRESENCIA APAGADA'); applyAFX(); sendState(); });
     seg($('#qual'), 'qual', String(MIX.quality), (v) => { MIX.quality = +v; store.set('calidadAuto', +v); sendState(); });
     const markQ = seg($('#quant'), 'quant', quant, (v) => { quant = v; store.set('quant', v); });
     CTL.quant.mark = markQ;
@@ -1107,7 +1149,7 @@
     $('#stAud').textContent = (ctx.sampleRate / 1000).toFixed(1) + ' kHz'; $('#ledAud').className = 'led on';
     setInterval(schedTick, 40);
     // con audio sonando, Chrome no frena los temporizadores de la pestaña aunque quede detrás de la salida
-    setInterval(() => { autoStep(); apTick(); flush(); ddjLeds(); }, 30);
+    setInterval(() => { autoStep(); apTick(); presTick(); flush(); ddjLeds(); }, 30);
     initMidi();
     log('BUSCANDO PIEZAS VØID_LOOM…');
     let items = [];

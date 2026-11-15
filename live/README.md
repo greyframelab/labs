@@ -45,5 +45,22 @@ Con `?instalacion` en la URL (`live/index.html?instalacion`) arranca solo y entr
 
 **App de escritorio sin internet** para Windows y Mac: ver [`live-app/`](../live-app/README.md).
 
+## OJO · PRESENCIA (apagado por defecto)
+
+LIVE puede reaccionar a la gente que hay en la sala usando [OJO](../ojo/README.md) como sensor. OJO solo envía números (cuántas personas, dónde, cuánto se mueven y si alguien mira a la cámara), nunca la imagen.
+
+1. Abre OJO en otra ventana del mismo navegador (`ojo/`), pulsa ARRANCAR y elige la cámara. No hace falta abrir su salida.
+2. En LIVE, pulsa **OJO** en la cabecera. El botón muestra lo que ve: SIN SEÑAL, SALA VACÍA, 1 PERSONA, CONTACTO…
+
+Qué pasa:
+- **Sala vacía:** LIVE sigue a lo suyo.
+- **Entra alguien:** VER CÓDIGO pasa a **MÁQUINA** y la sala suena más abierta: más reverberación y más eco cuanto más se mueve la gente. Aguanta 3 s después de que se vaya.
+- **Contacto** (alguien mira a la cámara medio segundo): negro y silencio.
+- **Fin del contacto:** impacto de luz y todo vuelve.
+
+En el deck C, el shader recibe `presencia` (0–1), `personas`, `energia` (movimiento), `contacto` (0–1), `pos` (posición de la persona principal, 0–1, arriba = 0) y `talla` (lo cerca que está). El preset **PRESENCIA** abre la imagen alrededor del visitante y la cierra cuando le mira.
+
+Fase 1: funciona con LIVE y OJO en el navegador. Las dos apps de escritorio todavía van por separado.
+
 ## Atajos
 Pulsa **?** en la consola. Cualquier control se puede asignar a un controlador MIDI con **MIDI · APRENDER**.

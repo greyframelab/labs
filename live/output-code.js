@@ -12,6 +12,8 @@ in vec2 uv; out vec4 o;
 uniform sampler2D IMG, A, B, PREV;
 uniform float t, golpe, graves, medios, agudos, aspect, mezcla;
 uniform vec2 res; uniform vec3 acento;
+// OJO · presencia en la sala (0 sin señal): presencia 0–1, personas, energia (movimiento), contacto 0–1, pos (0–1, arriba = 0), talla
+uniform float presencia, personas, energia, contacto, talla; uniform vec2 pos;
 vec3 img(vec2 p){ return texture(IMG, p).rgb; }
 vec3 deckA(vec2 p){ return texture(A, p).rgb; }
 vec3 deckB(vec2 p){ return texture(B, p).rgb; }
@@ -39,7 +41,7 @@ void main(){ vec3 base = img(uv); o = vec4(mix(base, code(uv), mezcla), 1.); }`;
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) return { ok: false, line: 0, msg: (gl.getProgramInfoLog(p) || 'link').slice(0, 160) };
     if (C.prog) gl.deleteProgram(C.prog);
     C.prog = p; C.src = src; C.lines = src.split('\n').length;
-    C.U = {}; ['IMG', 'A', 'B', 'PREV', 't', 'golpe', 'graves', 'medios', 'agudos', 'aspect', 'mezcla', 'res', 'acento'].forEach((n) => (C.U[n] = gl.getUniformLocation(p, n)));
+    C.U = {}; ['IMG', 'A', 'B', 'PREV', 't', 'golpe', 'graves', 'medios', 'agudos', 'aspect', 'mezcla', 'res', 'acento', 'presencia', 'personas', 'energia', 'contacto', 'talla', 'pos'].forEach((n) => (C.U[n] = gl.getUniformLocation(p, n)));
     return { ok: true, lines: C.lines };
   }
   // dibuja el deck C sobre la imagen ya compuesta
@@ -49,6 +51,8 @@ void main(){ vec3 base = img(uv); o = vec4(mix(base, code(uv), mezcla), 1.); }`;
     [['IMG', o.img], ['A', o.a], ['B', o.b], ['PREV', o.prev]].forEach(([n, tx], i) => { gl.activeTexture(gl.TEXTURE6 + i); gl.bindTexture(gl.TEXTURE_2D, tx); gl.uniform1i(U[n], 6 + i); });
     gl.uniform1f(U.t, o.t); gl.uniform1f(U.golpe, o.golpe); gl.uniform1f(U.graves, o.bands[0]); gl.uniform1f(U.medios, o.bands[1]); gl.uniform1f(U.agudos, o.bands[2]);
     gl.uniform1f(U.aspect, o.w / o.h); gl.uniform1f(U.mezcla, o.mix); gl.uniform2f(U.res, o.w, o.h); gl.uniform3fv(U.acento, o.acc);
+    const P = o.pres || {};
+    gl.uniform1f(U.presencia, P.k || 0); gl.uniform1f(U.personas, P.n || 0); gl.uniform1f(U.energia, P.e || 0); gl.uniform1f(U.contacto, P.c || 0); gl.uniform1f(U.talla, P.s || 0); gl.uniform2f(U.pos, P.x ?? 0.5, P.y ?? 0.5);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 

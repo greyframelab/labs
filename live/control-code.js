@@ -43,6 +43,17 @@ vec3 code(vec2 uv) {
   vec3 c = img(w);
   return max(c, prev(uv + f * .004) * (.9 - agudos * .2));
 }`,
+    PRESENCIA: `// PRESENCIA · con OJO: la imagen se abre donde está el visitante y se cierra al mirarle
+vec3 code(vec2 uv) {
+  vec2 p = vec2(pos.x, 1. - pos.y);                       // pos viene con arriba = 0
+  float d = length((uv - p) * vec2(aspect, 1.));
+  float r = .12 + talla * .45 + energia * .08;
+  float lente = smoothstep(r, r * .2, d) * presencia;
+  vec2 w = uv + (uv - p) * lente * (.12 + golpe * .05);
+  vec3 c = img(w) * (1. - presencia * .55 + lente * 1.1);
+  float aro = smoothstep(.006, 0., abs(d - r)) * presencia;
+  return c * (1. - contacto) + acento * aro * .7;
+}`,
   };
 
   // ---------------------------------------------------------------- panel
