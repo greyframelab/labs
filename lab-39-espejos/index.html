@@ -1,0 +1,685 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Espejos · VØID_LOOM · Greyframe Labs</title>
+<meta name="description" content="VØID_LOOM · Espejos: un muro curvo de acero pulido que solo existe cuando refleja; una pieza IDM voltea sus lamas en olas de luz roja hasta que todas se alinean y devuelven la luz a quien mira.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&display=swap">
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden}
+canvas{width:100vw;height:100vh;display:block}
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920" role="img" aria-label="Espejos: un muro curvo de miles de lamas de acero pulido en la oscuridad; olas de reflejo rojo lo recorren con cada golpe, se apaga en la quietud y, al final, todas las lamas se alinean y devuelven la luz roja a cámara en un destello"></canvas>
+<script>
+// web: el lienzo ocupa toda la pantalla (apaisado en escritorio, vertical en móvil); ?render = 1080×1920 para el vídeo
+(function () {
+  if (new URLSearchParams(location.search).has('render')) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), w = innerWidth * dpr, h = innerHeight * dpr;
+  const k = Math.min(1, 1920 / Math.max(w, h));
+  window.VL_SIZE = [Math.round(w * k), Math.round(h * k)];
+  const c = document.getElementById('c'); c.width = window.VL_SIZE[0]; c.height = window.VL_SIZE[1];
+  const r0 = innerWidth / innerHeight; let tm;
+  addEventListener('resize', () => { clearTimeout(tm); tm = setTimeout(() => { const r = innerWidth / innerHeight; if (Math.abs(r - r0) / r0 > 0.12) location.reload(); }, 400); });
+})();
+</script>
+<script>
+/* VØID_LOOM — núcleo compartido + firma animada (sting) de cierre.
+   Todo es determinista: el estado de cada frame depende solo de t.
+   Uso en cualquier lab:  VL.post(...), VL.drawSymbol(...), VL.stingState(t, opts)  */
+(function () {
+  // tamaño del lienzo: 1080×1920 para el vídeo; la web puede fijar window.VL_SIZE = [w, h] antes de cargar
+  const W = (window.VL_SIZE && window.VL_SIZE[0]) || 1080, H = (window.VL_SIZE && window.VL_SIZE[1]) || 1920;
+  const VL = { W, H };
+  // marco virtual de la firma (1080×1920), centrado y escalado dentro del lienzo real
+  VL.FRAME = (function () { const k = Math.min(W / 1080, H / 1920); return { k, ox: (W - 1080 * k) / 2, oy: (H - 1920 * k) / 2 }; })();
+  VL.fx = (x) => VL.FRAME.ox + x * VL.FRAME.k;
+  VL.fy = (y) => VL.FRAME.oy + y * VL.FRAME.k;
+
+  // ---------- utilidades ----------
+  VL.clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+  VL.lerp = (a, b, k) => a + (b - a) * k;
+  VL.seg = (t, a, b) => VL.clamp((t - a) / (b - a));
+  VL.ease = {
+    inOut: (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2),
+    out: (x) => 1 - Math.pow(1 - x, 3),
+    outQuart: (x) => 1 - Math.pow(1 - x, 4),
+    outExpo: (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x)),
+    in: (x) => x * x * x,
+  };
+  VL.rng = function (seed) {
+    let a = seed >>> 0;
+    return function () {
+      a |= 0; a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  };
+  VL.hash = (a, b) => {
+    let h = Math.imul(a * 374761393 + b * 668265263, 1274126177);
+    h = (h ^ (h >>> 13)) * 1103515245;
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  };
+  VL.rgba = (hex, a) => {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  };
+  VL.INK = '#F2F0EA';
+  VL.GREY = '#8F8C86';
+  VL.ACCENTS = {
+    rojo: '#FF1A1A', cian: '#00E5FF', ambar: '#FFB000', verde: '#39FF6A',
+    violeta: '#8A2BFF', magenta: '#FF2BD6', blanco: '#F2F0EA',
+  };
+  VL.FONT = "'JetBrains Mono', ui-monospace, monospace";
+
+  // ---------- geometría del símbolo (viewBox 200 → pantalla) ----------
+  VL.geo = function (cx = 540, cy = 820, s = 3.0) {
+    const cols = [];
+    for (let k = 0; k < 7; k++) cols.push(cx + (k - 3) * 20 * s);
+    return {
+      cx, cy, s, cols,
+      R: 66 * s,                 // radio del vacío
+      top: cy - 86 * s, bottom: cy + 86 * s,
+      wA: [cx - 42 * s, cy + 42 * s], wB: [cx + 42 * s, cy - 42 * s],
+    };
+  };
+
+  // ---------- capas de post-procesado ----------
+  function mk(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+  let P = null;
+  function initPost() {
+    if (P) return P;
+    P = {};
+    P.scene = mk(W, H);
+    P.b1 = mk(W / 4, H / 4);
+    P.b2 = mk(W / 12, H / 12);
+    // grano: 6 texturas precalculadas
+    P.grain = [];
+    const r = VL.rng(77);
+    for (let g = 0; g < 6; g++) {
+      const c = mk(540, 960), x = c.getContext('2d');
+      const im = x.createImageData(540, 960);
+      for (let i = 0; i < im.data.length; i += 4) {
+        const v = (r() * 255) | 0;
+        im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255;
+      }
+      x.putImageData(im, 0, 0);
+      P.grain.push(c);
+    }
+    // scanlines
+    P.scan = mk(W, H);
+    const sx = P.scan.getContext('2d');
+    sx.fillStyle = 'rgba(0,0,0,0.22)';
+    for (let y = 0; y < H; y += 4) sx.fillRect(0, y, W, 1.5);
+    // viñeta
+    P.vig = mk(W, H);
+    const vx = P.vig.getContext('2d');
+    const gr = vx.createRadialGradient(W / 2, H * 0.45, H * 0.18, W / 2, H * 0.45, H * 0.72);
+    gr.addColorStop(0, 'rgba(0,0,0,0)');
+    gr.addColorStop(1, 'rgba(0,0,0,0.78)');
+    vx.fillStyle = gr; vx.fillRect(0, 0, W, H);
+    return P;
+  }
+  VL.sceneCtx = function () {
+    const p = initPost();
+    const c = p.scene.getContext('2d');
+    c.globalCompositeOperation = 'source-over';
+    c.globalAlpha = 1;
+    c.fillStyle = '#000'; c.fillRect(0, 0, W, H);
+    c.globalCompositeOperation = 'lighter';
+    return c;
+  };
+  // compone escena → salida con bloom, flash, scanlines, viñeta y grano
+  VL.post = function (out, frame, opt = {}) {
+    const p = initPost();
+    const bloom = opt.bloom ?? 1, flash = opt.flash ?? 0;
+    const b1 = p.b1.getContext('2d'), b2 = p.b2.getContext('2d');
+    b1.globalCompositeOperation = 'copy'; b1.filter = 'blur(3px)';
+    b1.drawImage(p.scene, 0, 0, p.b1.width, p.b1.height); b1.filter = 'none';
+    b2.globalCompositeOperation = 'copy'; b2.filter = 'blur(4px)';
+    b2.drawImage(p.b1, 0, 0, p.b2.width, p.b2.height); b2.filter = 'none';
+
+    out.globalCompositeOperation = 'source-over'; out.globalAlpha = 1;
+    out.drawImage(p.scene, 0, 0);
+    out.globalCompositeOperation = 'lighter';
+    out.imageSmoothingEnabled = true; out.imageSmoothingQuality = 'high';
+    out.globalAlpha = VL.clamp(0.85 * bloom, 0, 1); out.drawImage(p.b1, 0, 0, W, H);
+    out.globalAlpha = VL.clamp(0.9 * bloom, 0, 1); out.drawImage(p.b2, 0, 0, W, H);
+    if (bloom > 1.1) { out.globalAlpha = VL.clamp((bloom - 1) * 0.5, 0, 1); out.drawImage(p.b2, 0, 0, W, H); }
+    if (flash > 0) {
+      out.globalAlpha = 1;
+      out.fillStyle = opt.flashColor ? VL.rgba(opt.flashColor, flash * 0.22) : `rgba(242,240,234,${flash * 0.22})`;
+      out.fillRect(0, 0, W, H);
+    }
+    out.globalAlpha = 1;
+    out.globalCompositeOperation = 'source-over';
+    out.globalAlpha = opt.scan ?? 1; out.drawImage(p.scan, 0, 0); out.globalAlpha = 1;
+    out.globalAlpha = opt.vig ?? 1; out.drawImage(p.vig, 0, 0); out.globalAlpha = 1;
+    // grano sutil: en zonas planas y luminosas (horizontes, halos) un grano fuerte ensucia la imagen
+    const g = p.grain[frame % p.grain.length], gk = opt.grain ?? 1;
+    out.globalCompositeOperation = 'overlay'; out.globalAlpha = 0.11 * gk;
+    out.drawImage(g, 0, 0, W, H);
+    out.globalCompositeOperation = 'lighter'; out.globalAlpha = 0.01 * gk;
+    out.drawImage(g, 0, 0, W, H);
+    out.globalAlpha = 1; out.globalCompositeOperation = 'source-over';
+  };
+
+  // ---------- primitivas de luz ----------
+  // línea luminosa: halo ancho + cuerpo + núcleo caliente
+  VL.lightLine = function (c, x1, y1, x2, y2, col, w, k = 1) {
+    c.lineCap = 'round';
+    const pass = (lw, a, cc) => { c.strokeStyle = VL.rgba(cc, a * k); c.lineWidth = lw; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); };
+    pass(w * 7, 0.06, col);
+    pass(w * 3.2, 0.16, col);
+    pass(w, 0.95, col);
+    pass(Math.max(1.2, w * 0.3), 0.55, '#FFFFFF');
+  };
+
+  // ---------- el símbolo ----------
+  // st: { threads, top, bottom, vib, open, ring, ringColor, weft, weftGlow, ghost, accent, ca, dim }
+  VL.drawSymbol = function (c, g, st, t) {
+    const acc = st.accent;
+    const R = g.R * (st.open || 0);
+    const thr = st.threads ?? 1;
+    const dim = st.dim ?? 1;
+    const top = st.top ?? g.top, bottom = st.bottom ?? g.bottom;
+    const vib = st.vib || 0;
+    const coreW = 3 * g.s;
+
+    // fantasma de los hilos dentro del vacío
+    if ((st.ghost || 0) > 0 && thr > 0) {
+      c.lineCap = 'butt';
+      c.strokeStyle = VL.rgba(VL.INK, 0.1 * st.ghost * thr * dim);
+      c.lineWidth = coreW;
+      c.beginPath();
+      for (const x of g.cols) { c.moveTo(x, Math.max(top, g.cy - R)); c.lineTo(x, Math.min(bottom, g.cy + R)); }
+      c.stroke();
+    }
+
+    // urdimbre: 7 hilos (con vibración de cuerda y corte del vacío)
+    if (thr > 0) {
+      const passes = [[coreW * 5, 0.05], [coreW * 2.2, 0.14], [coreW, 0.92], [coreW * 0.35, 0.45]];
+      for (let pi = 0; pi < passes.length; pi++) {
+        const [lw, a] = passes[pi];
+        c.lineCap = 'butt';
+        c.lineWidth = lw;
+        c.strokeStyle = pi === 3 ? `rgba(255,255,255,${a * thr * dim})` : VL.rgba(VL.INK, a * thr * dim);
+        c.beginPath();
+        for (let k = 0; k < 7; k++) {
+          const X = g.cols[k], dx = X - g.cx;
+          const h = R > Math.abs(dx) ? Math.sqrt(R * R - dx * dx) : 0;
+          const segs = h > 0 ? [[top, g.cy - h], [g.cy + h, bottom]] : [[top, bottom]];
+          for (const [ya, yb] of segs) {
+            if (yb - ya < 1) continue;
+            const n = vib > 0.3 ? 48 : 1;
+            for (let i = 0; i <= n; i++) {
+              const y = ya + (yb - ya) * (i / n);
+              const u = (y - top) / Math.max(1, bottom - top);
+              const off = vib * Math.sin(Math.PI * u) * Math.sin(t * 23 + k * 1.7 + u * 9.0) * (0.6 + 0.4 * Math.sin(k * 2.3 + t * 3));
+              if (i === 0) c.moveTo(X + off, y); else c.lineTo(X + off, y);
+            }
+          }
+        }
+        c.stroke();
+      }
+    }
+
+    // onda de choque del vacío
+    if (st.ring != null && st.ring >= 0 && st.ring < 1) {
+      const rr = g.R * (1 + 1.9 * VL.ease.out(st.ring));
+      const a = Math.pow(1 - st.ring, 2);
+      const rc = st.ringColor || acc;
+      c.strokeStyle = VL.rgba(rc, 0.9 * a); c.lineWidth = 10 * (1 - st.ring) + 1.5;
+      c.beginPath(); c.arc(g.cx, g.cy, rr, 0, Math.PI * 2); c.stroke();
+      c.strokeStyle = VL.rgba(VL.INK, 0.5 * a); c.lineWidth = 2;
+      c.beginPath(); c.arc(g.cx, g.cy, rr * 0.93, 0, Math.PI * 2); c.stroke();
+    }
+
+    // trama: el hilo de color
+    if ((st.weft || 0) > 0) {
+      const p = st.weft;
+      const [ax, ay] = g.wA, [bx, by] = g.wB;
+      const hx = VL.lerp(ax, bx, p), hy = VL.lerp(ay, by, p);
+      const gk = (st.weftGlow ?? 1) * dim;
+      const ww = 5 * g.s;
+      const ca = st.ca || 0;
+      if (ca > 0.5) {
+        VL.lightLine(c, ax - ca, ay, hx - ca, hy, '#FF2A2A', ww * 0.8, 0.45 * gk);
+        VL.lightLine(c, ax + ca, ay, hx + ca, hy, '#2AB8FF', ww * 0.8, 0.45 * gk);
+      }
+      VL.lightLine(c, ax, ay, hx, hy, acc, ww, gk);
+      if (p < 1) { // cabeza incandescente
+        const gr = c.createRadialGradient(hx, hy, 0, hx, hy, 90);
+        gr.addColorStop(0, 'rgba(255,255,255,0.95)');
+        gr.addColorStop(0.15, VL.rgba(acc, 0.8));
+        gr.addColorStop(1, VL.rgba(acc, 0));
+        c.fillStyle = gr; c.beginPath(); c.arc(hx, hy, 90, 0, Math.PI * 2); c.fill();
+      }
+    }
+  };
+
+  // ---------- texto ----------
+  const GLYPHS = 'Ø#/\\|_=+<>01X:;*%';
+  VL.decodeText = function (c, str, x, y, opt) {
+    const size = opt.size || 40, spacing = opt.spacing ?? 0.42, prog = opt.prog ?? 1;
+    const alpha = opt.alpha ?? 1, align = opt.align || 'center';
+    const weight = opt.weight || 300, t = opt.t || 0, seed = opt.seed || 1;
+    c.font = `${weight} ${size}px ${VL.FONT}`;
+    c.textBaseline = 'middle'; c.textAlign = 'left';
+    const adv = c.measureText('M').width + size * spacing;
+    const total = adv * str.length - size * spacing;
+    let x0 = align === 'center' ? x - total / 2 : align === 'right' ? x - total : x;
+    const n = str.length;
+    for (let i = 0; i < n; i++) {
+      const ch = str[i];
+      if (ch === ' ') continue;
+      const ri = VL.clamp((prog * (n + 3) - i) / 3);
+      if (ri <= 0) continue;
+      let draw = ch;
+      if (ri < 1) draw = GLYPHS[Math.floor(VL.hash(i + seed * 31, Math.floor(t * 24)) * GLYPHS.length)];
+      const isAcc = opt.accentChar && ch === opt.accentChar && ri >= 1;
+      const col = isAcc ? opt.accent : (opt.color || VL.INK);
+      c.font = `${isAcc ? 600 : weight} ${size}px ${VL.FONT}`;
+      c.fillStyle = VL.rgba(col, alpha * (ri < 1 ? 0.55 + 0.45 * ri : 1));
+      c.fillText(draw, x0 + i * adv, y);
+    }
+  };
+
+  // HUD de esquinas (telemetría)
+  VL.hud = function (c, t, opt = {}) {
+    const a = opt.alpha ?? 1;
+    if (a <= 0) return;
+    c.font = `400 22px ${VL.FONT}`;
+    c.textBaseline = 'middle';
+    c.fillStyle = VL.rgba(VL.GREY, 0.9 * a);
+    const fps = 30, tt = Math.max(0, t);
+    const tc = [Math.floor(tt / 3600), Math.floor(tt / 60) % 60, Math.floor(tt) % 60, Math.floor((tt % 1) * fps)]
+      .map((v) => String(v).padStart(2, '0')).join(':');
+    c.textAlign = 'left'; c.fillText(opt.tl || 'VØID_LOOM / SYS.01', 72, 120);
+    c.textAlign = 'right'; c.fillText(tc, W - 72, 120);
+    c.textAlign = 'left'; c.fillText(opt.bl || 'GREYFRAME LABS', 72, 1640);
+    c.textAlign = 'right'; c.fillText(opt.br || 'SEÑAL 07/07', W - 72, 1640);
+    // corchetes de encuadre
+    c.strokeStyle = VL.rgba(VL.GREY, 0.55 * a); c.lineWidth = 2;
+    const m = 48, L = 36;
+    c.beginPath();
+    c.moveTo(m, m + L); c.lineTo(m, m); c.lineTo(m + L, m);
+    c.moveTo(W - m - L, m); c.lineTo(W - m, m); c.lineTo(W - m, m + L);
+    c.moveTo(m, 1700 - L); c.lineTo(m, 1700); c.lineTo(m + L, 1700);
+    c.moveTo(W - m - L, 1700); c.lineTo(W - m, 1700); c.lineTo(W - m, 1700 - L);
+    c.stroke();
+  };
+
+  // ---------- cierre: logotipo + firma ----------
+  VL.drawSignature = function (c, g, st, t) {
+    if ((st.wordAlpha || 0) > 0)
+      VL.decodeText(c, 'VØID_LOOM', g.cx, g.bottom + 150, {
+        size: 70, spacing: 0.42, prog: st.word, alpha: st.wordAlpha, t, seed: 3,
+        accentChar: 'Ø', accent: st.accent, weight: 300,
+      });
+    if ((st.tag || 0) > 0)
+      VL.decodeText(c, 'SEÑAL · RUIDO · MOTION EXPERIMENTAL', g.cx, g.bottom + 240, {
+        size: 22, spacing: 0.5, prog: VL.clamp(st.tag * 1.6), alpha: st.tag, t, seed: 5, color: VL.GREY, weight: 400,
+      });
+    const lines = st.creditLines || ['GREYFRAME LABS', 'greyframelab.github.io/labs'];
+    if ((st.credit || 0) > 0) {
+      VL.decodeText(c, lines[0], g.cx, 1500, { size: 24, spacing: 0.34, prog: VL.clamp(st.credit * 1.5), alpha: st.credit, t, seed: 7, color: '#BDBAB3', weight: 400 });
+      if (lines[1]) VL.decodeText(c, lines[1], g.cx, 1550, { size: 22, spacing: 0.06, prog: VL.clamp(st.credit * 1.5 - 0.3), alpha: st.credit * 0.9, t, seed: 9, color: VL.GREY, weight: 400 });
+    }
+  };
+
+  // ---------- STING: firma animada reutilizable (5.5 s) ----------
+  // Llamar con t local (0 → VL.STING_DUR). opts: { accent, creditLines, skipDrop }
+  VL.STING_DUR = 5.5;
+  VL.stingState = function (t, opts = {}) {
+    const g = opts.geo || VL.geo();
+    const e = VL.ease, sg = VL.seg;
+    const drop = opts.skipDrop ? 1 : e.out(sg(t, 0.0, 0.7));
+    const tOpen = 0.75, tWeft = 1.05;
+    const out = 1 - e.inOut(sg(t, 4.7, 5.5));
+    return {
+      accent: opts.accent || VL.ACCENTS.rojo,
+      creditLines: opts.creditLines,
+      threads: drop * out,
+      top: VL.lerp(g.cy, g.top, drop), bottom: VL.lerp(g.cy, g.bottom, drop),
+      vib: 14 * (1 - sg(t, 0.2, 1.6)) * (t > 0.2 ? 1 : 0),
+      open: e.outExpo(sg(t, tOpen, tOpen + 0.35)),
+      ring: t >= tOpen ? sg(t, tOpen, tOpen + 0.9) : -1,
+      weft: e.outQuart(sg(t, tWeft, tWeft + 0.28)),
+      weftGlow: (1 + 0.12 * Math.sin(t * 2.4)) * VL.clamp(out + (1 - sg(t, 4.7, 5.4)) * 0.6),
+      ghost: sg(t, 1.2, 2.0),
+      ca: 10 * (1 - sg(t, tWeft, tWeft + 0.5)) * (t >= tWeft ? 1 : 0),
+      word: sg(t, 1.5, 2.6), wordAlpha: sg(t, 1.5, 1.7) * out,
+      tag: sg(t, 2.6, 3.2) * out,
+      credit: sg(t, 3.0, 3.6) * out,
+      flash: Math.max(t >= tOpen ? 1 - sg(t, tOpen, tOpen + 0.5) : 0, t >= tWeft ? 0.7 * (1 - sg(t, tWeft, tWeft + 0.45)) : 0),
+    };
+  };
+  // dibuja el sting completo en un contexto de escena
+  VL.drawSting = function (c, t, opts = {}) {
+    const g = opts.geo || VL.geo();
+    const st = VL.stingState(t, opts);
+    const F = VL.FRAME, framed = W !== 1080 || H !== 1920;
+    if (framed) { c.save(); c.translate(F.ox, F.oy); c.scale(F.k, F.k); }
+    VL.drawSymbol(c, g, st, t);
+    VL.drawSignature(c, g, st, t);
+    if (framed) c.restore();
+    return st;
+  };
+
+  window.VL = VL;
+})();
+</script>
+<script src="espejos-score.js"></script>
+<script>
+/* VØID_LOOM — Lab 39 · Espejos. Determinista y sin estado: renderFrame(t, frame) depende solo de t.
+   Un muro curvo de 20.000 lamas de acero pulido y una sola luz roja rasante. Las lamas solo se ven cuando reflejan:
+   cada golpe las voltea en ondas y el reflejo rojo recorre el muro; en el clímax todas se alinean y devuelven la luz a cámara. */
+(function () {
+  const VL = window.VL, W = VL.W, H = VL.H, e = VL.ease, sg = VL.seg, clamp = VL.clamp, lerp = VL.lerp;
+  const ACC = VL.ACCENTS.rojo;
+  const Z = window.EDD, { T, EV, warp } = Z;
+  const DUR = T.sting + VL.STING_DUR;
+  window.DURATION = DUR; window.FPS = 60;
+  const TAU = Math.PI * 2, D2R = Math.PI / 180;
+  const NC = 110, NR = 44, RW = 26, PH0 = 1.05, Y0 = 0.3, DY = 0.42;
+  const SS = window.ESP_SS || 2, SW = W * SS, SH = H * SS;
+  const BAR_A = [-26, 0.4, 2], BAR_B = [14, 0.4, -2];   // la luz roja: una barra rasante a ras de suelo
+
+  const ofV = (v) => EV.filter((x) => x.v === v);
+  const KS = ofV("K"), SN = ofV("S"), HS = ofV('h'), GS = ofV('G'), BS = ofV('B');
+  const recent = (arr, t, n, maxAge) => { const o = []; for (const x of arr) { if (x.t > t) break; if (t - x.t < maxAge) o.push(x); } return o.slice(-n); };
+  function twist(t) { let v = 0, tp = 0, tg = 0; for (const x of BS) { if (x.t > t) break; v += (tg - v) * (1 - Math.exp(-(x.t - tp) / 0.3)); tp = x.t; tg = x.note * 0.35; } return v + (tg - v) * (1 - Math.exp(-(t - tp) / 0.3)); }
+  const W0 = TAU / 5;
+
+  // ================================================================ 1 · WebGL2
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const gl = cv.getContext('webgl2', { alpha: false, antialias: false, preserveDrawingBuffer: true });
+  gl.getExtension('EXT_color_buffer_float'); gl.getExtension('EXT_float_blend');
+  function prog(vs, fs, attrs) {
+    const sh = (t, s) => { const x = gl.createShader(t); gl.shaderSource(x, s); gl.compileShader(x); if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(x)); return x; };
+    const p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
+    attrs.forEach((a, i) => gl.bindAttribLocation(p, i, a)); gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+    const U = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+    for (let i = 0; i < n; i++) { const nm = gl.getActiveUniform(p, i).name.replace('[0]', ''); U[nm] = gl.getUniformLocation(p, nm); }
+    return { p, U };
+  }
+  const TS = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, TS); gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA16F, SW, SH);
+  for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+  const FS = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, FS); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, TS, 0);
+  { const d = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, d); gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, SW, SH); gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, d); }
+
+  // luz: reflejo de la barra roja (distancia angular rayo–segmento) + una tira blanca tenue arriba para dar forma
+  const LIGHT = `
+  uniform vec3 uA, uB, uCam; uniform float uLI, uWI;
+  float segAng(vec3 ro, vec3 rd, vec3 a, vec3 b) {
+    vec3 v = b - a, w0 = ro - a; float bb = dot(rd, v), c = dot(v, v), d = dot(rd, w0), e = dot(v, w0), den = max(c - bb * bb, 1e-5);
+    float tc = clamp((e - bb * d) / den, 0., 1.); vec3 q = a + v * tc; float sc = max(dot(q - ro, rd), 0.);
+    if (sc <= 0.) return 9.; return length(ro + rd * sc - q) / sc;
+  }
+  vec3 env(vec3 ro, vec3 rd) {
+    float ang = segAng(ro, rd, uA, uB);
+    vec3 red = vec3(1., 0.05, 0.035);
+    vec3 c = red * uLI * (1.8 * exp(-pow(ang / 0.07, 2.)) + 0.7 * exp(-pow(ang / 0.22, 2.)) + 0.07 * exp(-ang / 0.45)) + vec3(1., 0.32, 0.22) * uLI * 8. * exp(-pow(ang / 0.012, 2.));
+    float a2 = segAng(ro, rd, vec3(-30., 21., -6.), vec3(30., 21., -6.));
+    c += red * uLI * (0.5 * exp(-pow(a2 / 0.02, 2.)) + 0.08 * exp(-pow(a2 / 0.1, 2.)));
+    float aw = segAng(ro, rd, vec3(-30., 24., -2.), vec3(30., 24., -2.));
+    c += vec3(0.85, 0.9, 1.) * uWI * (0.6 * exp(-pow(aw / 0.008, 2.)) + 0.035 * exp(-pow(aw / 0.12, 2.))) + vec3(0.012, 0.012, 0.014) * max(rd.y, 0.);
+    return c;
+  }`;
+
+  // lamas: caja fina instanciada sobre el muro curvo; gira sobre su eje vertical
+  const VSL = `#version 300 es
+  precision highp float;
+  in vec3 aP; in vec3 aN; in vec2 aI;
+  uniform mat4 uVP; uniform float uT, uMir, uAl, uPh, uStill; uniform vec4 uW[4]; uniform vec4 uC[3]; uniform vec4 uRw[2]; uniform vec4 uH[4];
+  uniform vec3 uCam2, uLc;
+  out vec3 vW, vN; out float vEdge;
+  const float NC = ${NC}., NR = ${NR}., RW = ${RW}., PH0 = ${PH0}, Y0 = ${Y0}, DY = ${DY};
+  void main() {
+    float u = aI.x / (NC - 1.), v = aI.y / NR;
+    float ph = mix(-PH0, PH0, u), y = Y0 + aI.y * DY;
+    vec3 P = vec3(RW * sin(ph), y, -RW * cos(ph));
+    vec3 n = vec3(-sin(ph), 0., cos(ph)), tg = vec3(cos(ph), 0., sin(ph));
+    // campo de giro: dos ondas lentas que viajan + ondas de golpe que salen de un punto del muro
+    float s = ph * RW;
+    float th = (0.5 * sin(0.3 * s - 2.4 * uT + 0.12 * y + uPh) + 0.22 * sin(0.13 * s + 1.3 * uT - 0.2 * y + 1.3 - uPh * 0.5) + 0.05 * sin(1.9 * s + 0.4 * y + uT * 3.1)) * (1. - uStill);
+    for (int i = 0; i < 4; i++) { vec4 w = uW[i]; if (w.w <= 0.) continue;          // bombo: una ola que cruza el muro
+      float d = length(vec2(s - w.x, (y - w.y) * 1.4)), fr = w.z * 16., x = d - fr;
+      th += w.w * 0.9 * sin(x * 0.35) * exp(-x * x * 0.03) * exp(-w.z / 0.9);
+      if (w.w > 0.9 && w.z < 1.8) th += 6.2831853 * smoothstep(0., 1., clamp((w.z * 22. - d) / 5., 0., 1.)) * step(d, w.z * 22. + 0.01); }   // golpe fuerte: una cascada de lamas que dan la vuelta entera
+    for (int i = 0; i < 3; i++) { vec4 c = uC[i]; if (c.z <= 0.) continue;           // golpe grave: una columna gira de golpe
+      float d = abs(s - c.x); th += c.z * c.w * 1.1 * exp(-d * d * 0.35) * (1. - exp(-c.y / 0.02)) * exp(-c.y / 0.35); }
+    for (int i = 0; i < 2; i++) { vec4 r = uRw[i]; if (r.z <= 0.) continue;           // glitch: una fila entera se voltea
+      float d = abs(y - r.x); th -= r.z * 1.3 * exp(-d * d * 1.5) * (1. - exp(-r.y / 0.03)) * exp(-r.y / 0.4); }
+    float spk = 0.;
+    for (int i = 0; i < 4; i++) { vec4 h = uH[i]; if (h.w <= 0.) continue;            // ticks: destellos sueltos
+      float d = length(vec2(s - h.x, y - h.y)); spk += h.w * exp(-d * d * 0.6) * exp(-h.z / 0.12); }
+    // alineación: cada lama busca el ángulo que lleva la luz exactamente a la cámara
+    vec3 hv = normalize(normalize(uCam2 - P) + normalize(uLc - P));
+    float thA = atan(dot(hv, tg), dot(hv, n));
+    th = mix(th, thA, clamp(uAl + spk, 0., 1.));
+    float c = cos(th), sn = sin(th);
+    vec3 lp = aP * vec3(0.228, 0.195, 0.018);
+    vec3 X = tg * c - n * sn, Zz = n * c + tg * sn;
+    vec3 p = P + X * lp.x + vec3(0., 1., 0.) * lp.y + Zz * lp.z;
+    vec3 nb = X * aN.x + vec3(0., 1., 0.) * aN.y + Zz * aN.z;
+    if (aN.z > 0.5) nb += X * aP.x * 0.07 + vec3(0., 1., 0.) * aP.y * 0.07;   // cada espejo, levemente cóncavo: un degradado de luz dentro de cada lama
+    vN = normalize(nb);
+    vEdge = abs(aN.z) > 0.5 ? 0. : 1.;
+    vW = p;
+    p.y *= uMir;
+    gl_Position = uVP * vec4(p, 1.);
+  }`;
+  const FSL = `#version 300 es
+  precision highp float;
+  in vec3 vW, vN; in float vEdge; out vec4 o;
+  uniform float uMir, uDim;
+  ${LIGHT}
+  void main() {
+    vec3 V = normalize(uCam - vW), N = normalize(vN); if (dot(N, V) < 0.) N = -N;
+    vec3 R = reflect(-V, N);
+    float fr = 0.62 + 0.38 * pow(1. - max(dot(N, V), 0.), 5.);       // acero pulido: reflejo alto a cualquier ángulo
+    vec3 c = env(vW, R) * fr;
+    // difuso mínimo del rojo sobre el acero y canto que capta la luz
+    vec3 Lc = (uA + uB) * 0.5; float dl = length(Lc - vW);
+    c += vec3(1., 0.05, 0.035) * uLI * 0.02 * max(dot(N, normalize(Lc - vW)), 0.) / (1. + dl * dl * 0.01);
+    c += vEdge * vec3(1., 0.06, 0.04) * uLI * 0.03 / (1. + dl * 0.15);
+    c += vEdge * vec3(0.55, 0.6, 0.68) * 0.022 * (0.4 + 0.6 * smoothstep(0., 18., vW.y));   // canto de acero frío
+    c += vec3(0.012, 0.013, 0.016);
+    o = vec4(c * (uMir < 0. ? 0.3 : 1.) * (1. - uDim), length(uCam - vW));
+  }`;
+  const PL = prog(VSL, FSL, ['aP', 'aN', 'aI']);
+  const BOX = []; const face = (n, a, b, c, d) => { for (const p of [a, b, c, a, c, d]) BOX.push(...p, ...n); };
+  const P_ = (x, y, z) => [x * 2 - 1, y * 2 - 1, z * 2 - 1];
+  face([0, 0, 1], P_(0, 0, 1), P_(1, 0, 1), P_(1, 1, 1), P_(0, 1, 1)); face([0, 0, -1], P_(1, 0, 0), P_(0, 0, 0), P_(0, 1, 0), P_(1, 1, 0));
+  face([1, 0, 0], P_(1, 0, 1), P_(1, 0, 0), P_(1, 1, 0), P_(1, 1, 1)); face([-1, 0, 0], P_(0, 0, 0), P_(0, 0, 1), P_(0, 1, 1), P_(0, 1, 0));
+  face([0, 1, 0], P_(0, 1, 1), P_(1, 1, 1), P_(1, 1, 0), P_(0, 1, 0)); face([0, -1, 0], P_(0, 0, 0), P_(1, 0, 0), P_(1, 0, 1), P_(0, 0, 1));
+  const NBV = BOX.length / 6;
+  const INST = new Float32Array(NC * NR * 2); { let k = 0; for (let i = 0; i < NC; i++) for (let j = 0; j < NR; j++) { INST[k++] = i; INST[k++] = j; } }
+  const vaoL = gl.createVertexArray(); gl.bindVertexArray(vaoL);
+  { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(BOX), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 24, 0); gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 12);
+    const bi = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, bi); gl.bufferData(gl.ARRAY_BUFFER, INST, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 0, 0); gl.vertexAttribDivisor(2, 1); }
+
+  // suelo de laca negra (con el reflejo del muro dibujado debajo) y el charco de luz roja de la barra
+  const VSF = `#version 300 es
+  precision highp float; in vec3 aP; uniform mat4 uVP; out vec3 vW;
+  void main() { vW = vec3(aP.x * 60., 0., aP.y * 60.); gl_Position = uVP * vec4(vW, 1.); }`;
+  const FSF = `#version 300 es
+  precision highp float; in vec3 vW; out vec4 o; uniform float uDim;
+  ${LIGHT}
+  float segD(vec3 p, vec3 a, vec3 b) { vec3 v = b - a; float h = clamp(dot(p - a, v) / dot(v, v), 0., 1.); return length(p - a - v * h); }
+  void main() {
+    float d = segD(vW, uA, uB);
+    vec3 c = vec3(1., 0.05, 0.035) * uLI * (0.05 / (0.04 + d * d) * 0.08 + 0.006 * exp(-d * 0.25));
+    vec3 V = normalize(uCam - vW); vec3 R = reflect(-V, vec3(0., 1., 0.));
+    c += env(vW, R) * 0.05;
+    o = vec4(c * (1. - uDim), length(uCam - vW));
+  }`;
+  const PF = prog(VSF, FSF, ['aP']);
+  const vaoF = gl.createVertexArray(); gl.bindVertexArray(vaoF);
+  { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, 1, 1, 0, -1, 1, 0]), gl.STATIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0); }
+
+  // la barra de luz misma, con su halo en la bruma (aditiva, orientada a cámara)
+  const VSB = `#version 300 es
+  precision highp float; in vec3 aP; uniform mat4 uVP; uniform vec3 uA, uB, uCam; uniform float uWd; out vec2 vQ;
+  void main() { vec3 m = mix(uA, uB, aP.x * 0.5 + 0.5); vec3 v = normalize(uB - uA), tc = normalize(uCam - m), s = normalize(cross(v, tc));
+    vec3 p = m + s * aP.y * uWd + v * aP.x * uWd * 0.5 * sign(aP.x) * 0.; vQ = vec2(aP.x, aP.y * uWd); gl_Position = uVP * vec4(p, 1.); }`;
+  const FSB = `#version 300 es
+  precision highp float; in vec2 vQ; out vec4 o; uniform float uLI;
+  void main() { float d = abs(vQ.y), ends = smoothstep(1., 0.96, abs(vQ.x));
+    vec3 c = vec3(1., 0.06, 0.04) * uLI * (6. * exp(-pow(d / 0.03, 2.)) + 0.5 * exp(-pow(d / 0.35, 2.)) + 0.12 * exp(-d / 1.6)) * ends;
+    c += vec3(1., 0.75, 0.7) * uLI * 4. * exp(-pow(d / 0.012, 2.)) * ends;
+    o = vec4(c, 0.); }`;
+  const PB = prog(VSB, FSB, ['aP']);
+  const vaoB = gl.createVertexArray(); gl.bindVertexArray(vaoB);
+  { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, 1, 1, 0, -1, 1, 0]), gl.STATIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0); }
+
+  // composición: reducción 2× (antialias), desenfoque de profundidad suave, bruma roja, tonemap fílmico
+  const VSQ = `#version 300 es
+  in vec3 aP; out vec2 vUv; void main() { vUv = aP.xy * 0.5 + 0.5; gl_Position = vec4(aP.xy, 0., 1.); }`;
+  const FSQ = `#version 300 es
+  precision highp float; in vec2 vUv; out vec4 o; uniform sampler2D uS; uniform vec2 uRes; uniform float uFoc, uAp, uExp, uSeed;
+  vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0., 1.); }
+  float hsh(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233)) + uSeed) * 43758.5453); }
+  void main() {
+    vec2 px = 1. / uRes;
+    vec4 c0 = texture(uS, vUv);
+    float coc = clamp(uAp * abs(c0.a - uFoc) / max(c0.a, 0.1), 0., 9.);
+    vec3 acc = c0.rgb; float wsum = 1.;
+    if (coc > 0.6) { for (int i = 0; i < 16; i++) { float a = float(i) * 2.39996 + hsh(vUv) * 6.28, r = sqrt((float(i) + 0.5) / 16.) * coc;
+        vec4 s = texture(uS, vUv + vec2(cos(a), sin(a)) * r * px); float w = 1.; acc += s.rgb * w; wsum += w; } }
+    vec3 c = acc / wsum;
+    c = aces(c * uExp);
+    o = vec4(c, 1.);
+  }`;
+  const PQ = prog(VSQ, FSQ, ['aP']);
+  const vaoQ = gl.createVertexArray(); gl.bindVertexArray(vaoQ);
+  { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 0, 1, -1, 0, -1, 1, 0, 1, 1, 0]), gl.STATIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0); }
+
+  // ================================================================ 2 · cámara
+  const subv = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const nrm = (a) => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+  function viewProj(cam, tgt, fov, roll = 0) {
+    const f = nrm(subv(tgt, cam)); let r = nrm(cross(f, [0, 1, 0])); let u = cross(r, f);
+    if (roll) { const c = Math.cos(roll), s = Math.sin(roll); const r2 = [r[0] * c + u[0] * s, r[1] * c + u[1] * s, r[2] * c + u[2] * s]; u = cross(r2, f); r = r2; }
+    const V = [r[0], u[0], -f[0], 0, r[1], u[1], -f[1], 0, r[2], u[2], -f[2], 0, -dot(r, cam), -dot(u, cam), dot(f, cam), 1];
+    const a = W / H, fy = 1 / Math.tan(fov * D2R / 2), n = 0.05, fa = 300;
+    const P = [fy / a, 0, 0, 0, 0, fy, 0, 0, 0, 0, -(fa + n) / (fa - n), -1, 0, 0, -2 * fa * n / (fa - n), 0];
+    const O = new Float32Array(16); for (let c = 0; c < 4; c++) for (let rr = 0; rr < 4; rr++) { let s = 0; for (let k = 0; k < 4; k++) s += P[k * 4 + rr] * V[c * 4 + k]; O[c * 4 + rr] = s; }
+    return O;
+  }
+  // cámara: siempre en movimiento. tr = tiempo real (la cámara no se congela)
+  const arc = (ph, r, y) => [r * Math.sin(ph), y, -r * Math.cos(ph)];
+  function shot(tr) {
+    const port = H > W, F = port ? 1 : 0.75;
+    if (tr < T.mut) {            // OLA: travelling rápido a ras de las lamas
+      const u = tr / T.mut, ph = lerp(-1.05, -0.12, e.inOut(u));
+      return { cam: arc(ph, 21.5 + 1.2 * Math.sin(u * 3.1), 1.6 + 2.2 * u), tgt: arc(ph + 0.42, 25.2, 6.5 + 1.5 * Math.sin(u * 2.4)), fov: 66 * F, foc: 9, ap: 2.4, roll: -0.12 + 0.18 * e.inOut(u) };
+    }
+    if (tr < T.cut) {            // MAREA: grúa que sube y gira hasta ver la curva entera
+      const u = e.inOut(sg(tr, T.mut, T.cut)), ph = lerp(-0.25, 0.35, u);
+      const c0 = arc(-0.25, 21.5, 3.0), c1 = [8, 10.5, 7];
+      const cam = [lerp(c0[0], c1[0], u), lerp(c0[1], c1[1], u), lerp(c0[2], c1[2], u)];
+      // latigazos de cámara al empezar cada compás
+      const bk = (tr - T.mut) / T.bar, bf = bk - Math.floor(bk), whip = Math.exp(-bf * T.bar / 0.18) * (Math.floor(bk) % 2 ? 1 : -1) * (1 - Math.exp(-bf * T.bar / 0.02));
+      return { cam, tgt: [lerp(arc(0.17, 25.2, 6.5)[0], -2, u) + 5 * whip, lerp(6.5, 7, u), lerp(arc(0.17, 25.2, 6.5)[2], -26, u)], fov: lerp(66, 58, u) * F, foc: lerp(9, 28, u), ap: lerp(2.4, 0.8, u), roll: lerp(-0.03, 0.06, u) + 0.05 * whip };
+    }
+    if (tr < T.rupt) {           // QUIETUD: se acerca despacio al muro que se apaga
+      const u = e.inOut(sg(tr, T.cut, T.rupt));
+      return { cam: [lerp(8, 1.5, u), lerp(10.5, 6.5, u), lerp(7, -4, u)], tgt: [0, 7, -26], fov: lerp(58, 52, u) * F, foc: lerp(28, 21, u), ap: 0.9, roll: lerp(0.06, 0, u) };
+    }
+    const u = tr - T.rupt;        // REFLEJO: empuje hacia el muro encendido y vaivén (periódico en 5 s para el loop)
+    const push = e.out(sg(u, 0, 1.6)), lu = u > T.bar ? (u - T.bar) % (2 * T.bar) : 0, sw = u > T.bar ? Math.sin(W0 * lu) : 0;
+    const cz = lerp(-4, -10, push), drift = u > 3 * T.bar ? e.in(sg(u, 3 * T.bar, 3.5 * T.bar + 1)) : 0;
+    return { cam: [1.5 * (1 - push) + 4.2 * sw, 6.5 - 1.2 * push + 1.4 * Math.cos(W0 * lu), cz + 6 * drift], tgt: [2.4 * sw, 7, -26], fov: (52 + 6 * push) * F, foc: 15, ap: 1.4, roll: 0.07 * sw };
+  }
+
+  // ================================================================ 3 · render
+  let out = null;
+  window.renderFrame = function (tReal, frame) {
+    if (!out) out = document.getElementById('c').getContext('2d');
+    const t = (tReal >= T.cut && tReal < T.rupt) ? T.cut - 1e-4 : warp(tReal);
+    const c = VL.sceneCtx(); const ts = tReal - T.sting;
+    const fade = 1 - e.inOut(sg(tReal, T.sting - 0.9, T.sting + 0.15));
+    if (fade > 0.002) {
+      const cm = shot(tReal), M = viewProj(cm.cam, cm.tgt, cm.fov, cm.roll);
+      const a = tReal - T.rupt, frozen = tReal >= T.cut && tReal < T.rupt;
+      const still = frozen ? e.inOut(sg(tReal, T.cut, T.cut + 1.6)) : 0;
+      const kp = a >= 0 ? recent(KS, t, 1, 2).pop() : null;
+      const al = a >= 0 ? clamp(e.out(sg(a, 0, 0.12)) * (1 - 0.68 * e.inOut(sg(a, 0.5, 2.2))) + (a > 2.2 && kp ? 0.18 * Math.exp(-(t - kp.t) / 0.15) : 0)) : 0;
+      const LI = (1.0 + 2.2 * (a >= 0 ? Math.exp(-a / 0.5) : 0)) * (1 - 0.88 * still);
+      const S2 = (x) => (x - 0.5) * 2 * PH0 * RW, HY = Y0 + NR * DY;
+      const waves = new Float32Array(16); recent(KS, t, 4, 2.4).forEach((x, i) => waves.set([S2(x.px ?? 0.5), (x.py ?? 0.5) * HY, t - x.t, x.s], i * 4));
+      const cols = new Float32Array(12); recent(SN, t, 3, 1.5).forEach((x, i) => cols.set([S2(x.px ?? 0.5), t - x.t, x.s, x.side], i * 4));
+      const rows = new Float32Array(8); recent(GS, t, 2, 1.5).forEach((x, i) => rows.set([(0.15 + 0.7 * (((x.seed * 37) % 100) / 100)) * HY, t - x.t, x.s, 0], i * 4));
+      const hs = new Float32Array(16); recent(HS, t, 4, 0.5).forEach((x, i) => hs.set([S2(((x.seed * 53) % 100) / 100), ((x.seed * 29) % 100) / 100 * HY, t - x.t, x.s], i * 4));
+      const lc = [(BAR_A[0] + BAR_B[0]) / 2, BAR_A[1], BAR_A[2]];
+      { const kk = recent(KS, t, 1, 0.3).pop(), kf = frozen || !kk ? 0 : kk.s * Math.exp(-(t - kk.t) / 0.07), hit = a >= 0 ? Math.exp(-a / 0.12) : 0, shk = 0.12 * kf + 0.6 * hit;
+        if (shk > 0.001) { const j = (k) => Math.sin(tReal * (83 + k * 31) + k) * shk * 0.15; cm.cam = [cm.cam[0] + j(1), cm.cam[1] + j(2), cm.cam[2] + j(3)]; } }
+      const M2 = viewProj(cm.cam, cm.tgt, cm.fov, cm.roll); M.set(M2);
+      const setL = (U) => { gl.uniform3f(U.uA, ...BAR_A); gl.uniform3f(U.uB, ...BAR_B); gl.uniform3f(U.uCam, ...cm.cam); gl.uniform1f(U.uLI, LI); gl.uniform1f(U.uWI, 1); };
+      gl.bindFramebuffer(gl.FRAMEBUFFER, FS); gl.viewport(0, 0, SW, SH); gl.clearColor(0, 0, 0, 200); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      gl.enable(gl.DEPTH_TEST); gl.disable(gl.BLEND);
+      // reflejo del muro en el suelo (espejado), luego el suelo encima con transparencia simulada por atenuación
+      gl.useProgram(PL.p); gl.bindVertexArray(vaoL); setL(PL.U);
+      gl.uniformMatrix4fv(PL.U.uVP, false, M); gl.uniform1f(PL.U.uT, t); gl.uniform4fv(PL.U.uW, waves); gl.uniform1f(PL.U.uAl, al); gl.uniform4fv(PL.U.uC, cols); gl.uniform4fv(PL.U.uRw, rows); gl.uniform4fv(PL.U.uH, hs); gl.uniform1f(PL.U.uPh, twist(t)); gl.uniform1f(PL.U.uStill, still);
+      gl.uniform3f(PL.U.uCam2, ...cm.cam); gl.uniform3f(PL.U.uLc, ...lc); gl.uniform1f(PL.U.uDim, 0);
+      gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK);
+      gl.frontFace(gl.CW); gl.uniform1f(PL.U.uMir, -1); gl.drawArraysInstanced(gl.TRIANGLES, 0, NBV, NC * NR);
+      gl.frontFace(gl.CCW); gl.disable(gl.CULL_FACE);
+      gl.clear(gl.DEPTH_BUFFER_BIT);
+      gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+      gl.useProgram(PF.p); gl.bindVertexArray(vaoF); setL(PF.U); gl.uniformMatrix4fv(PF.U.uVP, false, M); gl.uniform1f(PF.U.uDim, 0);
+      gl.blendFuncSeparate(gl.ONE, gl.ONE, gl.ZERO, gl.ONE); gl.drawArrays(gl.TRIANGLES, 0, 6);
+      gl.disable(gl.BLEND); gl.clear(gl.DEPTH_BUFFER_BIT);
+      gl.useProgram(PL.p); gl.bindVertexArray(vaoL); gl.uniform1f(PL.U.uMir, 1); gl.drawArraysInstanced(gl.TRIANGLES, 0, NBV, NC * NR);
+      // la barra y su halo
+      gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFuncSeparate(gl.ONE, gl.ONE, gl.ZERO, gl.ONE);
+      gl.useProgram(PB.p); gl.bindVertexArray(vaoB); gl.uniformMatrix4fv(PB.U.uVP, false, M); gl.uniform3f(PB.U.uA, ...BAR_A); gl.uniform3f(PB.U.uB, ...BAR_B); gl.uniform3f(PB.U.uCam, ...cm.cam);
+      gl.uniform1f(PB.U.uLI, LI); gl.uniform1f(PB.U.uWd, 4.0); gl.drawArrays(gl.TRIANGLES, 0, 6);
+      gl.disable(gl.BLEND); gl.depthMask(true); gl.disable(gl.DEPTH_TEST);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H);
+      gl.useProgram(PQ.p); gl.bindVertexArray(vaoQ); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, TS); gl.uniform1i(PQ.U.uS, 0);
+      gl.uniform2f(PQ.U.uRes, W, H); gl.uniform1f(PQ.U.uFoc, cm.foc); gl.uniform1f(PQ.U.uAp, cm.ap); gl.uniform1f(PQ.U.uExp, 1.55); gl.uniform1f(PQ.U.uSeed, (frame % 64) * 0.137);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      c.globalAlpha = fade; c.drawImage(cv, 0, 0, W, H); c.globalAlpha = 1;
+    }
+    let fl = 0, bloom = 1.0, flashColor; { const a = tReal - T.rupt; if (a >= 0 && tReal < T.sting) { fl = 0.9 * Math.exp(-a / 0.14); flashColor = a < 0.06 ? undefined : ACC; bloom = 1.0 + 0.8 * Math.exp(-a / 0.4); } }
+    if (ts >= 0) { const st = VL.drawSting(c, ts, { accent: ACC }); fl = st.flash; bloom = 0.8 + 0.5 * st.flash; }
+    VL.post(out, frame, { bloom, flash: fl, flashColor, grain: 0.3, scan: 0, vig: 1 });
+  };
+})();
+</script>
+<script src="../shared/motion-timeline.js"></script>
+<script>
+(async () => {
+  if (new URLSearchParams(location.search).has('render')) return;
+  await Promise.race([Promise.all([300, 400, 600].map((w) => document.fonts.load(`${w} 40px 'JetBrains Mono'`, 'VØID_LOOMÑ'))), new Promise((r) => setTimeout(r, 2500))]);
+  const Z = window.EDD, T = Z.T;
+  MotionTimeline.mount({
+    duration: window.DURATION,
+    render: (t) => window.renderFrame(t, Math.floor(t * 60)),
+    acts: [[0, 'OLA'], [+T.mut.toFixed(3), 'MAREA'], [+T.cut.toFixed(3), 'QUIETUD'], [+T.rupt.toFixed(3), 'REFLEJO'], [+T.sting.toFixed(3), 'FIRMA']],
+    accent: '#FF1A1A',
+    audio: 'espejos.m4a',
+    live: {
+      loops: Z.LOOPS.map(([a, b]) => [+a.toFixed(4), +b.toFixed(4)]),
+      hits: Z.EV.filter((x) => x.v === 'K' || x.v === 'R').map((x) => +x.t.toFixed(4)),
+      bpm: T.bpm,
+      stems: { dron: 'espejos-stems/dron.m4a', golpes: 'espejos-stems/golpes.m4a', ritmo: 'espejos-stems/ritmo.m4a', ruptura: 'espejos-stems/ruptura.m4a' },
+    },
+  });
+})();
+</script>
+</body>
+</html>
