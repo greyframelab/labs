@@ -675,7 +675,8 @@ canvas{width:100vw;height:100vh;display:block}
   gl.texImage3D(gl.TEXTURE_3D, 0, gl.R8, NV, NV, NV, 0, gl.RED, gl.UNSIGNED_BYTE, NOI);
   for (const p of [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T, gl.TEXTURE_WRAP_R]) gl.texParameteri(gl.TEXTURE_3D, p, gl.REPEAT);
   gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  const VW = Math.round(W / 2), VH = Math.round(H / 2);
+  const VDIV = /[?&]live\b/.test(location.search) ? 1 : 2;   // en el live, el volumen a resolución completa (proyección)
+  const VW = Math.round(W / VDIV), VH = Math.round(H / VDIV);
   const VOL = (() => { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA16F, VW, VH);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);

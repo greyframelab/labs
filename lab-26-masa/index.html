@@ -388,7 +388,7 @@ canvas{width:100vw;height:100vh;display:block}
   const T = { pull0: 2.2, pull1: 7.2, crack0: 6.2, tense: 8.8, freeze: 12.4, rupt: 13.0, fade0: 18.2, sting: 19.0 };
   const DUR = T.sting + VL.STING_DUR;
   window.DURATION = DUR; window.FPS = FPS;
-  const SCALE = window.MASA_SCALE || 0.5;
+  const SCALE = /[?&]live\b/.test(location.search) ? 1 : (window.MASA_SCALE || 0.5);   // en el live, a resolución completa (proyección)
   const RW = Math.round(W * SCALE), RH = Math.round(H * SCALE);
 
   // ---------------------------------------------------------------- celdas (direcciones de fractura)
