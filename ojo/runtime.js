@@ -63,7 +63,11 @@
           lastF = now;
           if (((S.device || '') + '@' + S.res) !== camKey) self.camera();
           const wall = OJO.wall();
-          let model = visionOn ? V.update(now, eng, S) : remote;
+          V.configure(S);
+          const pmal = S.p && S.p.malla;
+          eng.wantKeypoints(S.mode === 'malla' && !!pmal && (pmal[4] || 0) > 0.01, 0.12 + (1 - ((pmal && pmal[4]) || 0)) * 0.4);
+          const track = S.tracking !== false;
+          let model = !track ? null : visionOn ? V.update(now, eng, S) : remote;
           if (!visionOn && remote && now - remoteAt > 4000) model = null;
           // cara principal para los modos: la que tiene contacto o la más grande
           let face = null, focus = null;

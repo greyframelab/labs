@@ -161,6 +161,7 @@ body.solo{cursor:none}
       <div class="chip">FPS <b id="cFps">—</b></div>
     </div>
     <div class="tools">
+      <button class="tbtn" id="bTrackTop" title="Seguimiento de personas por IA (T)">SEGUIMIENTO</button>
       <button class="tbtn" id="bOut" title="Abrir la ventana de salida (O)">SALIDA</button>
       <button class="tbtn" id="bSnd" title="Sonido (S)">SONIDO</button>
       <button class="tbtn" id="bShot" title="Captura PNG (C)">CAPTURA</button>
@@ -172,7 +173,7 @@ body.solo{cursor:none}
 
   <main>
     <section class="modes">
-      <div class="p-head"><span class="lbl">MODOS</span><span class="n">1 – 7</span></div>
+      <div class="p-head"><span class="lbl">MODOS</span><span class="n">1 – 0</span></div>
       <div id="modeList"></div>
       <div class="auto-box">
         <div class="auto-row"><button class="tbtn" id="bAuto" title="Recorre los modos solo (P)">AUTO</button>
@@ -211,6 +212,10 @@ body.solo{cursor:none}
         <div class="seg" id="anSeg"><button data-a="0">NADA</button><button data-a="1">FORMA</button><button data-a="2" class="on">DATOS</button></div>
         <div id="gList"></div>
         <div class="row">
+          <button class="tbtn" id="bTrack" title="Seguimiento de personas por IA (T)">SEGUIMIENTO</button>
+          <button class="tbtn" id="bHands" title="Detectar manos">MANOS</button>
+        </div>
+        <div class="row">
           <button class="tbtn" id="bMirror" title="Espejo (M)">ESPEJO</button>
           <button class="tbtn" id="bFreeze" title="Congelar (espacio)">CONGELAR</button>
           <button class="tbtn" id="bBlack" title="Negro (B)">NEGRO</button>
@@ -230,13 +235,14 @@ body.solo{cursor:none}
   </main>
 
   <footer>
-    <span><b>1–7</b> MODO</span><span><b>A</b> ANÁLISIS</span><span><b>M</b> ESPEJO</span><span><b>ESPACIO</b> CONGELAR</span><span><b>B</b> NEGRO</span><span><b>F</b> FIRMA</span><span><b>P</b> AUTO</span><span><b>H</b> SOLO PREVIA</span><span><b>?</b> ATAJOS</span>
+    <span><b>1–0</b> MODO</span><span><b>T</b> SEGUIMIENTO</span><span><b>A</b> ANÁLISIS</span><span><b>M</b> ESPEJO</span><span><b>ESPACIO</b> CONGELAR</span><span><b>B</b> NEGRO</span><span><b>F</b> FIRMA</span><span><b>P</b> AUTO</span><span><b>H</b> SOLO PREVIA</span><span><b>?</b> ATAJOS</span>
   </footer>
 </div>
 
 <div id="help"><div class="box">
   <h4>ATAJOS</h4>
-  <b>1 – 7</b><span>MODO</span>
+  <b>1 – 9 · 0</b><span>MODO</span>
+  <b>T</b><span>SEGUIMIENTO SÍ / NO</span>
   <b>← →</b><span>MODO ANTERIOR / SIGUIENTE</span>
   <b>A</b><span>ANÁLISIS: NADA · FORMA · DATOS</span>
   <b>M</b><span>ESPEJO</span>

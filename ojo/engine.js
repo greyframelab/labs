@@ -37,7 +37,17 @@
     { id: 'memoria', name: 'MEMORIA', accent: 'magenta', trail: 0.1,
       idea: 'Cada zona de la imagen vive en un instante distinto.',
       params: [['profundidad', 'RETARDO', 0.7], ['forma', 'FORMA', 0.67], ['color', 'COLOR', 0.5], ['contraste', 'CONTRASTE', 0.5]] },
+    { id: 'malla', name: 'MALLA', accent: 'cian', trail: 0.0,
+      idea: 'Tu cara en polígonos iluminados; todo lo que acercas, tejido en malla.',
+      params: [['fondo', 'FONDO', 0.12], ['luz', 'LUZ', 0.4], ['relleno', 'RELLENO', 0.8], ['alambre', 'ALAMBRE', 0.35], ['entorno', 'ENTORNO', 0.6]] },
+    { id: 'objetos', name: 'OBJETOS', accent: 'ambar', trail: 0.0,
+      idea: 'Nombra lo que ve a tu alrededor, con su grado de certeza.',
+      params: [['fondo', 'FONDO', 0.4], ['certeza', 'CERTEZA MÍN.', 0.25], ['personas', 'PERSONAS', 1], ['contorno', 'CONTORNO', 0.4]] },
+    { id: 'entrada', name: 'ENTRADA', accent: 'blanco', trail: 0.0,
+      idea: 'La imagen como la recibe la red: bloques de píxeles y sus valores.',
+      params: [['celda', 'TAMAÑO', 0.4], ['niveles', 'NIVELES', 0.35], ['numeros', 'VALORES', 0.7], ['foco', 'FOCO EN TI', 0.8]] },
   ];
+  OJO.overlayOn = (S) => S.tracking !== false && (S.analysis > 0 || S.mode === 'malla' || S.mode === 'objetos');
   OJO.modeIndex = (id) => Math.max(0, OJO.MODES.findIndex((m) => m.id === id));
 
   OJO.defaultState = function () {
@@ -45,6 +55,8 @@
       mode: 'profundidad',
       p: {}, acc: {},
       analysis: 2,          // 0 nada · 1 geometría · 2 geometría + datos
+      tracking: true,       // SEGUIMIENTO: IA de cara, cuerpo y manos
+      hands: true,
       trail: null,          // null = la del modo
       bloom: 0.3, grain: 0.22, ca: 0.25,
       mirror: true, freeze: false, black: false,
@@ -423,12 +435,67 @@ void main(){
   float pulse = (float(k) == uFocus) ? 1. : 0.;
   vec3 col = uAcc * smoothstep(.02, .8, a) * .85 + vec3(1., .97, .94) * smoothstep(.85, 1.8, a) * .8;
   col *= .55 + .45 * pulse + uEnergy * .3;
-  float fm = faceMask(lc);
-  col += uAcc * fm * uContact * .6;
+  // en el CONTACTO solo queda encendida la casilla de foco
+  col *= 1. - uContact * .6 * (1. - pulse);
   // separación entre casillas
   vec2 e = min(lc, 1. - lc) * uRes / N * (1. - uP.z * .7);
   float gap = smoothstep(.5, 1.5, min(e.x, e.y));
   col *= gap;
+  o = vec4(col, 1.);
+}`;
+
+  // MALLA y OBJETOS: fondo casi negro; la malla y las detecciones las dibuja la capa de análisis
+  const FS_FONDO = HEAD + `
+float Lc(vec2 c){ return dot(cam(c), vec3(.299, .587, .114)); }
+void main(){
+  vec2 cuv = C(vUV);
+  float l = texture(uLuma, cuv).g;
+  vec4 F = texture(uFeat, cuv);
+  float bg = uP.x;
+  vec3 col = vec3(pow(l, 1.3)) * bg * .55;
+  // contorno técnico tenue para situar la escena
+  col += vec3(.9) * smoothstep(.3, .7, F.r) * uP.w * .06;
+  col *= 1. - uContact * (1. - faceMask(vUV)) * .6;
+  o = vec4(col, 1.);
+}`;
+
+  // ENTRADA: el tensor. Bloques cuantizados con su valor (0–255) escrito dentro; más resolución donde estás
+  const FS_ENTRADA = HEAD + `
+uniform sampler2D uAtlas;
+float glyph(float ch, vec2 lc){
+  float g = clamp(ch - 32., 0., 95.);
+  vec2 gi = vec2(mod(g, 16.), floor(g / 16.));
+  return texture(uAtlas, (gi + vec2(lc.x, 1. - lc.y)) / vec2(16., 6.)).a;
+}
+void main(){
+  vec2 px = vUV * uRes;
+  float cs = floor((14. + uP.x * 70.) * uRes.y / 1080.);
+  float fm = faceMask(vUV) * step(.01, uP.w);
+  if (fm > .5) cs = max(6., floor(cs / (1. + floor(uP.w * 2.5))));
+  vec2 cell = floor(px / cs), lc = fract(px / cs);
+  vec2 cuv = C((cell + .5) * cs / uRes);
+  vec2 d = uCover.xy * cs / uRes * .25;
+  float l = (dot(cam(cuv + d), vec3(.299,.587,.114)) + dot(cam(cuv - d), vec3(.299,.587,.114))
+           + dot(cam(cuv + vec2(d.x, -d.y)), vec3(.299,.587,.114)) + dot(cam(cuv + vec2(-d.x, d.y)), vec3(.299,.587,.114))) * .25;
+  float N = 2. + floor(uP.y * 14.);
+  float q = floor(l * N + .5) / N;
+  float mot = texture(uFeat, cuv).a;
+  float gap = step(1. / cs, lc.x) * step(1. / cs, lc.y);
+  vec3 col = vec3(q) * .82 * gap;
+  // valor numérico centrado (3 dígitos)
+  float v = floor(q * 255. + .5);
+  vec2 tl = (lc - vec2(.5 - .27, .5 - .14)) / vec2(.54, .28);
+  if (cs >= 22. && uP.z > .01 && tl.x > 0. && tl.x < 1. && tl.y > 0. && tl.y < 1.) {
+    float k = floor(tl.x * 3.);
+    float dgt = k < .5 ? floor(v / 100.) : k < 1.5 ? mod(floor(v / 10.), 10.) : mod(v, 10.);
+    float gv = glyph(48. + dgt, vec2(fract(tl.x * 3.), tl.y));
+    vec3 ink = q > .5 ? vec3(0.) : vec3(.9);
+    col = mix(col, ink, gv * uP.z * .9);
+  }
+  // los bloques que cambian se marcan en el acento
+  col = mix(col, uAcc * (.35 + q), smoothstep(.15, .6, mot) * .55 * gap);
+  col += uAcc * fm * .06 * gap;
+  col *= 1. - uContact * (1. - faceMask(vUV)) * .6;
   o = vec4(col, 1.);
 }`;
 
@@ -561,6 +628,7 @@ void main(){
       pstep: prog('particulas', FS_PSTEP), part: prog('flujo', FS_POINTS, VS_PART), fbg: prog('flujo-fondo', FS_FLUJO_BG),
       codigo: prog('codigo', FS_CODIGO), atencion: prog('atencion', FS_ATENCION), neuronas: prog('neuronas', FS_NEURONAS),
       histw: prog('memoria-escritura', FS_HIST_W), memoria: prog('memoria', FS_MEMORIA),
+      fondo: prog('malla-objetos', FS_FONDO), entrada: prog('entrada', FS_ENTRADA),
       trail: prog('estela', FS_TRAIL), comp: prog('composicion', FS_COMP), down: prog('bloom-baja', FS_DOWN), up: prog('bloom-sube', FS_UP), final: prog('final', FS_FINAL),
     };
 
@@ -715,7 +783,8 @@ void main(){
     let video = null, li = 0, fi = 0, si = 0, frame = 0, lastT = 0, salMax = 0.4;
     let curMode = null, transT = -1, transSeed = 0;
     let vis = { face: null, contact: 0, energy: 0 };
-    let salBuf = null, energy = 0;
+    let salBuf = null, energy = 0, keyBuf = null, wantKeys = false, keyThr = 0.25, keysT = 0;
+    const keys = [];
     const peaks = [];
     let stingCanvas = null, stingDraw = null;
     let pendingCapture = null;
@@ -772,6 +841,23 @@ void main(){
       fi = 1 - fi; pr = use(P.flow); target(A.flow[fi]); common(pr, t); bindT(pr, 'uPrev', A.flow[1 - fi].t); quad();
       si = 1 - si; pr = use(P.sal); target(A.sal[si]); common(pr, t); bindT(pr, 'uPrev', A.sal[1 - si].t); quad();
       pr = use(P.key); target(A.key); common(pr, t); quad();
+      // lectura de puntos clave (esquinas) para la malla del entorno
+      if (wantKeys && frame % 3 === 0 && cbf) {
+        const kw = AW / 8, kh = AH / 8;
+        if (!keyBuf || keyBuf.length !== kw * kh * 4) keyBuf = new Float32Array(kw * kh * 4);
+        target(A.key);
+        gl.readPixels(0, 0, kw, kh, gl.RGBA, gl.FLOAT, keyBuf);
+        keys.length = 0;
+        for (let j = 0; j < kh; j++) for (let i = 0; i < kw; i++) {
+          const q = (j * kw + i) * 4, r = keyBuf[q];
+          if (r < keyThr) continue;
+          const cu = (i + keyBuf[q + 1]) / kw, cv = (j + keyBuf[q + 2]) / kh;
+          const x = (cu - cover[2]) / cover[0], y = 1 - (cv - cover[3]) / cover[1];
+          if (x < 0 || x > 1 || y < 0 || y > 1) continue;
+          keys.push(x * W, y * H, Math.min(1, r));
+        }
+        keysT = performance.now();
+      }
       // lectura de saliencia: picos para la mirada y normalización
       if (frame % 5 === 0 && cbf) {
         const sw = AW / 4, shh = AH / 4;
@@ -859,6 +945,10 @@ void main(){
         if (nrFocus >= N * N) nrFocus = 0;
         u1(pr, 'uFocus', nrFocus);
         quad();
+      } else if (id === 'entrada') {
+        const pr = use(P.entrada); common(pr, t); bindT(pr, 'uAtlas', atlasTex); if (atlasReady) quad();
+      } else if (id === 'malla' || id === 'objetos') {
+        const pr = use(P.fondo); common(pr, t); quad();
       } else {
         const pr = use(id === 'bordes' ? P.bordes : P.atencion); common(pr, t); quad();
       }
@@ -898,7 +988,7 @@ void main(){
       const tk = transT >= 0 ? Math.max(0, 1 - (t - transT) / 0.7) : 0;
       if (tk <= 0) transT = -1;
       pr = use(P.comp); target(R.comp);
-      bindT(pr, 'uTrailT', R.trail[0].t); bindT(pr, 'uOver', S.analysis > 0 ? overTex : black); bindT(pr, 'uTrans', R.trans.t);
+      bindT(pr, 'uTrailT', R.trail[0].t); bindT(pr, 'uOver', OJO.overlayOn(S) ? overTex : black); bindT(pr, 'uTrans', R.trans.t);
       bindT(pr, 'uSting', stingOn ? stingTex : black);
       u1(pr, 'uTransK', tk * tk); u1(pr, 'uSeedT', transSeed + Math.floor(t * 30) * 0.37); u1(pr, 'uBlack', S.black ? 1 : 0);
       u1(pr, 'uStingK', stingK * 0.92); u1(pr, 'uOverK', 1 - stingK); quad();
@@ -946,6 +1036,9 @@ void main(){
       },
       get energy() { return energy; },
       get zoom() { return zoomK; },
+      get keys() { return keys; },
+      get keysT() { return keysT; },
+      wantKeypoints(on, thr) { wantKeys = on; if (thr != null) keyThr = thr; },
       toScreen(u, v) {
         const uu = S.mirror ? 1 - u : u;
         return [((uu - cover[2]) / cover[0]) * W, ((v - coverDy) / cover[1]) * H];
