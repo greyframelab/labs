@@ -127,6 +127,8 @@
       const prevQ = MIX.quality;
       traceState(m);
       MIX = m.mix; FX = m.fx;
+      if (m.pres && PRES_ && m.pres.hit > PRES_.hit) presHit = 1;   // OJO · fin del contacto: impacto
+      PRES_ = m.pres || null;
       for (const k in m.decks) {
         const s = m.decks[k], d = D[k];
         if (!s) continue;
@@ -358,7 +360,7 @@
     const age = (p - hs[k]) / Math.max(0.25, Math.abs(rate || 1));
     return age < 0.4 ? Math.exp(-age * 16) : 0;
   };
-  let now_ = 0, scanOn = false;
+  let now_ = 0, scanOn = false, PRES_ = null, presHit = 0;
   let cur = 0, blackS = 0, fpsN = 0, fpsT = performance.now(), lastPrev = 0, info = {};
   function drawDeck(k, w, live) {
     const d = D[k];
@@ -470,7 +472,7 @@
     gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, src.t); gl.uniform1i(U.FB, 4);
     gl.uniform1f(U.aw, ra.w); gl.uniform1f(U.bw, rb.w); gl.uniform1f(U.ga, ga); gl.uniform1f(U.gb, gb);
     gl.uniform1f(U.fa, fa); gl.uniform1f(U.fb, fb);
-    gl.uniform1f(U.trail, FX.trail); gl.uniform1f(U.flash, FX.hits * env);
+    gl.uniform1f(U.trail, FX.trail); gl.uniform1f(U.flash, Math.min(1, FX.hits * env + presHit)); presHit *= 0.86; if (presHit < 0.01) presHit = 0;
     gl.uniform1f(U.split, FX.split * (0.25 + 0.75 * env) + (FX.glitch ? 0.6 : 0));
     gl.uniform1f(U.inv, FX.invert ? 1 : 0); gl.uniform1f(U.black, blackS); gl.uniform1f(U.bright, FX.bright);
     gl.uniform1f(U.time, now / 1000); gl.uniform1f(U.aspect, cv.width / cv.height); gl.uniform1f(U.glitch, FX.glitch ? 1 : 0);
@@ -483,7 +485,7 @@
     let fin = dst;
     if (CL.C.prog && FX.cMix > 0.001) {
       const outF = CF[ci], prevF = CF[ci ^ 1];
-      CL.pass({ fb: outF.fb, w: cv.width, h: cv.height, img: dst.t, a: T.A0, b: T.B0, prev: prevF.t, t: now / 1000, golpe: env, bands: BANDS, mix: FX.cMix, acc: hex(FX.tintC) });
+      CL.pass({ fb: outF.fb, w: cv.width, h: cv.height, img: dst.t, a: T.A0, b: T.B0, prev: prevF.t, t: now / 1000, golpe: env, bands: BANDS, mix: FX.cMix, acc: hex(FX.tintC), pres: PRES_ });
       fin = outF; ci ^= 1;
     }
     // historial del escaneo: solo se graba con el efecto activo; al encenderlo se rellena con el frame actual

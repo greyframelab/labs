@@ -208,11 +208,28 @@
   }
   new ResizeObserver(sizePrev).observe(view);
 
+  // → VØID_LOOM LIVE: presencia en la sala, ~15 veces por segundo y solo con números (nunca la imagen)
+  const presCh = new BroadcastChannel('voidloom-presencia');
+  let presT = 0;
+  function sendPresence(now, model, n, energy) {
+    if (now - presT < 66) return; presT = now;
+    let x = 0.5, y = 0.5, size = 0;
+    const [cw, chh] = rt.eng.camSize;
+    if (n && cw) {
+      let best = null;
+      model.subjects.forEach((s) => { if ((s.gone || 0) > 0.5) return; const a = s.box[2] * s.box[3]; if (!best || a > best.a) best = { s, a }; });
+      if (best) { const b = best.s.box; x = (b[0] + b[2] / 2) / cw; y = (b[1] + b[3] * 0.45) / chh; size = Math.min(1, Math.sqrt(best.a / (cw * chh)) * 2); if (S.mirror) x = 1 - x; }
+    }
+    presCh.postMessage({ type: 'presencia', n, energy: energy || 0, contact: model ? model.contact || 0 : 0, x, y, size, ts: Date.now() });
+  }
+
   let lastUI = 0;
   rt.onFrame = (now, model) => {
     if (rt.localVision) rt.vision.drainEvents().forEach(onEvent);
     const n = model && model.subjects ? model.subjects.filter((s) => (s.gone || 0) < 0.5).length : 0;
-    snd.update(outAlive() && outInfo ? outInfo.energy : rt.eng.energy, n, model ? model.contact : 0, S.mode);
+    const energyNow = outAlive() && outInfo ? outInfo.energy : rt.eng.energy;
+    sendPresence(now, model, n, energyNow);
+    snd.update(energyNow, n, model ? model.contact : 0, S.mode);
     // AUTO
     if (autoOn) {
       const k = (now - autoT0) / (autoSec * 1000);

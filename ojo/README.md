@@ -50,6 +50,9 @@ Dron grave en Re que sigue la energía de la escena, pulso IDM contenido que se 
 ## Instalación
 `ojo/index.html?instalacion` arranca solo y entra en AUTO (cambia de modo cada 20, 45 o 90 s, y espera si alguien está en CONTACTO). En la app de escritorio, el modo instalación abre además la salida a pantalla completa.
 
+## Con VØID_LOOM LIVE
+OJO envía siempre, por `BroadcastChannel('voidloom-presencia')`, un resumen de la sala ~15 veces por segundo: personas, posición de la principal, movimiento y contacto. Solo números, nunca la imagen. Con OJO abierto en otra ventana y el botón OJO activado en LIVE, el directo reacciona a la gente (ver [`live/`](../live/README.md)).
+
 ## Atajos
 `1–9, 0` modo · `T` seguimiento · `← →` modo anterior / siguiente · `A` análisis · `M` espejo · `espacio` congelar · `B` negro · `F` firma · `P` auto · `O` salida · `S` sonido · `R` grabar · `C` captura · `H` solo previa · `?` ayuda.
 
