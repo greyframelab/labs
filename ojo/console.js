@@ -16,7 +16,7 @@
     const sv = JSON.parse(localStorage.getItem(KEY) || 'null');
     if (sv) {
       // v2: el bloom, el grano y la aberración bajaron; los ajustes guardados antes vuelven al nuevo valor
-      const keys = sv.v >= 2 ? ['mode', 'analysis', 'bloom', 'grain', 'ca', 'mirror', 'contactSens', 'device', 'res'] : ['mode', 'analysis', 'mirror', 'contactSens', 'device', 'res'];
+      const keys = sv.v >= 2 ? ['mode', 'analysis', 'bloom', 'grain', 'ca', 'mirror', 'contactSens', 'device', 'res', 'tracking', 'hands'] : ['mode', 'analysis', 'mirror', 'contactSens', 'device', 'res'];
       keys.forEach((k) => { if (sv[k] != null) S[k] = sv[k]; });
       if (sv.p) OJO.MODES.forEach((m) => { if (Array.isArray(sv.p[m.id]) && sv.p[m.id].length === m.params.length) S.p[m.id] = sv.p[m.id]; });
       if (sv.acc) OJO.MODES.forEach((m) => { if (OJO.ACCENTS[sv.acc[m.id]]) S.acc[m.id] = sv.acc[m.id]; });
@@ -59,7 +59,7 @@
   OJO.MODES.forEach((m, i) => {
     const b = document.createElement('button');
     b.className = 'mode'; b.dataset.id = m.id;
-    b.innerHTML = `<span class="k">${i + 1}</span><span class="nm"><b>${m.name}</b><span>${m.idea}</span></span>`;
+    b.innerHTML = `<span class="k">${(i + 1) % 10}</span><span class="nm"><b>${m.name}</b><span>${m.idea}</span></span>`;
     b.onclick = () => setMode(m.id);
     list.appendChild(b);
   });
@@ -113,6 +113,10 @@
   $('anSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; S.analysis = +b.dataset.a; push(); };
   $('resSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; S.res = +b.dataset.r; push(); };
   $('bMirror').onclick = () => { S.mirror = !S.mirror; push(); };
+  $('bTrack').onclick = toggleTrack;
+  $('bTrackTop').onclick = toggleTrack;
+  $('bHands').onclick = () => { S.hands = !S.hands; log(S.hands ? 'MANOS · ACTIVADAS' : 'MANOS · DESACTIVADAS'); push(); };
+  function toggleTrack() { S.tracking = !S.tracking; log(S.tracking ? 'SEGUIMIENTO · ACTIVADO' : 'SEGUIMIENTO · DESACTIVADO · LA IA DEJA DE MIRAR', S.tracking ? 'hot' : ''); push(); }
   $('bFreeze').onclick = () => { S.freeze = !S.freeze; push(); };
   $('bBlack').onclick = () => { S.black = !S.black; push(); };
   const qOut = $('qOut'); qOut.value = quality; $('qOutV').textContent = Math.round(quality * 100);
@@ -187,7 +191,7 @@
     $('pAcc').textContent = S.acc[S.mode].toUpperCase();
     [...$('anSeg').children].forEach((b) => b.classList.toggle('on', +b.dataset.a === S.analysis));
     [...$('resSeg').children].forEach((b) => b.classList.toggle('on', +b.dataset.r === S.res));
-    $('bMirror').classList.toggle('on', S.mirror); $('bFreeze').classList.toggle('on', S.freeze); $('bBlack').classList.toggle('on', S.black);
+    $('bMirror').classList.toggle('on', S.mirror); $('bTrack').classList.toggle('on', S.tracking !== false); $('bTrackTop').classList.toggle('on', S.tracking !== false); $('bHands').classList.toggle('on', S.hands !== false); $('bFreeze').classList.toggle('on', S.freeze); $('bBlack').classList.toggle('on', S.black);
     $('bSnd').classList.toggle('on', snd.on); $('bAuto').classList.toggle('on', autoOn);
     $('vBig').textContent = m.name;
     paramShows.forEach((f) => f()); gShows.forEach((f) => f());
@@ -250,7 +254,9 @@
   addEventListener('keydown', (e) => {
     if (e.target.tagName === 'SELECT' || e.metaKey || e.ctrlKey || e.altKey) return;
     const k = e.key;
-    if (k >= '1' && k <= '7') setMode(OJO.MODES[+k - 1].id);
+    if (k >= '1' && k <= '9' && OJO.MODES[+k - 1]) setMode(OJO.MODES[+k - 1].id);
+    else if (k === '0' && OJO.MODES[9]) setMode(OJO.MODES[9].id);
+    else if (k === 't' || k === 'T') toggleTrack();
     else if (k === 'ArrowRight') step(1);
     else if (k === 'ArrowLeft') step(-1);
     else if (k === 'a' || k === 'A') { S.analysis = (S.analysis + 1) % 3; push(); }

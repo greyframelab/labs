@@ -19,7 +19,7 @@
     [168, 6, 197, 195, 5, 4], [98, 97, 2, 326, 327],
   ];
   // aristas únicas de la triangulación de la cara (se rellenan al cargar Human)
-  let EDGES = null;
+  let EDGES = null, TRI = null;
   function buildEdges(tri) {
     if (!tri || !tri.length) return;
     const set = new Set(), out = [];
@@ -38,7 +38,7 @@
   OJO.vision = function () {
     let human = null, video = null, running = false, status = 'apagada';
     const subjects = new Map();
-    let nextId = 1, lastDet = 0, detMs = 0, lastErr = null;
+    let nextId = 1, lastDet = 0, detMs = 0, lastErr = null, active = true;
     const events = [];
     const fov = { x: 0.5, y: 0.45, fx: 0.5, fy: 0.45, sx: 0.5, sy: 0.45, sacT: 0, sacDur: 0.07, next: 0, path: [], target: null, born: performance.now() };
     let model = { subjects: [], body: null, fovea: { x: 0.5, y: 0.45, path: [], sac: 0 }, contact: 0, status, energy: 0 };
@@ -61,17 +61,20 @@
           emotion: { enabled: false }, description: { enabled: false }, antispoof: { enabled: false }, liveness: { enabled: false }, attention: { enabled: false },
         },
         body: { enabled: true, modelPath: 'movenet-lightning.json', maxDetected: 1, minConfidence: 0.25 },
-        hand: { enabled: false }, object: { enabled: false }, gesture: { enabled: false }, segmentation: { enabled: false },
+        hand: { enabled: true, maxDetected: 2, minConfidence: 0.55, skipFrames: 6, skipTime: 250, detector: { modelPath: 'handtrack.json' }, skeleton: { modelPath: 'handlandmark-lite.json' } },
+        object: { enabled: false, modelPath: 'centernet.json', minConfidence: 0.3, maxDetected: 12, skipFrames: 8, skipTime: 400 },
+        gesture: { enabled: false }, segmentation: { enabled: false },
       });
       await human.load();
       buildEdges(human.faceTriangulation);
+      TRI = human.faceTriangulation ? Uint16Array.from(human.faceTriangulation) : null;
       say('lista');
     }
 
     async function loop() {
       while (running) {
         const t0 = performance.now();
-        if (video && video.readyState >= 2 && video.videoWidth) {
+        if (active && video && video.readyState >= 2 && video.videoWidth) {
           try { await human.detect(video); lastDet = performance.now(); detMs = detMs * 0.9 + (lastDet - t0) * 0.1; } catch (e) { lastErr = e; }
         }
         await new Promise((r) => setTimeout(r, Math.max(4, 30 - (performance.now() - t0))));
@@ -138,6 +141,17 @@
         if (body && body[j][2] > 0.3) { tr.push([body[j][0], body[j][1]]); if (tr.length > 36) tr.shift(); }
         else if (tr.length) tr.shift();
       });
+      // manos (21 puntos) y objetos
+      let hands = null, objects = null;
+      if (res && res.hand && res.hand.length) {
+        hands = res.hand.filter((h) => (h.score || 0) > 0.5 && h.keypoints && h.keypoints.length >= 21)
+          .map((h) => ({ pts: h.keypoints.map((q) => [q[0] / vw, q[1] / vh]), score: h.score, label: h.label || '' }));
+        if (!hands.length) hands = null;
+      }
+      if (res && res.object && res.object.length && human.config.object.enabled) {
+        objects = res.object.filter((o) => o.box && (o.score || 0) > 0.3)
+          .map((o) => ({ label: o.label || '', score: o.score, box: [o.box[0] / vw, o.box[1] / vh, o.box[2] / vw, o.box[3] / vh] }));
+      }
       // contacto global: el sujeto que más tiempo lleva mirando
       let cs = null;
       subjects.forEach((s) => { s.contact = clamp((s.contactT - 0.45) / 0.35); if (s.contact > 0 && (!cs || s.contactT > cs.contactT)) cs = s; });
@@ -153,7 +167,7 @@
         yaw: s.yaw, pitch: s.pitch, gaze: s.gaze, dist: s.dist, score: s.score, contact: s.contact, contactT: s.contactT, gone: s.gone || 0,
       }));
       model = {
-        subjects: list, body, trails: trails.map((x) => x.slice()), contact: contactLevel, status, ms: detMs,
+        subjects: list, body, hands, objects, trails: trails.map((x) => x.slice()), contact: contactLevel, status, ms: detMs,
         fovea: { x: fov.x, y: fov.y, path: fov.path.slice(), sac: fov.sacK || 0, lock: cs ? 1 : 0, born: fov.born },
         energy: model.energy,
       };
@@ -214,6 +228,15 @@
       start(v) { video = v; if (!human || running) return; running = true; loop(); },
       stop() { running = false; },
       get running() { return running; },
+      // SEGUIMIENTO, MANOS y OBJETOS se encienden y apagan sin recargar modelos ya cargados
+      configure(S) {
+        active = S.tracking !== false;
+        if (!human) return;
+        human.config.hand.enabled = S.hands !== false;
+        human.config.object.enabled = S.mode === 'objetos';
+        if (!active) { subjects.clear(); trails[0].length = 0; trails[1].length = 0; contactLevel = 0; contactOn = false; }
+      },
+      get active() { return active; },
       get model() { return model; },
       get status() { return status; },
       get error() { return lastErr; },
@@ -316,16 +339,99 @@
     }
   }
 
+  OJO.COCO_ES = { person: 'persona', bicycle: 'bicicleta', car: 'coche', motorcycle: 'moto', airplane: 'avión', bus: 'autobús', train: 'tren', truck: 'camión', boat: 'barco',
+    'traffic light': 'semáforo', 'fire hydrant': 'boca de incendios', 'stop sign': 'señal de stop', 'parking meter': 'parquímetro', bench: 'banco', bird: 'pájaro', cat: 'gato', dog: 'perro',
+    horse: 'caballo', sheep: 'oveja', cow: 'vaca', elephant: 'elefante', bear: 'oso', zebra: 'cebra', giraffe: 'jirafa', backpack: 'mochila', umbrella: 'paraguas', handbag: 'bolso',
+    tie: 'corbata', suitcase: 'maleta', frisbee: 'frisbee', skis: 'esquís', snowboard: 'snowboard', 'sports ball': 'pelota', kite: 'cometa', 'baseball bat': 'bate', 'baseball glove': 'guante',
+    skateboard: 'monopatín', surfboard: 'tabla de surf', 'tennis racket': 'raqueta', bottle: 'botella', 'wine glass': 'copa', cup: 'taza', fork: 'tenedor', knife: 'cuchillo', spoon: 'cuchara',
+    bowl: 'cuenco', banana: 'plátano', apple: 'manzana', sandwich: 'sándwich', orange: 'naranja', broccoli: 'brócoli', carrot: 'zanahoria', 'hot dog': 'perrito', pizza: 'pizza', donut: 'dónut',
+    cake: 'pastel', chair: 'silla', couch: 'sofá', 'potted plant': 'planta', bed: 'cama', 'dining table': 'mesa', toilet: 'váter', tv: 'pantalla', laptop: 'portátil', mouse: 'ratón',
+    remote: 'mando', keyboard: 'teclado', 'cell phone': 'móvil', microwave: 'microondas', oven: 'horno', toaster: 'tostadora', sink: 'fregadero', refrigerator: 'nevera', book: 'libro',
+    clock: 'reloj', vase: 'jarrón', scissors: 'tijeras', 'teddy bear': 'peluche', 'hair drier': 'secador', toothbrush: 'cepillo de dientes' };
+
+  // Delaunay (Bowyer-Watson) sobre una lista plana [x0, y0, x1, y1, …] → índices de triángulos
+  function delaunay(P2) {
+    const n = P2.length / 2; if (n < 3) return [];
+    let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+    for (let i = 0; i < n; i++) { const x = P2[i * 2], y = P2[i * 2 + 1]; if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y; }
+    const d = Math.max(maxX - minX, maxY - minY) * 20, mx = (minX + maxX) / 2, my = (minY + maxY) / 2;
+    const X = Array.from(P2.filter((_, i) => i % 2 === 0)), Y = Array.from(P2.filter((_, i) => i % 2 === 1));
+    X.push(mx - d, mx, mx + d); Y.push(my - d, my + d, my - d);
+    const circ = (a, b, c) => {
+      const ax = X[a], ay = Y[a], bx = X[b], by = Y[b], cx = X[c], cy = Y[c];
+      const D = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by)) || 1e-9;
+      const ux = ((ax * ax + ay * ay) * (by - cy) + (bx * bx + by * by) * (cy - ay) + (cx * cx + cy * cy) * (ay - by)) / D;
+      const uy = ((ax * ax + ay * ay) * (cx - bx) + (bx * bx + by * by) * (ax - cx) + (cx * cx + cy * cy) * (bx - ax)) / D;
+      return [ux, uy, (ax - ux) * (ax - ux) + (ay - uy) * (ay - uy)];
+    };
+    let tris = [[n, n + 1, n + 2, ...circ(n, n + 1, n + 2)]];
+    for (let i = 0; i < n; i++) {
+      const x = X[i], y = Y[i], bad = [], keep = [];
+      for (const t of tris) ((x - t[3]) * (x - t[3]) + (y - t[4]) * (y - t[4]) < t[5] ? bad : keep).push(t);
+      const edges = new Map();
+      for (const t of bad) for (const [a, b] of [[t[0], t[1]], [t[1], t[2]], [t[2], t[0]]]) {
+        const k = a < b ? a + ',' + b : b + ',' + a; edges.set(k, edges.has(k) ? null : [a, b]);
+      }
+      tris = keep;
+      edges.forEach((e) => { if (e) tris.push([e[0], e[1], i, ...circ(e[0], e[1], i)]); });
+    }
+    const out = [];
+    for (const t of tris) if (t[0] < n && t[1] < n && t[2] < n) out.push(t[0], t[1], t[2]);
+    return out;
+  }
+  OJO.delaunay = delaunay;
+
+  // malla del entorno: triangula en vivo las esquinas de la escena (y las manos) — todo lo que acercas queda tejido
+  let envCache = { t: 0, pts: null, tri: null };
+  function drawEnvMesh(c, eng, model, S, t, accent, k, lw) {
+    const pm = (S.p && S.p.malla) || [];
+    const amt = pm[4] != null ? pm[4] : 0.6;
+    if (amt <= 0.01) return;
+    if (eng.keysT && eng.keysT !== envCache.t) {
+      const kp = eng.keys, pts = [];
+      for (let i = 0; i < kp.length; i += 3) pts.push(kp[i], kp[i + 1]);
+      envCache = { t: eng.keysT, pts, tri: delaunay(pts), r: kp.filter((_, i) => i % 3 === 2) };
+    }
+    const { pts, tri } = envCache;
+    if (!tri || !tri.length) return;
+    const [W, H] = eng.size, maxL = H * (0.05 + amt * 0.09);
+    const near = new Path2D(), far = new Path2D();
+    for (let i = 0; i < tri.length; i += 3) {
+      const a = tri[i], b = tri[i + 1], c2 = tri[i + 2];
+      const ax = pts[a * 2], ay = pts[a * 2 + 1], bx = pts[b * 2], by = pts[b * 2 + 1], cx = pts[c2 * 2], cy = pts[c2 * 2 + 1];
+      const l1 = Math.hypot(bx - ax, by - ay), l2 = Math.hypot(cx - bx, cy - by), l3 = Math.hypot(ax - cx, ay - cy);
+      const L = Math.max(l1, l2, l3);
+      if (L > maxL) continue;   // solo superficies densas: objetos cercanos, no el vacío
+      const pa = L < maxL * 0.5 ? near : far;
+      pa.moveTo(ax, ay); pa.lineTo(bx, by); pa.lineTo(cx, cy); pa.closePath();
+    }
+    c.lineWidth = Math.max(0.6, 0.8 * k);
+    c.strokeStyle = rgba(accent, 0.5 * amt + 0.15); c.stroke(near);
+    c.strokeStyle = `rgba(242,240,234,${0.12 + 0.18 * amt})`; c.stroke(far);
+    // nodos
+    const dot = Math.max(1, 1.5 * k);
+    c.fillStyle = `rgba(242,240,234,${0.35 + 0.4 * amt})`;
+    for (let i = 0; i < pts.length; i += 2) c.fillRect(pts[i] - dot / 2, pts[i + 1] - dot / 2, dot, dot);
+  }
+  function drawHandMesh(c, hp, accent, k) {
+    const flat = []; hp.forEach((p) => flat.push(p[0], p[1]));
+    const tri = delaunay(flat);
+    const pa = new Path2D();
+    for (let i = 0; i < tri.length; i += 3) { const a = hp[tri[i]], b = hp[tri[i + 1]], d = hp[tri[i + 2]]; pa.moveTo(a[0], a[1]); pa.lineTo(b[0], b[1]); pa.lineTo(d[0], d[1]); pa.closePath(); }
+    c.fillStyle = rgba(accent, 0.06); c.fill(pa);
+    c.strokeStyle = rgba(accent, 0.45); c.lineWidth = Math.max(0.6, 0.8 * k); c.stroke(pa);
+  }
+
   OJO.drawAnalysis = function (eng, model, S, nowMs, accent) {
     const c = eng.overlay; const [W, H] = eng.size;
     c.clearRect(0, 0, W, H);
     eng.markOverlay();
-    if (!S.analysis || !model) return;
+    if (!model || !OJO.overlayOn(S)) return;
     const t = nowMs / 1000;
     const k = H / 1080;
     const lw = Math.max(1, 1.15 * k);
     const fs = Math.round(Math.max(9, 12.5 * k));
-    const INK = 'rgba(242,240,234,', data = S.analysis >= 2;
+    const INK = 'rgba(242,240,234,', data = S.analysis >= 2, minimal = !S.analysis;
     c.lineCap = 'square'; c.lineJoin = 'miter';
     c.font = `400 ${fs}px 'JetBrains Mono', ui-monospace, monospace`;
     c.textBaseline = 'alphabetic';
@@ -333,8 +439,10 @@
     const P = (u, v) => eng.toScreen(u, v);
     const contact = model.contact || 0;
 
+    if (S.mode === 'malla') drawEnvMesh(c, eng, model, S, t, accent, k, lw);
+
     // ---- cuerpo: rig con articulaciones, ángulos y estelas de las manos
-    if (model.body) {
+    if (model.body && !minimal) {
       const b = model.body, on = (i) => b[i][2] >= 0.3;
       const bp = b.map((q) => P(q[0], q[1]));
       const dim = 1 - contact * 0.65;
@@ -379,7 +487,7 @@
       }
     }
     // estelas de las manos
-    if (model.trails) {
+    if (model.trails && !minimal) {
       for (const tr of model.trails) {
         if (tr.length < 3) continue;
         const pts = tr.map((q) => P(q[0], q[1]));
@@ -388,6 +496,54 @@
           c.strokeStyle = rgba(accent, a * a * 0.9 * (1 - contact * 0.5)); c.lineWidth = lw * (0.6 + a * 2.2);
           c.beginPath(); c.moveTo(pts[i - 1][0], pts[i - 1][1]); c.lineTo(pts[i][0], pts[i][1]); c.stroke();
         }
+      }
+    }
+
+    // ---- manos: 21 puntos por mano
+    if (model.hands && (!minimal || S.mode === 'malla')) {
+      const FING = [[0, 1, 2, 3, 4], [0, 5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16], [0, 17, 18, 19, 20], [5, 9, 13, 17]];
+      for (const h of model.hands) {
+        const hp = h.pts.map((q) => P(q[0], q[1]));
+        if (S.mode === 'malla') drawHandMesh(c, hp, accent, k);
+        c.strokeStyle = INK + (0.6 * (1 - contact * 0.5)) + ')'; c.lineWidth = lw;
+        c.beginPath();
+        for (const f of FING) f.forEach((i, n) => (n ? c.lineTo(hp[i][0], hp[i][1]) : c.moveTo(hp[i][0], hp[i][1])));
+        c.stroke();
+        for (let i = 0; i < 21; i++) {
+          const tip = i % 4 === 0 && i > 0;
+          const r = (tip ? 3.2 : 1.8) * k;
+          c.fillStyle = tip ? rgba(accent, 0.95) : INK + '0.8)';
+          c.fillRect(hp[i][0] - r / 2, hp[i][1] - r / 2, r, r);
+          if (tip) { c.strokeStyle = rgba(accent, 0.5); c.beginPath(); c.arc(hp[i][0], hp[i][1], r * 2.2, 0, Math.PI * 2); c.stroke(); }
+        }
+        if (data) {
+          c.fillStyle = INK + '0.6)';
+          const w0 = hp[0];
+          decode(c, (h.label === 'left' ? 'MANO IZQ' : h.label === 'right' ? 'MANO DCHA' : 'MANO') + ' · ' + (h.score || 0).toFixed(2), w0[0] + 10 * k, w0[1] + fs * 1.4, 1, t, 7);
+        }
+      }
+    }
+
+    // ---- objetos (modo OBJETOS)
+    if (model.objects && S.mode === 'objetos') {
+      const po = (S.p && S.p.objetos) || [0.35, 0.4, 0.5, 0.5];
+      const minS = 0.3 + po[1] * 0.5;
+      for (const o of model.objects) {
+        if (o.score < minS || (o.label === 'person' && po[2] < 0.5)) continue;
+        const a = P(o.box[0], o.box[1]), b = P(o.box[0] + o.box[2], o.box[1] + o.box[3]);
+        const x0 = Math.min(a[0], b[0]), x1 = Math.max(a[0], b[0]), y0 = Math.min(a[1], b[1]), y1 = Math.max(a[1], b[1]);
+        const L = Math.min(x1 - x0, y1 - y0) * 0.18;
+        c.strokeStyle = rgba(accent, 0.9); c.lineWidth = lw * 1.2;
+        c.beginPath();
+        c.moveTo(x0, y0 + L); c.lineTo(x0, y0); c.lineTo(x0 + L, y0); c.moveTo(x1 - L, y0); c.lineTo(x1, y0); c.lineTo(x1, y0 + L);
+        c.moveTo(x1, y1 - L); c.lineTo(x1, y1); c.lineTo(x1 - L, y1); c.moveTo(x0 + L, y1); c.lineTo(x0, y1); c.lineTo(x0, y1 - L);
+        c.stroke();
+        c.strokeStyle = INK + '0.18)'; c.lineWidth = lw; c.strokeRect(x0, y0, x1 - x0, y1 - y0);
+        const name = (OJO.COCO_ES[o.label] || o.label).toUpperCase();
+        c.fillStyle = rgba(accent, 1);
+        const ty = y0 > fs * 2 ? y0 - fs * 0.7 : y1 + fs * 1.4;
+        decode(c, name, x0, ty, 1, t, name.length * 7);
+        if (data) { c.fillStyle = INK + '0.55)'; c.textAlign = 'right'; decode(c, o.score.toFixed(2), x1, ty, 1, t, 3); c.textAlign = 'left'; }
       }
     }
 
@@ -410,6 +566,7 @@
       const mg = 18 * k;
       x0 = Math.max(mg, x0); y0 = Math.max(mg + fs * 2.2, y0); x1 = Math.min(W - mg, x1); y1 = Math.min(H - mg, y1);
       const cc = s.contact || 0;
+      if (!minimal) {
       // onda de choque al fijar
       if (s.age < 0.9) {
         const pr = ease(s.age / 0.9), cxs = (x0 + x1) / 2, cys = (y0 + y1) / 2;
@@ -432,6 +589,7 @@
       const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, tk = 5 * k;
       c.beginPath(); c.moveTo(mx, y0 - tk); c.lineTo(mx, y0 + tk); c.moveTo(mx, y1 - tk); c.lineTo(mx, y1 + tk); c.moveTo(x0 - tk, my); c.lineTo(x0 + tk, my); c.moveTo(x1 - tk, my); c.lineTo(x1 + tk, my); c.stroke();
 
+      }
       const m = s.mesh;
       if (m && m.length >= 936) {
         // malla: triangulación completa en hilo fino, sombreada por profundidad; se teje de arriba abajo al fijar
@@ -445,19 +603,63 @@
         if (z) { z0 = 1e9; z1 = -1e9; for (let i = 0; i < 468; i++) { if (z[i] < z0) z0 = z[i]; if (z[i] > z1) z1 = z[i]; } if (z1 - z0 < 1e-6) z1 = z0 + 1e-6; }
         const hot = cc > 0.01;
         const wire = (a) => hot ? rgba(accent, a) : INK + a + ')';
+        const isMalla = S.mode === 'malla';
+        const pm = (S.p && S.p.malla) || [0.12, 0.4, 0.8, 0.35];
+        // MALLA: escultura low-poly sombreada con una luz que gira
+        if (isMalla && TRI && z) {
+          const ppu = Math.abs(P(1, 0)[0] - P(0, 0)[0]) || W;
+          const ang = t * (0.15 + pm[1] * 0.9);
+          let lx = Math.cos(ang) * 0.7, ly = -0.35 + Math.sin(ang * 0.7) * 0.25, lz = -0.65;
+          const ll = Math.hypot(lx, ly, lz); lx /= ll; ly /= ll; lz /= ll;
+          const nT = TRI.length / 3, order = new Array(nT), depth = new Float32Array(nT);
+          for (let n = 0; n < nT; n++) { order[n] = n; depth[n] = z[TRI[n * 3]] + z[TRI[n * 3 + 1]] + z[TRI[n * 3 + 2]]; }
+          order.sort((p, q) => depth[q] - depth[p]);
+          const [ar, ag, ab] = OJO.hex3(accent).map((v) => Math.round(v * 255));
+          for (const n of order) {
+            const i = TRI[n * 3], j = TRI[n * 3 + 1], l = TRI[n * 3 + 2];
+            if (m[i * 2 + 1] > cut || m[j * 2 + 1] > cut || m[l * 2 + 1] > cut) continue;
+            const ax = pts[i * 2], ay = pts[i * 2 + 1], az = z[i] * ppu;
+            const ux = pts[j * 2] - ax, uy = pts[j * 2 + 1] - ay, uz = z[j] * ppu - az;
+            const vx = pts[l * 2] - ax, vy = pts[l * 2 + 1] - ay, vz = z[l] * ppu - az;
+            let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+            const nl = Math.hypot(nx, ny, nz) || 1; nx /= nl; ny /= nl; nz /= nl;
+            if (nz > 0) { nx = -nx; ny = -ny; nz = -nz; }
+            const dif = Math.max(0, nx * lx + ny * ly + nz * lz);
+            const rim = Math.pow(1 - Math.abs(nz), 2.2);
+            const w = dif * dif * (0.25 + pm[2] * 0.75) * fade;
+            const ra = (hot ? 0.9 : 0.55) * rim * fade;
+            const r = Math.min(255, Math.round(236 * w + ar * ra)), g = Math.min(255, Math.round(234 * w + ag * ra)), bb = Math.min(255, Math.round(228 * w + ab * ra));
+            c.fillStyle = `rgb(${r},${g},${bb})`;
+            c.beginPath(); c.moveTo(ax, ay); c.lineTo(pts[j * 2], pts[j * 2 + 1]); c.lineTo(pts[l * 2], pts[l * 2 + 1]); c.closePath(); c.fill();
+          }
+        }
         if (EDGES) {
-          // tres capas de profundidad: lo cercano más presente, lo lejano casi desaparece
-          const paths = [new Path2D(), new Path2D(), new Path2D()];
+          // capas de profundidad + banda de escaneo que recorre la cara sin parar
+          const paths = [new Path2D(), new Path2D(), new Path2D(), new Path2D()];
+          const span = Math.max(1e-4, ymax - ymin);
+          const band = ymin - span * 0.1 + span * 1.2 * ((t * 0.32 + s.id * 0.37) % 1), bw = span * 0.05;
           for (let e = 0; e < EDGES.length; e += 2) {
             const i = EDGES[e], j = EDGES[e + 1];
             if (m[i * 2 + 1] > cut || m[j * 2 + 1] > cut) continue;
+            const vm = (m[i * 2 + 1] + m[j * 2 + 1]) * 0.5;
             const d = z ? ((z[i] + z[j]) * 0.5 - z0) / (z1 - z0) : 0.5;
-            const pa = paths[d < 0.33 ? 0 : d < 0.66 ? 1 : 2];
+            const pa = Math.abs(vm - band) < bw && d < 0.7 ? paths[3] : paths[d < 0.33 ? 0 : d < 0.66 ? 1 : 2];
             pa.moveTo(pts[i * 2], pts[i * 2 + 1]); pa.lineTo(pts[j * 2], pts[j * 2 + 1]);
           }
           c.lineWidth = Math.max(0.6, 0.75 * k);
-          const al = [0.3, 0.17, 0.07];
-          paths.forEach((pa, n) => { c.strokeStyle = wire(al[n] * fade * (hot ? 1.5 : 1)); c.stroke(pa); });
+          const boost = isMalla ? 0.4 + pm[3] * 1.6 : 1;
+          const al = [0.3, 0.17, 0.06];
+          paths.slice(0, 3).forEach((pa, n) => { c.strokeStyle = wire(Math.min(1, al[n] * fade * boost * (hot ? 1.4 : 1))); c.stroke(pa); });
+          c.strokeStyle = rgba(accent, 0.85 * fade * reveal); c.lineWidth = Math.max(0.8, 1 * k); c.stroke(paths[3]);
+          // nodos: solo los más cercanos, como puntos de anclaje
+          if (z) {
+            const dot = Math.max(1, 1.6 * k);
+            c.fillStyle = wire(0.55 * fade);
+            for (let i = 0; i < 468; i += 3) {
+              if (m[i * 2 + 1] > cut || (z[i] - z0) / (z1 - z0) > 0.3) continue;
+              c.fillRect(pts[i * 2] - dot / 2, pts[i * 2 + 1] - dot / 2, dot, dot);
+            }
+          }
         } else {
           const dot = Math.max(1, 1.4 * k);
           c.fillStyle = wire(0.4 * fade);
@@ -536,11 +738,11 @@
     // ---- réplica 3D del sujeto principal: la máquina te reconstruye y te gira
     let main = null;
     for (const s of model.subjects) { if ((s.gone || 0) > 0.3 || !s.meshZ || !s.mesh) continue; const sc = s.box[2] * s.box[3] + (s.contact || 0) * 10; if (!main || sc > main.sc) main = { s, sc }; }
-    if (main && EDGES) drawModel(c, main.s, eng, S, t, accent, k, lw, fs, data);
+    if (main && EDGES && !minimal) drawModel(c, main.s, eng, S, t, accent, k, lw, fs, data);
 
     // ---- fóvea: la mirada de la máquina
     const f = model.fovea;
-    if (f) {
+    if (f && !minimal) {
       const p = P(f.x, f.y);
       const R = (26 - (model.contact || 0) * 10) * k * (1 + (f.sac || 0) * 0.6);
       // recorrido: fijaciones anteriores
