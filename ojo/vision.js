@@ -8,7 +8,29 @@
   'use strict';
   const OJO = root.OJO || (root.OJO = {});
 
-  const SIL = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109];
+  // rasgos de la malla (índices de MediaPipe FaceMesh): ojos, cejas, labios y nariz
+  const FEAT = [
+    [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246, 33],
+    [263, 249, 390, 373, 374, 380, 381, 382, 362, 398, 384, 385, 386, 387, 388, 466, 263],
+    [70, 63, 105, 66, 107], [46, 53, 52, 65, 55],
+    [300, 293, 334, 296, 336], [276, 283, 282, 295, 285],
+    [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 409, 270, 269, 267, 0, 37, 39, 40, 185, 61],
+    [78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308, 415, 310, 311, 312, 13, 82, 81, 80, 191, 78],
+    [168, 6, 197, 195, 5, 4], [98, 97, 2, 326, 327],
+  ];
+  // aristas únicas de la triangulación de la cara (se rellenan al cargar Human)
+  let EDGES = null;
+  function buildEdges(tri) {
+    if (!tri || !tri.length) return;
+    const set = new Set(), out = [];
+    for (let i = 0; i + 2 < tri.length; i += 3) {
+      for (const [a, b] of [[tri[i], tri[i + 1]], [tri[i + 1], tri[i + 2]], [tri[i + 2], tri[i]]]) {
+        const k = a < b ? a * 1000 + b : b * 1000 + a;
+        if (!set.has(k)) { set.add(k); out.push(a, b); }
+      }
+    }
+    EDGES = new Uint16Array(out);
+  }
   const BONES = [[5, 6], [5, 7], [7, 9], [6, 8], [8, 10], [5, 11], [6, 12], [11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [0, 1], [0, 2], [1, 3], [2, 4]];
   const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
   const ease = (x) => 1 - Math.pow(1 - clamp(x), 3);
@@ -21,6 +43,8 @@
     const fov = { x: 0.5, y: 0.45, fx: 0.5, fy: 0.45, sx: 0.5, sy: 0.45, sacT: 0, sacDur: 0.07, next: 0, path: [], target: null, born: performance.now() };
     let model = { subjects: [], body: null, fovea: { x: 0.5, y: 0.45, path: [], sac: 0 }, contact: 0, status, energy: 0 };
     let contactLevel = 0, contactOn = false;
+    const trails = [[], []];
+    const lost = [];
 
     async function load(onStatus) {
       const say = (s) => { status = s; onStatus && onStatus(s); };
@@ -40,6 +64,7 @@
         hand: { enabled: false }, object: { enabled: false }, gesture: { enabled: false }, segmentation: { enabled: false },
       });
       await human.load();
+      buildEdges(human.faceTriangulation);
       say('lista');
     }
 
@@ -69,14 +94,20 @@
           // emparejar con el sujeto más cercano
           let best = null, bd = 0.22;
           subjects.forEach((s) => { if (seen.has(s.id)) return; const d = Math.hypot(s.cx - cx, s.cy - cy); if (d < bd) { bd = d; best = s; } });
-          if (!best) { best = { id: nextId++, born: now, cx, cy, box: b.slice(), contactT: 0, contact: 0 }; subjects.set(best.id, best); emit('entra', { id: best.id, x: cx }); }
+          if (!best) {
+            // ¿es alguien que acaba de perder? recupera su ID y su tiempo observado
+            let back = null, bd2 = 0.3;
+            for (const g of lost) { const d = Math.hypot(g.cx - cx, g.cy - cy); if (now - g.last < 8000 && d < bd2) { bd2 = d; back = g; } }
+            if (back) { lost.splice(lost.indexOf(back), 1); best = back; best.box = b.slice(); best.contactT = 0; subjects.set(best.id, best); }
+            else { best = { id: nextId++, born: now, cx, cy, box: b.slice(), contactT: 0, contact: 0 }; subjects.set(best.id, best); emit('entra', { id: best.id, x: cx }); }
+          }
           seen.add(best.id);
           best.last = now; best.cx = cx; best.cy = cy;
           for (let i = 0; i < 4; i++) best.box[i] += (b[i] - best.box[i]) * 0.5;
           const mesh = f.mesh || [];
-          const m = new Array(mesh.length * 2);
-          for (let i = 0; i < mesh.length; i++) { m[i * 2] = mesh[i][0] / vw; m[i * 2 + 1] = mesh[i][1] / vh; }
-          best.mesh = m;
+          const m = new Array(mesh.length * 2), mz = new Array(mesh.length);
+          for (let i = 0; i < mesh.length; i++) { m[i * 2] = mesh[i][0] / vw; m[i * 2 + 1] = mesh[i][1] / vh; mz[i] = (mesh[i][2] || 0) / vw; }
+          best.mesh = m; best.meshZ = mz;
           const irisC = (k) => { const a = f.annotations && f.annotations[k]; if (!a || !a.length) return null; const r = a.length > 1 ? Math.hypot(a[1][0] - a[0][0], a[1][1] - a[0][1]) / vw : 0.006; return [a[0][0] / vw, a[0][1] / vh, r]; };
           best.irisL = irisC('leftEyeIris'); best.irisR = irisC('rightEyeIris');
           const rot = f.rotation || {};
@@ -92,8 +123,8 @@
       }
       // los que se van
       subjects.forEach((s) => {
-        s.gone = clamp((now - s.last) / 1200);
-        if (!seen.has(s.id) && now - s.last > 1200) { subjects.delete(s.id); emit('sale', { id: s.id }); }
+        s.gone = seen.has(s.id) ? 0 : clamp((now - s.last - 400) / 1600);
+        if (!seen.has(s.id) && now - s.last > 2000) { subjects.delete(s.id); lost.push(s); if (lost.length > 12) lost.shift(); emit('sale', { id: s.id }); }
       });
       // cuerpo
       let body = null;
@@ -101,6 +132,12 @@
         body = res.body[0].keypoints.map((k) => [k.position[0] / vw, k.position[1] / vh, k.score || 0]);
         if (body.length < 17) body = null;
       }
+      // estelas de las muñecas: las manos dibujan luz
+      [9, 10].forEach((j, n) => {
+        const tr = trails[n];
+        if (body && body[j][2] > 0.3) { tr.push([body[j][0], body[j][1]]); if (tr.length > 36) tr.shift(); }
+        else if (tr.length) tr.shift();
+      });
       // contacto global: el sujeto que más tiempo lleva mirando
       let cs = null;
       subjects.forEach((s) => { s.contact = clamp((s.contactT - 0.45) / 0.35); if (s.contact > 0 && (!cs || s.contactT > cs.contactT)) cs = s; });
@@ -112,11 +149,11 @@
       updateFovea(now, eng, cs);
 
       const list = [...subjects.values()].sort((a, b) => a.id - b.id).map((s) => ({
-        id: s.id, box: s.box, age: (now - s.born) / 1000, mesh: s.mesh, irisL: s.irisL, irisR: s.irisR,
+        id: s.id, box: s.box, age: (now - s.born) / 1000, mesh: s.mesh, meshZ: s.meshZ, irisL: s.irisL, irisR: s.irisR,
         yaw: s.yaw, pitch: s.pitch, gaze: s.gaze, dist: s.dist, score: s.score, contact: s.contact, contactT: s.contactT, gone: s.gone || 0,
       }));
       model = {
-        subjects: list, body, contact: contactLevel, status, ms: detMs,
+        subjects: list, body, trails: trails.map((x) => x.slice()), contact: contactLevel, status, ms: detMs,
         fovea: { x: fov.x, y: fov.y, path: fov.path.slice(), sac: fov.sacK || 0, lock: cs ? 1 : 0, born: fov.born },
         energy: model.energy,
       };
@@ -205,6 +242,80 @@
 
   function rgba(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; }
 
+  function drawModel(c, s, eng, S, t, accent, k, lw, fs, data) {
+    const [W, H] = eng.size, [cw, ch] = eng.camSize;
+    const m = s.mesh, z = s.meshZ, asp = ch && cw ? ch / cw : 0.5625;
+    const show = ease((s.age - 0.9) / 0.8) * (1 - (s.gone || 0));
+    if (show <= 0) return;
+    const hot = (s.contact || 0) > 0.01;
+    // esquina contraria a donde está la persona
+    const fc = eng.toScreen(s.box[0] + s.box[2] / 2, s.box[1] + s.box[3] / 2);
+    const size = H * 0.3, mg = 34 * k;
+    const left = fc[0] > W / 2;
+    const cx = left ? mg + size * 0.5 : W - mg - size * 0.5, cy = H - mg - size * 0.55;
+    let mx = 0, my = 0, mz = 0;
+    for (let i = 0; i < 468; i++) { mx += m[i * 2]; my += m[i * 2 + 1]; mz += z[i]; }
+    mx /= 468; my /= 468; mz /= 468;
+    const X = new Float32Array(468), Y = new Float32Array(468), Z = new Float32Array(468);
+    let ext = 1e-6;
+    for (let i = 0; i < 468; i++) {
+      X[i] = (m[i * 2] - mx) * (S.mirror ? -1 : 1); Y[i] = (m[i * 2 + 1] - my) * asp; Z[i] = (z[i] - mz) * (S.mirror ? 1 : 1);
+      ext = Math.max(ext, Math.abs(X[i]), Math.abs(Y[i]));
+    }
+    const sc = (size * 0.46 / ext) * (0.85 + 0.15 * show);
+    const yaw = Math.sin(t * 0.45) * 1.05 + (S.mirror ? 0 : 0), pit = Math.sin(t * 0.29) * 0.18;
+    const cyw = Math.cos(yaw), syw = Math.sin(yaw), cp = Math.cos(pit), sp = Math.sin(pit);
+    const px = new Float32Array(468), py = new Float32Array(468), pz = new Float32Array(468);
+    let z0 = 1e9, z1 = -1e9;
+    for (let i = 0; i < 468; i++) {
+      const x1 = X[i] * cyw + Z[i] * syw, zz = -X[i] * syw + Z[i] * cyw;
+      const y1 = Y[i] * cp - zz * sp, z2 = Y[i] * sp + zz * cp;
+      const persp = 1 / (1 + z2 * 1.2);
+      px[i] = cx + x1 * sc * persp; py[i] = cy + y1 * sc * persp; pz[i] = z2;
+      if (z2 < z0) z0 = z2; if (z2 > z1) z1 = z2;
+    }
+    const rng = Math.max(1e-6, z1 - z0);
+    // barrido de reconstrucción: las aristas aparecen de arriba abajo la primera vez
+    const cut = cy - size * 0.5 + size * 1.1 * show;
+    const paths = [new Path2D(), new Path2D(), new Path2D()];
+    for (let e = 0; e < EDGES.length; e += 2) {
+      const i = EDGES[e], j = EDGES[e + 1];
+      if (py[i] > cut || py[j] > cut) continue;
+      const d = ((pz[i] + pz[j]) * 0.5 - z0) / rng;
+      const pa = paths[d < 0.33 ? 0 : d < 0.62 ? 1 : 2];
+      pa.moveTo(px[i], py[i]); pa.lineTo(px[j], py[j]);
+    }
+    const col = (a) => hot ? rgba(accent, a) : `rgba(242,240,234,${a})`;
+    c.lineWidth = Math.max(0.6, 0.8 * k);
+    [0.55, 0.26, 0.08].forEach((a, n) => { c.strokeStyle = n === 0 ? rgba(accent, a * show) : col(a * show); c.stroke(paths[n]); });
+    // rasgos sobre la réplica
+    c.strokeStyle = col(0.75 * show); c.lineWidth = lw;
+    c.beginPath();
+    for (const f of FEAT) { f.forEach((i, n) => { if (py[i] > cut) return; n ? c.lineTo(px[i], py[i]) : c.moveTo(px[i], py[i]); }); }
+    c.stroke();
+    // línea de escaneo que recorre la réplica
+    const sy = cy - size * 0.5 + ((t * 0.35) % 1) * size;
+    const g = c.createLinearGradient(cx - size * 0.5, 0, cx + size * 0.5, 0);
+    g.addColorStop(0, rgba(accent, 0)); g.addColorStop(0.5, rgba(accent, 0.6 * show)); g.addColorStop(1, rgba(accent, 0));
+    c.strokeStyle = g; c.lineWidth = lw;
+    c.beginPath(); c.moveTo(cx - size * 0.5, sy); c.lineTo(cx + size * 0.5, sy); c.stroke();
+    // marco y datos
+    const hx = size * 0.56, hy = size * 0.56, L = 10 * k;
+    c.strokeStyle = `rgba(242,240,234,${0.45 * show})`; c.lineWidth = lw;
+    c.beginPath();
+    [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([a, b]) => { const x = cx + a * hx, y = cy + b * hy; c.moveTo(x - a * L, y); c.lineTo(x, y); c.lineTo(x, y - b * L); });
+    c.stroke();
+    if (data) {
+      c.textAlign = left ? 'left' : 'right';
+      const tx = left ? cx - hx : cx + hx;
+      c.fillStyle = hot ? rgba(accent, show) : `rgba(242,240,234,${0.85 * show})`;
+      decode(c, 'MODELO · SUJETO ' + two(s.id), tx, cy - hy - fs * 1.9, show, t, s.id * 53);
+      c.fillStyle = `rgba(242,240,234,${0.45 * show})`;
+      decode(c, '468 PUNTOS · ' + (EDGES.length / 2) + ' ARISTAS · GIRO ' + deg(yaw), tx, cy - hy - fs * 0.6, show, t, s.id * 53 + 4);
+      c.textAlign = 'left';
+    }
+  }
+
   OJO.drawAnalysis = function (eng, model, S, nowMs, accent) {
     const c = eng.overlay; const [W, H] = eng.size;
     c.clearRect(0, 0, W, H);
@@ -222,19 +333,62 @@
     const P = (u, v) => eng.toScreen(u, v);
     const contact = model.contact || 0;
 
-    // ---- esqueleto
+    // ---- cuerpo: rig con articulaciones, ángulos y estelas de las manos
     if (model.body) {
-      const b = model.body;
-      c.strokeStyle = INK + (0.32 * (1 - contact * 0.6)) + ')'; c.lineWidth = lw;
-      c.beginPath();
+      const b = model.body, on = (i) => b[i][2] >= 0.3;
+      const bp = b.map((q) => P(q[0], q[1]));
+      const dim = 1 - contact * 0.65;
+      // huesos: doble trazo fino (contorno técnico)
+      c.lineWidth = lw;
       for (const [i, j] of BONES) {
-        if (b[i][2] < 0.3 || b[j][2] < 0.3) continue;
-        const p = P(b[i][0], b[i][1]), q = P(b[j][0], b[j][1]);
-        c.moveTo(p[0], p[1]); c.lineTo(q[0], q[1]);
+        if (!on(i) || !on(j) || i < 5) continue;
+        const p = bp[i], q = bp[j];
+        const dx = q[0] - p[0], dy = q[1] - p[1], L = Math.hypot(dx, dy) || 1;
+        const nx = -dy / L * 3 * k, ny = dx / L * 3 * k;
+        c.strokeStyle = INK + (0.3 * dim) + ')';
+        c.beginPath(); c.moveTo(p[0] + nx, p[1] + ny); c.lineTo(q[0] + nx, q[1] + ny); c.moveTo(p[0] - nx, p[1] - ny); c.lineTo(q[0] - nx, q[1] - ny); c.stroke();
+        c.strokeStyle = rgba(accent, 0.35 * dim);
+        c.setLineDash([2 * k, 5 * k]); c.beginPath(); c.moveTo(p[0], p[1]); c.lineTo(q[0], q[1]); c.stroke(); c.setLineDash([]);
       }
-      c.stroke();
-      c.fillStyle = INK + '0.7)';
-      for (let i = 5; i < 17; i++) { if (b[i][2] < 0.3) continue; const p = P(b[i][0], b[i][1]); const s = 3 * k; c.fillRect(p[0] - s / 2, p[1] - s / 2, s, s); }
+      // articulaciones: anillo con marcas que giran
+      for (let i = 5; i < 17; i++) {
+        if (!on(i)) continue;
+        const p = bp[i], r = (i === 9 || i === 10 ? 7 : 5) * k, a0 = t * (i % 2 ? 1.4 : -1.4) + i;
+        c.strokeStyle = INK + (0.75 * dim) + ')'; c.lineWidth = lw;
+        c.beginPath(); c.arc(p[0], p[1], r, a0, a0 + Math.PI * 0.6); c.moveTo(p[0] + Math.cos(a0 + Math.PI) * r, p[1] + Math.sin(a0 + Math.PI) * r); c.arc(p[0], p[1], r, a0 + Math.PI, a0 + Math.PI * 1.6); c.stroke();
+        c.fillStyle = rgba(accent, 0.9 * dim); c.fillRect(p[0] - lw, p[1] - lw, lw * 2, lw * 2);
+      }
+      // ángulos de codos y rodillas
+      if (data) {
+        c.font = `400 ${Math.round(fs * 0.85)}px 'JetBrains Mono', ui-monospace, monospace`;
+        for (const [a, m, z] of [[5, 7, 9], [6, 8, 10], [11, 13, 15], [12, 14, 16]]) {
+          if (!on(a) || !on(m) || !on(z)) continue;
+          const A = bp[a], M = bp[m], Z = bp[z];
+          const t1 = Math.atan2(A[1] - M[1], A[0] - M[0]), t2 = Math.atan2(Z[1] - M[1], Z[0] - M[0]);
+          let d = t2 - t1; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2;
+          const r = 16 * k;
+          c.strokeStyle = rgba(accent, 0.7 * dim); c.lineWidth = lw;
+          c.beginPath(); c.arc(M[0], M[1], r, t1, t1 + d, d < 0); c.stroke();
+          c.fillStyle = INK + (0.6 * dim) + ')';
+          const mid = t1 + d / 2;
+          c.textAlign = 'center';
+          c.fillText(Math.round(Math.abs(d) * 57.3) + '°', M[0] + Math.cos(mid) * r * 2.1, M[1] + Math.sin(mid) * r * 2.1 + fs * 0.3);
+        }
+        c.textAlign = 'left';
+        c.font = `400 ${fs}px 'JetBrains Mono', ui-monospace, monospace`;
+      }
+    }
+    // estelas de las manos
+    if (model.trails) {
+      for (const tr of model.trails) {
+        if (tr.length < 3) continue;
+        const pts = tr.map((q) => P(q[0], q[1]));
+        for (let i = 1; i < pts.length; i++) {
+          const a = i / pts.length;
+          c.strokeStyle = rgba(accent, a * a * 0.9 * (1 - contact * 0.5)); c.lineWidth = lw * (0.6 + a * 2.2);
+          c.beginPath(); c.moveTo(pts[i - 1][0], pts[i - 1][1]); c.lineTo(pts[i][0], pts[i][1]); c.stroke();
+        }
+      }
     }
 
     // ---- sujetos
@@ -256,6 +410,15 @@
       const mg = 18 * k;
       x0 = Math.max(mg, x0); y0 = Math.max(mg + fs * 2.2, y0); x1 = Math.min(W - mg, x1); y1 = Math.min(H - mg, y1);
       const cc = s.contact || 0;
+      // onda de choque al fijar
+      if (s.age < 0.9) {
+        const pr = ease(s.age / 0.9), cxs = (x0 + x1) / 2, cys = (y0 + y1) / 2;
+        const rr = Math.max(x1 - x0, y1 - y0) * (0.35 + pr * 1.6);
+        c.strokeStyle = rgba(accent, (1 - pr) * 0.85 * fade); c.lineWidth = lw * (1 + (1 - pr) * 2);
+        c.beginPath(); c.arc(cxs, cys, rr, 0, Math.PI * 2); c.stroke();
+        c.strokeStyle = INK + ((1 - pr) * 0.35 * fade) + ')'; c.lineWidth = lw;
+        c.beginPath(); c.arc(cxs, cys, rr * 0.72, 0, Math.PI * 2); c.stroke();
+      }
       const col = cc > 0.01 ? rgba(accent, (0.85 + 0.15 * cc) * fade) : INK + (0.85 * fade * (0.4 + 0.6 * lock)) + ')';
       const L = Math.min(x1 - x0, y1 - y0) * 0.16;
       c.strokeStyle = col; c.lineWidth = lw * (1 + cc * 0.8);
@@ -271,27 +434,53 @@
 
       const m = s.mesh;
       if (m && m.length >= 936) {
-        // malla: se dibuja de arriba abajo al fijar
+        // malla: triangulación completa en hilo fino, sombreada por profundidad; se teje de arriba abajo al fijar
         const reveal = ease((s.age - 0.25) / 0.9);
         const ymin = s.box[1], ymax = s.box[1] + s.box[3];
         const cut = ymin + (ymax - ymin) * 1.2 * reveal;
-        const dot = Math.max(1, 1.5 * k);
-        c.fillStyle = cc > 0.01 ? rgba(accent, 0.55 * fade) : INK + (0.42 * fade) + ')';
-        for (let i = 0; i < 468; i++) {
-          const v = m[i * 2 + 1]; if (v > cut) continue;
-          const p = P(m[i * 2], v); c.fillRect(p[0] - dot / 2, p[1] - dot / 2, dot, dot);
+        const pts = new Float32Array(936);
+        for (let i = 0; i < 468; i++) { const p = P(m[i * 2], m[i * 2 + 1]); pts[i * 2] = p[0]; pts[i * 2 + 1] = p[1]; }
+        const z = s.meshZ;
+        let z0 = 0, z1 = 1;
+        if (z) { z0 = 1e9; z1 = -1e9; for (let i = 0; i < 468; i++) { if (z[i] < z0) z0 = z[i]; if (z[i] > z1) z1 = z[i]; } if (z1 - z0 < 1e-6) z1 = z0 + 1e-6; }
+        const hot = cc > 0.01;
+        const wire = (a) => hot ? rgba(accent, a) : INK + a + ')';
+        if (EDGES) {
+          // tres capas de profundidad: lo cercano más presente, lo lejano casi desaparece
+          const paths = [new Path2D(), new Path2D(), new Path2D()];
+          for (let e = 0; e < EDGES.length; e += 2) {
+            const i = EDGES[e], j = EDGES[e + 1];
+            if (m[i * 2 + 1] > cut || m[j * 2 + 1] > cut) continue;
+            const d = z ? ((z[i] + z[j]) * 0.5 - z0) / (z1 - z0) : 0.5;
+            const pa = paths[d < 0.33 ? 0 : d < 0.66 ? 1 : 2];
+            pa.moveTo(pts[i * 2], pts[i * 2 + 1]); pa.lineTo(pts[j * 2], pts[j * 2 + 1]);
+          }
+          c.lineWidth = Math.max(0.6, 0.75 * k);
+          const al = [0.3, 0.17, 0.07];
+          paths.forEach((pa, n) => { c.strokeStyle = wire(al[n] * fade * (hot ? 1.5 : 1)); c.stroke(pa); });
+        } else {
+          const dot = Math.max(1, 1.4 * k);
+          c.fillStyle = wire(0.4 * fade);
+          for (let i = 0; i < 468; i++) { if (m[i * 2 + 1] > cut) continue; c.fillRect(pts[i * 2] - dot / 2, pts[i * 2 + 1] - dot / 2, dot, dot); }
         }
-        // barrido de la malla
+        // rasgos: ojos, cejas, labios y nariz
+        c.strokeStyle = wire(0.62 * fade); c.lineWidth = lw;
+        c.beginPath();
+        for (const f of FEAT) {
+          let open = false;
+          for (const i of f) {
+            if (m[i * 2 + 1] > cut) { open = false; continue; }
+            open ? c.lineTo(pts[i * 2], pts[i * 2 + 1]) : c.moveTo(pts[i * 2], pts[i * 2 + 1]);
+            open = true;
+          }
+        }
+        c.stroke();
+        // barrido mientras se teje
         if (reveal > 0 && reveal < 1) {
           const sy = P(0, cut)[1];
           c.strokeStyle = rgba(accent, 0.9 * fade); c.lineWidth = lw;
           c.beginPath(); c.moveTo(x0, sy); c.lineTo(x1, sy); c.stroke();
         }
-        // silueta
-        c.strokeStyle = cc > 0.01 ? rgba(accent, 0.8 * fade) : INK + (0.22 * fade * reveal) + ')'; c.lineWidth = lw;
-        c.beginPath();
-        SIL.forEach((i, n) => { const p = P(m[i * 2], m[i * 2 + 1]); n ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]); });
-        c.closePath(); c.stroke();
         // iris y mirada
         const eyes = [s.irisL, s.irisR].filter(Boolean);
         eyes.forEach((ir) => {
@@ -343,6 +532,11 @@
         c.textAlign = 'left';
       }
     }
+
+    // ---- réplica 3D del sujeto principal: la máquina te reconstruye y te gira
+    let main = null;
+    for (const s of model.subjects) { if ((s.gone || 0) > 0.3 || !s.meshZ || !s.mesh) continue; const sc = s.box[2] * s.box[3] + (s.contact || 0) * 10; if (!main || sc > main.sc) main = { s, sc }; }
+    if (main && EDGES) drawModel(c, main.s, eng, S, t, accent, k, lw, fs, data);
 
     // ---- fóvea: la mirada de la máquina
     const f = model.fovea;
