@@ -676,14 +676,15 @@ void main(){
       R = { mode: fbo(W, H), comp: fbo(W, H), trans: fbo(W, H), trail: [fbo(W, H), fbo(W, H)], bl: [] };
       let bw = W >> 1, bh = H >> 1;
       for (let i = 0; i < 5 && bw > 8 && bh > 8; i++) { R.bl.push(fbo(bw, bh)); bw >>= 1; bh >>= 1; }
-      over.width = W; over.height = H;
+      overScale = Math.min(1, 1440 / Math.max(W, H));
+      over.width = Math.round(W * overScale); over.height = Math.round(H * overScale);
       codeGrid = null;
     }
 
     // ---------- capa 2D de análisis (la dibuja vision.js)
     const over = document.createElement('canvas');
     const overCtx = over.getContext('2d');
-    let overDirty = false;
+    let overDirty = false, overScale = 1;
 
     // ---------- partículas
     const PW = 256, PH = 256;
@@ -829,7 +830,36 @@ void main(){
       const f = vis.face; u4(pr, 'uFace', f ? [f[0], f[1], f[2], 1] : [0, 0, 0, 0]);
     }
 
+    // lecturas GPU → CPU sin parar la tubería: PBO + fence; el resultado llega uno o dos frames después
+    const reads = {};
+    function readAsync(name, src, w, h, buf, cb) {
+      let r = reads[name];
+      if (r && r.sync) return;                                   // la anterior aún no ha llegado
+      if (!r) r = reads[name] = { pbo: gl.createBuffer(), size: 0 };
+      const bytes = w * h * 16;
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, r.pbo);
+      if (r.size !== bytes) { gl.bufferData(gl.PIXEL_PACK_BUFFER, bytes, gl.STREAM_READ); r.size = bytes; }
+      target(src);
+      gl.readPixels(0, 0, w, h, gl.RGBA, gl.FLOAT, 0);
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+      r.sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0); r.buf = buf; r.cb = cb;
+    }
+    function pollReads() {
+      for (const k in reads) {
+        const r = reads[k]; if (!r.sync) continue;
+        const st = gl.clientWaitSync(r.sync, 0, 0);
+        if (st === gl.TIMEOUT_EXPIRED) continue;
+        gl.deleteSync(r.sync); r.sync = null;
+        if (st === gl.WAIT_FAILED) continue;
+        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, r.pbo);
+        gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, r.buf);
+        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+        r.cb();
+      }
+    }
+
     function analyse(t) {
+      pollReads();
       gl.disable(gl.BLEND);
       // cámara
       gl.bindTexture(gl.TEXTURE_2D, camTex);
@@ -841,12 +871,11 @@ void main(){
       fi = 1 - fi; pr = use(P.flow); target(A.flow[fi]); common(pr, t); bindT(pr, 'uPrev', A.flow[1 - fi].t); quad();
       si = 1 - si; pr = use(P.sal); target(A.sal[si]); common(pr, t); bindT(pr, 'uPrev', A.sal[1 - si].t); quad();
       pr = use(P.key); target(A.key); common(pr, t); quad();
-      // lectura de puntos clave (esquinas) para la malla del entorno
+      // lectura de puntos clave (esquinas) para la malla del entorno — asíncrona
       if (wantKeys && frame % 3 === 0 && cbf) {
         const kw = AW / 8, kh = AH / 8;
         if (!keyBuf || keyBuf.length !== kw * kh * 4) keyBuf = new Float32Array(kw * kh * 4);
-        target(A.key);
-        gl.readPixels(0, 0, kw, kh, gl.RGBA, gl.FLOAT, keyBuf);
+        readAsync('key', A.key, kw, kh, keyBuf, () => {
         keys.length = 0;
         for (let j = 0; j < kh; j++) for (let i = 0; i < kw; i++) {
           const q = (j * kw + i) * 4, r = keyBuf[q];
@@ -857,12 +886,12 @@ void main(){
           keys.push(x * W, y * H, Math.min(1, r));
         }
         keysT = performance.now();
+        });
       }
       // lectura de saliencia: picos para la mirada y normalización
-      if (frame % 5 === 0 && cbf) {
+      if (frame % 4 === 0 && cbf) {
         const sw = AW / 4, shh = AH / 4;
-        target(A.sal[si]);
-        gl.readPixels(0, 0, sw, shh, gl.RGBA, gl.FLOAT, salBuf);
+        readAsync('sal', A.sal[si], sw, shh, salBuf, () => {
         let mx = 0, sum = 0; const cand = [];
         for (let i = 0; i < sw * shh; i++) sum += salBuf[i * 4];
         energy = energy * 0.8 + Math.min(1, Math.max(0, (sum / (sw * shh)) / (salMax || 1) * 2.2 - 0.4)) * 0.2;
@@ -882,6 +911,7 @@ void main(){
           if (peaks.some((p) => Math.hypot((p[0] - x) * W / H, p[1] - y) < 0.12)) continue;
           peaks.push([x, y, c[2] / (salMax || 1)]);
         }
+        });
       }
     }
 
@@ -1018,7 +1048,7 @@ void main(){
 
     const api = {
       gl, sources,
-      get overlay() { return overCtx; },
+      get overlay() { overCtx.setTransform(overScale, 0, 0, overScale, 0, 0); return overCtx; },
       get size() { return [W, H]; },
       get camSize() { return [camW, camH]; },
       get peaks() { return peaks; },

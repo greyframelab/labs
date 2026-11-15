@@ -23,7 +23,7 @@
     let stream = null, camKey = '', camBusy = false, camError = null, camLabel = '';
     const V = OJO.vision();
     let visionOn = false, remote = null, remoteAt = 0;
-    let fps = 0, lastF = 0, raf = 0;
+    let fps = 0, lastF = 0, raf = 0, skipN = 0, gapT = 0;
     const self = {
       eng, video, vision: V,
       get state() { return S; },
@@ -34,6 +34,7 @@
       setState(ns) { S = ns; eng.setState(S); },
       setRemoteModel(m) { remote = m; remoteAt = performance.now(); },
       onFrame: null,
+      throttle: 1,
       async loadVision(onStatus) { await V.load(onStatus); },
       useLocalVision(on) { if (on === visionOn) return; visionOn = on; if (on) V.start(video); else V.stop(); },
       get localVision() { return visionOn; },
@@ -61,7 +62,10 @@
           raf = requestAnimationFrame(loop);
           if (lastF) fps = fps * 0.92 + (1000 / Math.max(1, now - lastF)) * 0.08;
           lastF = now;
+          // la consola, con la salida abierta, pinta su previa a menos frames: la GPU es para la salida
+          if (self.throttle > 1 && (++skipN % self.throttle)) return;
           if (((S.device || '') + '@' + S.res) !== camKey) self.camera();
+          if (now - gapT > 1000) { gapT = now; V.setGap(fps < 30 ? 70 : fps < 45 ? 45 : 30); }
           const wall = OJO.wall();
           V.configure(S);
           const pmal = S.p && S.p.malla;

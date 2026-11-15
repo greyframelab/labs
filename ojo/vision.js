@@ -38,13 +38,13 @@
   OJO.vision = function () {
     let human = null, video = null, running = false, status = 'apagada';
     const subjects = new Map();
-    let nextId = 1, lastDet = 0, detMs = 0, lastErr = null, active = true;
+    let nextId = 1, lastDet = 0, detMs = 0, lastErr = null, active = true, gap = 30;
     const events = [];
     const fov = { x: 0.5, y: 0.45, fx: 0.5, fy: 0.45, sx: 0.5, sy: 0.45, sacT: 0, sacDur: 0.07, next: 0, path: [], target: null, born: performance.now() };
     let model = { subjects: [], body: null, fovea: { x: 0.5, y: 0.45, path: [], sac: 0 }, contact: 0, status, energy: 0 };
     let contactLevel = 0, contactOn = false;
     const trails = [[], []];
-    const lost = [];
+    const lost = [], objTracks = [];
 
     async function load(onStatus) {
       const say = (s) => { status = s; onStatus && onStatus(s); };
@@ -52,7 +52,7 @@
       const { Human } = await import(new URL('vendor/human/human.esm.js', document.baseURI).href);
       human = new Human({
         modelBasePath: new URL('models/', document.baseURI).href,
-        backend: 'webgl', debug: false, warmup: 'none', cacheSensitivity: 0,
+        backend: 'webgl', debug: false, warmup: 'none', cacheSensitivity: 0.7,
         filter: { enabled: false },
         face: {
           enabled: true,
@@ -60,9 +60,9 @@
           mesh: { enabled: true }, iris: { enabled: true },
           emotion: { enabled: false }, description: { enabled: false }, antispoof: { enabled: false }, liveness: { enabled: false }, attention: { enabled: false },
         },
-        body: { enabled: true, modelPath: 'movenet-lightning.json', maxDetected: 1, minConfidence: 0.25 },
+        body: { enabled: true, modelPath: 'movenet-lightning.json', maxDetected: 1, minConfidence: 0.25, skipFrames: 2, skipTime: 60 },
         hand: { enabled: true, maxDetected: 2, minConfidence: 0.55, skipFrames: 6, skipTime: 250, detector: { modelPath: 'handtrack.json' }, skeleton: { modelPath: 'handlandmark-lite.json' } },
-        object: { enabled: false, modelPath: 'centernet.json', minConfidence: 0.3, maxDetected: 12, skipFrames: 8, skipTime: 400 },
+        object: { enabled: false, modelPath: 'centernet.json', minConfidence: 0.22, maxDetected: 12, skipFrames: 12, skipTime: 320 },
         gesture: { enabled: false }, segmentation: { enabled: false },
       });
       await human.load();
@@ -77,7 +77,7 @@
         if (active && video && video.readyState >= 2 && video.videoWidth) {
           try { await human.detect(video); lastDet = performance.now(); detMs = detMs * 0.9 + (lastDet - t0) * 0.1; } catch (e) { lastErr = e; }
         }
-        await new Promise((r) => setTimeout(r, Math.max(4, 30 - (performance.now() - t0))));
+        await new Promise((r) => setTimeout(r, Math.max(4, gap - (performance.now() - t0))));
       }
     }
 
@@ -145,13 +145,29 @@
       let hands = null, objects = null;
       if (res && res.hand && res.hand.length) {
         hands = res.hand.filter((h) => (h.score || 0) > 0.5 && h.keypoints && h.keypoints.length >= 21)
-          .map((h) => ({ pts: h.keypoints.map((q) => [q[0] / vw, q[1] / vh]), score: h.score, label: h.label || '' }));
+          .map((h) => ({ pts: h.keypoints.map((q) => [q[0] / vw, q[1] / vh, (q[2] || 0) / vw]), score: h.score, label: h.label || '' }));
         if (!hands.length) hands = null;
       }
-      if (res && res.object && res.object.length && human.config.object.enabled) {
-        objects = res.object.filter((o) => o.box && (o.score || 0) > 0.3)
-          .map((o) => ({ label: o.label || '', score: o.score, box: [o.box[0] / vw, o.box[1] / vh, o.box[2] / vw, o.box[3] / vh] }));
-      }
+      // objetos: seguimiento suave entre detecciones (misma etiqueta + solape), duran 0,8 s sin verse
+      if (human.config.object.enabled) {
+        const det = res && res.object ? res.object.filter((o) => o.box && (o.score || 0) > 0.2) : [];
+        const used = new Set();
+        for (const o of det) {
+          const b = [o.box[0] / vw, o.box[1] / vh, o.box[2] / vw, o.box[3] / vh];
+          let best = null, bi = 0.25;
+          for (const tr of objTracks) {
+            if (used.has(tr) || tr.label !== o.label) continue;
+            const ix = Math.max(0, Math.min(b[0] + b[2], tr.box[0] + tr.box[2]) - Math.max(b[0], tr.box[0]));
+            const iy = Math.max(0, Math.min(b[1] + b[3], tr.box[1] + tr.box[3]) - Math.max(b[1], tr.box[1]));
+            const inter = ix * iy, iou = inter / (b[2] * b[3] + tr.box[2] * tr.box[3] - inter + 1e-9);
+            if (iou > bi) { bi = iou; best = tr; }
+          }
+          if (best) { for (let i = 0; i < 4; i++) best.box[i] += (b[i] - best.box[i]) * 0.35; best.score += (o.score - best.score) * 0.3; best.last = now; used.add(best); }
+          else { const tr = { label: o.label, score: o.score, box: b, born: now, last: now }; objTracks.push(tr); used.add(tr); }
+        }
+        for (let i = objTracks.length - 1; i >= 0; i--) if (now - objTracks[i].last > 800) objTracks.splice(i, 1);
+        objects = objTracks.map((tr) => ({ label: tr.label, score: tr.score, box: tr.box.slice(), age: (now - tr.born) / 1000, gone: clamp((now - tr.last - 300) / 500) }));
+      } else objTracks.length = 0;
       // contacto global: el sujeto que más tiempo lleva mirando
       let cs = null;
       subjects.forEach((s) => { s.contact = clamp((s.contactT - 0.45) / 0.35); if (s.contact > 0 && (!cs || s.contactT > cs.contactT)) cs = s; });
@@ -237,6 +253,8 @@
         if (!active) { subjects.clear(); trails[0].length = 0; trails[1].length = 0; contactLevel = 0; contactOn = false; }
       },
       get active() { return active; },
+      // si el render va justo, la IA cede: detecta con menos frecuencia (la interpolación mantiene el movimiento suave)
+      setGap(ms) { gap = ms; },
       get model() { return model; },
       get status() { return status; },
       get error() { return lastErr; },
@@ -381,6 +399,7 @@
   }
   OJO.delaunay = delaunay;
 
+  const handTrails = [];
   // malla del entorno: triangula en vivo las esquinas de la escena (y las manos) — todo lo que acercas queda tejido
   let envCache = { t: 0, pts: null, tri: null };
   function drawEnvMesh(c, eng, model, S, t, accent, k, lw) {
@@ -424,9 +443,11 @@
 
   OJO.drawAnalysis = function (eng, model, S, nowMs, accent) {
     const c = eng.overlay; const [W, H] = eng.size;
+    // capa vacía: se limpia una sola vez y no se vuelve a subir a la GPU
+    if (!model || !OJO.overlayOn(S)) { if (!eng._blank) { c.clearRect(0, 0, W, H); eng.markOverlay(); eng._blank = true; } return; }
+    eng._blank = false;
     c.clearRect(0, 0, W, H);
     eng.markOverlay();
-    if (!model || !OJO.overlayOn(S)) return;
     const t = nowMs / 1000;
     const k = H / 1080;
     const lw = Math.max(1, 1.15 * k);
@@ -499,50 +520,113 @@
       }
     }
 
-    // ---- manos: 21 puntos por mano
+    // ---- manos: anatomía completa — palma tejida, dedos como volúmenes con profundidad, articulaciones vivas,
+    //      yemas con retícula, gesto reconocido y estela del índice
     if (model.hands && (!minimal || S.mode === 'malla')) {
-      const FING = [[0, 1, 2, 3, 4], [0, 5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16], [0, 17, 18, 19, 20], [5, 9, 13, 17]];
-      for (const h of model.hands) {
+      const FINGERS = [[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16], [17, 18, 19, 20]];
+      const NAMES = ['PULGAR', 'ÍNDICE', 'CORAZÓN', 'ANULAR', 'MEÑIQUE'];
+      model.hands.forEach((h, hi) => {
         const hp = h.pts.map((q) => P(q[0], q[1]));
+        const hz = h.pts.map((q) => q[2] || 0);
+        let z0 = 1e9, z1 = -1e9; hz.forEach((v) => { if (v < z0) z0 = v; if (v > z1) z1 = v; });
+        const zr = Math.max(1e-6, z1 - z0), near = (i) => 1 - (hz[i] - z0) / zr;   // 1 = más cerca de la cámara
+        const size = Math.hypot(hp[9][0] - hp[0][0], hp[9][1] - hp[0][1]) || 40 * k;
+        const dim = 1 - contact * 0.5;
+        // gesto: dedos extendidos (punta más lejos de la muñeca que la articulación media)
+        const ext = FINGERS.map((f, n) => {
+          const d = (i) => Math.hypot(hp[i][0] - hp[0][0], hp[i][1] - hp[0][1]);
+          return n === 0 ? Math.hypot(hp[4][0] - hp[17][0], hp[4][1] - hp[17][1]) > Math.hypot(hp[3][0] - hp[17][0], hp[3][1] - hp[17][1]) * 1.08 : d(f[3]) > d(f[1]) * 1.15;
+        });
+        const nExt = ext.filter(Boolean).length;
+        const gesto = nExt === 0 ? 'PUÑO' : nExt >= 4 ? 'ABIERTA' : ext[1] && !ext[2] && !ext[3] && !ext[4] ? 'SEÑALA' : ext[1] && ext[2] && !ext[3] && !ext[4] ? 'DOS' : nExt + ' DEDOS';
+        // palma tejida (Delaunay de muñeca + bases) con relleno muy tenue
+        const palmIdx = [0, 1, 2, 5, 9, 13, 17];
+        const flat = []; palmIdx.forEach((i) => flat.push(hp[i][0], hp[i][1]));
+        const tri = delaunay(flat), palm = new Path2D();
+        for (let i = 0; i < tri.length; i += 3) { const a = hp[palmIdx[tri[i]]], b = hp[palmIdx[tri[i + 1]]], d = hp[palmIdx[tri[i + 2]]]; palm.moveTo(a[0], a[1]); palm.lineTo(b[0], b[1]); palm.lineTo(d[0], d[1]); palm.closePath(); }
+        c.fillStyle = rgba(accent, 0.07 * dim); c.fill(palm);
+        c.strokeStyle = INK + (0.28 * dim) + ')'; c.lineWidth = Math.max(0.6, 0.8 * k); c.stroke(palm);
         if (S.mode === 'malla') drawHandMesh(c, hp, accent, k);
-        c.strokeStyle = INK + (0.6 * (1 - contact * 0.5)) + ')'; c.lineWidth = lw;
-        c.beginPath();
-        for (const f of FING) f.forEach((i, n) => (n ? c.lineTo(hp[i][0], hp[i][1]) : c.moveTo(hp[i][0], hp[i][1])));
-        c.stroke();
+        // dedos: volumen que se estrecha hacia la punta, más brillante lo cercano
+        FINGERS.forEach((f, n) => {
+          const chain = [n === 0 ? 1 : f[0] === 5 ? 5 : f[0], ...f.slice(n === 0 ? 1 : 1)];
+          const pts = [hp[n === 0 ? 1 : f[0]]].concat(f.slice(1).map((i) => hp[i]));
+          const idx = [n === 0 ? 1 : f[0]].concat(f.slice(1));
+          const L = [], R = [];
+          for (let j = 0; j < pts.length; j++) {
+            const a = pts[Math.max(0, j - 1)], b = pts[Math.min(pts.length - 1, j + 1)];
+            const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
+            const w = size * (0.13 - j * 0.022) * (0.8 + near(idx[j]) * 0.4);
+            L.push([pts[j][0] - dy / l * w, pts[j][1] + dx / l * w]); R.push([pts[j][0] + dy / l * w, pts[j][1] - dx / l * w]);
+          }
+          const tip = pts[pts.length - 1];
+          const shape = new Path2D();
+          shape.moveTo(L[0][0], L[0][1]); L.slice(1).forEach((p) => shape.lineTo(p[0], p[1]));
+          shape.quadraticCurveTo(tip[0] + (tip[0] - pts[pts.length - 2][0]) * 0.35, tip[1] + (tip[1] - pts[pts.length - 2][1]) * 0.35, R[R.length - 1][0], R[R.length - 1][1]);
+          R.slice(0, -1).reverse().forEach((p) => shape.lineTo(p[0], p[1]));
+          const nz = near(idx[idx.length - 1]);
+          c.fillStyle = rgba(accent, (ext[n] ? 0.1 : 0.04) * dim); c.fill(shape);
+          c.strokeStyle = ext[n] ? rgba(accent, (0.45 + nz * 0.4) * dim) : INK + ((0.25 + nz * 0.3) * dim) + ')';
+          c.lineWidth = lw; c.stroke(shape);
+          // eje del dedo
+          c.strokeStyle = INK + (0.35 * dim) + ')'; c.setLineDash([2 * k, 3 * k]);
+          c.beginPath(); pts.forEach((p, j) => (j ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]))); c.stroke(); c.setLineDash([]);
+        });
+        // articulaciones: anillos que giran; yemas: retícula en el acento
         for (let i = 0; i < 21; i++) {
-          const tip = i % 4 === 0 && i > 0;
-          const r = (tip ? 3.2 : 1.8) * k;
-          c.fillStyle = tip ? rgba(accent, 0.95) : INK + '0.8)';
-          c.fillRect(hp[i][0] - r / 2, hp[i][1] - r / 2, r, r);
-          if (tip) { c.strokeStyle = rgba(accent, 0.5); c.beginPath(); c.arc(hp[i][0], hp[i][1], r * 2.2, 0, Math.PI * 2); c.stroke(); }
+          const p = hp[i], tip = i % 4 === 0 && i > 0, nz = near(i);
+          if (tip) {
+            const r = (4 + nz * 3) * k, a0 = t * 2.2 + i;
+            c.strokeStyle = rgba(accent, (0.6 + nz * 0.4) * dim); c.lineWidth = lw;
+            c.beginPath(); c.arc(p[0], p[1], r, a0, a0 + Math.PI * 1.2); c.stroke();
+            c.beginPath(); c.moveTo(p[0] - r * 1.8, p[1]); c.lineTo(p[0] - r * 1.2, p[1]); c.moveTo(p[0] + r * 1.2, p[1]); c.lineTo(p[0] + r * 1.8, p[1]);
+            c.moveTo(p[0], p[1] - r * 1.8); c.lineTo(p[0], p[1] - r * 1.2); c.stroke();
+            c.fillStyle = rgba(accent, 0.95 * dim); c.fillRect(p[0] - lw, p[1] - lw, lw * 2, lw * 2);
+          } else {
+            const r = (1.6 + nz * 1.4) * k;
+            c.fillStyle = INK + ((0.5 + nz * 0.4) * dim) + ')'; c.fillRect(p[0] - r / 2, p[1] - r / 2, r, r);
+          }
         }
+        // estela del índice
+        const tr = handTrails[hi] || (handTrails[hi] = []);
+        tr.push([hp[8][0], hp[8][1]]); if (tr.length > 28) tr.shift();
+        for (let i = 1; i < tr.length; i++) {
+          const a = i / tr.length;
+          c.strokeStyle = rgba(accent, a * a * 0.8 * dim); c.lineWidth = lw * (0.5 + a * 2);
+          c.beginPath(); c.moveTo(tr[i - 1][0], tr[i - 1][1]); c.lineTo(tr[i][0], tr[i][1]); c.stroke();
+        }
+        // datos: lado, gesto y dedos extendidos
         if (data) {
-          c.fillStyle = INK + '0.6)';
           const w0 = hp[0];
-          decode(c, (h.label === 'left' ? 'MANO IZQ' : h.label === 'right' ? 'MANO DCHA' : 'MANO') + ' · ' + (h.score || 0).toFixed(2), w0[0] + 10 * k, w0[1] + fs * 1.4, 1, t, 7);
+          c.fillStyle = rgba(accent, 0.9 * dim);
+          decode(c, (h.label === 'left' ? 'MANO IZQ' : h.label === 'right' ? 'MANO DCHA' : 'MANO') + ' · ' + gesto, w0[0] + 12 * k, w0[1] + fs * 1.5, 1, t, 7 + hi);
+          c.fillStyle = INK + (0.5 * dim) + ')';
+          decode(c, NAMES.map((nm, n) => (ext[n] ? nm[0] : '·')).join(' ') + '  ' + (h.score || 0).toFixed(2), w0[0] + 12 * k, w0[1] + fs * 2.9, 1, t, 11 + hi);
         }
-      }
-    }
+      });
+      handTrails.length = model.hands.length;
+    } else handTrails.length = 0;
 
     // ---- objetos (modo OBJETOS)
     if (model.objects && S.mode === 'objetos') {
       const po = (S.p && S.p.objetos) || [0.35, 0.4, 0.5, 0.5];
-      const minS = 0.3 + po[1] * 0.5;
+      const minS = 0.2 + po[1] * 0.6;
       for (const o of model.objects) {
         if (o.score < minS || (o.label === 'person' && po[2] < 0.5)) continue;
         const a = P(o.box[0], o.box[1]), b = P(o.box[0] + o.box[2], o.box[1] + o.box[3]);
         const x0 = Math.min(a[0], b[0]), x1 = Math.max(a[0], b[0]), y0 = Math.min(a[1], b[1]), y1 = Math.max(a[1], b[1]);
-        const L = Math.min(x1 - x0, y1 - y0) * 0.18;
-        c.strokeStyle = rgba(accent, 0.9); c.lineWidth = lw * 1.2;
+        const L = Math.min(x1 - x0, y1 - y0) * 0.18, of = (1 - (o.gone || 0)) * ease((o.age || 1) / 0.35);
+        if (of <= 0) continue;
+        c.strokeStyle = rgba(accent, 0.9 * of); c.lineWidth = lw * 1.2;
         c.beginPath();
         c.moveTo(x0, y0 + L); c.lineTo(x0, y0); c.lineTo(x0 + L, y0); c.moveTo(x1 - L, y0); c.lineTo(x1, y0); c.lineTo(x1, y0 + L);
         c.moveTo(x1, y1 - L); c.lineTo(x1, y1); c.lineTo(x1 - L, y1); c.moveTo(x0 + L, y1); c.lineTo(x0, y1); c.lineTo(x0, y1 - L);
         c.stroke();
-        c.strokeStyle = INK + '0.18)'; c.lineWidth = lw; c.strokeRect(x0, y0, x1 - x0, y1 - y0);
+        c.strokeStyle = INK + (0.18 * of) + ')'; c.lineWidth = lw; c.strokeRect(x0, y0, x1 - x0, y1 - y0);
         const name = (OJO.COCO_ES[o.label] || o.label).toUpperCase();
-        c.fillStyle = rgba(accent, 1);
+        c.fillStyle = rgba(accent, of);
         const ty = y0 > fs * 2 ? y0 - fs * 0.7 : y1 + fs * 1.4;
-        decode(c, name, x0, ty, 1, t, name.length * 7);
+        decode(c, name, x0, ty, clamp((o.age || 1) / 0.5), t, name.length * 7);
         if (data) { c.fillStyle = INK + '0.55)'; c.textAlign = 'right'; decode(c, o.score.toFixed(2), x1, ty, 1, t, 3); c.textAlign = 'left'; }
       }
     }

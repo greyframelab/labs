@@ -66,7 +66,7 @@
   function setMode(id, quiet) {
     if (S.mode === id) return;
     S.mode = id; S.trail = null; autoT0 = performance.now();
-    snd.event({ type: 'modo' });
+    snd.event({ type: 'modo' }); snd.update(rt.eng.energy, 0, 0, id);
     if (!quiet) log('MODO · ' + OJO.MODES[OJO.modeIndex(id)].name);
     buildParams(); push();
   }
@@ -203,7 +203,7 @@
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const solo = document.body.classList.contains('solo');
     let w = view.clientWidth * dpr, h = view.clientHeight * dpr;
-    const k = Math.min(1, (solo ? 1920 : 1280) / Math.max(w, h));
+    const k = Math.min(1, (solo ? 1920 : outAlive() ? 880 : 1280) / Math.max(w, h));
     if (w > 0 && h > 0) rt.eng.resize(Math.round(w * k), Math.round(h * k));
   }
   new ResizeObserver(sizePrev).observe(view);
@@ -212,7 +212,7 @@
   rt.onFrame = (now, model) => {
     if (rt.localVision) rt.vision.drainEvents().forEach(onEvent);
     const n = model && model.subjects ? model.subjects.filter((s) => (s.gone || 0) < 0.5).length : 0;
-    snd.update(outAlive() && outInfo ? outInfo.energy : rt.eng.energy, n, model ? model.contact : 0);
+    snd.update(outAlive() && outInfo ? outInfo.energy : rt.eng.energy, n, model ? model.contact : 0, S.mode);
     // AUTO
     if (autoOn) {
       const k = (now - autoT0) / (autoSec * 1000);
@@ -225,6 +225,7 @@
     if (now - lastUI < 120) return;
     lastUI = now;
     const alive = outAlive();
+    if (rt.throttle !== (alive ? 2 : 1)) { rt.throttle = alive ? 2 : 1; sizePrev(); }
     $('cFps').textContent = Math.round(rt.fps) + (alive && outInfo ? ' / ' + Math.round(outInfo.fps) : '');
     $('ledOut').className = 'led' + (alive ? ' on' : '');
     $('cOut').textContent = alive && outInfo ? outInfo.size.join('×') : 'CERRADA';
