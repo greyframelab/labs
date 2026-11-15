@@ -11,7 +11,7 @@
   // ------------------------------------------------------------------ estado recibido
   let MIX = { xf: 0, mode: 'fundido', onAir: 'A', quality: 1 };
   let FX = { trail: 0, hits: 0, split: 0, invert: 0, black: 0, bright: 1, glitch: 0, punch: 0, lens: 0, mosaic: 0, tint: 0, scan: 0, mirror: 0, strobe: 0, tintC: '#ffffff',
-    pBloom: 1, pFlash: 1, pScan: 0.5, cMix: 0, view: 0, viewOp: 0.85, viewMode: 'full' };
+    pBloom: 1, pFlash: 1, pScan: 0.2, cMix: 0, view: 0, viewOp: 0.85, viewMode: 'full' };
   let BANDS = [0, 0, 0];
   const HITS = {};          // piece id -> [s]
   const D = {};             // deck id -> { st, pending, piece, src, frame, api, next }
@@ -35,7 +35,7 @@
                 const o2 = Object.assign({}, opt);
                 o2.bloom = (opt.bloom ?? 1) * (FX.pBloom ?? 1); o2.flash = (opt.flash ?? 0) * (FX.pFlash ?? 1);
                 // líneas horizontales (scanlines) de la pieza: suavizadas por defecto en el live, que en proyección ensucian
-                o2.scan = (opt.scan ?? 1) * (FX.pScan ?? 0.5);
+                o2.scan = (opt.scan ?? 1) * (FX.pScan ?? 0.2);
                 api.post = { bloom: o2.bloom, flash: o2.flash };
                 return orig.call(this, out, frame, o2);
               };

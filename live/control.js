@@ -15,7 +15,7 @@
   const LIB = [];
   const MIX = { xf: 0, mode: 'fundido', onAir: 'A', quality: store.get('quality', 1) };
   const FX = { trail: 0, hits: 0, split: 0, invert: 0, black: 0, bright: 1, glitch: 0, punch: 0, lens: 0, mosaic: 0, tint: 0, scan: 0, mirror: 0, strobe: 0, tintC: '#ffffff',
-    pBloom: 1, pFlash: 1, pScan: 0.5, cMix: 0, view: 0, viewOp: 0.85, viewMode: 'full' };
+    pBloom: 1, pFlash: 1, pScan: 0.2, cMix: 0, view: 0, viewOp: 0.85, viewMode: 'full' };
   const AFX = { filter: 0, echo: 0, echoT: 0.375, room: 0.12, master: 0.9, av: store.get('av', 0) };
   let quant = store.get('quant', 'golpe');
   let focus = 'A';
@@ -790,7 +790,7 @@
     const x2 = (v) => (v * 2).toFixed(2) + '×';
     knob(fp, 'pBloom', 'BLOOM', 0.5, (v) => { FX.pBloom = Math.abs(v - 0.5) < 0.01 ? 1 : v * 2; sendState(); }, x2);
     knob(fp, 'pFlash', 'FLASH', 0.5, (v) => { FX.pFlash = Math.abs(v - 0.5) < 0.01 ? 1 : v * 2; sendState(); }, x2);
-    knob(fp, 'pScan', 'LÍNEAS', 0.5, (v) => { FX.pScan = v; sendState(); }, (v) => Math.round(v * 100) + '%');
+    knob(fp, 'pScan', 'LÍNEAS', 0.2, (v) => { FX.pScan = v; sendState(); }, (v) => Math.round(v * 100) + '%');
     const kc = $('#kC'); kc.style.setProperty('--acc', '#f2f0ea');
     knob(kc, 'cMix', 'MEZCLA C', 0, (v) => { FX.cMix = v; sendState(); if (v > 0 && !VLC.isCompiled()) toast('DECK C · ABRE EL EDITOR Y COMPILA UN CÓDIGO'); });
     btn($('#cEdit'), 'cEdit', () => VLC.openEditor && VLC.openEditor());
