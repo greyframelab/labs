@@ -53,14 +53,63 @@
       }
     },
   };
-  function frameSize() { const q = MIX.quality || 1; return [Math.round(innerWidth * q), Math.round(innerHeight * q)]; }
+  // ------------------------------------------------------------------ CALIDAD AUTO
+  // Cada pieza se pinta a la resolución que el ordenador aguanta con fluidez. La salida mide los FPS de
+  // la pieza en el aire (sola, fuera de fundidos y vueltas de loop) y, si va a saltos, la recarga más
+  // pequeña; si va sobrada, la sube poco a poco. Lo aprendido se guarda por pieza (localStorage).
+  const PQ_KEY = 'vll:calidadPieza', AUTO0 = 0.75, QMIN = 0.45;
+  let PQ = {}; try { PQ = JSON.parse(localStorage.getItem(PQ_KEY) || '{}') || {}; } catch (e) {}
+  const savePQ = () => { try { localStorage.setItem(PQ_KEY, JSON.stringify(PQ)); } catch (e) {} };
+  const isAuto = () => !(MIX.quality > 0);
+  function pieceQ(piece) { if (!isAuto()) return MIX.quality; const e = PQ[piece]; return e ? e.q : AUTO0; }
+  function frameSize(piece) { const q = pieceQ(piece); return [Math.max(64, Math.round(innerWidth * q)), Math.max(64, Math.round(innerHeight * q))]; }
+  function reloadDeck(k) {
+    const d = D[k]; if (!d.piece || !d.frame) return;
+    const src = d.frame.src.replace(/[?&]live\b/, ''), piece = d.frame.dataset.piece;
+    d.piece = null; loadPiece(k, piece, src); d.reloadAt = performance.now();
+  }
+  const AQ = { n: 0, sum: 0, long: 0, t0: 0, last: 0, ref: 60, piece: null };
+  function autoQuality(now, ra, rb) {
+    const dt = AQ.last ? now - AQ.last : 0; AQ.last = now;
+    if (!isAuto() || !dt || dt > 500) return;
+    // solo cuenta con una pieza en el aire, sin fundido ni vuelta de loop, y ya asentada
+    const k = ra.drawn && !rb.drawn ? 'A' : rb.drawn && !ra.drawn ? 'B' : null;
+    const d = k && D[k];
+    if (!d || !d.frame || d.next || (ra.w || 0) > 0 || (rb.w || 0) > 0 || now - (d.reloadAt || 0) < 2500) { AQ.n = 0; AQ.sum = 0; AQ.long = 0; AQ.t0 = now; return; }
+    const piece = d.frame.dataset.piece;
+    if (AQ.piece !== piece) { AQ.piece = piece; AQ.n = 0; AQ.sum = 0; AQ.long = 0; AQ.t0 = now; return; }
+    AQ.n++; AQ.sum += dt; if (dt > 1000 / AQ.ref * 1.6) AQ.long++; if (dt > 3) AQ.minDt = Math.min(AQ.minDt || 1e9, dt);
+    if (now - AQ.t0 < 2500) return;
+    const fps = AQ.n * 1000 / AQ.sum, longR = AQ.long / AQ.n;
+    // frecuencia de la pantalla (50, 60, 120…): el intervalo más corto entre frames es el de su refresco
+    if (AQ.minDt) { const r = 1000 / AQ.minDt; AQ.ref = [30, 50, 60, 75, 90, 100, 120, 144, 165, 240].reduce((a, b) => (Math.abs(b - r) < Math.abs(a - r) ? b : a)); }
+    AQ.minDt = 0; AQ.n = 0; AQ.sum = 0; AQ.long = 0; AQ.t0 = now;
+    const e = PQ[piece] || (PQ[piece] = { q: +(d.frame.dataset.q || AUTO0), good: 0, fail: 0 });
+    if (fps < AQ.ref * 0.85 || longR > 0.08) {
+      if (e.q <= QMIN + 0.001) return;
+      e.fail = e.q; e.q = Math.max(QMIN, Math.round(e.q * 0.86 * 100) / 100); e.good = 0;
+      savePQ(); reloadDeck(k);
+      CL.trace(tstr(), 'calidad', `${k} · ${piece} va a saltos (${fps.toFixed(0)} fps) → calidad ${Math.round(e.q * 100)}%`);
+    } else if (fps >= AQ.ref * 0.96 && longR < 0.02) {
+      if (e.q >= 1) return;
+      e.good++;
+      const next = Math.min(1, Math.round((e.q + 0.08) * 100) / 100);
+      // no vuelve enseguida a la calidad que ya fue a saltos: lo reintenta mucho más tarde
+      if (e.good >= (e.fail && next >= e.fail - 0.01 ? 24 : 3)) {
+        if (e.fail && next >= e.fail - 0.01) e.fail = 0;
+        e.q = next; e.good = 0; savePQ(); reloadDeck(k);
+        CL.trace(tstr(), 'calidad', `${k} · ${piece} va sobrada → calidad ${Math.round(e.q * 100)}%`);
+      } else savePQ();
+    } else e.good = 0;
+  }
+  function frameQ(k) { const d = D[k]; return d && d.frame ? Math.round(+(d.frame.dataset.q || 1) * 100) : 0; }
   function loadPiece(k, piece, src) {
     const d = D[k];
     if (d.next && d.next.dataset.piece === piece) return;
     if (d.next) d.next.remove();
     const fr = document.createElement('iframe');
-    const [w, h] = frameSize();
-    fr.className = 'deck'; fr.dataset.piece = piece; fr.dataset.q = MIX.quality;
+    const [w, h] = frameSize(piece);
+    fr.className = 'deck'; fr.dataset.piece = piece; fr.dataset.q = pieceQ(piece);
     fr.style.width = w + 'px'; fr.style.height = h + 'px';
     fr.setAttribute('aria-hidden', 'true'); fr.tabIndex = -1;
     fr.src = src + (src.includes('?') ? '&' : '?') + 'live';
@@ -411,6 +460,7 @@
     const fa = frz && MIX.onAir === 'A' ? 1 : 0, fb = frz && MIX.onAir === 'B' ? 1 : 0;
     const ra = drawDeck('A', ga, !fa), rb = drawDeck('B', gb, !fb);
     if (!ra.ok) ga = 0; if (!rb.ok) gb = 0;
+    autoQuality(now, ra, rb);
     blackS += ((FX.black ? 1 : 0) - blackS) * 0.12;
     const env = Math.max(ra.env, rb.env);
     gl.useProgram(P);
@@ -427,7 +477,7 @@
     gl.uniform1f(U.env, env); gl.uniform1f(U.punch, FX.punch || 0); gl.uniform1f(U.lens, FX.lens || 0); gl.uniform1f(U.mosaic, FX.mosaic || 0);
     gl.uniform1f(U.tint, FX.tint || 0); gl.uniform1f(U.mirror, FX.mirror || 0); gl.uniform1f(U.strobe, FX.strobe ? 1 : 0);
     gl.uniform3fv(U.tintC, hex(FX.tintC));
-    gl.uniform1f(U.up, (MIX.quality || 1) < 0.99 ? 1 : 0);
+    gl.uniform1f(U.up, (T.A0._w && T.A0._w < cv.width * 0.98) || (T.B0._w && T.B0._w < cv.width * 0.98) ? 1 : 0);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     // deck C: el shader en directo se aplica sobre la imagen compuesta (solo si está activo)
     let fin = dst;
@@ -479,7 +529,7 @@
     cur ^= 1;
     // estadísticas + monitor para la consola
     fpsN++;
-    if (now - fpsT > 1000) { ch.postMessage({ type: 'stats', fps: Math.round(fpsN * 1000 / (now - fpsT)), w: cv.width, h: cv.height }); fpsN = 0; fpsT = now; }
+    if (now - fpsT > 1000) { ch.postMessage({ type: 'stats', fps: Math.round(fpsN * 1000 / (now - fpsT)), w: cv.width, h: cv.height, q: frameQ(MIX.onAir), auto: isAuto() }); fpsN = 0; fpsT = now; }
     if (now - lastPrev > 150) {
       lastPrev = now;
       const pw = 480, ph = Math.round(pw * cv.height / cv.width);
