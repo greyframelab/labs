@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VØID_LOOM · OJO · Greyframe Labs</title>
+<meta name="description" content="VØID_LOOM · OJO: la cámara proyectada tal como la ve una máquina. Te detecta, te sigue con la mirada y sabe cuándo la miras.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+:root{
+  --bg:#060606;--panel:#0b0b0b;--panel2:#101010;--line:#1d1c1b;--line2:#2a2927;
+  --tx:#f2f0ea;--tx2:#bdbab3;--mute:#8f8c86;--dim:#5d5b57;
+  --red:#FF1A1A;--acc:#00E5FF;
+  --f:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--tx);font:400 11px var(--f);letter-spacing:.06em;overflow:hidden;-webkit-font-smoothing:antialiased}
+button{all:unset;cursor:pointer;box-sizing:border-box}
+button:focus-visible,[tabindex]:focus-visible,select:focus-visible,input:focus-visible{outline:1px solid var(--acc);outline-offset:2px}
+.lbl{font-size:9px;letter-spacing:.24em;color:var(--mute);text-transform:uppercase}
+
+/* ---------- arranque ---------- */
+#boot{position:fixed;inset:0;z-index:100;background:#000;display:grid;place-items:center;transition:opacity .8s}
+#boot.off{opacity:0;pointer-events:none}
+#boot canvas{position:absolute;inset:0;width:100%;height:100%}
+.boot-in{position:relative;display:flex;flex-direction:column;align-items:center;gap:34px;text-align:center}
+.boot-in .mark{font-size:34px;font-weight:300;letter-spacing:.42em;margin-right:-.42em}
+.boot-in .mark i{font-style:normal;color:var(--acc)}
+.boot-in .sub{color:var(--mute);letter-spacing:.32em;font-size:10px;margin-top:-18px;line-height:2}
+#go{border:1px solid var(--line2);padding:16px 34px;letter-spacing:.36em;font-size:11px;transition:border-color .2s,color .2s,background .2s;background:#000}
+#go:hover{border-color:var(--acc);color:#fff;background:rgba(0,229,255,.06)}
+#bootlog{min-height:14px;color:var(--dim);font-size:9.5px;letter-spacing:.2em;max-width:560px;line-height:1.8}
+#bootlog.err{color:var(--red)}
+
+/* ---------- estructura ---------- */
+.app{display:grid;grid-template-rows:46px 1fr 30px;height:100vh}
+header{display:flex;align-items:center;gap:22px;padding:0 18px;border-bottom:1px solid var(--line);background:#050505;min-width:0}
+.brand{display:flex;align-items:baseline;gap:12px;letter-spacing:.34em;font-size:12px;white-space:nowrap}
+.brand i{font-style:normal;color:var(--acc)}
+.brand span{color:var(--mute);font-size:9px;letter-spacing:.3em}
+.chips{display:flex;gap:18px;margin-left:8px;min-width:0;overflow:hidden}
+.chip{display:flex;align-items:center;gap:8px;font-size:9px;letter-spacing:.22em;color:var(--mute);white-space:nowrap}
+.chip b{font-weight:400;color:var(--tx2);font-variant-numeric:tabular-nums}
+.led{width:6px;height:6px;border-radius:50%;background:#2a2927;flex:none}
+.led.on{background:#39FF6A;box-shadow:0 0 8px #39FF6A}
+.led.warn{background:#FFB000;box-shadow:0 0 8px #FFB000}
+.led.err{background:var(--red);box-shadow:0 0 8px var(--red)}
+.tools{margin-left:auto;display:flex;align-items:center;gap:10px}
+.seg{display:flex;border:1px solid var(--line2)}
+.seg button{padding:7px 10px;font-size:9px;letter-spacing:.22em;color:var(--mute);transition:color .15s,background .15s;white-space:nowrap}
+.seg button+button{border-left:1px solid var(--line2)}
+.seg button:hover{color:var(--tx)}
+.seg button.on{color:#000;background:var(--tx)}
+.tbtn{border:1px solid var(--line2);padding:7px 11px;font-size:9px;letter-spacing:.22em;color:var(--tx2);transition:all .15s;white-space:nowrap}
+.tbtn:hover{border-color:var(--mute);color:var(--tx)}
+.tbtn.on{border-color:var(--acc);color:#fff;background:color-mix(in srgb,var(--acc) 12%,transparent)}
+.tbtn.rec.on{border-color:var(--red);background:rgba(255,26,26,.14);animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:.55}}
+
+main{display:grid;grid-template-columns:250px minmax(0,1fr) 300px;gap:1px;background:var(--line);min-height:0}
+main>*{background:var(--panel);min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:#2a2927 transparent}
+.p-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 12px;border-bottom:1px solid var(--line)}
+.p-head .n{color:var(--dim);font-size:9px;letter-spacing:.2em;white-space:nowrap}
+
+/* ---------- modos ---------- */
+.mode{display:grid;grid-template-columns:20px 1fr;gap:10px;padding:13px 14px 13px 16px;border-bottom:1px solid #141413;position:relative;width:100%;transition:background .15s}
+.mode::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:2px;background:var(--ma);opacity:0;transition:opacity .2s}
+.mode:hover{background:#0f0f0f}
+.mode.on{background:var(--panel2)}
+.mode.on::before{opacity:1;box-shadow:0 0 10px var(--ma)}
+.mode .k{color:var(--dim);font-size:10px;padding-top:1px}
+.mode.on .k{color:var(--ma)}
+.mode .nm{display:flex;flex-direction:column;gap:6px;min-width:0}
+.mode .nm b{font-weight:400;letter-spacing:.26em;font-size:11px}
+.mode .nm span{font-size:9px;letter-spacing:.06em;color:var(--mute);line-height:1.55}
+.mode.on .nm span{color:var(--tx2)}
+.auto-box{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
+.auto-row{display:flex;align-items:center;gap:8px}
+.auto-bar{height:1px;background:var(--line2);position:relative;overflow:hidden}
+.auto-bar i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--acc);box-shadow:0 0 8px var(--acc)}
+
+/* ---------- previa ---------- */
+.stage{display:grid;grid-template-rows:minmax(0,1fr) 168px;overflow:hidden}
+.view{position:relative;background:#000;overflow:hidden;min-height:0}
+#prev{position:absolute;inset:0;width:100%;height:100%;display:block}
+.v-tag{position:absolute;left:16px;top:14px;display:flex;gap:10px;align-items:center;font-size:9px;letter-spacing:.24em;color:var(--tx2);text-shadow:0 0 12px #000;pointer-events:none}
+.v-tag .air{border:1px solid var(--acc);color:var(--acc);padding:3px 6px;font-size:8px}
+.v-big{position:absolute;left:16px;bottom:14px;font-size:22px;font-weight:300;letter-spacing:.36em;text-shadow:0 0 18px rgba(0,0,0,.9);pointer-events:none}
+.v-msg{position:absolute;inset:0;display:none;place-items:center;text-align:center;color:var(--mute);font-size:10px;letter-spacing:.24em;line-height:2.2;padding:20px;background:rgba(0,0,0,.6)}
+.v-msg.on{display:grid}
+.v-msg b{color:var(--tx);font-weight:400}
+.read{display:grid;grid-template-columns:minmax(0,1fr) 210px;border-top:1px solid var(--line);min-height:0}
+.log{padding:12px 16px;overflow:hidden;display:flex;flex-direction:column-reverse;gap:5px;font-size:9.5px;letter-spacing:.12em;color:var(--mute);min-height:0;mask-image:linear-gradient(0deg,#000 70%,transparent)}
+.log div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.log div i{font-style:normal;color:var(--dim);margin-right:12px;font-variant-numeric:tabular-nums}
+.log div.hot{color:var(--tx)}
+.log div.acc{color:var(--acc)}
+.stats{border-left:1px solid var(--line);padding:12px 14px;display:flex;flex-direction:column;gap:9px;font-size:9px;letter-spacing:.2em;color:var(--mute)}
+.stats div{display:flex;justify-content:space-between;gap:8px}
+.stats b{font-weight:400;color:var(--tx2);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stats .big{font-size:26px;font-weight:300;color:var(--tx);letter-spacing:.1em}
+
+/* ---------- parámetros ---------- */
+.sect{padding:14px 16px 16px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:13px}
+.sect h3{margin:0;font-weight:400;font-size:9px;letter-spacing:.26em;color:var(--mute);display:flex;justify-content:space-between}
+.sect h3 em{font-style:normal;color:var(--acc)}
+.sl{display:grid;grid-template-columns:96px 1fr 30px;align-items:center;gap:10px;font-size:9px;letter-spacing:.18em;color:var(--tx2)}
+.sl output{text-align:right;color:var(--dim);font-variant-numeric:tabular-nums}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:18px;background:transparent;margin:0;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:1px;background:linear-gradient(90deg,var(--acc) var(--v,50%),var(--line2) var(--v,50%))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:9px;height:9px;margin-top:-4px;background:var(--tx);border:0;transform:rotate(45deg)}
+input[type=range]::-moz-range-track{height:1px;background:var(--line2)}
+input[type=range]::-moz-range-progress{height:1px;background:var(--acc)}
+input[type=range]::-moz-range-thumb{width:8px;height:8px;background:var(--tx);border:0;border-radius:0}
+.sw{display:flex;gap:6px;flex-wrap:wrap}
+.sw button{width:26px;height:18px;border:1px solid var(--line2);position:relative}
+.sw button i{position:absolute;inset:4px;background:var(--c)}
+.sw button.on{border-color:var(--tx)}
+.row{display:flex;gap:6px;flex-wrap:wrap}
+.row .tbtn{flex:1;text-align:center}
+select{all:unset;box-sizing:border-box;width:100%;border:1px solid var(--line2);padding:8px 10px;font:400 9px var(--f);letter-spacing:.16em;color:var(--tx2);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+select option{background:#0b0b0b;color:var(--tx)}
+
+footer{display:flex;align-items:center;gap:18px;padding:0 18px;border-top:1px solid var(--line);background:#050505;color:var(--dim);font-size:8.5px;letter-spacing:.2em;white-space:nowrap;overflow:hidden}
+footer b{color:var(--tx2);font-weight:400}
+
+/* ---------- solo previa (H) ---------- */
+body.solo .app{grid-template-rows:1fr}
+body.solo header,body.solo footer,body.solo .modes,body.solo .params,body.solo .read,body.solo .v-tag,body.solo .v-big{display:none}
+body.solo main{grid-template-columns:1fr}
+body.solo .stage{grid-template-rows:1fr}
+body.solo{cursor:none}
+
+/* ---------- ayuda ---------- */
+#help{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.86);display:none;place-items:center}
+#help.on{display:grid}
+#help .box{border:1px solid var(--line2);background:#070707;padding:28px 34px;display:grid;grid-template-columns:auto auto;gap:9px 34px;font-size:10px;letter-spacing:.16em;color:var(--tx2)}
+#help .box b{color:var(--acc);font-weight:400}
+#help h4{grid-column:1/-1;margin:0 0 8px;font-weight:400;letter-spacing:.3em;color:var(--tx)}
+</style>
+</head>
+<body>
+<div id="boot">
+  <canvas id="bootfx"></canvas>
+  <div class="boot-in">
+    <div class="mark">VØID_LOOM · <i>OJO</i></div>
+    <div class="sub">LO QUE LA MÁQUINA VE DE TI<br>CÁMARA · VISIÓN · SALIDA</div>
+    <button id="go">ARRANCAR</button>
+    <div id="bootlog">LA CÁMARA SE PROCESA EN ESTE ORDENADOR · NADA SE ENVÍA NI SE GUARDA</div>
+  </div>
+</div>
+
+<div class="app">
+  <header>
+    <div class="brand">VØID_LOOM · <i>OJO</i><span>CONSOLA</span></div>
+    <div class="chips">
+      <div class="chip"><span class="led" id="ledCam"></span>CÁMARA <b id="cCam">—</b></div>
+      <div class="chip"><span class="led" id="ledIA"></span>IA <b id="cIA">—</b></div>
+      <div class="chip"><span class="led" id="ledOut"></span>SALIDA <b id="cOut">CERRADA</b></div>
+      <div class="chip">FPS <b id="cFps">—</b></div>
+    </div>
+    <div class="tools">
+      <button class="tbtn" id="bOut" title="Abrir la ventana de salida (O)">SALIDA</button>
+      <button class="tbtn" id="bSnd" title="Sonido (S)">SONIDO</button>
+      <button class="tbtn" id="bShot" title="Captura PNG (C)">CAPTURA</button>
+      <button class="tbtn rec" id="bRec" title="Grabar vídeo (R)">GRABAR</button>
+      <button class="tbtn" id="bFirma" title="Firma de cierre (F)">FIRMA</button>
+      <button class="tbtn" id="bHelp" title="Atajos (?)">?</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="modes">
+      <div class="p-head"><span class="lbl">MODOS</span><span class="n">1 – 7</span></div>
+      <div id="modeList"></div>
+      <div class="auto-box">
+        <div class="auto-row"><button class="tbtn" id="bAuto" title="Recorre los modos solo (P)">AUTO</button>
+          <div class="seg" id="autoSeg"><button data-s="20">20 S</button><button data-s="45" class="on">45 S</button><button data-s="90">90 S</button></div></div>
+        <div class="auto-bar"><i id="autoBar"></i></div>
+      </div>
+    </section>
+
+    <section class="stage">
+      <div class="view">
+        <canvas id="prev"></canvas>
+        <div class="v-tag"><span class="air" id="vAir">PREVIA</span><span id="vInfo"></span></div>
+        <div class="v-big" id="vBig"></div>
+        <div class="v-msg" id="vMsg"></div>
+      </div>
+      <div class="read">
+        <div class="log" id="log"></div>
+        <div class="stats">
+          <div><span>SUJETOS</span></div>
+          <div><span class="big" id="sN">00</span></div>
+          <div><span>CONTACTO</span><b id="sC">—</b></div>
+          <div><span>MIRADA</span><b id="sG">—</b></div>
+          <div><span>LATENCIA IA</span><b id="sL">—</b></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="params">
+      <div class="sect"><h3><span id="pTitle">MODO</span><em id="pAcc"></em></h3><div id="pList"></div></div>
+      <div class="sect">
+        <h3>ACENTO</h3>
+        <div class="sw" id="swatches"></div>
+      </div>
+      <div class="sect">
+        <h3>ANÁLISIS <span>A</span></h3>
+        <div class="seg" id="anSeg"><button data-a="0">NADA</button><button data-a="1">FORMA</button><button data-a="2" class="on">DATOS</button></div>
+        <div id="gList"></div>
+        <div class="row">
+          <button class="tbtn" id="bMirror" title="Espejo (M)">ESPEJO</button>
+          <button class="tbtn" id="bFreeze" title="Congelar (espacio)">CONGELAR</button>
+          <button class="tbtn" id="bBlack" title="Negro (B)">NEGRO</button>
+        </div>
+      </div>
+      <div class="sect">
+        <h3>FUENTE</h3>
+        <select id="selCam" aria-label="Cámara"></select>
+        <div class="seg" id="resSeg"><button data-r="480">480P</button><button data-r="720" class="on">720P</button><button data-r="1080">1080P</button></div>
+        <div class="sl"><span>CALIDAD SALIDA</span><input type="range" id="qOut" min="0.5" max="1" step="0.05" value="1"><output id="qOutV">100</output></div>
+      </div>
+      <div class="sect">
+        <h3>SONIDO</h3>
+        <div class="sl"><span>VOLUMEN</span><input type="range" id="vol" min="0" max="1" step="0.01" value="0.8"><output id="volV">80</output></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span><b>1–7</b> MODO</span><span><b>A</b> ANÁLISIS</span><span><b>M</b> ESPEJO</span><span><b>ESPACIO</b> CONGELAR</span><span><b>B</b> NEGRO</span><span><b>F</b> FIRMA</span><span><b>P</b> AUTO</span><span><b>H</b> SOLO PREVIA</span><span><b>?</b> ATAJOS</span>
+  </footer>
+</div>
+
+<div id="help"><div class="box">
+  <h4>ATAJOS</h4>
+  <b>1 – 7</b><span>MODO</span>
+  <b>← →</b><span>MODO ANTERIOR / SIGUIENTE</span>
+  <b>A</b><span>ANÁLISIS: NADA · FORMA · DATOS</span>
+  <b>M</b><span>ESPEJO</span>
+  <b>ESPACIO</b><span>CONGELAR</span>
+  <b>B</b><span>NEGRO</span>
+  <b>F</b><span>FIRMA DE CIERRE</span>
+  <b>P</b><span>AUTO</span>
+  <b>O</b><span>ABRIR SALIDA</span>
+  <b>S</b><span>SONIDO</span>
+  <b>R</b><span>GRABAR LA SALIDA</span>
+  <b>C</b><span>CAPTURA PNG</span>
+  <b>H</b><span>SOLO PREVIA (SIN SEGUNDA PANTALLA)</span>
+  <b>? / ESC</b><span>CERRAR AYUDA</span>
+</div></div>
+
+<script>window.VL_SIZE = [1920, 1080];</script>
+<script src="void-loom-sting.js"></script>
+<script src="engine.js"></script>
+<script src="vision.js"></script>
+<script src="sound.js"></script>
+<script src="runtime.js"></script>
+<script src="console.js"></script>
+</body>
+</html>

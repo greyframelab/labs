@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Salida · VØID_LOOM · OJO</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden;cursor:none}
+#out{position:fixed;inset:0;width:100vw;height:100vh;display:block}
+#hint{position:fixed;left:50%;bottom:9vh;transform:translateX(-50%);font:400 11px 'JetBrains Mono',ui-monospace,monospace;letter-spacing:.32em;color:#8f8c86;text-align:center;transition:opacity 1.2s;white-space:nowrap}
+#hint b{color:#f2f0ea;font-weight:400}
+#hint.off{opacity:0}
+</style>
+</head>
+<body>
+<canvas id="out" aria-label="Salida de VØID_LOOM · OJO: la imagen de la cámara tal como la ve la máquina"></canvas>
+<div id="hint">VØID_LOOM · OJO · SALIDA<br><br><b>F</b> PANTALLA COMPLETA · <b id="hs">ESPERANDO A LA CONSOLA</b></div>
+<script>window.VL_SIZE = [1920, 1080];</script>
+<script src="void-loom-sting.js"></script>
+<script src="engine.js"></script>
+<script src="vision.js"></script>
+<script src="runtime.js"></script>
+<script src="output.js"></script>
+</body>
+</html>

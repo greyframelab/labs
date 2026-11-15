@@ -6,6 +6,8 @@ Experiments in UI, motion and creative coding for games, apps and interfaces.
 
 **VØID_LOOM LIVE** (rig para tocar las piezas en directo): https://greyframelab.github.io/labs/live/
 
+**VØID_LOOM · OJO** (la cámara proyectada tal como la ve una máquina): https://greyframelab.github.io/labs/ojo/
+
 | # | Lab | Category |
 |---|-----|----------|
 | 37 | [Tokamak](lab-37-tokamak/) | Motion |
