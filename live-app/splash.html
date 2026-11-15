@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>VØID_LOOM LIVE</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<style>
+  html,body{margin:0;height:100%;background:#050505;color:#f2f0ea;font:400 11px/1.6 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.24em;cursor:default;user-select:none}
+  body{display:grid;place-items:center}
+  .w{width:min(420px,80vw)}
+  h1{font-weight:400;font-size:13px;letter-spacing:.5em;margin:0 0 34px}
+  h1 span{color:#6f6c66;letter-spacing:.3em;font-size:10px;margin-left:10px}
+  .bar{height:1px;background:#1c1b19;position:relative;overflow:hidden}
+  .bar i{position:absolute;left:0;top:0;bottom:0;width:0;background:#f2f0ea;transition:width .2s}
+  .bar.scan i{width:28%;animation:s 1.4s ease-in-out infinite}
+  @keyframes s{0%{left:-28%}100%{left:100%}}
+  #st{margin-top:16px;color:#8d8a83;font-size:9.5px;min-height:3.2em;white-space:pre-line}
+</style>
+</head>
+<body>
+<div class="w">
+  <h1>VØID_LOOM<span>LIVE</span></h1>
+  <div class="bar scan" id="bar"><i></i></div>
+  <div id="st">BUSCANDO PIEZAS NUEVAS EN LABS…</div>
+</div>
+<script>
+  const st = document.getElementById('st'), bar = document.getElementById('bar'), fill = bar.firstElementChild;
+  const set = (t, k) => { st.textContent = t; if (k == null) { bar.classList.add('scan'); fill.style.width = ''; } else { bar.classList.remove('scan'); fill.style.width = (k * 100).toFixed(0) + '%'; } };
+  window.VLL_APP && VLL_APP.onStatus((s) => {
+    if (s.phase === 'check') set('BUSCANDO PIEZAS NUEVAS EN LABS…');
+    else if (s.phase === 'download') set('DESCARGANDO ' + (s.done + 1) + ' / ' + s.total + '\n' + (s.file || '').toUpperCase(), s.total ? s.done / s.total : 0);
+    else if (s.phase === 'fonts') set('GUARDANDO TIPOGRAFÍAS…');
+    else if (s.phase === 'done') set((s.text || 'TODO AL DÍA').toUpperCase(), 1);
+    else if (s.phase === 'offline') set('SIN CONEXIÓN\nUSANDO LAS PIEZAS GUARDADAS', 1);
+    else if (s.phase === 'late') set('LA DESCARGA SIGUE POR DETRÁS\nARRANCANDO CON LO GUARDADO', 1);
+    else if (s.phase === 'empty') set('NO HAY PIEZAS GUARDADAS TODAVÍA\nCONECTA A INTERNET Y PULSA LIVE › ACTUALIZAR PIEZAS', 0);
+  });
+</script>
+</body>
+</html>
