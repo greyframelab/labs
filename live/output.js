@@ -376,14 +376,14 @@
       else if (a.rate !== b.rate || a.ramp) CL.trace(tstr(), 'deck', `${k} · rate = ${a.ramp ? 'cinta → ' + a.ramp.to.toFixed(2) : (+a.rate).toFixed(2)}`);
     }
   }
-  // VER CÓDIGO · ALTERNAR: va pasando entre PANTALLA, VENTANA y MÁQUINA (nunca dos a la vez), cada 6–12 s, en un golpe
+  // VER CÓDIGO · ALTERNAR: va pasando entre PANTALLA, VENTANA, MÁQUINA y ratos solo de imagen (nunca dos a la vez), cada 6–12 s, en un golpe
   const ALT = { m: 'full', until: 0, k: 1, want: 1 };
   function viewModeNow(now, env) {
     if (FX.viewMode !== 'alt') { ALT.until = 0; ALT.k = 1; ALT.want = 1; return FX.viewMode; }
     if (!ALT.until) ALT.until = now + 3000 + Math.random() * 2000;
     if (ALT.want && now > ALT.until && (env > 0.35 || now > ALT.until + 1500)) ALT.want = 0;
     ALT.k += (ALT.want - ALT.k) * (ALT.want ? 0.12 : 0.3);
-    if (!ALT.want && ALT.k < 0.02) { const o = ['full', 'win', 'maq'].filter((m) => m !== ALT.m); ALT.m = o[Math.random() < 0.5 ? 0 : 1]; ALT.want = 1; ALT.until = now + 6000 + Math.random() * 6000; }
+    if (!ALT.want && ALT.k < 0.02) { const o = ['full', 'win', 'maq', 'none', 'none'].filter((m) => m !== ALT.m); ALT.m = o[Math.floor(Math.random() * o.length)]; ALT.want = 1; ALT.until = now + 6000 + Math.random() * 6000; }
     return ALT.m;
   }
   let maqS = 0, maqOff = 0, maqHit = false;
@@ -451,7 +451,8 @@
     // VER EL CÓDIGO
     const viewOn = FX.view && FX.viewOp > 0.001;
     const vMode = viewModeNow(now, env), isMaq = vMode === 'maq';
-    if (viewOn && !isMaq) CL.draw(viewData(env, vMode), now);
+    const codeOn = viewOn && !isMaq && vMode !== 'none';
+    if (codeOn) CL.draw(viewData(env, vMode), now);
     // VISTA MÁQUINA: entra y sale con un fundido corto; apagada no cuesta nada
     maqS += ((viewOn && isMaq ? Math.min(1, FX.viewOp / 0.85) * ALT.k : 0) - maqS) * 0.14;
     if (maqS < 0.002) maqS = 0;
@@ -471,7 +472,7 @@
     gl.uniform1f(UB.maq, maqS);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fin.t); gl.uniform1i(UB.S, 0);
     gl.activeTexture(gl.TEXTURE10); gl.bindTexture(gl.TEXTURE_2D, CL.tex); gl.uniform1i(UB.OV, 10);
-    gl.uniform1f(UB.ovOp, viewOn && !isMaq ? FX.viewOp * ALT.k : 0);
+    gl.uniform1f(UB.ovOp, codeOn ? FX.viewOp * ALT.k : 0);
     gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D_ARRAY, HIST); gl.uniform1i(UB.H, 5);
     gl.uniform1f(UB.scan, FX.scan || 0); gl.uniform1f(UB.head, head);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);

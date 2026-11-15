@@ -31,7 +31,7 @@ En `MotionTimeline.mount({ ..., live: { ... } })`:
   - **VER CÓDIGO COMO** (⇧K pasa de uno a otro):
     - **PANTALLA:** el programa y la traza ocupan toda la proyección.
     - **VENTANA:** una consola pequeña tipo PowerShell en una esquina.
-    - **ALTERNAR:** va pasando entre PANTALLA, VENTANA y MÁQUINA en orden aleatorio, nunca dos a la vez: el primer cambio a los 3–5 s y después cada 6–12 s, siempre en un golpe. Pensado para el AUTOPLAY.
+    - **ALTERNAR:** va pasando entre PANTALLA, VENTANA, MÁQUINA y ratos solo de imagen, sin código, en orden aleatorio y nunca dos a la vez: el primer cambio a los 3–5 s y después cada 6–12 s, siempre en un golpe. Pensado para el AUTOPLAY.
     - **MÁQUINA:** la imagen convertida en una página del código real de la pieza. Cada carácter brilla con la luz que tiene debajo, los contornos se encienden con el acento de la pieza, un cursor de lectura recorre la imagen y en cada golpe la página avanza y los contornos se reescriben. Lo dibuja la GPU en el paso final; apagado no cuesta nada.
 
 ## AUTOPLAY
