@@ -704,11 +704,26 @@
     const host = $('#lib'); host.innerHTML = '';
     LIB.forEach((it, i) => {
       const el = document.createElement('div'); el.className = 'item'; el.style.setProperty('--ia', it.accent); it.el = el;
-      el.innerHTML = `<img src="${it.thumb}" alt="" loading="lazy"><div class="nm"><b>${it.title}</b><span>${String(it.n).padStart(2, '0')} · <em style="font-style:normal" class="st">CARGANDO</em></span></div><div class="ld"><button data-d="A" aria-label="Cargar en A">A</button><button data-d="B" aria-label="Cargar en B">B</button></div>`;
-      el.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => load(b.dataset.d, it)));
+      el.innerHTML = `<button class="ap" aria-label="Incluir en AUTOPLAY" title="Clic · sacar o meter en AUTOPLAY"><img src="${it.thumb}" alt="" loading="lazy"><i>FUERA</i></button><div class="nm"><b>${it.title}</b><span>${String(it.n).padStart(2, '0')} · <em style="font-style:normal" class="st">CARGANDO</em></span></div><div class="ld"><button data-d="A" aria-label="Cargar en A">A</button><button data-d="B" aria-label="Cargar en B">B</button></div>`;
+      el.querySelectorAll('.ld button').forEach((b) => b.addEventListener('click', () => load(b.dataset.d, it)));
+      el.querySelector('.ap').addEventListener('click', () => apSkip(it));
       host.appendChild(el);
     });
-    $('#libN').textContent = LIB.length + ' PIEZAS';
+    markSkip();
+  }
+  // piezas fuera del AUTOPLAY: se guardan entre sesiones; siguen disponibles para cargar a mano en A y B
+  function markSkip() {
+    let inAp = 0;
+    LIB.forEach((it) => { const off = AP.skip.has(it.id); if (!off) inAp++; if (it.el) { it.el.classList.toggle('skip', off); it.el.querySelector('.ap').setAttribute('aria-pressed', String(!off)); } });
+    $('#libN').textContent = inAp === LIB.length ? LIB.length + ' PIEZAS' : 'AUTOPLAY ' + inAp + '/' + LIB.length;
+  }
+  function apSkip(it, v) {
+    const off = v == null ? !AP.skip.has(it.id) : v;
+    off ? AP.skip.add(it.id) : AP.skip.delete(it.id);
+    store.set('apSkip', [...AP.skip]);
+    AP.bag = AP.bag.filter((b) => !AP.skip.has(b.id));
+    markSkip();
+    toast(it.title + (off ? ' · FUERA DEL AUTOPLAY' : ' · EN AUTOPLAY'));
   }
   function markLib() { LIB.forEach((it) => { if (!it.el) return; it.el.classList.toggle('inA', DECK.A.item === it); it.el.classList.toggle('inB', DECK.B.item === it); }); }
   function libStatus(it, t) { const s = it.el && it.el.querySelector('.st'); if (s) s.textContent = t; }
@@ -802,9 +817,9 @@
   // ---------------------------------------------------------------- AUTOPLAY: instalación desatendida
   // Recorre todas las piezas en orden aleatorio (sin repetir hasta agotar la bolsa) y pasa de una a otra
   // con AUTO. Pensado para dejarlo solo durante horas: se recupera si una pieza falla o se queda parada.
-  const AP = { on: false, bag: [], laps: store.get('apLaps', 1), lap: 0, lastP: 0, stage: 0, next: null, since: 0 };
+  const AP = { on: false, bag: [], laps: store.get('apLaps', 1), lap: 0, lastP: 0, stage: 0, next: null, since: 0, skip: new Set(store.get('apSkip', [])) };
   function apBagNext(exclude) {
-    const ok = LIB.filter((it) => it.meta && it.buf);
+    const ok = LIB.filter((it) => it.meta && it.buf && !AP.skip.has(it.id));
     if (!ok.length) return null;
     if (!AP.bag.length) AP.bag = ok.slice().sort(() => Math.random() - 0.5);
     let i = AP.bag.findIndex((it) => it !== exclude);
