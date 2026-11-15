@@ -12,6 +12,7 @@ Rig para tocar en directo todas las piezas de VØID_LOOM, con imagen al proyecto
 
 ## Cómo funciona
 - Las piezas no se exportan a vídeo: la salida carga cada lab en un iframe (`?live`) y lo dibuja con su propia función `render(t)`. La resolución es nativa, sin pérdida de calidad.
+- **CALIDAD** (abajo, en SISTEMA): **AUTO** por defecto. Cada pieza se pinta a la resolución que el ordenador aguanta con fluidez: empieza al 75 %, la salida mide sus FPS mientras está sola en el aire y, si va a saltos, la recarga más pequeña (hasta el 45 %); si va sobrada, la sube poco a poco hasta el 100 %. Lo aprendido se guarda por pieza, así que la siguiente vez ya sale a su resolución. La salida amplía con escalado nítido (Catmull-Rom). El chip SALIDA muestra los FPS y la calidad de la pieza en el aire; con VER CÓDIGO, cada ajuste aparece en la traza. 100 / 75 / 50 fijan la calidad a mano para todas.
 - Consola y salida comparten un reloj. Solo se envían los cambios de estado (saltar, loop, velocidad…) y las dos calculan la misma posición (`core.js`).
 - El audio de cada pieza se decodifica en Web Audio: loop con crossfade de igual potencia, reversa, cinta, stutter, aislador de 3 bandas con kill, filtro, eco y sala.
 - Golpes: se detectan del audio o se leen de la partitura si la pieza los declara.

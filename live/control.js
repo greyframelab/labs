@@ -13,7 +13,7 @@
 
   // ================================================================== estado global
   const LIB = [];
-  const MIX = { xf: 0, mode: 'fundido', onAir: 'A', quality: store.get('calidad', 1) };
+  const MIX = { xf: 0, mode: 'fundido', onAir: 'A', quality: store.get('calidadAuto', 0) };
   const FX = { trail: 0, hits: 0, split: 0, invert: 0, black: 0, bright: 1, glitch: 0, punch: 0, lens: 0, mosaic: 0, tint: 0, scan: 0, mirror: 0, strobe: 0, tintC: '#ffffff',
     pBloom: 1, pFlash: 1, pScan: 0.2, cMix: 0, view: 0, viewOp: 0.85, viewMode: 'full' };
   const AFX = { filter: 0, echo: 0, echoT: 0.375, room: 0.12, master: 0.9, av: store.get('av', 0) };
@@ -501,7 +501,7 @@
       dirty = true; flush();
       VLC.resend && VLC.resend();
     } else if (m.type === 'stats') {
-      outOK = true; $('#stOut').textContent = m.fps + ' FPS · ' + m.w + '×' + m.h;
+      outOK = true; $('#stOut').textContent = m.fps + ' FPS · ' + m.w + '×' + m.h + (m.q ? ' · PIEZA ' + m.q + '%' + (m.auto ? ' AUTO' : '') : '');
       $('#ledOut').className = 'led ' + (m.fps >= 50 ? 'on' : m.fps >= 30 ? 'warn' : 'err');
     } else if (m.type === 'ready') { const d = DECK[m.deck]; if (d && d.item && d.item.id === m.piece) { d.ready = true; renderDeckState(d); } }
     else if (m.type === 'loading') { const d = DECK[m.deck]; if (d) { d.ready = false; renderDeckState(d); } }
@@ -778,8 +778,8 @@
     // sistema
     const fs = $('#fxSys'); fs.style.setProperty('--acc', '#f2f0ea');
     knob(fs, 'av', 'SINCRO A/V', AFX.av / 250, (v) => { AFX.av = Math.round(v * 250); store.set('av', AFX.av); for (const k in DECK) play(DECK[k]); }, (v) => '+' + Math.round(v * 250) + 'ms');
-    const qc = document.createElement('div'); qc.className = 'grp'; qc.innerHTML = '<span class="lbl" style="font-size:7.5px">CALIDAD</span><div class="seg" id="qual"><button data-v="1">100</button><button data-v="0.75">75</button><button data-v="0.5">50</button></div>'; fs.appendChild(qc);
-    seg($('#qual'), 'qual', String(MIX.quality), (v) => { MIX.quality = +v; store.set('calidad', +v); sendState(); });
+    const qc = document.createElement('div'); qc.className = 'grp'; qc.innerHTML = '<span class="lbl" style="font-size:7.5px">CALIDAD</span><div class="seg" id="qual"><button data-v="0" title="Cada pieza a la resolución que el ordenador aguanta con fluidez">AUTO</button><button data-v="1">100</button><button data-v="0.75">75</button><button data-v="0.5">50</button></div>'; fs.appendChild(qc);
+    seg($('#qual'), 'qual', String(MIX.quality), (v) => { MIX.quality = +v; store.set('calidadAuto', +v); sendState(); });
     const markQ = seg($('#quant'), 'quant', quant, (v) => { quant = v; store.set('quant', v); });
     CTL.quant.mark = markQ;
   }
