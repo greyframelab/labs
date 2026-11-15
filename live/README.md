@@ -25,9 +25,14 @@ En `MotionTimeline.mount({ ..., live: { ... } })`:
 
 ## Inputs de código (opcionales, apagados por defecto)
 - **PIEZA · BLOOM / FLASH:** cambian el postproceso propio de cada pieza (`VL.post`), no se aplican como efecto encima. Al centro (1×) la pieza queda como fue diseñada.
-- **PIEZA · LÍNEAS:** intensidad de las líneas horizontales (scanlines) que llevan las piezas. Por defecto al 50 %, porque en proyección ensucian; 100 % es como en la web, 0 las quita.
+- **PIEZA · LÍNEAS:** intensidad de las líneas horizontales (scanlines) que llevan las piezas. Por defecto al 20 %, porque en proyección ensucian; 100 % es como en la web, 0 las quita.
 - **Deck C · live coding:** con la tecla ` o EDITAR CÓDIGO se abre un editor GLSL. Se escribe `vec3 code(vec2 uv)`, se compila con Ctrl/⌘ + Enter y entra con MEZCLA C. Tiene acceso a `img(uv)` (mezcla de A y B), `deckA`, `deckB`, `prev` (su frame anterior), `t`, `golpe`, `graves`, `medios`, `agudos`, `acento`, `res`, `aspect` y a `noise`, `fbm`, `hash` y `rot`. Si el código tiene un error, se marca la línea y sigue funcionando el último código bueno. Incluye los presets CONTORNO, REJILLA y DERIVA.
 - **VER EL CÓDIGO (tecla K):** proyecta el programa real de la pieza en el aire, que avanza con `t`, junto a sus valores vivos (t, frame, acto, bloom, flash, golpe, audio), la traza de lo que pasa (golpes → `VL.post`, actos, vueltas, órdenes de la consola) y el código del deck C cuando está activo. La opacidad se ajusta con su propio knob.
+  - **VER CÓDIGO COMO** (⇧K pasa de uno a otro):
+    - **PANTALLA:** el programa y la traza ocupan toda la proyección.
+    - **VENTANA:** una consola pequeña tipo PowerShell en una esquina.
+    - **ALTERNAR:** pasa de PANTALLA a VENTANA y vuelta, nunca las dos a la vez, cada 7–16 s y siempre en un golpe. Pensado para el AUTOPLAY.
+    - **MÁQUINA:** la imagen convertida en una página del código real de la pieza. Cada carácter brilla con la luz que tiene debajo, los contornos se encienden con el acento de la pieza, un cursor de lectura recorre la imagen y en cada golpe la página avanza y los contornos se reescriben. Lo dibuja la GPU en el paso final; apagado no cuesta nada.
 
 ## AUTOPLAY
 
