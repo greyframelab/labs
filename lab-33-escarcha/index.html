@@ -160,7 +160,7 @@ canvas{width:100vw;height:100vh;display:block}
     }
     out.globalAlpha = 1;
     out.globalCompositeOperation = 'source-over';
-    out.drawImage(p.scan, 0, 0);
+    out.globalAlpha = opt.scan ?? 1; out.drawImage(p.scan, 0, 0); out.globalAlpha = 1;
     out.drawImage(p.vig, 0, 0);
     // grano sutil: en zonas planas y luminosas (horizontes, halos) un grano fuerte ensucia la imagen
     const g = p.grain[frame % p.grain.length], gk = opt.grain ?? 1;

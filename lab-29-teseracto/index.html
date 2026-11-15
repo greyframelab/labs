@@ -159,7 +159,7 @@ canvas{width:100vw;height:100vh;display:block}
     }
     out.globalAlpha = 1;
     out.globalCompositeOperation = 'source-over';
-    out.drawImage(p.scan, 0, 0);
+    out.globalAlpha = opt.scan ?? 1; out.drawImage(p.scan, 0, 0); out.globalAlpha = 1;
     out.drawImage(p.vig, 0, 0);
     const g = p.grain[frame % p.grain.length];
     out.globalCompositeOperation = 'overlay'; out.globalAlpha = 0.32;
