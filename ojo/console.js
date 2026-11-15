@@ -66,7 +66,7 @@
   function setMode(id, quiet) {
     if (S.mode === id) return;
     S.mode = id; S.trail = null; autoT0 = performance.now();
-    snd.event({ type: 'modo' });
+    snd.event({ type: 'modo' }); snd.update(rt.eng.energy, 0, 0, id);
     if (!quiet) log('MODO · ' + OJO.MODES[OJO.modeIndex(id)].name);
     buildParams(); push();
   }
@@ -212,7 +212,7 @@
   rt.onFrame = (now, model) => {
     if (rt.localVision) rt.vision.drainEvents().forEach(onEvent);
     const n = model && model.subjects ? model.subjects.filter((s) => (s.gone || 0) < 0.5).length : 0;
-    snd.update(outAlive() && outInfo ? outInfo.energy : rt.eng.energy, n, model ? model.contact : 0);
+    snd.update(outAlive() && outInfo ? outInfo.energy : rt.eng.energy, n, model ? model.contact : 0, S.mode);
     // AUTO
     if (autoOn) {
       const k = (now - autoT0) / (autoSec * 1000);
