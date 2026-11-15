@@ -34,5 +34,9 @@ En `MotionTimeline.mount({ ..., live: { ... } })`:
 
 Clic en la miniatura de una pieza en la biblioteca la saca del AUTOPLAY (queda rayada y en gris) o la vuelve a meter. La selección se guarda en el navegador; las piezas fuera siguen pudiéndose cargar a mano en A y B.
 
+Con `?instalacion` en la URL (`live/index.html?instalacion`) arranca solo y entra en AUTOPLAY; en el navegador el audio empieza con el primer clic.
+
+**App de escritorio sin internet** para Windows y Mac: ver [`live-app/`](../live-app/README.md).
+
 ## Atajos
 Pulsa **?** en la consola. Cualquier control se puede asignar a un controlador MIDI con **MIDI · APRENDER**.

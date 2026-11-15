@@ -1150,5 +1150,14 @@
     if (ok[1]) load('B', ok[ok.length - 2]);
     setTimeout(() => $('#boot').classList.add('off'), 400);
     requestAnimationFrame(tick);
+    if (INSTALL) setTimeout(() => apToggle(true), 1500);
   });
+  // ?instalacion · arranca solo y entra en AUTOPLAY (la app de escritorio lo usa en modo instalación).
+  // En un navegador sin gesto previo el audio queda en pausa hasta el primer clic.
+  const INSTALL = new URLSearchParams(location.search).has('instalacion');
+  if (INSTALL) {
+    $('#go').click();
+    const resume = () => ctx && ctx.state === 'suspended' && ctx.resume();
+    document.addEventListener('pointerdown', resume); document.addEventListener('keydown', resume);
+  }
 })();

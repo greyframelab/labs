@@ -1,0 +1,91 @@
+{
+  "name": "voidloom-live",
+  "productName": "VØID_LOOM LIVE",
+  "version": "1.0.0",
+  "description": "VØID_LOOM LIVE · directo y modo instalación de las piezas de VØID_LOOM, sin internet",
+  "author": "VØID_LOOM",
+  "license": "MIT",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "seed": "node scripts/seed.js",
+    "start": "electron .",
+    "dist:win": "npm run seed && electron-builder --win --publish never",
+    "dist:mac": "npm run seed && electron-builder --mac --publish never"
+  },
+  "devDependencies": {
+    "electron": "45.3.2",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "labs.greyframe.voidloom.live",
+    "productName": "VØID_LOOM LIVE",
+    "copyright": "VØID_LOOM",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "sync.js",
+      "preload.js",
+      "splash.html",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "seed",
+        "to": "seed",
+        "filter": [
+          "**/*",
+          ".manifest.json"
+        ]
+      }
+    ],
+    "asar": true,
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "VØID_LOOM LIVE",
+      "artifactName": "VOID_LOOM-LIVE-${version}-windows-instalador.${ext}"
+    },
+    "portable": {
+      "artifactName": "VOID_LOOM-LIVE-${version}-windows-portable.${ext}"
+    },
+    "mac": {
+      "icon": "build/icon.png",
+      "category": "public.app-category.music",
+      "identity": "-",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ]
+    },
+    "dmg": {
+      "artifactName": "VOID_LOOM-LIVE-${version}-mac-${arch}.${ext}"
+    }
+  },
+  "repository": "github:greyframelab/labs"
+}
