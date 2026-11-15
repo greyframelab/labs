@@ -28,5 +28,11 @@ En `MotionTimeline.mount({ ..., live: { ... } })`:
 - **Deck C · live coding:** con la tecla ` o EDITAR CÓDIGO se abre un editor GLSL. Se escribe `vec3 code(vec2 uv)`, se compila con Ctrl/⌘ + Enter y entra con MEZCLA C. Tiene acceso a `img(uv)` (mezcla de A y B), `deckA`, `deckB`, `prev` (su frame anterior), `t`, `golpe`, `graves`, `medios`, `agudos`, `acento`, `res`, `aspect` y a `noise`, `fbm`, `hash` y `rot`. Si el código tiene un error, se marca la línea y sigue funcionando el último código bueno. Incluye los presets CONTORNO, REJILLA y DERIVA.
 - **VER EL CÓDIGO (tecla K):** proyecta el programa real de la pieza en el aire, que avanza con `t`, junto a sus valores vivos (t, frame, acto, bloom, flash, golpe, audio), la traza de lo que pasa (golpes → `VL.post`, actos, vueltas, órdenes de la consola) y el código del deck C cuando está activo. La opacidad se ajusta con su propio knob.
 
+## AUTOPLAY
+
+`P` o el botón AUTOPLAY recorre las piezas en orden aleatorio, sin repetir hasta pasar por todas, y funde de una a otra tras 1, 2 o 3 vueltas (VUELTAS). Sigue funcionando con la salida a pantalla completa delante, para dejar la instalación sola.
+
+Clic en la miniatura de una pieza en la biblioteca la saca del AUTOPLAY (queda rayada y en gris) o la vuelve a meter. La selección se guarda en el navegador; las piezas fuera siguen pudiéndose cargar a mano en A y B.
+
 ## Atajos
 Pulsa **?** en la consola. Cualquier control se puede asignar a un controlador MIDI con **MIDI · APRENDER**.
