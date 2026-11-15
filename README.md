@@ -8,6 +8,7 @@ Experiments in UI, motion and creative coding for games, apps and interfaces.
 
 | # | Lab | Category |
 |---|-----|----------|
+| 39 | [Espejos](lab-39-espejos/) | Motion |
 | 38 | [Ciudad](lab-38-ciudad/) | Motion |
 | 37 | [Tokamak](lab-37-tokamak/) | Motion |
 | 36 | [Engranaje](lab-36-engranaje/) | Motion |
