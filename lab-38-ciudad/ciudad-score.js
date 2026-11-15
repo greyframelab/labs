@@ -1,4 +1,4 @@
-/* VØID_LOOM — Lab 38 · Ciudad · PARTITURA ÚNICA (música: «RETÍCULA», void-loom-music).
+/* VØID_LOOM — Lab 38 · Ciudad · PARTITURA ÚNICA v4 (música: «HORMIGÓN», void-loom-music, referencia Amon Tobin): medio tiempo con foley → doble tiempo → silencio → caída; seco salvo una sala de chapa.
    Una ciudad infinita que se reescribe a sí misma. Techno industrial hipnótico tipo Orphx con mutación FM tipo Autechre, 104 bpm, Fa menor,
    polimetría 5 · 7 contra 16. Cada voz reescribe la retícula de torres a su manera:
    K bombo → una hilera entera cae de golpe · S caja → una onda levanta las torres desde un punto · h hats → ventanas que se encienden
@@ -17,7 +17,7 @@
   const sw = (i) => (i % 2 ? 0.016 : 0) + (i % 4 === 3 ? -0.005 : 0);   // swing irregular
 
   // ---- PULSO (2 compases que repiten perfecto)
-  const KG = [[0, 7, 10], [0, 3, 6, 10, 14]];
+  const KG = [[0, 10], [0, 7, 10]];   // medio tiempo: el bombo deja espacio al foley
   for (let g = 0; g < 32; g++) {
     const bar = g >> 4, i = g & 15, t = bar * BAR + i * st + sw(i);
     if (KG[bar].includes(i)) push('K', t, i === 0 ? 1 : 0.6 + 0.25 * H(bar, i), { seed: g, axis: g % 2, band: H(7, g) });
@@ -32,7 +32,8 @@
   const gA = 68;
   for (let g = 0; g < 64; g++) {
     const bar = g >> 4, i = g & 15, t = T.engrane + bar * BAR + i * st + sw(i), ten = g / 64;
-    const K = euclid([5, 5, 6, 7][bar], 16, [0, 2, 5, 1][bar]); K[0] = true;
+    const KP = [[0, 3, 10], [0, 3, 10, 11], [0, 6, 10], [0, 6, 10, 13]][bar];   // medio tiempo → doble tiempo
+    const K = Array.from({ length: 16 }, (_, j) => KP.includes(j));
     if (K[i]) push('K', t, i === 0 ? 1 : 0.58 + 0.3 * H(10 + bar, i), { seed: 1000 + g, axis: g % 2, band: H(17, g) });
     const e5 = (gA - g) % 5 === 0, m7 = (gA - g) % 7 === 0;
     if (e5) push('E', t + 0.006, 0.6 + 0.35 * ten, { seed: 1100 + g, ang: H(11, g), axis: (g >> 2) % 2, co: m7 ? 1 : 0 });
@@ -47,7 +48,7 @@
   push('R', T.align, 1);
   for (let b = 0; b < 3; b++) {
     const t0 = T.align + b * BAR;
-    const KS = b === 0 ? [8, 12] : [0, 6, 10, 13];
+    const KS = b === 0 ? [] : [0, 6, 10];
     for (const i of KS) push('K', t0 + i * st + sw(i), i === 0 ? 1 : 0.8, { big: 1, post: 1, seed: 2000 + i });
     for (let i = 0; i < 16; i++) {
       const g = (b === 0 ? 0 : (b - 1) * 16) + i;
@@ -58,22 +59,25 @@
   }
 
   // ---- hats (h) y caja (S)
-  const SN = { g: [[4, 12], [4, 12, 13]], e: [[4, 12], [4, 9, 12], [4, 12, 15], [2, 4, 12, 14]], a: [4, 12] };
+  const SN = { g: [[8], [8, 14]], e: [[8, 6, 14], [8, 13, 6], [4, 12, 7, 9, 15], [4, 12, 14, 15]], a: [4, 12, 3, 9, 14] };
   const hatBar = (t0, key, dens, b, acc) => {
-    const A = euclid(acc, 16, b);
+    const A = euclid(acc, 16, b * 3);
     for (let i = 0; i < 16; i++) {
-      if (H(key, i) < dens) push('h', t0 + i * st + sw(i) + 0.003, (A[i] ? 0.75 : 0.35) * (0.7 + 0.3 * H(key + 1, i)), { seed: key * 16 + i, open: A[i] && i % 8 === 6 ? 1 : 0, ang: H(key + 3, i) });
-      if (H(key + 2, i) > 0.9) for (let k = 1; k < 3; k++) push('h', t0 + i * st + sw(i) + 0.003 + k * st / 2, 0.25, { seed: key * 16 + i + 500 + k, ang: H(key + 4, i + k) });
+      if (dens < 0.5 && i % 2) continue;   // en el PULSO, corcheas
+      const open = i % 4 === 2 && (i === 6 || i === 14);
+      push('h', t0 + i * st + sw(i) * 0.6 + 0.003, (A[i] ? 0.8 : 0.42) * (0.85 + 0.15 * H(key + 1, i)), { seed: key * 16 + i, open: open ? 1 : 0, ang: H(key + 3, i) });
+      if (b % 2 === 1 && i === 15) for (let k = 1; k < 4; k++) push('h', t0 + i * st + 0.003 + k * st / 4, 0.3 + 0.12 * k, { seed: key * 16 + i + 500 + k, ang: H(key + 4, i + k), rat: k });   // ratchet a 1/64 que crece
+      if (b % 4 === 2 && i === 7) push('h', t0 + i * st + 0.003 + st / 2, 0.35, { seed: key * 16 + 900, ang: 0.5, rat: 1 });                                    // 1/32 escrito
     }
   };
-  for (let b = 0; b < 2; b++) { const t0 = b * BAR; for (const i of SN.g[b]) push('S', t0 + i * st + sw(i) + 0.004, i === 13 ? 0.45 : 0.9, { seed: 3000 + b * 16 + i, px: H(50, b * 16 + i), pz: H(51, b * 16 + i) }); hatBar(t0, 40 + b, 0.55, b, 5); }
-  for (let b = 0; b < 4; b++) { const t0 = T.engrane + b * BAR; for (const i of SN.e[b]) push('S', t0 + i * st + sw(i) + 0.004, [9, 15, 2, 14].includes(i) ? 0.5 : 0.95, { seed: 3100 + b * 16 + i, px: H(52, b * 16 + i), pz: H(53, b * 16 + i) }); hatBar(t0, 60 + b, 0.6 + 0.1 * b, b, 5 + b); }
+  for (let b = 0; b < 2; b++) { const t0 = b * BAR; for (const i of SN.g[b]) push('S', t0 + i * st + sw(i) + 0.004, i === 8 || i === 4 || i === 12 ? 0.95 : 0.38, { seed: 3000 + b * 16 + i, px: H(50, b * 16 + i), pz: H(51, b * 16 + i) }); hatBar(t0, 40 + b, 0.4, b, 3); }
+  for (let b = 0; b < 4; b++) { const t0 = T.engrane + b * BAR; for (const i of SN.e[b]) push('S', t0 + i * st + sw(i) + 0.004, i === 8 || i === 4 || i === 12 ? 0.95 : 0.38, { seed: 3100 + b * 16 + i, px: H(52, b * 16 + i), pz: H(53, b * 16 + i) }); hatBar(t0, 60 + b, 0.6 + 0.1 * b, b, 5 + b); }
   for (let k = 0; k < 6; k++) push('S', T.engrane + 3 * BAR + 14 * st + k * st / 3, 0.3 + 0.1 * k, { seed: 3300 + k, roll: 1, px: 0.5, pz: 0.5 });
-  for (let b = 1; b < 3; b++) { const t0 = T.align + b * BAR; for (const i of SN.a) push('S', t0 + i * st + sw(i) + 0.004, 1, { seed: 3400 + i, px: 0.5, pz: 0.5 }); hatBar(t0, 80, 0.6, 0, 5); }
+  for (let b = 1; b < 3; b++) { const t0 = T.align + b * BAR; for (const i of SN.a) push('S', t0 + i * st + sw(i) + 0.004, i === 4 || i === 12 ? 1 : 0.38, { seed: 3400 + i, px: 0.5, pz: 0.5 }); hatBar(t0, 80, 0.6, 0, 5); }
 
   // ---- ECO compartido: ping-pong a tempo; cada repetición también es un eco visual
   const DL = [[0, 3 * st, 0.38], [T.engrane, 3 * st, 0.45], [T.cut, 3 * st, 0], [T.align, 4 * st, 0.5]];
-  const SEND = { S: 0.35, E: 0.3, h: 0.22, M: 0.2, G: 0.15, R: 0.45 };
+  const SEND = {};   // sin eco ni delay: el espacio es una sala de chapa por convolución
   for (const x of ev) {
     if (x.v === 'S' && !x.roll && x.t >= T.engrane && x.t < T.cut && Math.round((x.t - T.engrane) / st) % 16 >= 12) x.thr = 1;
     if (x.v === 'S' && x.roll) x.thr = 1;
@@ -81,11 +85,12 @@
   }
   const dlAt = (t) => { let d = DL[0]; for (const x of DL) if (t >= x[0]) d = x; return d; };
   function echoes(x) {
-    const [, D, fb0] = dlAt(x.t), snd = (SEND[x.v] || 0) * (x.thr ? 2.2 : 1), fb = x.thr ? Math.min(0.68, fb0 + 0.2) : fb0, out = [];
+    const [, D, fb0] = dlAt(x.t), snd = (x.v === 'h' && !x.open ? 0 : (SEND[x.v] || 0)) * (x.thr ? 2.2 : 1), fb = x.thr ? Math.min(0.68, fb0 + 0.2) : fb0, out = [];
     let g = snd;
     for (let k = 1; k < 9 && g > 0.01; k++) { g *= k === 1 ? 1 : fb; const te = x.t + k * D; if (te >= T.cut && te < T.align) break; if (x.t < T.cut && te >= T.cut) break; out.push([te, g, k]); }
     return out;
   }
+
   ev.sort((a, b) => a.t - b.t); X.sort((a, b) => a.t - b.t);
   function warp(t) { for (const x of X) if (t >= x.t && t < x.t + x.len) return x.t + ((t - x.t) % x.div); return t; }
   const LOOPS = [[0, 2 * BAR], [T.align + BAR, T.align + 3 * BAR]];

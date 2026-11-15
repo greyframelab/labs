@@ -158,7 +158,7 @@ canvas{width:100vw;height:100vh;display:block}
     }
     out.globalAlpha = 1;
     out.globalCompositeOperation = 'source-over';
-    out.drawImage(p.scan, 0, 0);
+    out.globalAlpha = opt.scan ?? 1; out.drawImage(p.scan, 0, 0); out.globalAlpha = 1;
     out.drawImage(p.vig, 0, 0);
     // grano sutil: en zonas planas y luminosas (horizontes, halos) un grano fuerte ensucia la imagen
     const g = p.grain[frame % p.grain.length], gk = opt.grain ?? 1;
@@ -435,7 +435,7 @@ canvas{width:100vw;height:100vh;display:block}
   const VSC = `#version 300 es
   precision highp float;
   in vec3 aP; in vec3 aN; in vec4 aI;
-  uniform mat4 uVP; uniform float uNG, uTen, uPat, uAl, uT, uFrz, uMir;
+  uniform mat4 uVP; uniform float uNG, uTen, uPat, uAl, uT, uFrz, uMir, uTier;
   uniform vec4 uK[4]; uniform vec4 uS[3]; uniform vec4 uM[3]; uniform vec4 uG[2]; uniform vec4 uB; uniform float uKp;
   out vec3 vW; out vec3 vN; out vec3 vL; out float vH; out float vPat; out vec2 vId; out float vR;
   float h1(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -470,8 +470,14 @@ canvas{width:100vw;height:100vh;display:block}
     // avenidas cada 8 manzanas: calles anchas donde la cámara puede bajar y el asfalto refleja
     if (mod(aI.x, 8.) < 0.5 || mod(aI.y, 8.) < 0.5) h = 0.02 + (uPat > 0. ? 0. : 0.);
     h = max(h, 0.02);
-    vec3 p = vec3(c.x + aP.x * 0.8, aP.y * h, c.y + aP.z * 0.8);
-    vW = p; vN = aN; vL = vec3(aP.x + 0.5, aP.y, aP.z + 0.5); vH = h; vPat = pat; vId = aI.xy; vR = r2;
+    // escalonado: las torres altas rematan en un cuerpo más estrecho; algunas llevan antena
+    float y0 = 0., y1 = h, fw = 0.8;
+    bool tall = h > 2.2 && r1 > 0.45;
+    if (uTier < 0.5) { if (tall) y1 = h * 0.7; }
+    else if (uTier < 1.5) { if (tall) { y0 = h * 0.7; y1 = h; fw = 0.5 - 0.12 * r2; } else { y0 = 0.; y1 = 0.; fw = 0.; } }
+    else { if (h > 3.5 && r2 > 0.82) { y0 = h; y1 = h + 1.2 + 1.5 * r1; fw = 0.05; } else { y0 = 0.; y1 = 0.; fw = 0.; } }
+    vec3 p = vec3(c.x + aP.x * fw, y0 + aP.y * (y1 - y0), c.y + aP.z * fw);
+    vW = p; vN = aN; vL = vec3(aP.x + 0.5, aP.y, aP.z + 0.5); vH = y1; vPat = pat; vId = aI.xy; vR = r2;
     gl_Position = uVP * vec4(p.x, p.y * uMir, p.z, 1.);
   }`;
   const FSC = `#version 300 es
@@ -504,14 +510,33 @@ canvas{width:100vw;height:100vh;display:block}
     else { col *= 0.35 + 0.65 * smoothstep(0., 6., vH);                                // las azoteas altas destacan: profundidad desde arriba
       vec2 pq = floor(vL.xz * 3.); col *= 0.85 + 0.3 * h1(pq + vId);                   // paneles de cubierta
       if (vH > 3.) { float bl = step(h1(vId + floor(uWinSeed) * 0.37), 0.35 + 0.5 * uWin); vec2 dq = vL.xz - vec2(0.82); col += vec3(1., 0.95, 0.9) * exp(-dot(dq, dq) / 0.002) * bl * 3. * (1. - uDim); } }   // balizas de azotea
-    // ventanas en las fachadas (las encienden los hats)
-    if (top < 0.5 && vW.y > 0.15) {
-      vec2 wq = vec2((abs(N.x) > 0.5 ? vL.z : vL.x) * 5., vW.y / 0.16); vec2 wi = floor(wq), wf = fract(wq);
-      float win = step(0.25, wf.x) * step(wf.x, 0.75) * step(0.3, wf.y) * step(wf.y, 0.8);
-      float lit = step(h1(wi + vId * 7.1 + floor(uWinSeed)), uWin);
-      float wd = smoothstep(45., 12., length(uCam - vW));
-      col += vec3(0.95, 0.92, 0.85) * win * lit * 0.6 * wd * (1. - uDim);
-      col += vec3(0.9) * win * 0.02 * pow(max(dot(reflect(-Vd, N), uKd), 0.), 8.) * uKi;
+    // fachada: forjados, montantes, vidrio oscuro que refleja el horizonte y ventanas con interior (las encienden los hats)
+    if (top < 0.5 && vW.y > 0.05) {
+      float u = (abs(N.x) > 0.5 ? vL.z : vL.x);
+      vec2 wq = vec2(u * 6., vW.y / 0.17); vec2 wi = floor(wq), wf = fract(wq);
+      vec2 aa = fwidth(wq) * 1.2;
+      float slab = 1. - smoothstep(0.0, aa.y + 0.02, wf.y) * smoothstep(0.0, aa.y + 0.02, 0.86 - wf.y + 0.0);   // forjado (franja horizontal)
+      float fin = 1. - smoothstep(0., aa.x + 0.02, wf.x - 0.06) * smoothstep(0., aa.x + 0.02, 0.94 - wf.x);  // montante
+      float glass = (1. - slab) * (1. - fin);
+      float fr = 0.04 + 0.96 * pow(1. - max(dot(N, Vd), 0.), 5.);
+      vec3 R = reflect(-Vd, N);
+      vec3 skyR = vec3(0.03, 0.035, 0.045) * exp(-max(R.y, 0.) * 4.) * (1. - uDim) + GRN * 0.05 * uGreen * exp(-abs(R.y) * 6.);
+      col = mix(col, col * 0.4 + skyR * (0.35 + fr) * 2.2, glass * 0.85);                            // vidrio
+      col += vec3(0.6, 0.62, 0.65) * slab * 0.012 * (0.5 + 0.5 * uKi);                              // canto del forjado
+      // ventanas encendidas: por plantas (oficinas) y sueltas; con gradiente de interior y temperatura variable
+      float fl = floor(vW.y / 0.17);
+      float floorLit = step(h1(vec2(fl, vId.x * 3.1 + vId.y * 7.7) + floor(uWinSeed) * 0.13), uWin * 0.28);
+      float one = step(h1(wi + vId * 7.1 + floor(uWinSeed)), uWin);
+      float lit = max(floorLit, one) * glass;
+      float wd = smoothstep(55., 8., length(uCam - vW));
+      vec3 tint = mix(vec3(1., 0.86, 0.68), vec3(0.78, 0.86, 1.), step(0.55, h1(wi.yx + vId)));
+      float inner = 0.55 + 0.45 * (1. - wf.y) + 0.15 * step(0.5, fract(wf.x * 7.));                  // luz de techo + persianas
+      col += tint * lit * inner * 0.5 * wd * (1. - uDim);
+      // luz de calle: los pisos bajos reciben el resplandor de las avenidas
+      col += vec3(0.85, 0.82, 0.78) * 0.035 * exp(-vW.y / 1.1) * (1. - uDim) * (0.6 + 0.4 * h1(vId));
+      // canto de esquina: las aristas verticales captan el cielo
+      float edgeV = max(smoothstep(0.06, 0., u), smoothstep(0.94, 1., u));
+      col += vec3(0.08, 0.09, 0.11) * edgeV * (0.5 + 0.5 * smoothstep(0., 8., vW.y)) * (1. - uDim);
     }
     // escáner verde: una línea que barre las azoteas
     for (int k = 0; k < 2; k++){ if (uE[k].w <= 0.) continue; float cc = uE[k].x < 0.5 ? vW.x : vW.z; float d = cc - uE[k].y;
@@ -524,7 +549,8 @@ canvas{width:100vw;height:100vh;display:block}
     float dist = length(uCam - wp);
     col *= 1. - uDim;
     if (uRefl > 0.) col *= uRefl * (0.6 + 0.4 * fract(sin(dot(floor(vW.xz * 2.3), vec2(12.9, 78.2))) * 437.5));
-    col = mix(col, vec3(0.004, 0.006, 0.006) + GRN * 0.004 * uGreen, 1. - exp(-dist * uFog));
+    vec3 fogC = vec3(0.012, 0.014, 0.018) * (1. - uDim) + GRN * 0.01 * uGreen;
+    col = mix(col, fogC, 1. - exp(-dist * uFog));
     o = vec4(col, dist);
   }`;
   const FSSH = `#version 300 es
@@ -537,6 +563,13 @@ canvas{width:100vw;height:100vh;display:block}
     if (uMode < 0.5) {   // cortina: quad vertical a lo largo de la línea del escáner
       float u = aA.x, v = aA.y; vec3 p = uE.x < 0.5 ? vec3(uE.y, v * 7., (u - 0.5) * 96.) : vec3((u - 0.5) * 96., v * 7., uE.y);
       gl_Position = uVP * vec4(p, 1.); vC = vec3(0.22, 1., 0.42) * uE.w * exp(-v * 3.2) * 0.35 * exp(-length(p - uCam) * 0.012); vS = 0.;
+    } else if (uMode > 1.5 && uMode < 2.5) {   // luces lejanas fuera de la retícula: la ciudad sigue más allá
+      vec3 p = aA.xyz; gl_Position = uVP * vec4(p, 1.); float d = length(p - uCam); vS = clamp(120. / d, 1., 3.); gl_PointSize = vS;
+      vC = mix(vec3(1., 0.9, 0.75), vec3(0.8, 0.9, 1.), aA.w) * (0.25 + 0.5 * fract(aA.w * 37.)) * uE.w * exp(-d * 0.006);
+    } else if (uMode > 2.5) {   // columnas de luz verde desde las azoteas de la Ø
+      vec2 q = aA.xy; float side = aA.z, v = aA.w;
+      vec3 p = vec3(q.x + side * 0.35 * (1. - uPh), mix(6., 46., v), q.y + side * 0.35 * uPh);
+      gl_Position = uVP * vec4(p, 1.); vS = 0.; vC = vec3(0.22, 1., 0.42) * uE.w * pow(1. - v, 1.6) * 0.5;
     } else {              // motas: suben desde las azoteas de la Ø en ciclos de un compás (periódico para el loop)
       float a = aA.x * 6.2831853, r = aA.y; vec2 q = vec2(cos(a), sin(a)) * r;
       float ph = fract(uPh + aA.z); vec3 p = vec3(q.x, 5. + ph * 10. + aA.w * 3., q.y);
@@ -546,20 +579,23 @@ canvas{width:100vw;height:100vh;display:block}
   }`;
   const FSA = `#version 300 es
   precision highp float; in vec3 vC; in float vS; out vec4 o; uniform float uMode;
-  void main(){ float m = 1.; if (uMode > 0.5) { vec2 c = gl_PointCoord * 2. - 1.; m = exp(-dot(c, c) * 2.5); } o = vec4(vC * m, 0.); }`;
+  void main(){ float m = 1.; if (uMode > 0.5 && uMode < 2.5) { vec2 c = gl_PointCoord * 2. - 1.; m = exp(-dot(c, c) * 2.5); } o = vec4(vC * m, 0.); }`;
   const VSQ = `#version 300 es
   in vec2 aPos; out vec2 vUv; void main(){ vUv = aPos * .5 + .5; gl_Position = vec4(aPos, 0., 1.); }`;
   const FSDOF = `#version 300 es
-  precision highp float; in vec2 vUv; out vec4 o; uniform sampler2D uS; uniform float uFoc, uAp, uSeed; uniform vec2 uRes;
+  precision highp float; in vec2 vUv; out vec4 o; uniform sampler2D uS; uniform float uFoc, uAp, uSeed, uHz, uSky, uGr; uniform vec2 uRes;
+  vec3 sky(vec2 uv){ float d = uv.y - uHz; return (vec3(0.02, 0.024, 0.03) * exp(-max(d, 0.) * 7.) + vec3(0.03, 0.06, 0.04) * uGr * exp(-abs(d) * 10.)) * uSky; }
   float ign(vec2 q){ return fract(52.9829189 * fract(dot(q + uSeed * 37., vec2(0.06711056, 0.00583715)))); }
   float coc(float d){ return d > 0. ? clamp(abs(d - uFoc) / max(d, 0.5) * uAp * uRes.y * 6., 0., 30.) : 30. * step(0.0005, uAp); }
   void main(){
     vec4 c0 = texture(uS, vUv); float r0 = coc(c0.a);
+    if (c0.a <= 0.) c0.rgb += sky(vUv);
     float R = 30. * min(1., uAp / 0.004); if (R < 1.) { o = vec4(c0.rgb, 1.); return; }
     vec3 acc = c0.rgb; float wsum = 1.; float rot = ign(gl_FragCoord.xy) * 6.2831853;
     for (int i = 1; i < 28; i++) { float fi = float(i), rr = sqrt(fi / 28.) * R, an = fi * 2.39996 + rot; vec2 off = vec2(cos(an), sin(an)) * rr;
       vec4 s = texture(uS, vUv + off / uRes); float rs = coc(s.a);
       float w = s.a > 0. && (s.a < c0.a || c0.a <= 0.) ? smoothstep(rr - 1.5, rr + 1.5, rs) : smoothstep(rr - 1.5, rr + 1.5, min(rs, r0));
+      if (s.a <= 0.) s.rgb += sky(vUv + off / uRes);
       acc += s.rgb * w; wsum += w; }
     o = vec4(acc / wsum, 1.);
   }`;
@@ -591,6 +627,17 @@ canvas{width:100vw;height:100vh;display:block}
       MO.set([a, rr, r(), r()], (k++) * 4); } }
   const vaoA2 = gl.createVertexArray(); gl.bindVertexArray(vaoA2);
   { const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, MO, gl.STATIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 0, 0); }
+  const NFL = 14000, FL = new Float32Array(NFL * 4);
+  { const r = VL.rng(3840); for (let i = 0; i < NFL; i++) { const a = r() * TAU, rr = 52 + Math.pow(r(), 0.6) * 220; FL.set([rr * Math.cos(a), r() * r() * 6, rr * Math.sin(a), r()], i * 4); } }
+  const vaoA3 = gl.createVertexArray(); gl.bindVertexArray(vaoA3);
+  { const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, FL, gl.STATIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 0, 0); }
+  // columnas: 36 posiciones sobre la Ø; cada una dos tiras cruzadas (quads verticales)
+  const PIL = []; { const r = VL.rng(3841); for (let i = 0; i < 36; i++) { let x, z; if (i < 26) { const a = i / 26 * TAU; x = 25 * Math.cos(a); z = 25 * Math.sin(a); } else { const s2 = (i - 26) / 9 * 50 - 25; x = s2; z = s2; }
+      x = Math.round(x - 0.5) + 0.5; z = Math.round(z - 0.5) + 0.5;
+      for (const [u0, u1] of [[-1, 1]]) for (const [v0, v1] of [[0, 1]]) PIL.push(x, z, -1, 0, x, z, 1, 0, x, z, 1, 1, x, z, -1, 0, x, z, 1, 1, x, z, -1, 1); } }
+  const PILA = new Float32Array(PIL), NPIL = PIL.length / 4;
+  const vaoA4 = gl.createVertexArray(); gl.bindVertexArray(vaoA4);
+  { const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, PILA, gl.STATIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 0, 0); }
   const vaoQ = gl.createVertexArray(); gl.bindVertexArray(vaoQ);
   { const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0); }
 
@@ -679,7 +726,7 @@ canvas{width:100vw;height:100vh;display:block}
       gl.bindFramebuffer(gl.FRAMEBUFFER, FSHB); gl.viewport(0, 0, SHN, SHN); gl.clear(gl.DEPTH_BUFFER_BIT);
       gl.enable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE); gl.colorMask(false, false, false, false);
       gl.useProgram(PSH.p); gl.bindVertexArray(vaoC); gl.uniformMatrix4fv(PSH.U.uVP, false, LV); gl.uniform1f(PSH.U.uMir, 1); geo(PSH.U);
-      gl.drawArraysInstanced(gl.TRIANGLES, 0, NBV, NG * NG);
+      for (let ti = 0; ti < 3; ti++) { gl.uniform1f(PSH.U.uTier, ti); gl.drawArraysInstanced(gl.TRIANGLES, 0, NBV, NG * NG); }
       gl.colorMask(true, true, true, true);
       // · escena (y su reflejo en el asfalto mojado, en los planos que no son cenitales)
       const U = PC.U;
@@ -692,20 +739,26 @@ canvas{width:100vw;height:100vh;display:block}
       gl.uniform1f(U.uWin, frozen ? 0.02 : clamp(0.06 + 0.5 * hf + 0.4 * ec.win + 0.08 * ten)); gl.uniform1f(U.uWinSeed, winSeed);
       gl.uniform1f(U.uFog, cm.fog ?? (cm.up ? 0.004 : 0.009)); gl.uniform1f(U.uGreen, a >= 0 ? (1.1 + 1.6 * hit + 0.8 * (kp ? Math.exp(-(t - kp.t) / 0.15) : 0)) * fade : 0); gl.uniform1f(U.uDim, frozen ? 0.75 : 0);
       gl.uniformMatrix4fv(U.uLVP, false, LV); gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, TSH); gl.uniform1i(U.uSh, 1);
-      if (!cm.up) { gl.frontFace(gl.CW); gl.uniform1f(U.uMir, -1); gl.uniform1f(U.uRefl, 0.28); gl.drawArraysInstanced(gl.TRIANGLES, 0, NBV, NG * NG); gl.clear(gl.DEPTH_BUFFER_BIT); }
+      const drawCity = () => { for (let ti = 0; ti < 3; ti++) { gl.uniform1f(U.uTier, ti); gl.drawArraysInstanced(gl.TRIANGLES, 0, NBV, NG * NG); } };
+      if (!cm.up) { gl.frontFace(gl.CW); gl.uniform1f(U.uMir, -1); gl.uniform1f(U.uRefl, 0.28); drawCity(); gl.clear(gl.DEPTH_BUFFER_BIT); }
       gl.frontFace(gl.CCW); gl.uniform1f(U.uMir, 1); gl.uniform1f(U.uRefl, 0);
-      gl.drawArraysInstanced(gl.TRIANGLES, 0, NBV, NG * NG);
+      drawCity();
       // · cortina del escáner y motas de la Ø (aditivo; el alfa guarda la distancia para el desenfoque)
       gl.disable(gl.CULL_FACE); gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFuncSeparate(gl.ONE, gl.ONE, gl.ZERO, gl.ONE);
       { const UA = PA.U; gl.useProgram(PA.p); gl.uniformMatrix4fv(UA.uVP, false, M); gl.uniform3f(UA.uCam, ...cm.cam); gl.uniform1f(UA.uT, t);
         gl.uniform1f(UA.uMode, 0); gl.bindVertexArray(vaoA1);
         esl.forEach((x) => { const u = t - x.t; gl.uniform4f(UA.uE, x.axis, -48 + u * 70, 0, x.s * Math.exp(-u / 0.8) * fade); gl.drawArrays(gl.TRIANGLES, 0, 6); });
+        if (!cm.up) { gl.uniform1f(UA.uMode, 2); gl.bindVertexArray(vaoA3); gl.uniform4f(UA.uE, 0, 0, 0, fade * (frozen ? 0.25 : 1) * (0.7 + 0.5 * hf)); gl.drawArrays(gl.POINTS, 0, NFL); }
+        if (a >= 0) { const pi = clamp((a - 0.35) / 0.5) * fade * (1 + 1.2 * (kp ? Math.exp(-(t - kp.t) / 0.15) : 0)); gl.uniform1f(UA.uMode, 3); gl.bindVertexArray(vaoA4);
+          for (const ph of [0, 1]) { gl.uniform1f(UA.uPh, ph); gl.uniform4f(UA.uE, 0, 0, 0, pi); gl.drawArrays(gl.TRIANGLES, 0, NPIL); } }
         if (a >= 0) { gl.uniform1f(UA.uMode, 1); gl.bindVertexArray(vaoA2); gl.uniform1f(UA.uPh, ((t - T.align) / T.bar) % 1); gl.uniform4f(UA.uE, 0, 0, 0, clamp((a - 0.3) / 0.6) * fade * (1 + 0.8 * (kp ? Math.exp(-(t - kp.t) / 0.15) : 0))); gl.drawArrays(gl.POINTS, 0, NMO); } }
       gl.disable(gl.BLEND); gl.depthMask(true);
       gl.disable(gl.CULL_FACE); gl.disable(gl.DEPTH_TEST);
       // suelo: el fondo ya es casi negro; DOF solo en planos que lo piden
       gl.bindFramebuffer(gl.FRAMEBUFFER, FD);
       { const U2 = PF.U; gl.useProgram(PF.p); gl.bindVertexArray(vaoQ); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, TS);
+        { const hp = [cm.cam[0] + f[0] * 200, 0, cm.cam[2] + f[2] * 200, 1]; let hy = 0.5; { const m = M; const cy = m[1] * hp[0] + m[5] * hp[1] + m[9] * hp[2] + m[13], cw = m[3] * hp[0] + m[7] * hp[1] + m[11] * hp[2] + m[15]; if (cw > 0) hy = cy / cw * 0.5 + 0.5; }
+          gl.uniform1f(U2.uHz, hy); gl.uniform1f(U2.uSky, cm.up ? 0 : fade * (frozen ? 0.3 : 1)); gl.uniform1f(U2.uGr, a >= 0 ? 1 : 0); }
         gl.uniform1i(U2.uS, 0); gl.uniform1f(U2.uFoc, foc); gl.uniform1f(U2.uAp, cm.ap || 0); gl.uniform1f(U2.uSeed, (frame % 64) * 0.137); gl.uniform2f(U2.uRes, W, H); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); }
       gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H);
       { const U3 = PT.U; gl.useProgram(PT.p); gl.bindVertexArray(vaoQ); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, TD);
@@ -715,7 +768,7 @@ canvas{width:100vw;height:100vh;display:block}
     let bloom = 0.9, fl = 0, flashColor;
     if (a >= 0 && ts < 0) { fl = 0.8 * Math.max(0, 1 - a / 0.16); flashColor = a < 0.05 ? ACC : undefined; bloom = 1.05 + 0.6 * Math.exp(-a * 1.2); }
     if (ts >= 0) { const st = VL.drawSting(c, ts, { accent: ACC }); fl = st.flash; bloom = 0.8 + 0.5 * st.flash; }
-    VL.post(out, frame, { bloom, flash: fl, flashColor, grain: 0.35 });
+    VL.post(out, frame, { bloom, flash: fl, flashColor, grain: 0.35, scan: 0.3 });
   };
 })();
 </script>
