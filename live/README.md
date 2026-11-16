@@ -49,12 +49,16 @@ Con `?instalacion` en la URL (`live/index.html?instalacion`) arranca solo y entr
 
 LIVE puede reaccionar a la gente que hay en la sala usando [OJO](../ojo/README.md) como sensor. OJO solo envía números (cuántas personas, dónde, cuánto se mueven y si alguien mira a la cámara), nunca la imagen.
 
-1. Con la salida abierta, pulsa **OJO** en la cabecera de LIVE. La salida enciende la cámara con la IA de OJO, oculta y sin imagen (`ojo/sensor.html`). La primera vez el navegador pide permiso para la cámara en la ventana de salida; en la app de escritorio no pregunta.
+1. Con la salida abierta, pulsa **OJO** en la cabecera de LIVE. Cada clic cambia el modo: **ATENCIÓN** → **DISTRACCIÓN** → APAGADO. La salida enciende la cámara con la IA de OJO, oculta y sin imagen (`ojo/sensor.html`). La primera vez el navegador pide permiso para la cámara en la ventana de salida; en la app de escritorio no pregunta.
 2. El botón muestra lo que pasa: CÁMARA…, CARGANDO IA…, SALA VACÍA, 1 PERSONA, CONTACTO… Si dice SIN CÁMARA, revisa el permiso o que no la esté usando otra app.
 
 También funciona con OJO completo abierto en otra ventana del mismo navegador, pero esa ventana tiene que estar a la vista: si queda detrás u oculta, Chrome la pausa y LIVE deja de recibir.
 
-Qué pasa:
+Dos maneras de reaccionar:
+- **ATENCIÓN:** mientras haya alguien, lo muestra; el contacto apaga la pieza (lo de abajo).
+- **DISTRACCIÓN:** la máquina sigue a lo suyo con el AUTOPLAY. Cuando entra alguien nuevo, le mira 5–8 s y vuelve a sus piezas aunque la persona se quede. Si alguien la mira a la cámara, le devuelve otra mirada breve, sin apagar la pieza.
+
+Qué pasa en ATENCIÓN:
 - **Sala vacía:** LIVE sigue a lo suyo.
 - **Entra alguien:** aparece encima de la pieza tal como lo ve la máquina, en la vista CÓDIGO de OJO (la máquina le escribe con su propio código), con la malla de la cara y los rótulos de datos (SUJETO, CONTACTO, distancia…). Todo lo pinta el sensor en una sola pasada, a 960×540, y la sala suena más abierta: más reverberación y más eco cuanto más se mueve la gente. Aguanta 3 s después de que se vaya.
 - **Contacto** (alguien mira a la cámara medio segundo): la pieza a negro y silencio; solo queda el visitante dibujado por la máquina.

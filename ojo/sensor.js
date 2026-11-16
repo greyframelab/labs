@@ -26,9 +26,9 @@
     } else { S.mode = 'entrada'; S.bloom = 0; S.analysis = 0; S.codigoBordes = 0; rt.eng.resize(320, 180); }
     rt.setState(S);
   });
-  let t = 0;
+  let t = 0, ent = 0;   // ent: cuántas personas nuevas han entrado
   rt.onFrame = (now, model) => {
-    if (rt.localVision) rt.vision.drainEvents();
+    if (rt.localVision) rt.vision.drainEvents().forEach((ev) => { if (ev.type === 'entra') ent++; });
     if (now - t < 66) return; t = now;
     const subs = model && model.subjects ? model.subjects.filter((s) => (s.gone || 0) < 0.5) : [];
     let x = 0.5, y = 0.5, size = 0;
@@ -38,7 +38,7 @@
       subs.forEach((s) => { const a = s.box[2] * s.box[3]; if (!best || a > best.a) best = { s, a }; });
       const b = best.s.box; x = (b[0] + b[2] / 2) / cw; y = (b[1] + b[3] * 0.45) / chh; size = Math.min(1, Math.sqrt(best.a / (cw * chh)) * 2); if (S.mirror) x = 1 - x;
     }
-    ch.postMessage({ type: 'presencia', n: subs.length, energy: rt.eng.energy || 0, contact: model ? model.contact || 0 : 0, x, y, size, ts: Date.now(), from: 'sensor' });
+    ch.postMessage({ type: 'presencia', n: subs.length, energy: rt.eng.energy || 0, contact: model ? model.contact || 0 : 0, x, y, size, ent, ts: Date.now(), from: 'sensor' });
   };
   (async () => {
     say('camara');
