@@ -122,7 +122,9 @@
   // ------------------------------------------------------------------ mensajes
   ch.onmessage = (ev) => {
     const m = ev.data;
+    if (m.type === 'ext') { extEnv = Math.max(extEnv, m.hit || 0.6); return; }   // golpe de la caja externa
     if (m.type === 'state') {
+      extMode = m.ext || 0;
       ojoSensor(!!m.ojo);
       hint.classList.add('off');
       const prevQ = MIX.quality;
@@ -371,6 +373,7 @@
     return age < 0.4 ? Math.exp(-age * 16) : 0;
   };
   let now_ = 0, scanOn = false, PRES_ = null, presHit = 0;
+  let extEnv = 0, extMode = 0, extT = 0;   // ENTRADA externa: envolvente de sus golpes (SOLO CAJA: la única que manda)
   // OJO como sensor: cámara + IA sin imagen, oculto en esta ventana (siempre a la vista, nunca se pausa).
   // Envía la presencia directamente a la consola por BroadcastChannel('voidloom-presencia').
   let ojoFr = null, ojoSt = '', ojoK = 0, ojoShown = false, ojoMode = 'bordes';
@@ -498,7 +501,8 @@
     if (!ra.ok) ga = 0; if (!rb.ok) gb = 0;
     autoQuality(now, ra, rb);
     blackS += ((FX.black ? 1 : 0) - blackS) * 0.12;
-    const env = Math.max(ra.env, rb.env);
+    if (extT) extEnv *= Math.exp(-(now - extT) / 140); extT = now;
+    const env = !extMode ? Math.max(ra.env, rb.env) : extMode === 2 ? extEnv : Math.max(ra.env, rb.env, extEnv);
     gl.useProgram(P);
     const src = FBO[cur ^ 1], dst = FBO[cur];
     gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fb); gl.viewport(0, 0, cv.width, cv.height);
