@@ -434,7 +434,8 @@ canvas{width:100vw;height:100vh;display:block}
   }
   const NDM = 2048, DM = tex(NDM, NDM);
   // en la web, el trazado de rayos va a menor resolución y se escala (el vídeo y el live, a resolución completa)
-  const TSC = window.VL_SIZE && !/[?&]live\b/.test(location.search) ? 0.62 : 1, TW = Math.round(W * TSC), TH = Math.round(H * TSC);
+  window.VL_Q3D = true;   // en el live, el trazado de rayos a la calidad que pida CALIDAD AUTO (q3d)
+  const TSC = /[?&]live\b/.test(location.search) ? (+new URLSearchParams(location.search).get('q3d') || 1) : window.VL_SIZE ? 0.62 : 1, TW = Math.round(W * TSC), TH = Math.round(H * TSC);
   let TR = null;
   if (TSC < 1) { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, TW, TH);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);

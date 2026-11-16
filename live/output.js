@@ -26,6 +26,16 @@
           if (!fr || fr.contentWindow !== win) return;
           const canvas = win.document.getElementById('c') || win.document.querySelector('canvas');
           const api = { render: o.render, canvas, piece: fr.dataset.piece, acts: o.acts || [], dur: o.duration, post: { bloom: 1, flash: 0 } };
+          // primera vez que vemos una pieza con el 3D aparte: desde ahora AUTO solo baja su 3D (se recarga una vez)
+          try {
+            const pc = fr.dataset.piece;
+            if (win.VL_Q3D && isAuto() && !(PQ[pc] && PQ[pc].cap3)) {
+              const e = PQ[pc] || (PQ[pc] = { q: AUTO0, good: 0, fail: 0 });
+              e.cap3 = true; e.q = Math.min(e.q, 0.7); e.fail = 0; savePQ();
+              const tryReload = (n) => setTimeout(() => { if (D[k].frame === fr) reloadDeck(k); else if (n > 0 && (D[k].next === fr)) tryReload(n - 1); }, 400);
+              tryReload(20);
+            }
+          } catch (e) {}
           // mandos dentro de la pieza: se aplican en su propio postproceso (VL.post), no encima
           try {
             const VLw = win.VL;
@@ -61,11 +71,15 @@
   let PQ = {}; try { PQ = JSON.parse(localStorage.getItem(PQ_KEY) || '{}') || {}; } catch (e) {}
   const savePQ = () => { try { localStorage.setItem(PQ_KEY, JSON.stringify(PQ)); } catch (e) {} };
   const isAuto = () => !(MIX.quality > 0);
-  function pieceQ(piece) { if (!isAuto()) return MIX.quality; const e = PQ[piece]; return e ? e.q : AUTO0; }
+  // piezas con el 3D aparte (VL_Q3D: Masa, Teseracto, Campo, Grieta, Horizonte, Tokamak): en AUTO la ventana de la pieza
+  // va siempre a resolución completa y solo baja su 3D (q3d), así grano, líneas y bordes no se pixelan
+  const cap3 = (piece) => isAuto() && PQ[piece] && PQ[piece].cap3;
+  function pieceQ(piece) { if (!isAuto()) return MIX.quality; const e = PQ[piece]; return cap3(piece) ? 1 : e ? e.q : AUTO0; }
+  function pieceQ3(piece) { const e = PQ[piece]; return cap3(piece) ? e.q : null; }
   function frameSize(piece) { const q = pieceQ(piece); return [Math.max(64, Math.round(innerWidth * q)), Math.max(64, Math.round(innerHeight * q))]; }
   function reloadDeck(k) {
     const d = D[k]; if (!d.piece || !d.frame) return;
-    const src = d.frame.src.replace(/[?&]live\b/, ''), piece = d.frame.dataset.piece;
+    const src = d.frame.src.replace(/[?&]live\b.*$/, ''), piece = d.frame.dataset.piece;
     d.piece = null; loadPiece(k, piece, src); d.reloadAt = performance.now();
   }
   const AQ = { n: 0, sum: 0, long: 0, t0: 0, last: 0, ref: 60, piece: null };
@@ -85,9 +99,10 @@
     if (AQ.minDt) { const r = 1000 / AQ.minDt; AQ.ref = [30, 50, 60, 75, 90, 100, 120, 144, 165, 240].reduce((a, b) => (Math.abs(b - r) < Math.abs(a - r) ? b : a)); }
     AQ.minDt = 0; AQ.n = 0; AQ.sum = 0; AQ.long = 0; AQ.t0 = now;
     const e = PQ[piece] || (PQ[piece] = { q: +(d.frame.dataset.q || AUTO0), good: 0, fail: 0 });
+    const qmin = e.cap3 ? 0.35 : QMIN;
     if (fps < AQ.ref * 0.85 || longR > 0.08) {
-      if (e.q <= QMIN + 0.001) return;
-      e.fail = e.q; e.q = Math.max(QMIN, Math.round(e.q * 0.86 * 100) / 100); e.good = 0;
+      if (e.q <= qmin + 0.001) return;
+      e.fail = e.q; e.q = Math.max(qmin, Math.round(e.q * 0.86 * 100) / 100); e.good = 0;
       savePQ(); reloadDeck(k);
       CL.trace(tstr(), 'calidad', `${k} · ${piece} va a saltos (${fps.toFixed(0)} fps) → calidad ${Math.round(e.q * 100)}%`);
     } else if (fps >= AQ.ref * 0.96 && longR < 0.02) {
@@ -102,7 +117,8 @@
       } else savePQ();
     } else e.good = 0;
   }
-  function frameQ(k) { const d = D[k]; return d && d.frame ? Math.round(+(d.frame.dataset.q || 1) * 100) : 0; }
+  function frameQ(k) { const d = D[k]; if (!d || !d.frame) return 0; const q3 = d.frame.dataset.q3; return Math.round(+(q3 ? q3 : d.frame.dataset.q || 1) * 100); }
+  const frameQ3 = (k) => !!(D[k] && D[k].frame && D[k].frame.dataset.q3);
   function loadPiece(k, piece, src) {
     const d = D[k];
     if (d.next && d.next.dataset.piece === piece) return;
@@ -112,12 +128,13 @@
     fr.className = 'deck'; fr.dataset.piece = piece; fr.dataset.q = pieceQ(piece);
     fr.style.width = w + 'px'; fr.style.height = h + 'px';
     fr.setAttribute('aria-hidden', 'true'); fr.tabIndex = -1;
-    fr.src = src + (src.includes('?') ? '&' : '?') + 'live';
+    const q3 = pieceQ3(piece); fr.dataset.q3 = q3 == null ? '' : q3;
+    fr.src = src + (src.includes('?') ? '&' : '?') + 'live' + (q3 == null ? '' : '&q3d=' + q3);
     document.body.appendChild(fr);
     d.next = fr;
     ch.postMessage({ type: 'loading', deck: k, piece });
   }
-  function reloadAll() { for (const k in D) { const d = D[k]; if (d.piece && d.frame) { const src = d.frame.src.replace(/[?&]live\b/, ''); d.piece = null; loadPiece(k, d.frame.dataset.piece, src); } } }
+  function reloadAll() { for (const k in D) { const d = D[k]; if (d.piece && d.frame) { const src = d.frame.src.replace(/[?&]live\b.*$/, ''); d.piece = null; loadPiece(k, d.frame.dataset.piece, src); } } }
 
   // ------------------------------------------------------------------ mensajes
   ch.onmessage = (ev) => {
@@ -584,7 +601,7 @@
     cur ^= 1;
     // estadísticas + monitor para la consola
     fpsN++;
-    if (now - fpsT > 1000) { ch.postMessage({ type: 'stats', fps: Math.round(fpsN * 1000 / (now - fpsT)), w: cv.width, h: cv.height, q: frameQ(MIX.onAir), auto: isAuto() }); fpsN = 0; fpsT = now; }
+    if (now - fpsT > 1000) { ch.postMessage({ type: 'stats', fps: Math.round(fpsN * 1000 / (now - fpsT)), w: cv.width, h: cv.height, q: frameQ(MIX.onAir), q3: frameQ3(MIX.onAir), auto: isAuto() }); fpsN = 0; fpsT = now; }
     if (now - lastPrev > 150) {
       lastPrev = now;
       const pw = 480, ph = Math.round(pw * cv.height / cv.width);
