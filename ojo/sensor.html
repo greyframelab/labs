@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>VØID_LOOM · OJO · sensor</title>
+<!-- OJO sin imagen: cámara + IA, solo para decirle a VØID_LOOM LIVE quién hay en la sala.
+     LIVE lo carga oculto dentro de su ventana de salida (siempre visible, nunca se pausa). -->
+<style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block;width:320px;height:180px}</style>
+</head>
+<body>
+<canvas id="c" width="320" height="180"></canvas>
+<script src="engine.js"></script>
+<script src="vision.js"></script>
+<script src="runtime.js"></script>
+<script src="sensor.js"></script>
+</body>
+</html>

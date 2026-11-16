@@ -123,6 +123,7 @@
   ch.onmessage = (ev) => {
     const m = ev.data;
     if (m.type === 'state') {
+      ojoSensor(!!m.ojo);
       hint.classList.add('off');
       const prevQ = MIX.quality;
       traceState(m);
@@ -361,6 +362,20 @@
     return age < 0.4 ? Math.exp(-age * 16) : 0;
   };
   let now_ = 0, scanOn = false, PRES_ = null, presHit = 0;
+  // OJO como sensor: cámara + IA sin imagen, oculto en esta ventana (siempre a la vista, nunca se pausa).
+  // Envía la presencia directamente a la consola por BroadcastChannel('voidloom-presencia').
+  let ojoFr = null, ojoSt = '';
+  function ojoSensor(on) {
+    if (on && !ojoFr) {
+      ojoFr = document.createElement('iframe');
+      ojoFr.allow = 'camera; autoplay';
+      ojoFr.style.cssText = 'position:fixed;left:-340px;top:0;width:320px;height:180px;border:0;opacity:0;pointer-events:none';
+      ojoFr.src = '../ojo/sensor.html';
+      document.body.appendChild(ojoFr);
+      ojoSt = 'camara'; ch.postMessage({ type: 'ojo', st: ojoSt });
+    } else if (!on && ojoFr) { ojoFr.remove(); ojoFr = null; ojoSt = ''; ch.postMessage({ type: 'ojo', st: '' }); }
+  }
+  window.addEventListener('message', (e) => { const d = e.data; if (d && d.type === 'ojo-sensor' && ojoFr && e.source === ojoFr.contentWindow) { ojoSt = d.st; ch.postMessage({ type: 'ojo', st: d.st, err: d.err }); } });
   let cur = 0, blackS = 0, fpsN = 0, fpsT = performance.now(), lastPrev = 0, info = {};
   function drawDeck(k, w, live) {
     const d = D[k];

@@ -1,5 +1,5 @@
 // VØID_LOOM LIVE · sincronización con Labs y caché offline
-// Copia local de lo que el live necesita: README, live/, shared/ y las carpetas de las piezas Motion.
+// Copia local de lo que el live necesita: README, live/, shared/, ojo/ (sensor de presencia) y las carpetas de las piezas Motion.
 // Con internet descarga solo lo nuevo o cambiado (comparando el sha de git de cada archivo);
 // sin internet, el live usa lo último guardado.
 'use strict';
@@ -18,7 +18,7 @@ const readJSON = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8'))
 // carpetas que entran en la copia local, leídas del README igual que hace el live
 function prefixesFrom(readme) {
   const dirs = [...readme.matchAll(MOTION)].map((m) => m[3].replace(/^\.\//, '').replace(/\/?$/, '/'));
-  return { dirs, all: ['live/', 'shared/', ...dirs] };
+  return { dirs, all: ['live/', 'shared/', 'ojo/', ...dirs] };
 }
 const wanted = (p, pre) => p === 'README.md' || pre.all.some((x) => p.startsWith(x));
 
