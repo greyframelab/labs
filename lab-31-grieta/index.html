@@ -446,6 +446,23 @@ canvas{width:100vw;height:100vh;display:block}
 (function () {
   const VL = window.VL, W = VL.W, H = VL.H, e = VL.ease, sg = VL.seg, clamp = VL.clamp, lerp = VL.lerp;
   const ACC = VL.ACCENTS.ambar || '#FFB000';
+  // IMPERMANENCIA · con el modo activo en el live, cada pase recibe una semilla nueva (?semilla=) y la pieza varía dentro
+  // de rangos fijados: cámara (giro, distancia, altura) y, donde la hay, la geometría generada. Estructura, actos y
+  // sincronía con el sonido no cambian. En la web, en el vídeo y con el modo apagado: semilla 0, la versión canónica.
+  const SEMILLA = /[?&]live\b/.test(location.search) ? (+new URLSearchParams(location.search).get('semilla') || 0) : 0;
+  const VR = VL.rng((SEMILLA % 2147483647) || 1);
+  const varia = (def, amp) => (SEMILLA ? def + (VR() * 2 - 1) * amp : def);
+  const SEMN = (n) => (SEMILLA ? (n + SEMILLA * 7919) >>> 0 : n);
+  const AZ0 = varia(0, 0.35), DK = varia(1, 0.1), YK = varia(1, 0.12), RL0 = varia(0, 0.03);
+  // gira la cámara de un plano alrededor de su punto de mira (y su vector up, si lo tiene)
+  function variaCm(cm) {
+    if (!SEMILLA || !cm || !cm.cam || !cm.tgt) return cm;
+    const t = cm.tgt, v = [cm.cam[0] - t[0], cm.cam[1] - t[1], cm.cam[2] - t[2]], c = Math.cos(AZ0), s = Math.sin(AZ0);
+    cm.cam = [t[0] + (v[0] * c - v[2] * s) * DK, t[1] + v[1] * DK * YK, t[2] + (v[0] * s + v[2] * c) * DK];
+    if (cm.up) cm.up = [cm.up[0] * c - cm.up[2] * s, cm.up[1], cm.up[0] * s + cm.up[2] * c];
+    if (cm.roll != null) cm.roll += RL0;
+    return cm;
+  }
   const { T, B, CRACKS, MAIN, PULSE, CLOCK } = window.GRT;
   const DUR = T.sting + VL.STING_DUR;
   window.DURATION = DUR; window.FPS = 60;
@@ -749,7 +766,7 @@ canvas{width:100vw;height:100vh;display:block}
       const y = kf([[0, 0.55], [3, 0.2], [8, -1.2], [T.cut, -1.4], [T.rupt, -1.1], [T.sting, -0.9]], t);
       const ty = kf([[0, 0.7], [3, 0.55], [8, 0.35], [T.cut, 0.3], [T.rupt, 0.15], [T.sting, 0.2]], t);
       let shk = a > 0 && a < 1 ? 0.06 * Math.exp(-a * 4) : 0; shk += 0.012 * ten * ten * (t < T.cut ? 1 : 0) + (M.hot * 0.02 * (t < T.cut ? 1 : 0));
-      const cam = [Math.sin(az) * R, y, Math.cos(az) * R];
+      const cam = [Math.sin(az + AZ0) * R * DK, y * YK, Math.cos(az + AZ0) * R * DK];
       const tg = [(VL.hash(frame, 1) - 0.5) * shk, ty + (VL.hash(frame, 2) - 0.5) * shk, 0];
       gl.useProgram(PC.p); gl.bindFramebuffer(gl.FRAMEBUFFER, cfb); gl.viewport(0, 0, CW, CH);
       gl.uniform3f(PC.U.uB, ...B); gl.uniform4fv(PC.U.uCr, CR.C); gl.uniform4fv(PC.U.uCs, CR.S); gl.uniform1i(PC.U.uNc, CR.n);

@@ -45,6 +45,10 @@ Con `?instalacion` en la URL (`live/index.html?instalacion`) arranca solo y entr
 
 **App de escritorio sin internet** para Windows y Mac: ver [`live-app/`](../live-app/README.md).
 
+## IMPERMANENCIA
+
+Botón **IMPERMANENCIA** abajo, en SISTEMA. Con él activo, cada vez que una pieza entra recibe una semilla nueva y es una versión única e irrepetible: cambia la cámara (giro, distancia y altura alrededor del mismo punto de mira) y, donde la pieza genera su geometría, la geometría (otra helada en Escarcha, otros rayos en Descarga, otras grietas en Masa, otra catedral en Eco…). La estructura, los actos y la sincronía con el sonido no cambian. Apagado, todo es la versión canónica de la web y el vídeo. Se aplica a lo que se cargue a partir de que lo actives; al recargar una pieza por calidad, conserva su semilla.
+
 ## ENTRADA · caja de ritmos externa (TR-09)
 
 Pensado para la Roland **TR-09** conectada por USB: por el mismo cable manda audio y MIDI. Sirve cualquier caja o tarjeta de sonido; si hay una Roland conectada, LIVE la elige sola.

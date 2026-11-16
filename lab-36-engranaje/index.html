@@ -385,6 +385,23 @@ canvas{width:100vw;height:100vh;display:block}
 (function () {
   const VL = window.VL, W = VL.W, H = VL.H, e = VL.ease, sg = VL.seg, clamp = VL.clamp, lerp = VL.lerp;
   const ACC = VL.ACCENTS.ambar;
+  // IMPERMANENCIA · con el modo activo en el live, cada pase recibe una semilla nueva (?semilla=) y la pieza varía dentro
+  // de rangos fijados: cámara (giro, distancia, altura) y, donde la hay, la geometría generada. Estructura, actos y
+  // sincronía con el sonido no cambian. En la web, en el vídeo y con el modo apagado: semilla 0, la versión canónica.
+  const SEMILLA = /[?&]live\b/.test(location.search) ? (+new URLSearchParams(location.search).get('semilla') || 0) : 0;
+  const VR = VL.rng((SEMILLA % 2147483647) || 1);
+  const varia = (def, amp) => (SEMILLA ? def + (VR() * 2 - 1) * amp : def);
+  const SEMN = (n) => (SEMILLA ? (n + SEMILLA * 7919) >>> 0 : n);
+  const AZ0 = varia(0, 0.35), DK = varia(1, 0.1), YK = varia(1, 0.12), RL0 = varia(0, 0.03);
+  // gira la cámara de un plano alrededor de su punto de mira (y su vector up, si lo tiene)
+  function variaCm(cm) {
+    if (!SEMILLA || !cm || !cm.cam || !cm.tgt) return cm;
+    const t = cm.tgt, v = [cm.cam[0] - t[0], cm.cam[1] - t[1], cm.cam[2] - t[2]], c = Math.cos(AZ0), s = Math.sin(AZ0);
+    cm.cam = [t[0] + (v[0] * c - v[2] * s) * DK, t[1] + v[1] * DK * YK, t[2] + (v[0] * s + v[2] * c) * DK];
+    if (cm.up) cm.up = [cm.up[0] * c - cm.up[2] * s, cm.up[1], cm.up[0] * s + cm.up[2] * c];
+    if (cm.roll != null) cm.roll += RL0;
+    return cm;
+  }
   const Z = window.ENG, { T, EV, X, warp } = Z;
   const DUR = T.sting + VL.STING_DUR;
   window.DURATION = DUR; window.FPS = 60;
@@ -436,18 +453,18 @@ canvas{width:100vw;height:100vh;display:block}
   const MESH = new Float32Array(V), NV = V.length / 10;
   // polvo suspendido: solo se ve donde lo toca la luz
   const ND = 90000, DU = new Float32Array(ND * 4);
-  { const r = VL.rng(3636); for (let i = 0; i < ND; i++) { const a = r() * TAU, rr = 0.4 + Math.pow(r(), 0.7) * 16; DU.set([rr * Math.cos(a), -0.35 + Math.pow(r(), 1.6) * 3.2, rr * Math.sin(a), r()], i * 4); } }
+  { const r = VL.rng(SEMN(3636)); for (let i = 0; i < ND; i++) { const a = r() * TAU, rr = 0.4 + Math.pow(r(), 0.7) * 16; DU.set([rr * Math.cos(a), -0.35 + Math.pow(r(), 1.6) * 3.2, rr * Math.sin(a), r()], i * 4); } }
 
   // chispas: una lluvia en la alineación (a lo largo del canal) y una ráfaga en la salida con cada barrido del haz
   const SPK = [];
-  { const r = VL.rng(361);
+  { const r = VL.rng(SEMN(361));
     for (let i = 0; i < 2600; i++) { const rr = 0.4 + r() * 2.9, a = TH + (r() - 0.5) * 0.05, sp = 1.5 + r() * 4.5, side = (r() - 0.5) * 2.2, up = 0.6 + r() * 2.6;
       const dx = Math.cos(a), dz = Math.sin(a), tx = -dz, tz = dx;
       SPK.push([rr * dx, 0.22, rr * dz, T.align + r() * 0.04, (dx * 0.6 + tx * side) * sp, up * sp * 0.5, (dz * 0.6 + tz * side) * sp, 0.45 + r() * 0.9, r()]); }
   }
   const SPKN0 = SPK.length;
   const SPEV = EV.filter((x) => x.v === 'K' && x.big && x.t > T.align);
-  { const r = VL.rng(362); for (const x of SPEV) for (let i = 0; i < 260; i++) SPK.push([0, 0, 0, x.t + r() * 0.02, r(), r(), r(), 0.18 + r() * 0.3, r(), x.t]); }
+  { const r = VL.rng(SEMN(362)); for (const x of SPEV) for (let i = 0; i < 260; i++) SPK.push([0, 0, 0, x.t + r() * 0.02, r(), r(), r(), 0.18 + r() * 0.3, r(), x.t]); }
   // ================================================================ 2 · partitura → giro de cada anillo
   const RINGEV = [[], [], [], []];
   for (const x of EV) if (x.ring !== undefined && x.t < T.cut) RINGEV[x.ring].push(x);
@@ -805,7 +822,7 @@ canvas{width:100vw;height:100vh;display:block}
     if (fade > 0.002) {
       const lift = lifts(t), ang = ringAngles(t), sw = a >= 0 ? sweepAng(t) : 0;
       const AN = [...ang.map((x) => x + sw), TH + sw, 0, 0];
-      const cm = shot(t, lift);
+      const cm = variaCm(shot(t, lift));
       // golpes → luz
       const K = last('K', t), kf = K ? K.s * Math.exp(-(t - K.t) / 0.07) : 0;
       const P7 = last('P', t), pf = P7 ? P7.s * Math.exp(-(t - P7.t) / 0.12) : 0;

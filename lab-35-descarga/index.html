@@ -385,6 +385,23 @@ canvas{width:100vw;height:100vh;display:block}
 (function () {
   const VL = window.VL, W = VL.W, H = VL.H, e = VL.ease, sg = VL.seg, clamp = VL.clamp, lerp = VL.lerp;
   const ACC = VL.ACCENTS.violeta;
+  // IMPERMANENCIA · con el modo activo en el live, cada pase recibe una semilla nueva (?semilla=) y la pieza varía dentro
+  // de rangos fijados: cámara (giro, distancia, altura) y, donde la hay, la geometría generada. Estructura, actos y
+  // sincronía con el sonido no cambian. En la web, en el vídeo y con el modo apagado: semilla 0, la versión canónica.
+  const SEMILLA = /[?&]live\b/.test(location.search) ? (+new URLSearchParams(location.search).get('semilla') || 0) : 0;
+  const VR = VL.rng((SEMILLA % 2147483647) || 1);
+  const varia = (def, amp) => (SEMILLA ? def + (VR() * 2 - 1) * amp : def);
+  const SEMN = (n) => (SEMILLA ? (n + SEMILLA * 7919) >>> 0 : n);
+  const AZ0 = varia(0, 0.12), DK = varia(1, 0.05), YK = varia(1, 0.06), RL0 = varia(0, 0.03);
+  // gira la cámara de un plano alrededor de su punto de mira (y su vector up, si lo tiene)
+  function variaCm(cm) {
+    if (!SEMILLA || !cm || !cm.cam || !cm.tgt) return cm;
+    const t = cm.tgt, v = [cm.cam[0] - t[0], cm.cam[1] - t[1], cm.cam[2] - t[2]], c = Math.cos(AZ0), s = Math.sin(AZ0);
+    cm.cam = [t[0] + (v[0] * c - v[2] * s) * DK, t[1] + v[1] * DK * YK, t[2] + (v[0] * s + v[2] * c) * DK];
+    if (cm.up) cm.up = [cm.up[0] * c - cm.up[2] * s, cm.up[1], cm.up[0] * s + cm.up[2] * c];
+    if (cm.roll != null) cm.roll += RL0;
+    return cm;
+  }
   const Z = window.DSC, { T, EV, X, warp, STEPS } = Z;
   const DUR = T.sting + VL.STING_DUR;
   window.DURATION = DUR; window.FPS = 60;
@@ -393,7 +410,7 @@ canvas{width:100vw;height:100vh;display:block}
 
   // ================================================================ 1 · la geometría eléctrica (precalculada, con su instante de aparición)
   const SEG = [];   // ax ay az bx by bz tA kind w seed
-  const rng = VL.rng(3535);
+  const rng = VL.rng(SEMN(3535));
   const seg = (a, b, tA, kind, w) => SEG.push(a[0], a[1], a[2], b[0], b[1], b[2], tA, kind, w, rng());
   const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
   const nrm = (v) => { const l = Math.hypot(...v) || 1; return v.map((x) => x / l); };
@@ -468,13 +485,13 @@ canvas{width:100vw;height:100vh;display:block}
 
   // lluvia: cae siempre (periodo de medio compás → loops perfectos) y solo se ve cuando la ilumina un destello
   const NR = 26000, RA = new Float32Array(NR * 2 * 4);
-  { const r = VL.rng(909);
+  { const r = VL.rng(SEMN(909));
     for (let i = 0; i < NR; i++) { const x = (r() * 2 - 1) * 5, z = -3.5 + r() * 9, s0 = r(), len = 0.18 + r() * 0.2;
       RA.set([x, z, s0, 0], i * 8); RA.set([x, z, s0, len], i * 8 + 4); } }
 
   // ruido 3D periódico (64³) para la nube volumétrica
   const NV = 64, NOI = new Uint8Array(NV * NV * NV);
-  { const r = VL.rng(4242), base = [];
+  { const r = VL.rng(SEMN(4242)), base = [];
     for (const g of [4, 8, 16, 32]) { const L = new Float32Array(g * g * g); for (let i = 0; i < L.length; i++) L[i] = r(); base.push([g, L]); }
     const sm = (x) => x * x * (3 - 2 * x);
     for (let z = 0; z < NV; z++) for (let y = 0; y < NV; y++) for (let x = 0; x < NV; x++) {
@@ -752,7 +769,7 @@ canvas{width:100vw;height:100vh;display:block}
     const c = VL.sceneCtx(); const ts = tReal - T.sting, a = tReal - T.rupt;
     const fade = 1 - e.inOut(sg(tReal, T.sting - 0.9, T.sting + 0.2));
     if (fade > 0.002) {
-      const cm = camAt(t);
+      const cm = variaCm(camAt(t));
       { const Kb0 = last('K', t, (x) => x.big); const sh = (a >= 0 ? Math.exp(-a / 0.12) : 0) + (Kb0 && Kb0.t >= T.rupt ? 0.5 * Kb0.s * Math.exp(-(t - Kb0.t) / 0.08) : 0);
         if (sh > 0.001) { const j = (k) => Math.sin(t * (97 + k * 31) + k) * sh * 0.035; cm.cam = [cm.cam[0] + j(1), cm.cam[1] + j(2), cm.cam[2] + j(3)]; cm.roll += j(4) * 0.5; } }
       const M = viewProj(cm.cam, cm.tgt, cm.roll, cm.fov);

@@ -385,6 +385,23 @@ canvas{width:100vw;height:100vh;display:block}
 (function () {
   const VL = window.VL, W = VL.W, H = VL.H, e = VL.ease, sg = VL.seg, clamp = VL.clamp, lerp = VL.lerp;
   const ACC = VL.ACCENTS.magenta;
+  // IMPERMANENCIA · con el modo activo en el live, cada pase recibe una semilla nueva (?semilla=) y la pieza varía dentro
+  // de rangos fijados: cámara (giro, distancia, altura) y, donde la hay, la geometría generada. Estructura, actos y
+  // sincronía con el sonido no cambian. En la web, en el vídeo y con el modo apagado: semilla 0, la versión canónica.
+  const SEMILLA = /[?&]live\b/.test(location.search) ? (+new URLSearchParams(location.search).get('semilla') || 0) : 0;
+  const VR = VL.rng((SEMILLA % 2147483647) || 1);
+  const varia = (def, amp) => (SEMILLA ? def + (VR() * 2 - 1) * amp : def);
+  const SEMN = (n) => (SEMILLA ? (n + SEMILLA * 7919) >>> 0 : n);
+  const AZ0 = varia(0, 0.12), DK = varia(1, 0.05), YK = varia(1, 0.06), RL0 = varia(0, 0.03);
+  // gira la cámara de un plano alrededor de su punto de mira (y su vector up, si lo tiene)
+  function variaCm(cm) {
+    if (!SEMILLA || !cm || !cm.cam || !cm.tgt) return cm;
+    const t = cm.tgt, v = [cm.cam[0] - t[0], cm.cam[1] - t[1], cm.cam[2] - t[2]], c = Math.cos(AZ0), s = Math.sin(AZ0);
+    cm.cam = [t[0] + (v[0] * c - v[2] * s) * DK, t[1] + v[1] * DK * YK, t[2] + (v[0] * s + v[2] * c) * DK];
+    if (cm.up) cm.up = [cm.up[0] * c - cm.up[2] * s, cm.up[1], cm.up[0] * s + cm.up[2] * c];
+    if (cm.roll != null) cm.roll += RL0;
+    return cm;
+  }
   const Z = window.TKM, { T, EV, X, warp } = Z;
   const DUR = T.sting + VL.STING_DUR;
   window.DURATION = DUR; window.FPS = 60;
@@ -610,7 +627,7 @@ canvas{width:100vw;height:100vh;display:block}
   // chispas: golpes de ELM en el divertor, la disrupción a lo largo de la línea de quemado y ráfagas con cada bombo de la disrupción
   const BURN_TH = -0.95 + TAU;   // ángulo poloidal de la quemadura (abajo, hacia fuera)
   const SPK = [];
-  { const r = VL.rng(377);
+  { const r = VL.rng(SEMN(377));
     for (const x of ES) if (x.t < T.cut) { const ph = x.ang * TAU, wp = wallP(ph, 4.55); for (let i = 0; i < 70; i++) { const v = [(r() - 0.5) * 3, 1.2 + r() * 2.5, (r() - 0.5) * 3]; SPK.push([...wp, x.t + 0.08 + r() * 0.02, ...v, 0.25 + r() * 0.4, r(), 0]); } }
     for (let i = 0; i < 3200; i++) { const ph = r() * TAU, wp = wallP(ph, BURN_TH - 0.04 * r()); const nrm2 = [-(wp[0] - 3 * Math.cos(ph)), -wp[1] + 0.4, -(wp[2] - 3 * Math.sin(ph))]; const s = 0.8 + r() * 3;
       SPK.push([...wp, T.align + 0.05 + r() * 0.12, nrm2[0] * s * 0.5 + (r() - 0.5), nrm2[1] * s * 0.6 + r(), nrm2[2] * s * 0.5 + (r() - 0.5), 0.5 + r() * 1.0, r(), 1]); }
@@ -683,7 +700,7 @@ canvas{width:100vw;height:100vh;display:block}
     if (fade > 0.002) {
       const P = plasma(t), ec = frozen ? { L: 0, R: 0, sp: 0, edge: 0 } : echoEnv(t);
       P.I = Math.min(P.I * (1 + 0.4 * ec.edge), 1.9);
-      const cm = shot(t);
+      const cm = variaCm(shot(t));
       const K = last('K', t), kf = K ? K.s * Math.exp(-(t - K.t) / 0.07) : 0;
       const Mc = last('M', t), mf = Mc ? Mc.s * Math.exp(-(t - Mc.t) / 0.2) : 0;
       // disrupción: destello térmico, el plasma se expande y desaparece; queda el haz desbocado magenta

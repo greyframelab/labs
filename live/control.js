@@ -13,7 +13,7 @@
 
   // ================================================================== estado global
   const LIB = [];
-  const MIX = { xf: 0, mode: 'fundido', onAir: 'A', quality: store.get('calidadAuto', 0) };
+  const MIX = { xf: 0, mode: 'fundido', onAir: 'A', quality: store.get('calidadAuto', 0), imp: store.get('impermanencia', false) };
   const FX = { trail: 0, hits: 0, split: 0, invert: 0, black: 0, bright: 1, glitch: 0, punch: 0, lens: 0, mosaic: 0, tint: 0, scan: 0, mirror: 0, strobe: 0, tintC: '#ffffff',
     pBloom: 1, pFlash: 1, pScan: 0.2, cMix: 0, view: 0, viewOp: 0.85, viewMode: 'full' };
   const AFX = { filter: 0, echo: 0, echoT: 0.375, room: 0.12, master: 0.9, av: store.get('av', 0) };
@@ -960,6 +960,12 @@
     const fs = $('#fxSys'); fs.style.setProperty('--acc', '#f2f0ea');
     knob(fs, 'av', 'SINCRO A/V', AFX.av / 250, (v) => { AFX.av = Math.round(v * 250); store.set('av', AFX.av); for (const k in DECK) play(DECK[k]); }, (v) => '+' + Math.round(v * 250) + 'ms');
     const qc = document.createElement('div'); qc.className = 'grp'; qc.innerHTML = '<span class="lbl" style="font-size:7.5px">CALIDAD</span><div class="seg" id="qual"><button data-v="0" title="Cada pieza a la resolución que el ordenador aguanta con fluidez">AUTO</button><button data-v="1">100</button><button data-v="0.75">75</button><button data-v="0.5">50</button></div>'; fs.appendChild(qc);
+    // IMPERMANENCIA: cada pase, una versión única de la pieza (se aplica a lo que se cargue a partir de ahora)
+    const ig = document.createElement('div'); ig.className = 'grp';
+    ig.innerHTML = '<button class="tg" id="tg-imp" title="Cada vez que una pieza entra es una versión única e irrepetible (cámara, geometría). Apagado: la versión canónica de la web y el vídeo.">IMPERMANENCIA</button>';
+    fs.appendChild(ig);
+    const ib = $('#tg-imp'); ib.classList.toggle('on', !!MIX.imp);
+    ib.addEventListener('click', () => { MIX.imp = !MIX.imp; store.set('impermanencia', MIX.imp); ib.classList.toggle('on', MIX.imp); sendState(); toast(MIX.imp ? 'IMPERMANENCIA · CADA PASE SERÁ ÚNICO (DESDE LA PRÓXIMA PIEZA)' : 'IMPERMANENCIA · VERSIÓN CANÓNICA'); fitFx(); });
     $('#tg-ext').addEventListener('click', extCycle);
     const ob = $('#tg-ojo'); ob.classList.toggle('on', PRES.on);
     // clic: APAGADO → ATENCIÓN → DISTRACCIÓN → APAGADO

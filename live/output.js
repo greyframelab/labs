@@ -131,8 +131,9 @@
     fr.style.width = w + 'px'; fr.style.height = h + 'px';
     fr.setAttribute('aria-hidden', 'true'); fr.tabIndex = -1;
     const q3 = pieceQ3(piece); fr.dataset.q3 = q3 == null ? '' : q3;
-    fr.dataset.seed = seed || newSeed();
-    fr.src = src + (src.includes('?') ? '&' : '?') + 'live&semilla=' + fr.dataset.seed + (q3 == null ? '' : '&q3d=' + q3);
+    // con IMPERMANENCIA, semilla nueva en cada pase (o la misma si es una recarga de calidad); sin ella, la versión canónica
+    fr.dataset.seed = seed != null ? seed : MIX.imp ? newSeed() : 0;
+    fr.src = src + (src.includes('?') ? '&' : '?') + 'live' + (+fr.dataset.seed ? '&semilla=' + fr.dataset.seed : '') + (q3 == null ? '' : '&q3d=' + q3);
     document.body.appendChild(fr);
     d.next = fr;
     ch.postMessage({ type: 'loading', deck: k, piece });
