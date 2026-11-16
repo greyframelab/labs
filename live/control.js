@@ -106,6 +106,7 @@
   function buildMaster() {
     const m = {};
     m.in = ctx.createGain();
+    m.dk = ctx.createGain(); m.dk.connect(m.in);   // las piezas (A y B) entran por aquí; la entrada externa va directa a m.in
     m.hp = ctx.createBiquadFilter(); m.hp.type = 'highpass'; m.hp.frequency.value = 10;
     m.lp = ctx.createBiquadFilter(); m.lp.type = 'lowpass'; m.lp.frequency.value = 22000;
     m.in.connect(m.hp).connect(m.lp);
@@ -153,7 +154,7 @@
     a.in.connect(bq('highpass', 3400)).connect(bq('highpass', 3400)).connect(a.gH).connect(a.sum);
     a.vol = ctx.createGain(); a.xf = ctx.createGain();
     a.an = ctx.createAnalyser(); a.an.fftSize = 512;
-    a.sum.connect(a.vol).connect(a.xf).connect(M.in); a.xf.connect(a.an);
+    a.sum.connect(a.vol).connect(a.xf).connect(M.dk); a.xf.connect(a.an);
     a.voices = []; a.sched = null;
     d.aud = a;
   }
@@ -492,7 +493,100 @@
     const decks = {};
     for (const k in DECK) decks[k] = DECK[k].state;
     const air = DECK[MIX.onAir]; FX.tintC = air && air.item ? air.item.accent : '#ffffff';
-    ch.postMessage({ type: 'state', decks, mix: MIX, fx: presFx(), pres: presOut(), ojo: PRES.on });
+    ch.postMessage({ type: 'state', decks, mix: MIX, fx: presFx(), pres: presOut(), ojo: PRES.on, ext: EXT.mode });
+  }
+
+  // ---------------------------------------------------------------- ENTRADA EXTERNA · TR-09 (apagada por defecto)
+  // Una caja de ritmos por USB (pensado para la Roland TR-09: audio y MIDI por el mismo cable).
+  // · Audio: entra al master de LIVE (pasa por filtro, eco, sala y limitador) y sus golpes mueven la imagen.
+  //   MEZCLA: suena con las piezas. SOLO CAJA: las piezas siguen en imagen pero mudas; solo suena la caja.
+  // · Reloj MIDI: si la caja lo manda, las piezas siguen su tempo (como SYNC, en la relación ½ ⅔ 1 3:2 2 más cercana).
+  const EXT_M = ['APAGADA', 'MEZCLA', 'SOLO CAJA'];
+  const EXT = { mode: 0, stream: null, src: null, an: null, buf: null, name: '', prev: 0, mean: 0.02, last: 0, tk: [], bpm: 0, clkAt: 0, lastFollow: 0 };
+  async function extOpen() {
+    if (EXT.stream) return true;
+    if (!navigator.mediaDevices) return false;
+    const c = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, latency: 0, channelCount: 2 };
+    const get = (id) => navigator.mediaDevices.getUserMedia({ audio: Object.assign({}, c, id ? { deviceId: { exact: id } } : {}) }).catch(() => null);
+    let st = await get(store.get('extDev', ''));
+    if (!st) st = await get('');
+    if (!st) return false;
+    // la TR-09 (o cualquier Roland) si está conectada, aunque no sea la entrada por defecto
+    try {
+      const devs = await navigator.mediaDevices.enumerateDevices();
+      const tr = devs.find((d) => d.kind === 'audioinput' && /tr-?0?9|boutique|roland/i.test(d.label));
+      if (tr && tr.deviceId !== st.getAudioTracks()[0].getSettings().deviceId) { const s2 = await get(tr.deviceId); if (s2) { st.getTracks().forEach((t) => t.stop()); st = s2; } }
+    } catch (e) {}
+    EXT.stream = st; EXT.name = st.getAudioTracks()[0].label || 'ENTRADA';
+    store.set('extDev', st.getAudioTracks()[0].getSettings().deviceId || '');
+    EXT.src = ctx.createMediaStreamSource(st);
+    EXT.src.connect(M.in);
+    EXT.an = ctx.createAnalyser(); EXT.an.fftSize = 1024; EXT.an.smoothingTimeConstant = 0; EXT.src.connect(EXT.an);
+    EXT.buf = new Uint8Array(EXT.an.frequencyBinCount);
+    return true;
+  }
+  function extClose() {
+    if (EXT.src) { try { EXT.src.disconnect(); } catch (e) {} }
+    if (EXT.stream) EXT.stream.getTracks().forEach((t) => t.stop());
+    EXT.stream = EXT.src = EXT.an = null;
+  }
+  function extApply() {
+    if (!M) return;
+    const t = ctx.currentTime;
+    M.dk.gain.cancelScheduledValues(t); M.dk.gain.setTargetAtTime(EXT.mode === 2 ? 0 : 1, t, 0.12);
+  }
+  async function extCycle() {
+    if (!ctx) return toast('ENTRADA · PRIMERO ARRANCA EL LIVE');
+    if (EXT.busy) return;
+    const next = (EXT.mode + 1) % 3;
+    if (next && !EXT.stream) {
+      EXT.busy = true; $('#tg-ext').textContent = 'ENTRADA · ABRIENDO…';
+      const ok = await extOpen(); EXT.busy = false;
+      if (!ok) { toast('ENTRADA · NO HAY ACCESO AL AUDIO DE ENTRADA'); return; }
+    }
+    if (!next) extClose();
+    EXT.mode = next; extApply(); sendState();
+    $('#tg-ext').classList.toggle('on', EXT.mode > 0);
+    toast('ENTRADA · ' + EXT_M[EXT.mode] + (EXT.mode ? ' · ' + EXT.name.toUpperCase() : ''));
+  }
+  // golpes de la caja: subidas bruscas de energía en graves, medios y agudos
+  function extTick() {
+    if (!EXT.an) return;
+    EXT.an.getByteFrequencyData(EXT.buf);
+    const hz = ctx.sampleRate / EXT.an.fftSize, B = EXT.buf;
+    const avg = (a, b) => { let s = 0, n = 0; for (let i = Math.max(1, Math.floor(a / hz)); i < Math.min(B.length, Math.floor(b / hz)); i++) { s += B[i]; n++; } return n ? s / n / 255 : 0; };
+    const e = avg(30, 180) * 0.5 + avg(180, 1800) * 0.25 + avg(1800, 9000) * 0.25;   // bombo · caja/palmas/toms · charles/platos
+    const flux = Math.max(0, e - EXT.prev); EXT.prev = e;
+    EXT.mean += (flux - EXT.mean) * 0.04;
+    const now = performance.now();
+    if (flux > Math.max(0.035, EXT.mean * 3) && now - EXT.last > 85) { EXT.last = now; ch.postMessage({ type: 'ext', hit: VLL.clamp(flux * 5, 0.35, 1) }); }
+  }
+  setInterval(extTick, 10);
+  // reloj MIDI: 24 pulsos por negra
+  function extClock(st, ts) {
+    if (st === 0xf8) {
+      EXT.tk.push(ts); if (EXT.tk.length > 49) EXT.tk.shift();
+      if (EXT.tk.length >= 25) { const bpm = 60000 / ((EXT.tk[EXT.tk.length - 1] - EXT.tk[0]) / (EXT.tk.length - 1) * 24); EXT.bpm = EXT.bpm ? EXT.bpm + (bpm - EXT.bpm) * 0.2 : bpm; EXT.clkAt = performance.now(); }
+    } else if (st === 0xfc) { EXT.tk = []; }
+  }
+  // las piezas siguen el tempo de la caja (solo con la entrada encendida y el reloj llegando)
+  function extFollow() {
+    const now = performance.now();
+    if (!EXT.mode || now - EXT.clkAt > 1500 || !EXT.bpm || now - EXT.lastFollow < 400) return;
+    EXT.lastFollow = now;
+    for (const id of ['A', 'B']) {
+      const d = DECK[id];
+      if (!d.state || !d.item || !d.item.bpm || d.stopped || d.state.freeze != null || d.slip) continue;
+      const k = [0.5, 2 / 3, 1, 1.5, 2].reduce((a, b) => (Math.abs(Math.log(EXT.bpm * b / d.item.bpm)) < Math.abs(Math.log(EXT.bpm * a / d.item.bpm)) ? b : a));
+      const rate = VLL.clamp(EXT.bpm * k / d.item.bpm, 0.25, 2);
+      if (Math.abs(rate - (d.speed ?? 1)) > 0.004) { setSpeed(d, rate); d.fSpeed && d.fSpeed.set(spdToV(rate), true); }
+    }
+  }
+  function extLabel() {
+    const b = $('#tg-ext'); if (!b || EXT.busy) return;
+    const clk = EXT.bpm && performance.now() - EXT.clkAt < 1500;
+    const tx = 'ENTRADA · ' + EXT_M[EXT.mode] + (EXT.mode && clk ? ' · ' + EXT.bpm.toFixed(1) + ' BPM' : '');
+    if (b.textContent !== tx) b.textContent = tx;
   }
 
   // ---------------------------------------------------------------- OJO · PRESENCIA (apagado por defecto)
@@ -832,6 +926,7 @@
     const fs = $('#fxSys'); fs.style.setProperty('--acc', '#f2f0ea');
     knob(fs, 'av', 'SINCRO A/V', AFX.av / 250, (v) => { AFX.av = Math.round(v * 250); store.set('av', AFX.av); for (const k in DECK) play(DECK[k]); }, (v) => '+' + Math.round(v * 250) + 'ms');
     const qc = document.createElement('div'); qc.className = 'grp'; qc.innerHTML = '<span class="lbl" style="font-size:7.5px">CALIDAD</span><div class="seg" id="qual"><button data-v="0" title="Cada pieza a la resolución que el ordenador aguanta con fluidez">AUTO</button><button data-v="1">100</button><button data-v="0.75">75</button><button data-v="0.5">50</button></div>'; fs.appendChild(qc);
+    $('#tg-ext').addEventListener('click', extCycle);
     const ob = $('#tg-ojo'); ob.classList.toggle('on', PRES.on);
     // clic: APAGADO → ATENCIÓN → DISTRACCIÓN → APAGADO
     ob.addEventListener('click', () => {
@@ -1015,6 +1110,7 @@
     armed = id; CTL[id] && CTL[id].el.classList.add('armed'); return true;
   }
   function onMidi(e) {
+    if (e.data[0] >= 0xf8) { extClock(e.data[0], e.timeStamp); return; }   // reloj MIDI (TR-09…)
     const [st, n, v] = e.data, type = st & 0xf0, chn = st & 0x0f;
     if (type !== 0x90 && type !== 0x80 && type !== 0xb0) return;
     const key = (type === 0xb0 ? 'cc' : 'nt') + chn + ':' + n;
@@ -1167,7 +1263,7 @@
     $('#stAud').textContent = (ctx.sampleRate / 1000).toFixed(1) + ' kHz'; $('#ledAud').className = 'led on';
     setInterval(schedTick, 40);
     // con audio sonando, Chrome no frena los temporizadores de la pestaña aunque quede detrás de la salida
-    setInterval(() => { autoStep(); apTick(); presTick(); flush(); ddjLeds(); }, 30);
+    setInterval(() => { autoStep(); apTick(); presTick(); extFollow(); extLabel(); flush(); ddjLeds(); }, 30);
     initMidi();
     log('BUSCANDO PIEZAS VØID_LOOM…');
     let items = [];
