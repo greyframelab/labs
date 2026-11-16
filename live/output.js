@@ -367,7 +367,9 @@
   // OJO como sensor: cámara + IA sin imagen, oculto en esta ventana (siempre a la vista, nunca se pausa).
   // Envía la presencia directamente a la consola por BroadcastChannel('voidloom-presencia').
   let ojoFr = null, ojoSt = '', ojoK = 0, ojoShown = false, ojoMode = 'bordes';
-  const OJO_MODES = ['bordes', 'codigo', 'profundidad', 'atencion'];
+  // Modo de OJO para el visitante: BORDES (contornos + puntos clave). Es una sola pasada de GPU, el más rápido,
+  // y dibuja el cuerpo entero aunque no se vea la cara. Para alternar entre varios, añadirlos a la lista.
+  const OJO_MODES = ['bordes'];
   const ojoTex = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, ojoTex);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
