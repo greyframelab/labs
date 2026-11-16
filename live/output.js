@@ -251,6 +251,7 @@
   const FS_BLIT = `#version 300 es
   precision highp float; precision highp sampler2DArray; in vec2 uv; out vec4 o;
   uniform sampler2D S, OV; uniform sampler2DArray H; uniform float scan, head, ovOp;
+  uniform sampler2D OJ; uniform float ojoK;   // OJO: el visitante como lo ve la máquina, encima de la pieza
   // VISTA MÁQUINA
   uniform sampler2D GA, TX; uniform float maq, mt, menv, mlen, mrows, mlod, moff; uniform vec2 mres; uniform vec3 macc;
   float h1(float n){ return fract(sin(n * 127.1) * 43758.5453); }
@@ -301,6 +302,7 @@
       vec3 hc = mix(texture(H, vec3(uv, l0)).rgb, texture(H, vec3(uv, l1)).rgb, fract(d));
       c = mix(c, hc, smoothstep(0., .12, scan));
     }
+    if (ojoK > 0.) { vec3 v = texture(OJ, uv).rgb * ojoK; c = 1. - (1. - c) * (1. - v); }
     if (maq > 0.) c = mix(c, machine(c), maq);
     if (ovOp > 0.) { vec4 v = texture(OV, uv); c = c * (1. - v.a * ovOp) + v.rgb * ovOp; }
     o = vec4(c, 1.);
@@ -312,7 +314,7 @@
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
   gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
   const U = {}; ['A0', 'A1', 'B0', 'B1', 'FB', 'aw', 'bw', 'ga', 'gb', 'fa', 'fb', 'trail', 'flash', 'split', 'inv', 'black', 'bright', 'time', 'aspect', 'glitch', 'env', 'punch', 'lens', 'mosaic', 'tint', 'mirror', 'strobe', 'tintC', 'up'].forEach((n) => (U[n] = gl.getUniformLocation(P, n)));
-  const UB = {}; ['S', 'H', 'scan', 'head', 'OV', 'ovOp', 'GA', 'TX', 'maq', 'mt', 'menv', 'mlen', 'mrows', 'mlod', 'mres', 'macc', 'moff'].forEach((n) => (UB[n] = gl.getUniformLocation(PB, n)));
+  const UB = {}; ['S', 'H', 'scan', 'head', 'OV', 'ovOp', 'GA', 'TX', 'maq', 'mt', 'menv', 'mlen', 'mrows', 'mlod', 'mres', 'macc', 'moff', 'OJ', 'ojoK'].forEach((n) => (UB[n] = gl.getUniformLocation(PB, n)));
   function tex() { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
@@ -364,7 +366,14 @@
   let now_ = 0, scanOn = false, PRES_ = null, presHit = 0;
   // OJO como sensor: cámara + IA sin imagen, oculto en esta ventana (siempre a la vista, nunca se pausa).
   // Envía la presencia directamente a la consola por BroadcastChannel('voidloom-presencia').
-  let ojoFr = null, ojoSt = '';
+  let ojoFr = null, ojoSt = '', ojoK = 0, ojoShown = false, ojoMode = 'bordes';
+  const OJO_MODES = ['bordes', 'codigo', 'profundidad', 'atencion'];
+  const ojoTex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, ojoTex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  function ojoCfg(show) { try { ojoFr.contentWindow.postMessage({ type: 'ojo-cfg', show, mode: ojoMode }, '*'); } catch (e) {} }
+  function ojoCanvas() { try { return ojoFr.contentDocument.getElementById('c'); } catch (e) { return null; } }
   function ojoSensor(on) {
     if (on && !ojoFr) {
       ojoFr = document.createElement('iframe');
@@ -373,7 +382,7 @@
       ojoFr.src = '../ojo/sensor.html';
       document.body.appendChild(ojoFr);
       ojoSt = 'camara'; ch.postMessage({ type: 'ojo', st: ojoSt });
-    } else if (!on && ojoFr) { ojoFr.remove(); ojoFr = null; ojoSt = ''; ch.postMessage({ type: 'ojo', st: '' }); }
+    } else if (!on && ojoFr) { ojoFr.remove(); ojoFr = null; ojoSt = ''; ojoShown = false; ojoK = 0; ch.postMessage({ type: 'ojo', st: '' }); }
   }
   window.addEventListener('message', (e) => { const d = e.data; if (d && d.type === 'ojo-sensor' && ojoFr && e.source === ojoFr.contentWindow) { ojoSt = d.st; ch.postMessage({ type: 'ojo', st: d.st, err: d.err }); } });
   let cur = 0, blackS = 0, fpsN = 0, fpsT = performance.now(), lastPrev = 0, info = {};
@@ -537,6 +546,21 @@
       gl.uniform1f(UB.moff, maqOff % Math.max(1, CL.M.len));
     }
     gl.uniform1f(UB.maq, maqS);
+    // OJO · el visitante encima de la pieza (en el contacto la pieza va a negro y queda solo él)
+    const ojoWant = ojoFr && PRES_ ? Math.min(1, PRES_.k * 1.2) * 0.9 : 0;
+    if (ojoWant > 0.3 && !ojoShown) { ojoShown = true; ojoMode = OJO_MODES[Math.floor(Math.random() * OJO_MODES.length)]; ojoCfg(true); }
+    if (ojoWant < 0.02 && ojoK < 0.02 && ojoShown) { ojoShown = false; ojoCfg(false); }
+    ojoK += (ojoWant - ojoK) * 0.06; if (ojoK < 0.003) ojoK = 0;
+    let ojoOn = 0;
+    if (ojoK > 0 && ojoShown) {
+      const oc = ojoCanvas();
+      if (oc && oc.width >= 640) {
+        gl.activeTexture(gl.TEXTURE13); gl.bindTexture(gl.TEXTURE_2D, ojoTex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, oc);
+        gl.uniform1i(UB.OJ, 13); ojoOn = ojoK;
+      }
+    }
+    gl.uniform1f(UB.ojoK, ojoOn);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fin.t); gl.uniform1i(UB.S, 0);
     gl.activeTexture(gl.TEXTURE10); gl.bindTexture(gl.TEXTURE_2D, CL.tex); gl.uniform1i(UB.OV, 10);
     gl.uniform1f(UB.ovOp, codeOn ? FX.viewOp * ALT.k : 0);

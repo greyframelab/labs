@@ -497,17 +497,16 @@
 
   // ---------------------------------------------------------------- OJO · PRESENCIA (apagado por defecto)
   // OJO (otra ventana o pestaña del mismo sitio) envía cuánta gente hay, dónde y si alguien mira a la cámara.
-  // Sala vacía: LIVE sigue a lo suyo. Alguien entra: VER CÓDIGO pasa a MÁQUINA y la sala suena más abierta,
-  // más eco cuanto más se mueve. Contacto (te mira): negro y silencio; al apartar la mirada, impacto y vuelve.
+  // Sala vacía: LIVE sigue a lo suyo. Alguien entra: aparece encima de la pieza tal como lo ve OJO y la sala
+  // suena más abierta, más eco cuanto más se mueve. Contacto (te mira): la pieza a negro y silencio, queda solo él;
+  // al apartar la mirada, impacto y vuelve.
   const PRES = { on: store.get('ojoPres', false), n: 0, energy: 0, contact: 0, x: 0.5, y: 0.5, size: 0, at: 0, k: 0, seenAt: -1e9, cont: false, hit: 0, lastAFX: 0, sent: '' };
   const presCh = new BroadcastChannel('voidloom-presencia');
   presCh.onmessage = (e) => { const m = e.data; if (!m || m.type !== 'presencia') return; Object.assign(PRES, { n: m.n | 0, energy: +m.energy || 0, contact: +m.contact || 0, x: +m.x, y: +m.y, size: +m.size || 0, at: performance.now() }); };
   const presLive = () => PRES.on && performance.now() - PRES.at < 2000;
   function presFx() {
     if (!presLive() || PRES.k < 0.5) return FX;
-    const o = Object.assign({}, FX, { view: 1, viewMode: 'maq' });
-    if (PRES.cont) o.black = 1;
-    return o;
+    return PRES.cont ? Object.assign({}, FX, { black: 1 }) : FX;
   }
   function presOut() {
     if (!presLive()) return null;
