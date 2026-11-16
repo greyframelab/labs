@@ -27,6 +27,7 @@ jobs:
           - os: macos-latest
             target: mac
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
     defaults:
       run:
         working-directory: live-app
@@ -49,8 +50,11 @@ jobs:
             live-app/dist/*.dmg
           if-no-files-found: error
 
+  # Publica lo que se haya podido generar: si GitHub no tiene Macs libres (pasa a menudo), Windows se publica igual
+  # y en la release se queda el .dmg anterior hasta que un build de Mac salga bien.
   publish:
     needs: build
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -62,8 +66,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          ls -la out
-          gh release delete live-app-latest --cleanup-tag -y || true
-          gh release create live-app-latest out/* --prerelease --target "$GITHUB_SHA" \
-            --title "VØID_LOOM LIVE · app de escritorio (última)" \
-            --notes "App de escritorio de VØID_LOOM LIVE para Windows y Mac. Funciona sin internet y se actualiza sola con las piezas nuevas de Labs cuando hay conexión. Instrucciones en live-app/README.md."
+          ls -la out || true
+          if [ -z "$(ls -A out 2>/dev/null)" ]; then echo "No se generó ninguna app; no se publica nada."; exit 0; fi
+          WIN=$(ls out/*.exe >/dev/null 2>&1 && echo "Windows: $(date -u +%F)" || echo "Windows: sin cambios")
+          MAC=$(ls out/*.dmg >/dev/null 2>&1 && echo "Mac: $(date -u +%F)" || echo "Mac: sin cambios (GitHub no tenía Macs libres; se mantiene el anterior)")
+          NOTES="App de escritorio de VØID_LOOM LIVE para Windows y Mac. Funciona sin internet y se actualiza sola con las piezas nuevas de Labs cuando hay conexión. Instrucciones en live-app/README.md.
+
+          Última generación · $WIN · $MAC"
+          if ! gh release view live-app-latest >/dev/null 2>&1; then
+            gh release create live-app-latest --prerelease --target "$GITHUB_SHA" --title "VØID_LOOM LIVE · app de escritorio (última)" --notes "$NOTES"
+          else
+            gh release edit live-app-latest --notes "$NOTES"
+          fi
+          # sustituye solo los archivos generados ahora; los demás se quedan como estaban
+          gh release upload live-app-latest out/* --clobber
