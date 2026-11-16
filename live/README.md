@@ -56,10 +56,10 @@ También funciona con OJO completo abierto en otra ventana del mismo navegador, 
 
 Qué pasa:
 - **Sala vacía:** LIVE sigue a lo suyo.
-- **Entra alguien:** aparece encima de la pieza tal como lo ve la máquina, escrito con el código de la pieza que suena (MÁQUINA) y con sus contornos encendidos encima (BORDES de OJO: el modo más rápido, y dibuja el cuerpo entero aunque no se vea la cara), y la sala suena más abierta: más reverberación y más eco cuanto más se mueve la gente. Aguanta 3 s después de que se vaya.
+- **Entra alguien:** aparece encima de la pieza tal como lo ve la máquina, en la vista CÓDIGO de OJO (la máquina le escribe con su propio código), con los contornos de BORDES, la malla de la cara y los rótulos de datos (SUJETO, CONTACTO, distancia…) encima. Todo lo pinta el sensor en una sola pasada, a 960×540, y la sala suena más abierta: más reverberación y más eco cuanto más se mueve la gente. Aguanta 3 s después de que se vaya.
 - **Contacto** (alguien mira a la cámara medio segundo): la pieza a negro y silencio; solo queda el visitante dibujado por la máquina.
 
-Ligero a propósito: una sola cámara y una sola IA (el mismo sensor). Con la sala vacía el sensor trabaja a 320×180 en su modo más barato; solo con alguien delante pinta su modo a 640×360, que la salida funde encima (una textura de ~1 MB).
+Ligero a propósito: una sola cámara y una sola IA (el mismo sensor). Con la sala vacía el sensor trabaja a 320×180 en su modo más barato; solo con alguien delante pinta su vista a 960×540, que la salida funde encima (una textura de ~2 MB).
 - **Fin del contacto:** impacto de luz y todo vuelve.
 
 En el deck C, el shader recibe `presencia` (0–1), `personas`, `energia` (movimiento), `contacto` (0–1), `pos` (posición de la persona principal, 0–1, arriba = 0) y `talla` (lo cerca que está). El preset **PRESENCIA** abre la imagen alrededor del visitante y la cierra cuando le mira.

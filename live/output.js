@@ -374,10 +374,10 @@
   // OJO como sensor: cámara + IA sin imagen, oculto en esta ventana (siempre a la vista, nunca se pausa).
   // Envía la presencia directamente a la consola por BroadcastChannel('voidloom-presencia').
   let ojoFr = null, ojoSt = '', ojoK = 0, ojoShown = false, ojoMode = 'bordes';
-  // El visitante: BORDES de OJO (contornos + puntos clave; una sola pasada de GPU, dibuja el cuerpo entero aunque
-  // no se vea la cara) y, por encima, MÁQUINA escribiéndolo con el código de la pieza que suena.
-  // OJO_LOOK = 'bordes' para ver solo los contornos. Para alternar entre varios modos de OJO, añadirlos a la lista.
-  const OJO_MODES = ['bordes'], OJO_LOOK = 'mix';
+  // El visitante: la vista CÓDIGO de OJO (te escribe con su propio código) con los contornos de BORDES y la malla
+  // de la cara, todo en una sola pasada del sensor. OJO_LOOK = 'mix' escribe además con el código de la pieza
+  // (pasa MÁQUINA por la imagen de OJO); OJO_MODES = ['bordes'] para ver solo contornos.
+  const OJO_MODES = ['codigo'], OJO_LOOK = 'plain';
   const ojoTex = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, ojoTex);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);

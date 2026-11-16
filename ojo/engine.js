@@ -337,6 +337,8 @@ void main(){
   const FS_CODIGO = HEAD + `
 uniform sampler2D uChars, uAtlas;
 uniform vec2 uGridC; uniform float uCell;
+uniform float uBordes;   // contornos de BORDES encima del código (0 en OJO; VØID_LOOM LIVE lo enciende)
+float LcC(vec2 c){ return dot(cam(c), vec3(.299, .587, .114)); }
 void main(){
   vec2 px = vUV * uRes;
   vec2 cs = vec2(uCell, uCell * 1.6);
@@ -362,6 +364,16 @@ void main(){
   col = mix(col, uAcc * glyph * (.25 + v * 1.4), clamp(smoothstep(.15, .6, F.r) * .7 + F.a * .8 + fm * .6, 0., 1.));
   col *= 1. - uContact * (1. - fm) * .75;
   col += uAcc * glyph * uContact * fm * .35;
+  if (uBordes > 0.) {
+    // Sobel de 8 lecturas a resolución de pantalla: el trazo fino de BORDES sobre las letras
+    vec2 cp = C(vUV), d = uCover.xy / uRes;
+    float tl = LcC(cp + d*vec2(-1,1)), tt = LcC(cp + d*vec2(0,1)), tr = LcC(cp + d*vec2(1,1));
+    float ll = LcC(cp + d*vec2(-1,0)), rr = LcC(cp + d*vec2(1,0));
+    float bl = LcC(cp + d*vec2(-1,-1)), bb = LcC(cp + d*vec2(0,-1)), br = LcC(cp + d*vec2(1,-1));
+    float e = length(vec2((tr + 2.*rr + br) - (tl + 2.*ll + bl), (tl + 2.*tt + tr) - (bl + 2.*bb + br)));
+    e = smoothstep(.22, .55, e) * uBordes;
+    col = max(col, mix(vec3(.94, .93, .9), uAcc, .45 + fm * .4) * e * (.55 + fm * .3));
+  }
   o = vec4(col, 1.);
 }`;
 
@@ -953,7 +965,7 @@ void main(){
         updateChars(cols, rows, Math.floor(codeScroll));
         const pr = use(P.codigo); common(pr, t);
         bindT(pr, 'uChars', charTex); bindT(pr, 'uAtlas', atlasTex);
-        u2(pr, 'uGridC', cols, rows); u1(pr, 'uCell', cell);
+        u2(pr, 'uGridC', cols, rows); u1(pr, 'uCell', cell); u1(pr, 'uBordes', S.codigoBordes || 0);
         if (atlasReady) quad();
       } else if (id === 'memoria') {
         allocHist();
