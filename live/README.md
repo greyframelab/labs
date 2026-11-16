@@ -49,6 +49,16 @@ Con `?instalacion` en la URL (`live/index.html?instalacion`) arranca solo y entr
 
 Botón **IMPERMANENCIA** abajo, en SISTEMA. Con él activo, cada vez que una pieza entra recibe una semilla nueva y es una versión única e irrepetible: cambia la cámara (giro, distancia y altura alrededor del mismo punto de mira) y, donde la pieza genera su geometría, la geometría (otra helada en Escarcha, otros rayos en Descarga, otras grietas en Masa, otra catedral en Eco…). La estructura, los actos y la sincronía con el sonido no cambian. Apagado, todo es la versión canónica de la web y el vídeo. Se aplica a lo que se cargue a partir de que lo actives; al recargar una pieza por calidad, conserva su semilla.
 
+## AUDIO · GRABADO / SÍNTESIS
+
+Botón en SISTEMA, junto a IMPERMANENCIA. Por defecto, **GRABADO** (el audio original de cada pieza).
+
+- **SÍNTESIS**: el audio se genera en el navegador a partir de la partitura de la pieza (`synth/vl-voces.js` = instrumentos, `synth/piezas.js` = qué toca cada pieza). Se genera entero al cargar la pieza (menos de un segundo en un portátil normal); mientras tanto suena el grabado y luego cambia con un fundido corto. Loops, reverse, velocidad y congelar funcionan igual que con el grabado.
+- Con IMPERMANENCIA, imagen y audio comparten la semilla del pase: cada pase suena distinto (micro-tiempos, dinámica, timbres, dron, sala) sin cambiar dónde caen los golpes, así que siempre va a tiempo con el vídeo.
+- Se puede cambiar en pleno directo: los decks pasan al otro audio en el mismo punto de la pieza.
+- Masa y Estratos no tienen lista de golpes en la imagen: su partitura está compuesta en `piezas.js` sobre los momentos visuales (pulso, escaneo, congelado, ruptura).
+- Diagnóstico desde la consola del navegador: `VL_LIVE.estado()`.
+
 ## ENTRADA · caja de ritmos externa (TR-09)
 
 Pensado para la Roland **TR-09** conectada por USB: por el mismo cable manda audio y MIDI. Sirve cualquier caja o tarjeta de sonido; si hay una Roland conectada, LIVE la elige sola.
