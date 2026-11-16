@@ -434,6 +434,12 @@ canvas{width:100vw;height:100vh;display:block}
   const DUR = T.sting + VL.STING_DUR;
   window.DURATION = DUR; window.FPS = 60;
   const g = VL.geo();
+  // IMPERMANENCIA · en el live cada pase recibe una semilla nueva (?semilla=) y la pieza varía dentro de rangos fijados;
+  // en la web y en el vídeo, semilla 0: la versión canónica. Estructura, actos y sincronía con el sonido no cambian.
+  const SEMILLA = /[?&]live\b/.test(location.search) ? (+new URLSearchParams(location.search).get('semilla') || 0) : 0;
+  const VR = VL.rng((SEMILLA % 2147483647) || 1);
+  const varia = (def, amp) => (SEMILLA ? def + (VR() * 2 - 1) * amp : def);
+  const AZ0 = varia(0, 0.75), RK = varia(1, 0.13), YK = varia(1, 0.16), GLR = varia(0, 0.7);   // giro de la cámara, distancia, altura, luz
   // en el live: el 3D a la calidad que pida CALIDAD AUTO (q3d); grano, líneas y composición siempre a resolución completa
   window.VL_Q3D = true;
   const SCALE = /[?&]live\b/.test(location.search) ? (+new URLSearchParams(location.search).get('q3d') || 1) : (window.CMP_SCALE || 0.75);
@@ -647,7 +653,7 @@ canvas{width:100vw;height:100vh;display:block}
       const R = kf([[0, 1.15], [3, 1.7], [8, 2.3], [T.cut, 2.0], [T.rupt, 5.4], [T.rupt + 1.2, 5.8], [T.sting, 7.6]], t);
       const y = kf([[0, 0.28], [8, 0.5], [T.cut, 0.38], [T.rupt, 0.5], [T.rupt + 1.2, 0.5], [T.sting, 1.3]], t);
       const ctr = t < T.cut ? [lerp(m[0], 0, ten) * 0.8, lerp(m[1], 0, ten) * 0.8] : [0, 0];
-      const cam = [ctr[0] + Math.sin(az) * R, y, ctr[1] + Math.cos(az) * R];
+      const cam = [ctr[0] + Math.sin(az + AZ0) * R * RK, y * YK, ctr[1] + Math.cos(az + AZ0) * R * RK];
       let shk = a > 0 && a < 0.8 ? 0.05 * Math.exp(-a * 5) : 0;
       const ty = kf([[0, 0.3], [8, 0.42], [T.cut, 0.32], [T.rupt, 0.8], [T.rupt + 1.0, 1.7], [T.sting, 1.6]], t);
       const tg = [ctr[0] + (VL.hash(frame, 1) - 0.5) * shk, ty + (VL.hash(frame, 2) - 0.5) * shk, ctr[1]];
@@ -663,7 +669,7 @@ canvas{width:100vw;height:100vh;display:block}
       for (const pp of PULSES) { if (pp.t > t) break; if (pp.k <= 1 && t < T.cut) hp_ = Math.max(hp_, (pp.k === 1 ? 0.8 : 0.35) * Math.min(1, pp.s) * Math.exp(-(t - pp.t) * 12)); }
       gl.uniform1f(PM.U.uKey, fade * (a >= 0 ? 1.25 + 1.2 * Math.exp(-a * 2.5) + 0.9 * pump : 1 + 0.8 * hp_));
       const fwd = [tg[0] - cam[0], 0, tg[2] - cam[2]]; const fl = Math.hypot(fwd[0], fwd[2]);
-      gl.uniform3f(PM.U.uGlowDir, fwd[0] / fl, 0, fwd[2] / fl);
+      { const cg = Math.cos(GLR), sg_ = Math.sin(GLR), gx = fwd[0] / fl, gz = fwd[2] / fl; gl.uniform3f(PM.U.uGlowDir, gx * cg - gz * sg_, 0, gx * sg_ + gz * cg); }
       const cutK = t >= T.cut && t < T.rupt ? 0 : 1;
       if (a >= 0) { gl.uniform3f(PM.U.uGlowCol, 0.0, 0.85, 1.0); gl.uniform1f(PM.U.uGlow, fade * (0.55 + 1.6 * Math.exp(-a * 1.8) + 0.7 * pump)); }
       else { gl.uniform3f(PM.U.uGlowCol, 1.0, 0.96, 0.9); gl.uniform1f(PM.U.uGlow, cutK * (0.07 + 0.12 * ten + 0.35 * hp_)); }
