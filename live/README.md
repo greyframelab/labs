@@ -52,7 +52,9 @@ Pensado para la Roland **TR-09** conectada por USB: por el mismo cable manda aud
 Botón **ENTRADA** en la cabecera (clic: MEZCLA → SOLO CAJA → APAGADA):
 - **MEZCLA:** la caja suena junto a las piezas, pasando por el master de LIVE (filtro, eco, sala, aislador, limitador). Sus golpes mueven la imagen como los de las piezas: flashes, efectos, deck C, MÁQUINA…
 - **SOLO CAJA:** las piezas siguen en imagen pero mudas. Suena solo la caja y solo sus golpes mueven la imagen.
-- **Reloj MIDI:** si la caja manda reloj, las piezas siguen su tempo, igual que SYNC (en la relación ½, ⅔, 1, 3:2 o 2 más cercana). El botón muestra los BPM. Si cambias el tempo en la caja, el visual va con ella.
+- **Reloj MIDI:** si la caja manda reloj, las piezas siguen su tempo, igual que SYNC (en la relación ½, ⅔, 1, 3:2 o 2 más cercana), y además se **enganchan en fase**: cada negra, LIVE mide el desfase y, si pasa de 20 ms, recoloca la pieza en la siguiente negra para que sus pulsos caigan en los de la caja. Si la caja mandó START, alinea también el 1 del compás. El botón muestra los BPM. Si cambias el tempo en la caja, el visual va con ella.
+- Solo las piezas con tempo fijo pueden engancharse: Eco, Campo, Grieta, Cimática, Escarcha, Horizonte, Descarga, Engranaje, Tokamak, Ciudad y Espejos. Iris, Masa, Estratos y Teseracto no tienen tempo: con ellas solo responden los golpes.
+- Con ENTRADA encendida, cada golpe de la caja da un pequeño destello y empuje de imagen aunque GOLPES esté a 0.
 
 La primera vez el navegador pide permiso para el audio de entrada; en la app de escritorio no pregunta. Los golpes se detectan en graves (bombo), medios (caja, palmas, toms) y agudos (charles, platos), con unos 10 ms de precisión. El audio que pasa por el ordenador tiene la latencia normal de una tarjeta de sonido (unos 20–30 ms). Con patrones programados no se nota; si tocas los pads en directo, saca la caja también por su propia salida al mezclador.
 

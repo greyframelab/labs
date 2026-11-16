@@ -510,11 +510,11 @@
     gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, src.t); gl.uniform1i(U.FB, 4);
     gl.uniform1f(U.aw, ra.w); gl.uniform1f(U.bw, rb.w); gl.uniform1f(U.ga, ga); gl.uniform1f(U.gb, gb);
     gl.uniform1f(U.fa, fa); gl.uniform1f(U.fb, fb);
-    gl.uniform1f(U.trail, FX.trail); gl.uniform1f(U.flash, Math.min(1, FX.hits * env + presHit)); presHit *= 0.86; if (presHit < 0.01) presHit = 0;
+    gl.uniform1f(U.trail, FX.trail); gl.uniform1f(U.flash, Math.min(1, FX.hits * env + presHit + (extMode ? extEnv * 0.22 : 0)));   // ENTRADA: los golpes de la caja siempre se ven, aunque GOLPES esté a 0 presHit *= 0.86; if (presHit < 0.01) presHit = 0;
     gl.uniform1f(U.split, FX.split * (0.25 + 0.75 * env) + (FX.glitch ? 0.6 : 0));
     gl.uniform1f(U.inv, FX.invert ? 1 : 0); gl.uniform1f(U.black, blackS); gl.uniform1f(U.bright, FX.bright);
     gl.uniform1f(U.time, now / 1000); gl.uniform1f(U.aspect, cv.width / cv.height); gl.uniform1f(U.glitch, FX.glitch ? 1 : 0);
-    gl.uniform1f(U.env, env); gl.uniform1f(U.punch, FX.punch || 0); gl.uniform1f(U.lens, FX.lens || 0); gl.uniform1f(U.mosaic, FX.mosaic || 0);
+    gl.uniform1f(U.env, env); gl.uniform1f(U.punch, extMode ? Math.max(FX.punch || 0, 0.22) : FX.punch || 0); gl.uniform1f(U.lens, FX.lens || 0); gl.uniform1f(U.mosaic, FX.mosaic || 0);
     gl.uniform1f(U.tint, FX.tint || 0); gl.uniform1f(U.mirror, FX.mirror || 0); gl.uniform1f(U.strobe, FX.strobe ? 1 : 0);
     gl.uniform3fv(U.tintC, hex(FX.tintC));
     gl.uniform1f(U.up, (T.A0._w && T.A0._w < cv.width * 0.98) || (T.B0._w && T.B0._w < cv.width * 0.98) ? 1 : 0);
