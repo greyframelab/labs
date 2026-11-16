@@ -500,9 +500,17 @@
   // Sala vacía: LIVE sigue a lo suyo. Alguien entra: aparece encima de la pieza tal como lo ve OJO y la sala
   // suena más abierta, más eco cuanto más se mueve. Contacto (te mira): la pieza a negro y silencio, queda solo él;
   // al apartar la mirada, impacto y vuelve.
-  const PRES = { on: store.get('ojoPres', false), n: 0, energy: 0, contact: 0, x: 0.5, y: 0.5, size: 0, at: 0, k: 0, seenAt: -1e9, cont: false, hit: 0, lastAFX: 0, sent: '' };
+  // Dos maneras de reaccionar: ATENCIÓN (mientras haya alguien, lo muestra; el contacto apaga la pieza) y
+  // DISTRACCIÓN (cuando entra alguien nuevo lo mira unos segundos y vuelve a lo suyo; si le miran, otra mirada breve).
+  const OJO_M = ['APAGADO', 'ATENCIÓN', 'DISTRACCIÓN'];
+  const PRES = { mode: store.get('ojoModo', store.get('ojoPres', false) ? 1 : 0), get on() { return this.mode > 0; }, ent: -1, glance: 0, cLook: false, n: 0, energy: 0, contact: 0, x: 0.5, y: 0.5, size: 0, at: 0, k: 0, seenAt: -1e9, cont: false, hit: 0, lastAFX: 0, sent: '' };
   const presCh = new BroadcastChannel('voidloom-presencia');
-  presCh.onmessage = (e) => { const m = e.data; if (!m || m.type !== 'presencia') return; Object.assign(PRES, { n: m.n | 0, energy: +m.energy || 0, contact: +m.contact || 0, x: +m.x, y: +m.y, size: +m.size || 0, at: performance.now() }); };
+  presCh.onmessage = (e) => {
+    const m = e.data; if (!m || m.type !== 'presencia') return;
+    // alguien nuevo entra en la sala (OJO le da un ID nuevo): en DISTRACCIÓN, una mirada de unos segundos
+    if (m.ent != null) { if (PRES.ent >= 0 && m.ent > PRES.ent) PRES.glance = performance.now() + 5000 + Math.random() * 3000; PRES.ent = m.ent; }
+    Object.assign(PRES, { n: m.n | 0, energy: +m.energy || 0, contact: +m.contact || 0, x: +m.x, y: +m.y, size: +m.size || 0, at: performance.now() });
+  };
   const presLive = () => PRES.on && performance.now() - PRES.at < 2000;
   function presFx() {
     if (!presLive() || PRES.k < 0.5) return FX;
@@ -515,18 +523,22 @@
   function presTick() {
     const now = performance.now(), live = presLive();
     if (live && PRES.n > 0) PRES.seenAt = now;
-    const want = live && now - PRES.seenAt < 3000 ? 1 : 0;           // aguanta 3 s después de que se vaya
-    PRES.k += (want - PRES.k) * (want ? 0.12 : 0.02);
+    const dis = PRES.mode === 2;
+    // DISTRACCIÓN: si le miran, vuelve a mirar un momento (sin apagar la pieza)
+    if (dis && live && PRES.contact > 0.6 && !PRES.cLook) { PRES.cLook = true; PRES.glance = Math.max(PRES.glance, now + 4000); }
+    if (PRES.contact < 0.25) PRES.cLook = false;
+    const want = !live ? 0 : dis ? (now < PRES.glance && PRES.n > 0 ? 1 : 0) : (now - PRES.seenAt < 3000 ? 1 : 0);   // ATENCIÓN aguanta 3 s después de que se vaya
+    PRES.k += (want - PRES.k) * (want ? 0.12 : dis ? 0.04 : 0.02);
     const was = PRES.cont;
-    if (!PRES.cont && live && PRES.contact > 0.6) PRES.cont = true;
-    if (PRES.cont && (!live || PRES.contact < 0.25)) { PRES.cont = false; PRES.hit++; }    // el impacto al apartar la mirada
+    if (!PRES.cont && live && !dis && PRES.contact > 0.6) PRES.cont = true;
+    if (PRES.cont && (!live || dis || PRES.contact < 0.25)) { PRES.cont = false; PRES.hit++; }    // el impacto al apartar la mirada
     if (was !== PRES.cont) toast(PRES.cont ? 'OJO · CONTACTO' : 'OJO · FIN DEL CONTACTO');
     if (now - PRES.lastAFX > 90) { PRES.lastAFX = now; applyAFX(); }
     const key = live ? [Math.round(PRES.k * 10), PRES.cont, PRES.hit, Math.round(PRES.x * 40), Math.round(PRES.y * 40), Math.round(PRES.energy * 20), PRES.n].join() : 'off';
     if (key !== PRES.sent) { PRES.sent = key; sendState(); }
     const st = $('#tg-ojo');
     const wait = { camara: 'CÁMARA…', ia: 'CARGANDO IA…', 'sin-camara': 'SIN CÁMARA', 'error-ia': 'ERROR IA' }[PRES.sensor];
-    if (st) { const tx = 'OJO · ' + (!PRES.on ? 'APAGADO' : !live ? (!outOK ? 'ABRE LA SALIDA' : wait || 'SIN SEÑAL') : PRES.cont ? 'CONTACTO' : PRES.n ? PRES.n + (PRES.n === 1 ? ' PERSONA' : ' PERSONAS') : 'SALA VACÍA'); if (st.textContent !== tx) st.textContent = tx; }
+    if (st) { const tx = 'OJO · ' + (!PRES.on ? 'APAGADO' : OJO_M[PRES.mode] + ' · ') + (!PRES.on ? '' : !live ? (!outOK ? 'ABRE LA SALIDA' : wait || 'SIN SEÑAL') : PRES.cont ? 'CONTACTO' : PRES.n ? PRES.n + (PRES.n === 1 ? ' PERSONA' : ' PERSONAS') : 'SALA VACÍA'); if (st.textContent !== tx) st.textContent = tx; }
   }
   // el sonido de la sala: más abierto con gente, más eco con movimiento, silencio en el contacto
   function presAudio() {
@@ -821,7 +833,12 @@
     knob(fs, 'av', 'SINCRO A/V', AFX.av / 250, (v) => { AFX.av = Math.round(v * 250); store.set('av', AFX.av); for (const k in DECK) play(DECK[k]); }, (v) => '+' + Math.round(v * 250) + 'ms');
     const qc = document.createElement('div'); qc.className = 'grp'; qc.innerHTML = '<span class="lbl" style="font-size:7.5px">CALIDAD</span><div class="seg" id="qual"><button data-v="0" title="Cada pieza a la resolución que el ordenador aguanta con fluidez">AUTO</button><button data-v="1">100</button><button data-v="0.75">75</button><button data-v="0.5">50</button></div>'; fs.appendChild(qc);
     const ob = $('#tg-ojo'); ob.classList.toggle('on', PRES.on);
-    ob.addEventListener('click', () => { PRES.on = !PRES.on; store.set('ojoPres', PRES.on); ob.classList.toggle('on', PRES.on); toast(PRES.on ? 'OJO · ENCENDIENDO LA CÁMARA EN LA SALIDA' : 'OJO · APAGADO'); applyAFX(); sendState(); });
+    // clic: APAGADO → ATENCIÓN → DISTRACCIÓN → APAGADO
+    ob.addEventListener('click', () => {
+      const wasOn = PRES.on; PRES.mode = (PRES.mode + 1) % 3; store.set('ojoModo', PRES.mode); ob.classList.toggle('on', PRES.on);
+      toast(!PRES.on ? 'OJO · APAGADO' : (wasOn ? '' : 'ENCENDIENDO LA CÁMARA · ') + 'OJO · ' + OJO_M[PRES.mode] + (PRES.mode === 1 ? ' · LE MIRA MIENTRAS ESTÉ' : ' · LE MIRA UN MOMENTO AL ENTRAR Y SIGUE A LO SUYO'));
+      applyAFX(); sendState();
+    });
     seg($('#qual'), 'qual', String(MIX.quality), (v) => { MIX.quality = +v; store.set('calidadAuto', +v); sendState(); });
     const markQ = seg($('#quant'), 'quant', quant, (v) => { quant = v; store.set('quant', v); });
     CTL.quant.mark = markQ;
