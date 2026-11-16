@@ -92,7 +92,7 @@
     }
     // bajo con armónicos 2–5 (se oye en móvil) y sub controlado
     function bass(t, o) {
-      t = at('bass', t); const vel = (o.vel ?? 1) * dyn(idx), f = o.f || 98, d = o.dur || 0.12;
+      t = at('bass', t); const vel = (o.vel ?? 1) * dyn(idx) * (opt.bassGain || 1), f = o.f || 98, d = o.dur || 0.12;
       const s = ctx.createOscillator(), q = ctx.createOscillator(), lp = ctx.createBiquadFilter(), g = ctx.createGain(), sh = ctx.createWaveShaper();
       s.type = 'sawtooth'; s.frequency.value = f; q.type = 'sine'; q.frequency.value = f / 2;
       lp.type = 'lowpass'; lp.Q.value = 2.2 * T.bassQ; const c0 = (o.cut || 1100) * T.bassCut;
@@ -116,7 +116,7 @@
     }
     // charles 909: seis cuadradas metálicas inarmónicas, paso banda 6,8–11,5 kHz, bajo en mezcla
     function hat(t, o) {
-      t = at('hat', t); const vel = (o.vel ?? 1) * dyn(idx), dec = o.open ? 0.22 : 0.035;
+      t = at('hat', t); const vel = (o.vel ?? 1) * dyn(idx) * (opt.hatGain || 1), dec = o.open ? 0.22 : 0.035;
       const g = ctx.createGain(), hp = ctx.createBiquadFilter(), lp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 6800; lp.type = 'lowpass'; lp.frequency.value = 11500;
       const os = [205.3, 304.4, 369.6, 522.7, 540, 800].map((f) => { const x = ctx.createOscillator(); x.type = 'square'; x.frequency.value = f * 2.1 * T.hatPitch; x.connect(hp); x.start(t); return x; });
       env(g, t, 0.0007, 0.055 * vel, dec);
@@ -125,7 +125,7 @@
     }
     // golpe de hielo / metal mecanizado: FM inarmónica corta + golpe grave, sin campana
     function ice(t, o) {
-      t = at('ice', t); const vel = (o.vel ?? 1) * dyn(idx), fc = (o.f || 1650) * T.iceF, dec = o.dec || 0.11, ratio = o.ratio || T.iceRatio;
+      t = at('ice', t); const vel = (o.vel ?? 1) * dyn(idx) * (opt.iceGain || 1), fc = (o.f || 1650) * T.iceF, dec = o.dec || 0.11, ratio = o.ratio || T.iceRatio;
       const car = ctx.createOscillator(), mod = ctx.createOscillator(), mg = ctx.createGain(), g = ctx.createGain(), lp = ctx.createBiquadFilter();
       car.frequency.setValueAtTime(fc * 1.04, t); car.frequency.exponentialRampToValueAtTime(fc, t + 0.03);
       mod.frequency.value = fc * ratio; mg.gain.setValueAtTime(fc * 3.2, t); mg.gain.setTargetAtTime(fc * 0.2, t, dec / 5);
@@ -177,6 +177,16 @@
       });
       osc.start(t); stop([osc], t + 1);
     }
+    // placa al revés: crece hacia el golpe y se corta en seco (sin ruido: sierra filtrada que se abre)
+    function swell(t, o) {
+      const t1 = o.end || t + (o.len || 0.6), vel = o.vel ?? 1, f = o.f || 110;
+      const a = ctx.createOscillator(), b = ctx.createOscillator(), lp = ctx.createBiquadFilter(), g = ctx.createGain();
+      a.type = 'sawtooth'; b.type = 'sawtooth'; a.frequency.value = f; b.frequency.value = f * 1.5 + 0.4;
+      lp.type = 'lowpass'; lp.Q.value = 3; lp.frequency.setValueAtTime(180, t); lp.frequency.exponentialRampToValueAtTime(o.top || 2600, t1);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.2 * vel, t1 - 0.004); g.gain.linearRampToValueAtTime(0, t1);
+      a.connect(lp); b.connect(lp); lp.connect(g); out(g, voices, o.pan || 0, o.send ?? 0.25);
+      a.start(t); b.start(t); stop([a, b], t1 + 0.02);
+    }
     // ratchet: repeticiones a 1/32 con subida de tono y crescendo
     function ratchet(t, o) {
       const n = o.n || 6, d = o.d || 0.03;
@@ -210,7 +220,7 @@
       };
     }
 
-    return { ctx, master, silencio, voices, drums, verbIn, V, T, kick, bass, tick, hat, ice, crackle, impact, ping, ratchet, Dron };
+    return { ctx, master, silencio, voices, drums, verbIn, V, T, kick, bass, tick, hat, ice, crackle, impact, ping, ratchet, swell, Dron };
   }
 
   root.VLVoces = { Motor, Variacion, rng, hash };

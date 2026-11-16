@@ -67,7 +67,7 @@
   // partitura de la pieza (la misma que mueve la imagen), para la síntesis de audio
   function grabScore(item, win) {
     const P = window.VLPiezas && VLPiezas.find(item.id);
-    try { return P && win[P.g] ? JSON.parse(JSON.stringify(win[P.g])) : null; } catch (e) { return null; }
+    try { return P ? (P.build ? P.build() : win[P.g] ? JSON.parse(JSON.stringify(win[P.g])) : null) : null; } catch (e) { return null; }
   }
   // SÍNTESIS: el audio de la pieza se genera en un buffer con la semilla del pase (imagen y sonido comparten semilla)
   const newSeed = () => 1 + Math.floor(Math.random() * 2147483646);
