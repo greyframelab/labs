@@ -612,8 +612,8 @@
   function extLabel() {
     const b = $('#tg-ext'); if (!b || EXT.busy) return;
     const clk = EXT.bpm && performance.now() - EXT.clkAt < 1500;
-    const tx = 'ENTRADA · ' + EXT_M[EXT.mode] + (EXT.mode && clk ? ' · ' + EXT.bpm.toFixed(1) + ' BPM' : '');
-    if (b.textContent !== tx) b.textContent = tx;
+    const tx = 'ENTRADA<span class="hm"> · ' + EXT_M[EXT.mode] + '</span>' + (EXT.mode && clk ? '<span class="hx"> · ' + EXT.bpm.toFixed(1) + ' BPM</span>' : '');
+    if (b.innerHTML !== tx) { b.innerHTML = tx; b.title = 'ENTRADA · ' + EXT_M[EXT.mode] + (EXT.mode && clk ? ' · ' + EXT.bpm.toFixed(1) + ' BPM' : '') + (EXT.name && EXT.mode ? ' · ' + EXT.name : '') + ' · clic: MEZCLA → SOLO CAJA → APAGADA'; }
   }
 
   // ---------------------------------------------------------------- OJO · PRESENCIA (apagado por defecto)
@@ -659,7 +659,12 @@
     if (key !== PRES.sent) { PRES.sent = key; sendState(); }
     const st = $('#tg-ojo');
     const wait = { camara: 'CÁMARA…', ia: 'CARGANDO IA…', 'sin-camara': 'SIN CÁMARA', 'error-ia': 'ERROR IA' }[PRES.sensor];
-    if (st) { const tx = 'OJO · ' + (!PRES.on ? 'APAGADO' : OJO_M[PRES.mode] + ' · ') + (!PRES.on ? '' : !live ? (!outOK ? 'ABRE LA SALIDA' : wait || 'SIN SEÑAL') : PRES.cont ? 'CONTACTO' : PRES.n ? PRES.n + (PRES.n === 1 ? ' PERSONA' : ' PERSONAS') : 'SALA VACÍA'); if (st.textContent !== tx) st.textContent = tx; }
+    if (st) {
+      const what = !PRES.on ? '' : !live ? (!outOK ? 'ABRE LA SALIDA' : wait || 'SIN SEÑAL') : PRES.cont ? 'CONTACTO' : PRES.n ? PRES.n + (PRES.n === 1 ? ' PERSONA' : ' PERSONAS') : 'SALA VACÍA';
+      const mode = !PRES.on ? 'APAGADO' : OJO_M[PRES.mode];
+      const tx = 'OJO<span class="hm"> · ' + mode + '</span>' + (what ? '<span class="hx"> · ' + what + '</span>' : '');
+      if (st.innerHTML !== tx) { st.innerHTML = tx; st.title = 'OJO · ' + mode + (what ? ' · ' + what : '') + ' · clic: ATENCIÓN → DISTRACCIÓN → APAGADO'; }
+    }
   }
   // el sonido de la sala: más abierto con gente, más eco con movimiento, silencio en el contacto
   function presAudio() {
@@ -675,7 +680,9 @@
       dirty = true; flush();
       VLC.resend && VLC.resend();
     } else if (m.type === 'stats') {
-      outOK = true; $('#stOut').textContent = m.fps + ' FPS · ' + m.w + '×' + m.h + (m.q ? ' · ' + (m.q3 ? '3D ' : 'PIEZA ') + m.q + '%' + (m.auto ? ' AUTO' : '') : '');
+      outOK = true; { const q = m.q ? (m.q3 ? '3D ' : 'PIEZA ') + m.q + '%' + (m.auto ? ' AUTO' : '') : '';
+        const so = $('#stOut'), html = m.fps + ' FPS<span class="hx"> · ' + m.w + '×' + m.h + '</span>' + (q ? '<span class="hq"> · ' + q + '</span>' : '');
+        if (so.innerHTML !== html) so.innerHTML = html; so.parentElement.title = 'SALIDA · ' + m.fps + ' FPS · ' + m.w + '×' + m.h + (q ? ' · ' + q : ''); }
       $('#ledOut').className = 'led ' + (m.fps >= 50 ? 'on' : m.fps >= 30 ? 'warn' : 'err');
     } else if (m.type === 'ready') { const d = DECK[m.deck]; if (d && d.item && d.item.id === m.piece) { d.ready = true; renderDeckState(d); } }
     else if (m.type === 'loading') { const d = DECK[m.deck]; if (d) { d.ready = false; renderDeckState(d); } }
@@ -1272,6 +1279,15 @@
 
   // ================================================================== arranque
   mkDeck('A'); mkDeck('B'); setFocus('A'); buildCenter(); buildCode();
+  // la barra de mandos de abajo cabe siempre: si la pantalla es estrecha se reduce lo justo (sin cortar ni hacer scroll)
+  function fitFx() {
+    const fx = $('.fx'); if (!fx) return;
+    fx.style.zoom = '';
+    const need = fx.scrollWidth, have = fx.clientWidth;
+    if (need > have + 1) fx.style.zoom = String(Math.max(0.6, Math.floor(have / need * 995) / 1000));
+  }
+  addEventListener('resize', () => requestAnimationFrame(fitFx));
+  setTimeout(fitFx, 0); setTimeout(fitFx, 1500);
   $('#openOut').addEventListener('click', openOutput); $('#openOut2').addEventListener('click', openOutput);
   $('#learn').addEventListener('click', toggleLearn);
   $('#helpB').addEventListener('click', () => $('#help').classList.toggle('on'));

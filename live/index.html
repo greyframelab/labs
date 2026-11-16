@@ -35,7 +35,8 @@ button:focus-visible,[tabindex]:focus-visible{outline:1px solid var(--acc);outli
 .bar i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--red);box-shadow:0 0 10px var(--red);transition:width .25s}
 
 /* ---------- estructura ---------- */
-.app{display:grid;grid-template-rows:46px 1fr auto;height:100vh}
+.app{display:grid;grid-template-rows:46px 1fr auto;grid-template-columns:minmax(0,1fr);height:100vh}   /* nunca más ancha que la pantalla */
+.fx{transform-origin:left bottom}
 header{display:flex;align-items:center;gap:22px;padding:0 18px;border-bottom:1px solid var(--line);background:#050505}
 .brand{display:flex;align-items:baseline;gap:12px;font-weight:400;letter-spacing:.34em;font-size:12px;white-space:nowrap}
 .brand i{font-style:normal;color:var(--red)}
@@ -56,6 +57,42 @@ header{display:flex;align-items:center;gap:22px;padding:0 18px;border-bottom:1px
 .tbtn.on{color:#000;background:var(--tx);border-color:var(--tx)}
 .tbtn{border:1px solid var(--line2);padding:7px 11px;font-size:9px;letter-spacing:.22em;color:var(--tx2);transition:all .15s;white-space:nowrap}
 .tbtn:hover{border-color:var(--mute);color:var(--tx)}
+/* cabecera adaptable: en pantallas estrechas se ocultan primero los detalles (están en el title al pasar el ratón) */
+header{min-width:0}
+.chips,.tools{min-width:0}
+@media (max-width:2050px){
+  header{gap:14px;padding:0 14px}
+  .chips{gap:12px;margin-left:0}
+  .tools{gap:8px}
+  .tbtn,.seg button{padding:7px 8px;letter-spacing:.16em}
+  .chip{letter-spacing:.16em;gap:6px}
+  .brand{letter-spacing:.26em}
+  .hq{display:none}
+}
+@media (max-width:1760px){
+  .hx{display:none}
+  .tools>.lbl{display:none}
+  #stAud{display:none}
+  #stMidi{display:inline-block;max-width:110px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}
+}
+@media (max-width:1500px){
+  .brand span{display:none}
+  .chip{font-size:8px}
+  .tbtn,.seg button{font-size:8.5px;letter-spacing:.12em;padding:6px 7px}
+  .hs{display:none}
+  .chip .cl{display:none}
+}
+@media (max-width:1300px){
+  .hm{display:none}
+  #stMidi{display:none}
+  .brand{letter-spacing:.18em;font-size:11px}
+}
+@media (max-width:1100px){
+  .chip>b{display:none}
+  header{gap:10px;padding:0 10px}
+  .tools{gap:6px}
+}
+
 .tbtn.on{border-color:var(--red);color:#fff;background:rgba(255,26,26,.1)}
 
 main{display:grid;grid-template-columns:236px minmax(0,1fr) minmax(0,1.08fr) minmax(0,1fr);gap:1px;background:var(--line);min-height:0}
@@ -262,17 +299,17 @@ body.learn [data-ctl].mapped::after{content:"";position:absolute;width:4px;heigh
   <header>
     <div class="brand">VØID<i>_</i>LOOM <span>LIVE</span></div>
     <div class="chips">
-      <div class="chip"><span class="led" id="ledOut"></span>SALIDA <b id="stOut">CERRADA</b></div>
-      <div class="chip"><span class="led" id="ledAud"></span>AUDIO <b id="stAud">—</b></div>
-      <div class="chip"><span class="led" id="ledMidi"></span>MIDI <b id="stMidi">—</b></div>
+      <div class="chip"><span class="led" id="ledOut"></span><span class="cl">SALIDA </span><b id="stOut">CERRADA</b></div>
+      <div class="chip" title="AUDIO"><span class="led" id="ledAud"></span><span class="cl">AUDIO </span><b id="stAud">—</b></div>
+      <div class="chip" title="MIDI"><span class="led" id="ledMidi"></span><span class="cl">MIDI </span><b id="stMidi">—</b></div>
     </div>
     <div class="tools">
       <span class="lbl">CUANTIZAR</span>
       <div class="seg" id="quant" data-ctl="quant"><button data-v="libre">LIBRE</button><button data-v="golpe">GOLPE</button><button data-v="acto">ACTO</button></div>
-      <button class="tbtn" id="openOut">ABRIR SALIDA</button>
-      <button class="tbtn" id="tg-ext" title="Caja de ritmos por USB (TR-09): su audio entra en LIVE y sus golpes mueven la imagen; con reloj MIDI, las piezas siguen su tempo. Clic: MEZCLA → SOLO CAJA → APAGADA">ENTRADA · APAGADA</button>
-      <button class="tbtn" id="tg-ojo" title="Que LIVE reaccione a la gente de la sala: enciende la cámara con la IA de OJO dentro de la salida">OJO · APAGADO</button>
-      <button class="tbtn" id="learn">MIDI · APRENDER</button>
+      <button class="tbtn" id="openOut" title="Abrir la ventana de salida (proyector)"><span class="hs">ABRIR </span>SALIDA</button>
+      <button class="tbtn" id="tg-ext" title="Caja de ritmos por USB (TR-09): su audio entra en LIVE y sus golpes mueven la imagen; con reloj MIDI, las piezas siguen su tempo. Clic: MEZCLA → SOLO CAJA → APAGADA">ENTRADA<span class="hm"> · APAGADA</span></button>
+      <button class="tbtn" id="tg-ojo" title="Que LIVE reaccione a la gente de la sala: enciende la cámara con la IA de OJO dentro de la salida">OJO<span class="hm"> · APAGADO</span></button>
+      <button class="tbtn" id="learn" title="MIDI · APRENDER: asigna mandos del controlador">MIDI<span class="hs"> · APRENDER</span></button>
       <button class="tbtn" id="helpB" aria-label="Atajos de teclado">?</button>
     </div>
   </header>
