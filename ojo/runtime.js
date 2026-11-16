@@ -7,7 +7,7 @@
   OJO.wall = () => performance.timeOrigin + performance.now();
 
   OJO.runtime = function (canvas, opt = {}) {
-    const eng = OJO.engine(canvas, { lowLatency: opt.lowLatency });
+    const eng = OJO.engine(canvas, { lowLatency: opt.lowLatency, preserve: opt.preserve });
     const video = document.createElement('video');
     video.muted = true; video.playsInline = true; video.autoplay = true;
     eng.setVideo(video);

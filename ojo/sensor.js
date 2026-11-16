@@ -7,13 +7,21 @@
   const OJO = window.OJO;
   const ch = new BroadcastChannel('voidloom-presencia');
   const say = (st, extra) => { try { parent.postMessage(Object.assign({ type: 'ojo-sensor', st }, extra || {}), '*'); } catch (e) {} };
-  const rt = OJO.runtime(document.getElementById('c'));
+  const rt = OJO.runtime(document.getElementById('c'), { preserve: true });
   const S = OJO.defaultState();
   // lo mínimo para ver gente: sin manos, sin capa de análisis, cámara a 480p y el modo más barato
   Object.assign(S, { mode: 'entrada', analysis: 0, hands: false, res: 480, mirror: true, bloom: 0, grain: 0, ca: 0 });
   const dev = new URLSearchParams(location.search).get('cam'); if (dev) S.device = dev;
   rt.setState(S);
   rt.eng.resize(320, 180);
+  // LIVE pide ver al visitante: un modo de OJO a 640×360 que la salida funde encima de la pieza.
+  // Sin nadie en la sala vuelve al modo más barato a 320×180.
+  window.addEventListener('message', (e) => {
+    const d = e.data; if (!d || d.type !== 'ojo-cfg') return;
+    if (d.show) { S.mode = d.mode || 'bordes'; S.bloom = 0.25; rt.eng.resize(640, 360); }
+    else { S.mode = 'entrada'; S.bloom = 0; rt.eng.resize(320, 180); }
+    rt.setState(S);
+  });
   let t = 0;
   rt.onFrame = (now, model) => {
     if (rt.localVision) rt.vision.drainEvents();
