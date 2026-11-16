@@ -492,7 +492,7 @@
     const decks = {};
     for (const k in DECK) decks[k] = DECK[k].state;
     const air = DECK[MIX.onAir]; FX.tintC = air && air.item ? air.item.accent : '#ffffff';
-    ch.postMessage({ type: 'state', decks, mix: MIX, fx: presFx(), pres: presOut() });
+    ch.postMessage({ type: 'state', decks, mix: MIX, fx: presFx(), pres: presOut(), ojo: PRES.on });
   }
 
   // ---------------------------------------------------------------- OJO · PRESENCIA (apagado por defecto)
@@ -526,7 +526,8 @@
     const key = live ? [PRES.k > 0.5, PRES.cont, PRES.hit, Math.round(PRES.x * 40), Math.round(PRES.y * 40), Math.round(PRES.energy * 20), PRES.n].join() : 'off';
     if (key !== PRES.sent) { PRES.sent = key; sendState(); }
     const st = $('#tg-ojo');
-    if (st) { const tx = 'OJO · ' + (!PRES.on ? 'APAGADO' : !live ? 'SIN SEÑAL' : PRES.cont ? 'CONTACTO' : PRES.n ? PRES.n + (PRES.n === 1 ? ' PERSONA' : ' PERSONAS') : 'SALA VACÍA'); if (st.textContent !== tx) st.textContent = tx; }
+    const wait = { camara: 'CÁMARA…', ia: 'CARGANDO IA…', 'sin-camara': 'SIN CÁMARA', 'error-ia': 'ERROR IA' }[PRES.sensor];
+    if (st) { const tx = 'OJO · ' + (!PRES.on ? 'APAGADO' : !live ? (!outOK ? 'ABRE LA SALIDA' : wait || 'SIN SEÑAL') : PRES.cont ? 'CONTACTO' : PRES.n ? PRES.n + (PRES.n === 1 ? ' PERSONA' : ' PERSONAS') : 'SALA VACÍA'); if (st.textContent !== tx) st.textContent = tx; }
   }
   // el sonido de la sala: más abierto con gente, más eco con movimiento, silencio en el contacto
   function presAudio() {
@@ -535,6 +536,7 @@
   }
   ch.onmessage = (ev) => {
     const m = ev.data; lastOutMsg = performance.now();
+    if (m.type === 'ojo') { PRES.sensor = m.st || ''; if (m.st === 'sin-camara') toast('OJO · NO HAY ACCESO A LA CÁMARA' + (m.err ? ' · ' + m.err : '')); if (m.st === 'error-ia') toast('OJO · NO SE PUDO CARGAR LA IA'); return; }
     if (m.type === 'hello') {
       outOK = true;
       for (const it of LIB) if (it.hits) ch.postMessage({ type: 'hits', piece: it.id, hits: it.hits });
@@ -820,7 +822,7 @@
     knob(fs, 'av', 'SINCRO A/V', AFX.av / 250, (v) => { AFX.av = Math.round(v * 250); store.set('av', AFX.av); for (const k in DECK) play(DECK[k]); }, (v) => '+' + Math.round(v * 250) + 'ms');
     const qc = document.createElement('div'); qc.className = 'grp'; qc.innerHTML = '<span class="lbl" style="font-size:7.5px">CALIDAD</span><div class="seg" id="qual"><button data-v="0" title="Cada pieza a la resolución que el ordenador aguanta con fluidez">AUTO</button><button data-v="1">100</button><button data-v="0.75">75</button><button data-v="0.5">50</button></div>'; fs.appendChild(qc);
     const ob = $('#tg-ojo'); ob.classList.toggle('on', PRES.on);
-    ob.addEventListener('click', () => { PRES.on = !PRES.on; store.set('ojoPres', PRES.on); ob.classList.toggle('on', PRES.on); toast(PRES.on ? 'OJO · PRESENCIA ACTIVADA · ABRE OJO EN OTRA VENTANA' : 'OJO · PRESENCIA APAGADA'); applyAFX(); sendState(); });
+    ob.addEventListener('click', () => { PRES.on = !PRES.on; store.set('ojoPres', PRES.on); ob.classList.toggle('on', PRES.on); toast(PRES.on ? 'OJO · ENCENDIENDO LA CÁMARA EN LA SALIDA' : 'OJO · APAGADO'); applyAFX(); sendState(); });
     seg($('#qual'), 'qual', String(MIX.quality), (v) => { MIX.quality = +v; store.set('calidadAuto', +v); sendState(); });
     const markQ = seg($('#quant'), 'quant', quant, (v) => { quant = v; store.set('quant', v); });
     CTL.quant.mark = markQ;

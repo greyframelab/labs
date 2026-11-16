@@ -49,8 +49,10 @@ Con `?instalacion` en la URL (`live/index.html?instalacion`) arranca solo y entr
 
 LIVE puede reaccionar a la gente que hay en la sala usando [OJO](../ojo/README.md) como sensor. OJO solo envía números (cuántas personas, dónde, cuánto se mueven y si alguien mira a la cámara), nunca la imagen.
 
-1. Abre OJO en otra ventana del mismo navegador (`ojo/`), pulsa ARRANCAR y elige la cámara. No hace falta abrir su salida.
-2. En LIVE, pulsa **OJO** en la cabecera. El botón muestra lo que ve: SIN SEÑAL, SALA VACÍA, 1 PERSONA, CONTACTO…
+1. Con la salida abierta, pulsa **OJO** en la cabecera de LIVE. La salida enciende la cámara con la IA de OJO, oculta y sin imagen (`ojo/sensor.html`). La primera vez el navegador pide permiso para la cámara en la ventana de salida; en la app de escritorio no pregunta.
+2. El botón muestra lo que pasa: CÁMARA…, CARGANDO IA…, SALA VACÍA, 1 PERSONA, CONTACTO… Si dice SIN CÁMARA, revisa el permiso o que no la esté usando otra app.
+
+También funciona con OJO completo abierto en otra ventana del mismo navegador, pero esa ventana tiene que estar a la vista: si queda detrás u oculta, Chrome la pausa y LIVE deja de recibir.
 
 Qué pasa:
 - **Sala vacía:** LIVE sigue a lo suyo.
@@ -60,7 +62,7 @@ Qué pasa:
 
 En el deck C, el shader recibe `presencia` (0–1), `personas`, `energia` (movimiento), `contacto` (0–1), `pos` (posición de la persona principal, 0–1, arriba = 0) y `talla` (lo cerca que está). El preset **PRESENCIA** abre la imagen alrededor del visitante y la cierra cuando le mira.
 
-Fase 1: funciona con LIVE y OJO en el navegador. Las dos apps de escritorio todavía van por separado.
+Funciona igual en el navegador y en la app de escritorio de LIVE (que ya incluye OJO en su copia local).
 
 ## Atajos
 Pulsa **?** en la consola. Cualquier control se puede asignar a un controlador MIDI con **MIDI · APRENDER**.
