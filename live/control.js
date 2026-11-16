@@ -675,7 +675,7 @@
       dirty = true; flush();
       VLC.resend && VLC.resend();
     } else if (m.type === 'stats') {
-      outOK = true; $('#stOut').textContent = m.fps + ' FPS · ' + m.w + '×' + m.h + (m.q ? ' · PIEZA ' + m.q + '%' + (m.auto ? ' AUTO' : '') : '');
+      outOK = true; $('#stOut').textContent = m.fps + ' FPS · ' + m.w + '×' + m.h + (m.q ? ' · ' + (m.q3 ? '3D ' : 'PIEZA ') + m.q + '%' + (m.auto ? ' AUTO' : '') : '');
       $('#ledOut').className = 'led ' + (m.fps >= 50 ? 'on' : m.fps >= 30 ? 'warn' : 'err');
     } else if (m.type === 'ready') { const d = DECK[m.deck]; if (d && d.item && d.item.id === m.piece) { d.ready = true; renderDeckState(d); } }
     else if (m.type === 'loading') { const d = DECK[m.deck]; if (d) { d.ready = false; renderDeckState(d); } }

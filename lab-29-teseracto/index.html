@@ -415,7 +415,9 @@ canvas{width:100vw;height:100vh;display:block}
   const DUR = T.sting + VL.STING_DUR;
   window.DURATION = DUR; window.FPS = 60;
   const g = VL.geo();
-  const SCALE = /[?&]live\b/.test(location.search) ? 1 : (window.TSR_SCALE || 0.6);   // en el live, a resolución completa (proyección)
+  // en el live: el 3D a la calidad que pida CALIDAD AUTO (q3d); grano, líneas y composición siempre a resolución completa
+  window.VL_Q3D = true;
+  const SCALE = /[?&]live\b/.test(location.search) ? (+new URLSearchParams(location.search).get('q3d') || 1) : (window.TSR_SCALE || 0.6);
   const RW = Math.round(W * SCALE), RH = Math.round(H * SCALE);
   const SW = 1024, SH = 512;                         // mapa de sombras equirectangular
 
