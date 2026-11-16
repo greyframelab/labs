@@ -425,9 +425,17 @@ canvas{width:100vw;height:100vh;display:block}
   const DUR = T.sting + VL.STING_DUR;
   window.DURATION = DUR; window.FPS = 60;
   const RING = { x: 0, y: 17, z: -112, R: 16.5, r: 2.6 };
+  // IMPERMANENCIA · en el live cada pase recibe una semilla nueva (?semilla=) y la pieza varía dentro de rangos fijados;
+  // en la web y en el vídeo, semilla 0: la versión canónica. Estructura, actos y sincronía con el sonido no cambian.
+  const SEMILLA = /[?&]live\b/.test(location.search) ? (+new URLSearchParams(location.search).get('semilla') || 0) : 0;
+  const VR = VL.rng((SEMILLA % 2147483647) || 1);
+  const varia = (def, amp) => (SEMILLA ? def + (VR() * 2 - 1) * amp : def);
+  const BRK = SEMILLA ? Math.floor(VR() * 5) : 0, BRKS = SEMILLA && VR() < 0.5 ? -1 : 1;   // qué pilares están rotos
+  const SWP = varia(0, Math.PI), SWA = varia(1, 0.6), CY0 = varia(0, 0.3), RLP = varia(0, Math.PI), XOFF = varia(0, 1.1);   // paseo, altura y lado de la nave
+  const RA = [varia(0, 0.7), varia(0, 0.7), varia(0, 0.7), varia(0, 0.7), varia(0, 0.7), varia(0, 0.7)];   // inclinación de los anillos (se alinean igual al final)
 
   // ---------------------------------------------------------------- nube de puntos
-  const rnd = VL.rng(2812);
+  const rnd = VL.rng(SEMILLA ? (2812 + SEMILLA * 7919) >>> 0 : 2812);
   const pos = [], kind = [], rr = [];
   const add = (x, y, z, k) => { pos.push(x, y, z); kind.push(k); rr.push(rnd()); };
   // suelo de piedra mojada (tenue: lo que brilla es el reflejo)
@@ -443,7 +451,7 @@ canvas{width:100vw;height:100vh;display:block}
     for (const side of [-1, 1]) {
       // pilar de haces: 4 fustes finos + núcleo
       const offs = [[0, 0, 0.42], [0.38, 0, 0.2], [-0.38, 0, 0.2], [0, 0.38, 0.2], [0, -0.38, 0.2]];
-      const hp = b % 5 === 3 && side > 0 ? 5 + rnd() * 3 : HSPR;          // algún pilar roto
+      const hp = (b + BRK) % 5 === 3 && side === BRKS ? 5 + rnd() * 3 : HSPR;          // algún pilar roto
       for (const [ox, oz, r] of offs) for (let i = 0; i < 2600; i++) {
         const a = rnd() * Math.PI * 2, y = rnd() * hp;
         add(side * HW + ox + Math.cos(a) * r, y, z0 + oz + Math.sin(a) * r, 1);
@@ -581,8 +589,8 @@ canvas{width:100vw;height:100vh;display:block}
   function camAt(t) {
     const tt = Math.min(t, T.cut);
     const zt = 6 - 34 * e.inOut(sg(tt, 0, T.cut)) - 7 * (t > T.rupt ? e.out(sg(t, T.rupt, T.sting)) : 0);
-    const y = 1.15 + 0.05 * Math.sin(t * 0.9) + (t > T.rupt ? 1.6 * e.inOut(sg(t, T.rupt + 1, T.sting)) : 0);
-    const x = 0.25 * Math.sin(t * 0.37);
+    const y = 1.15 + CY0 + 0.05 * Math.sin(t * 0.9) + (t > T.rupt ? 1.6 * e.inOut(sg(t, T.rupt + 1, T.sting)) : 0);
+    const x = XOFF + 0.25 * SWA * Math.sin(t * 0.37 + SWP);
     return [x, y, zt];
   }
   ECO.camAt = camAt;
@@ -606,7 +614,7 @@ canvas{width:100vw;height:100vh;display:block}
       let shk = a > 0 && a < 1.4 ? 0.35 * Math.exp(-a * 3.5) : 0;
       shk += 0.04 * sg(t, T.tense, T.cut) * (t < T.cut ? 1 : 0);
       tg = [tg[0] + (VL.hash(frame, 1) - 0.5) * shk, tg[1] + (VL.hash(frame, 2) - 0.5) * shk, tg[2]];
-      ROLL = 0.035 * Math.sin(t * 0.31) + (a > 0 && a < 2 ? 0.02 * Math.exp(-a * 2) * Math.sin(a * 30) : 0);
+      ROLL = 0.035 * Math.sin(t * 0.31 + RLP) + (a > 0 && a < 2 ? 0.02 * Math.exp(-a * 2) * Math.sin(a * 30) : 0);
       const M = mul(persp(W > H ? 0.75 : 1.05, W / H, 0.1, 400), look(cam, tg));
       // pulsos activos
       let n = 0;
@@ -627,9 +635,9 @@ canvas{width:100vw;height:100vh;display:block}
         return new Float32Array([cy, 0, -sy, sx * sy, cx, sx * cy, cx * sy, -sx, cx * cy]); };
       const sp = t * 0.22;
       gl.uniform3f(U.uRC, RING.x, RING.y, RING.z);
-      gl.uniformMatrix3fv(U.uR0, false, rot((0.5 + 0.1 * sp) * (1 - al), (sp * 0.6) * (1 - al)));
-      gl.uniformMatrix3fv(U.uR1, false, rot((1.2 - 0.17 * sp) * (1 - al), (0.9 + sp) * (1 - al)));
-      gl.uniformMatrix3fv(U.uR2, false, rot((-0.8 + 0.23 * sp) * (1 - al), (-1.4 - 0.8 * sp) * (1 - al)));
+      gl.uniformMatrix3fv(U.uR0, false, rot((0.5 + 0.1 * sp + RA[0]) * (1 - al), (sp * 0.6 + RA[1]) * (1 - al)));
+      gl.uniformMatrix3fv(U.uR1, false, rot((1.2 - 0.17 * sp + RA[2]) * (1 - al), (0.9 + sp + RA[3]) * (1 - al)));
+      gl.uniformMatrix3fv(U.uR2, false, rot((-0.8 + 0.23 * sp + RA[4]) * (1 - al), (-1.4 - 0.8 * sp + RA[5]) * (1 - al)));
       gl.uniform1f(U.uMirror, 1); gl.drawArrays(gl.POINTS, 0, NP);
       gl.uniform1f(U.uMirror, 0); gl.drawArrays(gl.POINTS, 0, NP);
       c.drawImage(cv, 0, 0);

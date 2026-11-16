@@ -383,6 +383,23 @@ canvas{width:100vw;height:100vh;display:block}
 (function () {
   const VL = window.VL, W = VL.W, H = VL.H, e = VL.ease, sg = VL.seg, clamp = VL.clamp, lerp = VL.lerp;
   const ACC = VL.ACCENTS.verde;
+  // IMPERMANENCIA · con el modo activo en el live, cada pase recibe una semilla nueva (?semilla=) y la pieza varía dentro
+  // de rangos fijados: cámara (giro, distancia, altura) y, donde la hay, la geometría generada. Estructura, actos y
+  // sincronía con el sonido no cambian. En la web, en el vídeo y con el modo apagado: semilla 0, la versión canónica.
+  const SEMILLA = /[?&]live\b/.test(location.search) ? (+new URLSearchParams(location.search).get('semilla') || 0) : 0;
+  const VR = VL.rng((SEMILLA % 2147483647) || 1);
+  const varia = (def, amp) => (SEMILLA ? def + (VR() * 2 - 1) * amp : def);
+  const SEMN = (n) => (SEMILLA ? (n + SEMILLA * 7919) >>> 0 : n);
+  const AZ0 = varia(0, 0.35), DK = varia(1, 0.1), YK = varia(1, 0.12), RL0 = varia(0, 0.03);
+  // gira la cámara de un plano alrededor de su punto de mira (y su vector up, si lo tiene)
+  function variaCm(cm) {
+    if (!SEMILLA || !cm || !cm.cam || !cm.tgt) return cm;
+    const t = cm.tgt, v = [cm.cam[0] - t[0], cm.cam[1] - t[1], cm.cam[2] - t[2]], c = Math.cos(AZ0), s = Math.sin(AZ0);
+    cm.cam = [t[0] + (v[0] * c - v[2] * s) * DK, t[1] + v[1] * DK * YK, t[2] + (v[0] * s + v[2] * c) * DK];
+    if (cm.up) cm.up = [cm.up[0] * c - cm.up[2] * s, cm.up[1], cm.up[0] * s + cm.up[2] * c];
+    if (cm.roll != null) cm.roll += RL0;
+    return cm;
+  }
   const g = VL.geo();
   const FPS = 60;
   const T = { scan0: 1.6, scan1: 7.0, split: 7.0, tense: 9.2, freeze: 11.6, snap: 12.2, collapse: 16.6, sting: 19.0 };
@@ -513,7 +530,7 @@ canvas{width:100vw;height:100vh;display:block}
     const el = lerp(0.16, 0.62, pull) + 0.05 * Math.sin(tt * 0.3);
     const tgtY = lerp(0.35, 0, pull);
     if (W > H) dist *= 0.74;                      // apaisado (web en escritorio): prisma más grande
-    let eye = [Math.cos(az) * Math.cos(el) * dist, tgtY + Math.sin(el) * dist, Math.sin(az) * Math.cos(el) * dist];
+    let eye = [Math.cos(az + AZ0) * Math.cos(el) * dist * DK, tgtY + Math.sin(el) * dist * DK, Math.sin(az + AZ0) * Math.cos(el) * dist * DK];
     let sh = 0; if (a > 0 && a < 1) sh = 0.06 * Math.exp(-a * 5); if (!frozen) sh += 0.012 * ten * ten;
     const tg = [(hsh(Math.floor(t * 60), 1) - .5) * sh, tgtY + (hsh(Math.floor(t * 60), 2) - .5) * sh, 0];
     // láminas

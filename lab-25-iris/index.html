@@ -123,6 +123,10 @@ const renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true, preserve
 renderer.setPixelRatio(devicePixelRatio || 1); renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
 const scene = new THREE.Scene(); scene.background = new THREE.Color(0);
 const camera = new THREE.PerspectiveCamera(35, 9 / 16, .05, 100);
+// IMPERMANENCIA · con el modo activo en el live, cada pase gira y acerca/aleja un poco la cámara (semilla 0 = canónica)
+const IR_SEM = /[?&]live\b/.test(location.search) ? (+new URLSearchParams(location.search).get('semilla') || 0) : 0;
+const IR_R = (k) => { const x = Math.sin((IR_SEM % 100000) * 12.9898 + k * 78.233) * 43758.5453; return x - Math.floor(x); };
+const IR_AZ = IR_SEM ? (IR_R(1) * 2 - 1) * 0.4 : 0, IR_DK = IR_SEM ? 1 + (IR_R(2) * 2 - 1) * 0.08 : 1;
 const U = { uRot: { value: new Float32Array(R) }, uZ: { value: new Float32Array(R) }, uRS: { value: new Float32Array(R).fill(1) }, uBoom: { value: 0 }, uFade: { value: 1 }, uKeepFade: { value: 1 }, uSweep: { value: 0 }, uSweepA: { value: 0 }, uFlick: { value: 0 }, uT: { value: 0 } };
 const mat = new THREE.ShaderMaterial({ uniforms: U, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
   vertexShader: `attribute float aRing, aAng, aRad, aB, aRed, aSeed, aKeep;
@@ -238,7 +242,7 @@ function frameAt(frame) {
   const yaw = obl * (.42 + Math.sin(t * .5) * .08), pit = obl * (.3 + Math.sin(t * .37) * .05);
   let dist = lerp(9.2, 8.7, sstep(0, 9, t)) - obl * 2.6 - sstep(T_LOCK0, T_BOOM, t) * .5 + (t > T_BOOM ? sstep(T_BOOM, 21.9, t) * 1.2 : 0);
   if (t < 2) dist -= (1 - expOut(t / 2)) * 1.6;
-  camera.position.set(Math.sin(yaw) * Math.cos(pit) * dist, Math.sin(pit) * dist, Math.cos(yaw) * Math.cos(pit) * dist);
+  camera.position.set(Math.sin(yaw + IR_AZ) * Math.cos(pit) * dist * IR_DK, Math.sin(pit) * dist * IR_DK, Math.cos(yaw + IR_AZ) * Math.cos(pit) * dist * IR_DK);
   camera.up.set(Math.sin(t * .23) * .04 * (frozen ? 0 : 1), 1, 0); camera.lookAt(0, 0, obl * -1.2);
   v3.set(0, 0, 0).project(camera); post.uniforms.uC.value.set(v3.x * .5 + .5, v3.y * .5 + .5);
   composer.render();

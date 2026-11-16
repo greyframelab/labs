@@ -391,6 +391,12 @@ canvas{width:100vw;height:100vh;display:block}
   const DUR = T.sting + VL.STING_DUR;
   window.DURATION = DUR; window.FPS = 60;
   const g = VL.geo();
+  // IMPERMANENCIA · en el live cada pase recibe una semilla nueva (?semilla=) y la pieza varía dentro de rangos fijados;
+  // en la web y en el vídeo, semilla 0: la versión canónica. Estructura, actos y sincronía con el sonido no cambian.
+  const SEMILLA = /[?&]live\b/.test(location.search) ? (+new URLSearchParams(location.search).get('semilla') || 0) : 0;
+  const VR = VL.rng((SEMILLA % 2147483647) || 1);
+  const varia = (def, amp) => (SEMILLA ? def + (VR() * 2 - 1) * amp : def);
+  const XROT = varia(0, Math.PI / 6);   // giro del cristal
 
   // ================================================================ 1 · el cristal: crecimiento precalculado
   // Campo N×N sobre el cristal (coordenadas -1..1). Por texel: llegada efectiva del frente (eff), perfil de la rama (h) y variación.
@@ -398,7 +404,7 @@ canvas{width:100vw;height:100vh;display:block}
   const EFF = new Float32Array(N * N).fill(1e6), HH = new Float32Array(N * N).fill(-1), VAR = new Uint8Array(N * N), OWN = new Int16Array(N * N).fill(-1), BID = new Int32Array(N * N).fill(-1);
   let nBid = 0; const PAR = [];
   const RV = 0.37;                                  // radio del vacío central (solo lo ocupa la estrella del clímax)
-  const rng = VL.rng(3301);
+  const rng = VL.rng(SEMILLA ? (3301 + SEMILLA * 7919) >>> 0 : 3301);   // las ramas de la helada, distintas en cada pase
   const toPx = (u) => (u + 1) * 0.5 * N;
   function stamp(x, y, r, a, v, own, bid) {
     const R = r + 2.2, x0 = Math.max(0, Math.floor(x - R)), x1 = Math.min(N - 1, Math.ceil(x + R)), y0 = Math.max(0, Math.floor(y - R)), y1 = Math.min(N - 1, Math.ceil(y + R));
@@ -473,7 +479,7 @@ canvas{width:100vw;height:100vh;display:block}
     if (s.v !== 'S' || s.star || s.t >= T.cut) continue;
     let x = s.x, y = s.y; const d = Math.hypot(x, y); if (d < RV + 0.12) { const k = (RV + 0.12 + 0.2 * Math.abs(x)) / Math.max(d, 0.01); x *= k; y *= k; }
     x = clamp(x, -0.9, 0.9); y = clamp(y, -0.9, 0.9);
-    const sd = { x, y, ang: (s.seed % 60) / 60 * Math.PI / 3, a0: G(s.t), len: 170 + 220 * s.s, w: 1.8, type: 'nuc', t: s.t };
+    const sd = { x, y, ang: (s.seed % 60) / 60 * Math.PI / 3 + XROT, a0: G(s.t), len: 170 + 220 * s.s, w: 1.8, type: 'nuc', t: s.t };
     seeds.push(sd); SEEDS_S.push(sd);
   }
   seeds.sort((p, q) => p.a0 - q.a0);

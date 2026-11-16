@@ -384,6 +384,23 @@ canvas{width:100vw;height:100vh;display:block}
 (function () {
   const VL = window.VL, W = VL.W, H = VL.H, e = VL.ease, sg = VL.seg, clamp = VL.clamp, lerp = VL.lerp;
   const ACC = VL.ACCENTS.verde;
+  // IMPERMANENCIA · con el modo activo en el live, cada pase recibe una semilla nueva (?semilla=) y la pieza varía dentro
+  // de rangos fijados: cámara (giro, distancia, altura) y, donde la hay, la geometría generada. Estructura, actos y
+  // sincronía con el sonido no cambian. En la web, en el vídeo y con el modo apagado: semilla 0, la versión canónica.
+  const SEMILLA = /[?&]live\b/.test(location.search) ? (+new URLSearchParams(location.search).get('semilla') || 0) : 0;
+  const VR = VL.rng((SEMILLA % 2147483647) || 1);
+  const varia = (def, amp) => (SEMILLA ? def + (VR() * 2 - 1) * amp : def);
+  const SEMN = (n) => (SEMILLA ? (n + SEMILLA * 7919) >>> 0 : n);
+  const AZ0 = varia(0, 0.35), DK = varia(1, 0.1), YK = varia(1, 0.12), RL0 = varia(0, 0.03);
+  // gira la cámara de un plano alrededor de su punto de mira (y su vector up, si lo tiene)
+  function variaCm(cm) {
+    if (!SEMILLA || !cm || !cm.cam || !cm.tgt) return cm;
+    const t = cm.tgt, v = [cm.cam[0] - t[0], cm.cam[1] - t[1], cm.cam[2] - t[2]], c = Math.cos(AZ0), s = Math.sin(AZ0);
+    cm.cam = [t[0] + (v[0] * c - v[2] * s) * DK, t[1] + v[1] * DK * YK, t[2] + (v[0] * s + v[2] * c) * DK];
+    if (cm.up) cm.up = [cm.up[0] * c - cm.up[2] * s, cm.up[1], cm.up[0] * s + cm.up[2] * c];
+    if (cm.roll != null) cm.roll += RL0;
+    return cm;
+  }
   const Z = window.CDD, { T, EV, X, warp } = Z;
   const DUR = T.sting + VL.STING_DUR;
   window.DURATION = DUR; window.FPS = 60;
@@ -400,7 +417,7 @@ canvas{width:100vw;height:100vh;display:block}
   face([-1, 0, 0], P(0, 0, 0), P(0, 0, 1), P(0, 1, 1), P(0, 1, 0));
   const BOXV = new Float32Array(BOX), NBV = BOX.length / 6;
   const INST = new Float32Array(NG * NG * 4);
-  { const r = VL.rng(3838); let k = 0; for (let i = 0; i < NG; i++) for (let j = 0; j < NG; j++) INST.set([i, j, r(), r()], (k++) * 4); }
+  { const r = VL.rng(SEMN(3838)); let k = 0; for (let i = 0; i < NG; i++) for (let j = 0; j < NG; j++) INST.set([i, j, r(), r()], (k++) * 4); }
 
   // ================================================================ 2 · partitura → uniformes
   const ofV = (v) => EV.filter((x) => x.v === v);
@@ -622,17 +639,17 @@ canvas{width:100vw;height:100vh;display:block}
   const vaoA1 = gl.createVertexArray(); gl.bindVertexArray(vaoA1);
   { const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0]), gl.STATIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 0, 0); }
   const NMO = 5000, MO = new Float32Array(NMO * 4);
-  { const r = VL.rng(3839); let k = 0; while (k < NMO) { const ring = r() < 0.7; let a, rr;
+  { const r = VL.rng(SEMN(3839)); let k = 0; while (k < NMO) { const ring = r() < 0.7; let a, rr;
       if (ring) { a = r(); rr = 25 + (r() - 0.5) * 6; } else { const s2 = (r() - 0.5) * 56; a = (Math.atan2(s2, s2) / (2 * Math.PI) + (s2 < 0 ? 0.5 : 0)) % 1; rr = Math.abs(s2) * Math.SQRT2 * 0.5 + (r() - 0.5) * 2; a = (s2 >= 0 ? 0.125 : 0.625) + (r() - 0.5) * 0.02 / Math.max(rr, 1); }
       MO.set([a, rr, r(), r()], (k++) * 4); } }
   const vaoA2 = gl.createVertexArray(); gl.bindVertexArray(vaoA2);
   { const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, MO, gl.STATIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 0, 0); }
   const NFL = 14000, FL = new Float32Array(NFL * 4);
-  { const r = VL.rng(3840); for (let i = 0; i < NFL; i++) { const a = r() * TAU, rr = 52 + Math.pow(r(), 0.6) * 220; FL.set([rr * Math.cos(a), r() * r() * 6, rr * Math.sin(a), r()], i * 4); } }
+  { const r = VL.rng(SEMN(3840)); for (let i = 0; i < NFL; i++) { const a = r() * TAU, rr = 52 + Math.pow(r(), 0.6) * 220; FL.set([rr * Math.cos(a), r() * r() * 6, rr * Math.sin(a), r()], i * 4); } }
   const vaoA3 = gl.createVertexArray(); gl.bindVertexArray(vaoA3);
   { const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, FL, gl.STATIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 0, 0); }
   // columnas: 36 posiciones sobre la Ø; cada una dos tiras cruzadas (quads verticales)
-  const PIL = []; { const r = VL.rng(3841); for (let i = 0; i < 36; i++) { let x, z; if (i < 26) { const a = i / 26 * TAU; x = 25 * Math.cos(a); z = 25 * Math.sin(a); } else { const s2 = (i - 26) / 9 * 50 - 25; x = s2; z = s2; }
+  const PIL = []; { const r = VL.rng(SEMN(3841)); for (let i = 0; i < 36; i++) { let x, z; if (i < 26) { const a = i / 26 * TAU; x = 25 * Math.cos(a); z = 25 * Math.sin(a); } else { const s2 = (i - 26) / 9 * 50 - 25; x = s2; z = s2; }
       x = Math.round(x - 0.5) + 0.5; z = Math.round(z - 0.5) + 0.5;
       for (const [u0, u1] of [[-1, 1]]) for (const [v0, v1] of [[0, 1]]) PIL.push(x, z, -1, 0, x, z, 1, 0, x, z, 1, 1, x, z, -1, 0, x, z, 1, 1, x, z, -1, 1); } }
   const PILA = new Float32Array(PIL), NPIL = PIL.length / 4;
@@ -688,7 +705,7 @@ canvas{width:100vw;height:100vh;display:block}
     const c = VL.sceneCtx(); const ts = tReal - T.sting, a = tReal - T.align;
     const fade = 1 - e.inOut(sg(tReal, T.sting - 0.9, T.sting + 0.2));
     if (fade > 0.002) {
-      const cm = shot(t), ec = frozen ? { L: 0, R: 0, win: 0 } : echoEnv(t);
+      const cm = variaCm(shot(t)), ec = frozen ? { L: 0, R: 0, win: 0 } : echoEnv(t);
       const ten = clamp((t - T.engrane) / (T.cut - T.engrane));
       const K = last('K', t), kf = K ? K.s * Math.exp(-(t - K.t) / 0.07) : 0;
       const Sn = last('S', t), sf = Sn ? Sn.s * Math.exp(-(t - Sn.t) / 0.06) : 0;

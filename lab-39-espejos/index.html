@@ -383,6 +383,23 @@ canvas{width:100vw;height:100vh;display:block}
 (function () {
   const VL = window.VL, W = VL.W, H = VL.H, e = VL.ease, sg = VL.seg, clamp = VL.clamp, lerp = VL.lerp;
   const ACC = VL.ACCENTS.rojo;
+  // IMPERMANENCIA · con el modo activo en el live, cada pase recibe una semilla nueva (?semilla=) y la pieza varía dentro
+  // de rangos fijados: cámara (giro, distancia, altura) y, donde la hay, la geometría generada. Estructura, actos y
+  // sincronía con el sonido no cambian. En la web, en el vídeo y con el modo apagado: semilla 0, la versión canónica.
+  const SEMILLA = /[?&]live\b/.test(location.search) ? (+new URLSearchParams(location.search).get('semilla') || 0) : 0;
+  const VR = VL.rng((SEMILLA % 2147483647) || 1);
+  const varia = (def, amp) => (SEMILLA ? def + (VR() * 2 - 1) * amp : def);
+  const SEMN = (n) => (SEMILLA ? (n + SEMILLA * 7919) >>> 0 : n);
+  const AZ0 = varia(0, 0.12), DK = varia(1, 0.05), YK = varia(1, 0.06), RL0 = varia(0, 0.03);
+  // gira la cámara de un plano alrededor de su punto de mira (y su vector up, si lo tiene)
+  function variaCm(cm) {
+    if (!SEMILLA || !cm || !cm.cam || !cm.tgt) return cm;
+    const t = cm.tgt, v = [cm.cam[0] - t[0], cm.cam[1] - t[1], cm.cam[2] - t[2]], c = Math.cos(AZ0), s = Math.sin(AZ0);
+    cm.cam = [t[0] + (v[0] * c - v[2] * s) * DK, t[1] + v[1] * DK * YK, t[2] + (v[0] * s + v[2] * c) * DK];
+    if (cm.up) cm.up = [cm.up[0] * c - cm.up[2] * s, cm.up[1], cm.up[0] * s + cm.up[2] * c];
+    if (cm.roll != null) cm.roll += RL0;
+    return cm;
+  }
   const Z = window.EDD, { T, EV, warp } = Z;
   const DUR = T.sting + VL.STING_DUR;
   window.DURATION = DUR; window.FPS = 60;
@@ -612,7 +629,7 @@ canvas{width:100vw;height:100vh;display:block}
     const c = VL.sceneCtx(); const ts = tReal - T.sting;
     const fade = 1 - e.inOut(sg(tReal, T.sting - 0.9, T.sting + 0.15));
     if (fade > 0.002) {
-      const cm = shot(tReal), M = viewProj(cm.cam, cm.tgt, cm.fov, cm.roll);
+      const cm = variaCm(shot(tReal)), M = viewProj(cm.cam, cm.tgt, cm.fov, cm.roll);
       const a = tReal - T.rupt, frozen = tReal >= T.cut && tReal < T.rupt;
       const still = frozen ? e.inOut(sg(tReal, T.cut, T.cut + 1.6)) : 0;
       const kp = a >= 0 ? recent(KS, t, 1, 2).pop() : null;

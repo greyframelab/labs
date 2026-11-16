@@ -456,6 +456,23 @@ canvas{width:100vw;height:100vh;display:block}
 (function () {
   const VL = window.VL, W = VL.W, H = VL.H, e = VL.ease, sg = VL.seg, clamp = VL.clamp, lerp = VL.lerp;
   const ACC = VL.ACCENTS.magenta || '#FF2BD6';
+  // IMPERMANENCIA · con el modo activo en el live, cada pase recibe una semilla nueva (?semilla=) y la pieza varía dentro
+  // de rangos fijados: cámara (giro, distancia, altura) y, donde la hay, la geometría generada. Estructura, actos y
+  // sincronía con el sonido no cambian. En la web, en el vídeo y con el modo apagado: semilla 0, la versión canónica.
+  const SEMILLA = /[?&]live\b/.test(location.search) ? (+new URLSearchParams(location.search).get('semilla') || 0) : 0;
+  const VR = VL.rng((SEMILLA % 2147483647) || 1);
+  const varia = (def, amp) => (SEMILLA ? def + (VR() * 2 - 1) * amp : def);
+  const SEMN = (n) => (SEMILLA ? (n + SEMILLA * 7919) >>> 0 : n);
+  const AZ0 = varia(0, 0.35), DK = varia(1, 0.1), YK = varia(1, 0.12), RL0 = varia(0, 0.03);
+  // gira la cámara de un plano alrededor de su punto de mira (y su vector up, si lo tiene)
+  function variaCm(cm) {
+    if (!SEMILLA || !cm || !cm.cam || !cm.tgt) return cm;
+    const t = cm.tgt, v = [cm.cam[0] - t[0], cm.cam[1] - t[1], cm.cam[2] - t[2]], c = Math.cos(AZ0), s = Math.sin(AZ0);
+    cm.cam = [t[0] + (v[0] * c - v[2] * s) * DK, t[1] + v[1] * DK * YK, t[2] + (v[0] * s + v[2] * c) * DK];
+    if (cm.up) cm.up = [cm.up[0] * c - cm.up[2] * s, cm.up[1], cm.up[0] * s + cm.up[2] * c];
+    if (cm.roll != null) cm.roll += RL0;
+    return cm;
+  }
   const { T, EV, X, MODES, warp } = window.CIM;
   const DUR = T.sting + VL.STING_DUR;
   window.DURATION = DUR; window.FPS = 60;
@@ -652,7 +669,7 @@ canvas{width:100vw;height:100vh;display:block}
       az = P_.az + sh.r * 0.8 + P_.daz * lt; dist = P_.d + P_.dd * lt; el = P_.el + P_.del * lt;
       tg = [P_.tx + sh.r * 0.25, 0, P_.tz - sh.r * 0.2];
       if (tReal >= T.rupt) { const ar = tReal - T.rupt; az = 1.55 + 0.12 * ar; dist = kf([[0, 1.9], [1.6, 3.0], [7, 3.7]], ar); el = kf([[0, 0.8], [1.6, 1.52], [7, 1.55]], ar); tg = [0, 0, 0]; }
-      const cam = [tg[0] + Math.cos(el) * Math.sin(az) * dist, Math.sin(el) * dist, tg[2] + Math.cos(el) * Math.cos(az) * dist];
+      const cam = [tg[0] + Math.cos(el) * Math.sin(az + AZ0) * dist * DK, Math.sin(el) * dist * DK, tg[2] + Math.cos(el) * Math.cos(az + AZ0) * dist * DK];
       let fw = [tg[0] - cam[0], tg[1] - cam[1], tg[2] - cam[2]]; const fl = Math.hypot(...fw); fw = fw.map((v) => v / fl);
       const upW = Math.abs(fw[1]) > 0.98 ? [Math.sin(az + Math.PI), 0, Math.cos(az + Math.PI)] : [0, 1, 0];
       let rt = [fw[1] * upW[2] - fw[2] * upW[1], fw[2] * upW[0] - fw[0] * upW[2], fw[0] * upW[1] - fw[1] * upW[0]]; const rl = Math.hypot(...rt); rt = rt.map((v) => v / rl);

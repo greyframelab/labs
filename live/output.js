@@ -80,7 +80,7 @@
   function reloadDeck(k) {
     const d = D[k]; if (!d.piece || !d.frame) return;
     const src = d.frame.src.replace(/[?&]live\b.*$/, ''), piece = d.frame.dataset.piece;
-    d.piece = null; loadPiece(k, piece, src); d.reloadAt = performance.now();
+    d.piece = null; loadPiece(k, piece, src, d.frame.dataset.seed); d.reloadAt = performance.now();
   }
   const AQ = { n: 0, sum: 0, long: 0, t0: 0, last: 0, ref: 60, piece: null };
   function autoQuality(now, ra, rb) {
@@ -119,7 +119,9 @@
   }
   function frameQ(k) { const d = D[k]; if (!d || !d.frame) return 0; const q3 = d.frame.dataset.q3; return Math.round(+(q3 ? q3 : d.frame.dataset.q || 1) * 100); }
   const frameQ3 = (k) => !!(D[k] && D[k].frame && D[k].frame.dataset.q3);
-  function loadPiece(k, piece, src) {
+  // IMPERMANENCIA: cada vez que una pieza entra recibe una semilla nueva; las piezas que la usan nunca se repiten
+  const newSeed = () => 1 + Math.floor(Math.random() * 2147483646);
+  function loadPiece(k, piece, src, seed) {
     const d = D[k];
     if (d.next && d.next.dataset.piece === piece) return;
     if (d.next) d.next.remove();
@@ -129,12 +131,14 @@
     fr.style.width = w + 'px'; fr.style.height = h + 'px';
     fr.setAttribute('aria-hidden', 'true'); fr.tabIndex = -1;
     const q3 = pieceQ3(piece); fr.dataset.q3 = q3 == null ? '' : q3;
-    fr.src = src + (src.includes('?') ? '&' : '?') + 'live' + (q3 == null ? '' : '&q3d=' + q3);
+    // con IMPERMANENCIA, semilla nueva en cada pase (o la misma si es una recarga de calidad); sin ella, la versión canónica
+    fr.dataset.seed = seed != null ? seed : MIX.imp ? newSeed() : 0;
+    fr.src = src + (src.includes('?') ? '&' : '?') + 'live' + (+fr.dataset.seed ? '&semilla=' + fr.dataset.seed : '') + (q3 == null ? '' : '&q3d=' + q3);
     document.body.appendChild(fr);
     d.next = fr;
     ch.postMessage({ type: 'loading', deck: k, piece });
   }
-  function reloadAll() { for (const k in D) { const d = D[k]; if (d.piece && d.frame) { const src = d.frame.src.replace(/[?&]live\b.*$/, ''); d.piece = null; loadPiece(k, d.frame.dataset.piece, src); } } }
+  function reloadAll() { for (const k in D) { const d = D[k]; if (d.piece && d.frame) { const src = d.frame.src.replace(/[?&]live\b.*$/, ''); d.piece = null; loadPiece(k, d.frame.dataset.piece, src, d.frame.dataset.seed); } } }
 
   // ------------------------------------------------------------------ mensajes
   ch.onmessage = (ev) => {
