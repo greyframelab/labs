@@ -56,7 +56,7 @@ También funciona con OJO completo abierto en otra ventana del mismo navegador, 
 
 Qué pasa:
 - **Sala vacía:** LIVE sigue a lo suyo.
-- **Entra alguien:** aparece encima de la pieza tal como lo ve la máquina, en la vista CÓDIGO de OJO (la máquina le escribe con su propio código), con los contornos de BORDES, la malla de la cara y los rótulos de datos (SUJETO, CONTACTO, distancia…) encima. Todo lo pinta el sensor en una sola pasada, a 960×540, y la sala suena más abierta: más reverberación y más eco cuanto más se mueve la gente. Aguanta 3 s después de que se vaya.
+- **Entra alguien:** aparece encima de la pieza tal como lo ve la máquina, en la vista CÓDIGO de OJO (la máquina le escribe con su propio código), con la malla de la cara y los rótulos de datos (SUJETO, CONTACTO, distancia…). Todo lo pinta el sensor en una sola pasada, a 960×540, y la sala suena más abierta: más reverberación y más eco cuanto más se mueve la gente. Aguanta 3 s después de que se vaya.
 - **Contacto** (alguien mira a la cámara medio segundo): la pieza a negro y silencio; solo queda el visitante dibujado por la máquina.
 
 Ligero a propósito: una sola cámara y una sola IA (el mismo sensor). Con la sala vacía el sensor trabaja a 320×180 en su modo más barato; solo con alguien delante pinta su vista a 960×540, que la salida funde encima (una textura de ~2 MB).

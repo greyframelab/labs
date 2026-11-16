@@ -20,8 +20,8 @@
     const d = e.data; if (!d || d.type !== 'ojo-cfg') return;
     if (d.show) {
       S.mode = d.mode || 'bordes'; S.bloom = 0.25;
-      // CÓDIGO + BORDES con la malla de la cara, corchetes y rótulos de datos (SUJETO, CONTACTO…), a 960×540 para que se lean las letras
-      if (S.mode === 'codigo') { S.codigoBordes = 1; S.analysis = 2; S.p = Object.assign({}, S.p, { codigo: [0.6, 0.55, 0.6, 0.35] }); rt.eng.resize(960, 540); }
+      // vista CÓDIGO con la malla de la cara, corchetes y rótulos de datos (SUJETO, CONTACTO…), a 960×540 para que se lean las letras
+      if (S.mode === 'codigo') { S.codigoBordes = 0; S.analysis = 2; S.p = Object.assign({}, S.p, { codigo: [0.6, 0.55, 0.6, 0.35] }); rt.eng.resize(960, 540); }
       else { S.codigoBordes = 0; S.analysis = 0; rt.eng.resize(640, 360); }
     } else { S.mode = 'entrada'; S.bloom = 0; S.analysis = 0; S.codigoBordes = 0; rt.eng.resize(320, 180); }
     rt.setState(S);
