@@ -56,7 +56,7 @@ También funciona con OJO completo abierto en otra ventana del mismo navegador, 
 
 Qué pasa:
 - **Sala vacía:** LIVE sigue a lo suyo.
-- **Entra alguien:** aparece encima de la pieza tal como lo ve la máquina, en modo BORDES de OJO (contornos y puntos clave: el más rápido, y dibuja el cuerpo entero aunque no se vea la cara), y la sala suena más abierta: más reverberación y más eco cuanto más se mueve la gente. Aguanta 3 s después de que se vaya.
+- **Entra alguien:** aparece encima de la pieza tal como lo ve la máquina, escrito con el código de la pieza que suena (MÁQUINA) y con sus contornos encendidos encima (BORDES de OJO: el modo más rápido, y dibuja el cuerpo entero aunque no se vea la cara), y la sala suena más abierta: más reverberación y más eco cuanto más se mueve la gente. Aguanta 3 s después de que se vaya.
 - **Contacto** (alguien mira a la cámara medio segundo): la pieza a negro y silencio; solo queda el visitante dibujado por la máquina.
 
 Ligero a propósito: una sola cámara y una sola IA (el mismo sensor). Con la sala vacía el sensor trabaja a 320×180 en su modo más barato; solo con alguien delante pinta su modo a 640×360, que la salida funde encima (una textura de ~1 MB).

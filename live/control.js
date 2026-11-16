@@ -522,7 +522,7 @@
     if (PRES.cont && (!live || PRES.contact < 0.25)) { PRES.cont = false; PRES.hit++; }    // el impacto al apartar la mirada
     if (was !== PRES.cont) toast(PRES.cont ? 'OJO · CONTACTO' : 'OJO · FIN DEL CONTACTO');
     if (now - PRES.lastAFX > 90) { PRES.lastAFX = now; applyAFX(); }
-    const key = live ? [PRES.k > 0.5, PRES.cont, PRES.hit, Math.round(PRES.x * 40), Math.round(PRES.y * 40), Math.round(PRES.energy * 20), PRES.n].join() : 'off';
+    const key = live ? [Math.round(PRES.k * 10), PRES.cont, PRES.hit, Math.round(PRES.x * 40), Math.round(PRES.y * 40), Math.round(PRES.energy * 20), PRES.n].join() : 'off';
     if (key !== PRES.sent) { PRES.sent = key; sendState(); }
     const st = $('#tg-ojo');
     const wait = { camara: 'CÁMARA…', ia: 'CARGANDO IA…', 'sin-camara': 'SIN CÁMARA', 'error-ia': 'ERROR IA' }[PRES.sensor];

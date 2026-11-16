@@ -251,23 +251,25 @@
   const FS_BLIT = `#version 300 es
   precision highp float; precision highp sampler2DArray; in vec2 uv; out vec4 o;
   uniform sampler2D S, OV; uniform sampler2DArray H; uniform float scan, head, ovOp;
-  uniform sampler2D OJ; uniform float ojoK;   // OJO: el visitante como lo ve la máquina, encima de la pieza
+  uniform sampler2D OJ; uniform float ojoK, ojoMq;   // OJO: el visitante como lo ve la máquina, encima de la pieza
   // VISTA MÁQUINA
   uniform sampler2D GA, TX; uniform float maq, mt, menv, mlen, mrows, mlod, moff; uniform vec2 mres; uniform vec3 macc;
   float h1(float n){ return fract(sin(n * 127.1) * 43758.5453); }
   float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float lu(vec3 c){ return dot(c, vec3(.299, .587, .114)); }
-  vec3 machine(vec3 c){
+  // fuente de MÁQUINA: la imagen de la pieza (S) o el visitante visto por OJO (OJ)
+  vec3 msrc(bool oj, vec2 q){ return oj ? texture(OJ, q).rgb : texture(S, q).rgb; }
+  vec3 machine(vec3 c, bool oj){
     float ch = mres.y / mrows, cw = ch * .62, cols = floor(mres.x / cw);
     vec2 px = vec2(uv.x * mres.x, (1. - uv.y) * mres.y);
     vec2 cell = floor(px / vec2(cw, ch)), f = fract(px / vec2(cw, ch));
     vec2 cc = (cell + .5) * vec2(cw, ch), cuv = vec2(cc.x / mres.x, 1. - cc.y / mres.y);
     vec2 dx = vec2(cw / mres.x, 0.), dy = vec2(0., ch / mres.y);
-    vec3 col = texture(S, cuv).rgb;
+    vec3 col = msrc(oj, cuv).rgb;
     float l = lu(col);
     // contornos: donde la máquina reconoce forma
-    float gx = lu(texture(S, cuv + dx).rgb) - lu(texture(S, cuv - dx).rgb);
-    float gy = lu(texture(S, cuv + dy).rgb) - lu(texture(S, cuv - dy).rgb);
+    float gx = lu(msrc(oj, cuv + dx).rgb) - lu(msrc(oj, cuv - dx).rgb);
+    float gy = lu(msrc(oj, cuv + dy).rgb) - lu(msrc(oj, cuv - dy).rgb);
     float edge = clamp(length(vec2(gx, gy)) * 2.2, 0., 1.);
     // el programa de la pieza como una página de texto quieta; pasa unas líneas en cada golpe
     float i = mod(cell.y * cols + cell.x + moff, mlen);
@@ -302,8 +304,13 @@
       vec3 hc = mix(texture(H, vec3(uv, l0)).rgb, texture(H, vec3(uv, l1)).rgb, fract(d));
       c = mix(c, hc, smoothstep(0., .12, scan));
     }
-    if (ojoK > 0.) { vec3 v = texture(OJ, uv).rgb * ojoK; c = 1. - (1. - c) * (1. - v); }
-    if (maq > 0.) c = mix(c, machine(c), maq);
+    if (maq > 0.) c = mix(c, machine(c, false), maq);
+    if (ojoK > 0.) {
+      vec3 v = texture(OJ, uv).rgb;
+      // BORDES + MÁQUINA: el visitante escrito con el código de la pieza, con sus contornos encima
+      if (ojoMq > .5) { vec3 g = machine(vec3(0.), true); c = c * (1. - .35 * ojoK) + g * ojoK * 1.3; v *= .45; }
+      v *= ojoK; c = 1. - (1. - c) * (1. - v);
+    }
     if (ovOp > 0.) { vec4 v = texture(OV, uv); c = c * (1. - v.a * ovOp) + v.rgb * ovOp; }
     o = vec4(c, 1.);
   }`;
@@ -314,7 +321,7 @@
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
   gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
   const U = {}; ['A0', 'A1', 'B0', 'B1', 'FB', 'aw', 'bw', 'ga', 'gb', 'fa', 'fb', 'trail', 'flash', 'split', 'inv', 'black', 'bright', 'time', 'aspect', 'glitch', 'env', 'punch', 'lens', 'mosaic', 'tint', 'mirror', 'strobe', 'tintC', 'up'].forEach((n) => (U[n] = gl.getUniformLocation(P, n)));
-  const UB = {}; ['S', 'H', 'scan', 'head', 'OV', 'ovOp', 'GA', 'TX', 'maq', 'mt', 'menv', 'mlen', 'mrows', 'mlod', 'mres', 'macc', 'moff', 'OJ', 'ojoK'].forEach((n) => (UB[n] = gl.getUniformLocation(PB, n)));
+  const UB = {}; ['S', 'H', 'scan', 'head', 'OV', 'ovOp', 'GA', 'TX', 'maq', 'mt', 'menv', 'mlen', 'mrows', 'mlod', 'mres', 'macc', 'moff', 'OJ', 'ojoK', 'ojoMq'].forEach((n) => (UB[n] = gl.getUniformLocation(PB, n)));
   function tex() { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
@@ -367,9 +374,10 @@
   // OJO como sensor: cámara + IA sin imagen, oculto en esta ventana (siempre a la vista, nunca se pausa).
   // Envía la presencia directamente a la consola por BroadcastChannel('voidloom-presencia').
   let ojoFr = null, ojoSt = '', ojoK = 0, ojoShown = false, ojoMode = 'bordes';
-  // Modo de OJO para el visitante: BORDES (contornos + puntos clave). Es una sola pasada de GPU, el más rápido,
-  // y dibuja el cuerpo entero aunque no se vea la cara. Para alternar entre varios, añadirlos a la lista.
-  const OJO_MODES = ['bordes'];
+  // El visitante: BORDES de OJO (contornos + puntos clave; una sola pasada de GPU, dibuja el cuerpo entero aunque
+  // no se vea la cara) y, por encima, MÁQUINA escribiéndolo con el código de la pieza que suena.
+  // OJO_LOOK = 'bordes' para ver solo los contornos. Para alternar entre varios modos de OJO, añadirlos a la lista.
+  const OJO_MODES = ['bordes'], OJO_LOOK = 'mix';
   const ojoTex = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, ojoTex);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
@@ -534,7 +542,7 @@
     // VISTA MÁQUINA: entra y sale con un fundido corto; apagada no cuesta nada
     maqS += ((viewOn && isMaq ? Math.min(1, FX.viewOp / 0.85) * ALT.k : 0) - maqS) * 0.14;
     if (maqS < 0.002) maqS = 0;
-    if (maqS > 0) {
+    if (maqS > 0 || (ojoK > 0 && OJO_LOOK === 'mix')) {
       const api = D[MIX.onAir].api; CL.machineSrc(api && api.src);
       const rows = Math.round(Math.min(78, Math.max(40, cv.height / 15)));
       gl.activeTexture(gl.TEXTURE11); gl.bindTexture(gl.TEXTURE_2D, CL.M.atlas); gl.uniform1i(UB.GA, 11);
@@ -562,7 +570,7 @@
         gl.uniform1i(UB.OJ, 13); ojoOn = ojoK;
       }
     }
-    gl.uniform1f(UB.ojoK, ojoOn);
+    gl.uniform1f(UB.ojoK, ojoOn); gl.uniform1f(UB.ojoMq, OJO_LOOK === 'mix' ? 1 : 0);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fin.t); gl.uniform1i(UB.S, 0);
     gl.activeTexture(gl.TEXTURE10); gl.bindTexture(gl.TEXTURE_2D, CL.tex); gl.uniform1i(UB.OV, 10);
     gl.uniform1f(UB.ovOp, codeOn ? FX.viewOp * ALT.k : 0);
