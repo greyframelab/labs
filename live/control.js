@@ -502,7 +502,7 @@
   //   MEZCLA: suena con las piezas. SOLO CAJA: las piezas siguen en imagen pero mudas; solo suena la caja.
   // · Reloj MIDI: si la caja lo manda, las piezas siguen su tempo (como SYNC, en la relación ½ ⅔ 1 3:2 2 más cercana).
   const EXT_M = ['APAGADA', 'MEZCLA', 'SOLO CAJA'];
-  const EXT = { mode: 0, stream: null, src: null, an: null, buf: null, name: '', prev: 0, mean: 0.02, last: 0, tk: [], bpm: 0, clkAt: 0, lastFollow: 0 };
+  const EXT = { cnt: 0, started: false, mode: 0, stream: null, src: null, an: null, buf: null, name: '', prev: 0, mean: 0.02, last: 0, tk: [], bpm: 0, clkAt: 0, lastFollow: 0 };
   async function extOpen() {
     if (EXT.stream) return true;
     if (!navigator.mediaDevices) return false;
@@ -567,7 +567,34 @@
     if (st === 0xf8) {
       EXT.tk.push(ts); if (EXT.tk.length > 49) EXT.tk.shift();
       if (EXT.tk.length >= 25) { const bpm = 60000 / ((EXT.tk[EXT.tk.length - 1] - EXT.tk[0]) / (EXT.tk.length - 1) * 24); EXT.bpm = EXT.bpm ? EXT.bpm + (bpm - EXT.bpm) * 0.2 : bpm; EXT.clkAt = performance.now(); }
-    } else if (st === 0xfc) { EXT.tk = []; }
+      // cada negra de la caja (24 pulsos); cada compás (96) si sabemos dónde empezó (START)
+      if (EXT.cnt % 24 === 0) extPhase(performance.timeOrigin + ts, EXT.started && EXT.cnt % 96 === 0);
+      EXT.cnt++;
+    } else if (st === 0xfa) { EXT.cnt = 0; EXT.started = true; }        // START: el siguiente pulso es el 1 del compás
+    else if (st === 0xfc) { EXT.tk = []; EXT.started = false; }
+  }
+  // FASE: que los pulsos de la pieza caigan en los de la caja (y el 1 del compás en su 1, si la caja mandó START).
+  // Mide el desfase en cada negra de la caja y, si pasa de 20 ms, recoloca la pieza en la siguiente negra.
+  function extPhase(wall, isBar) {
+    if (!EXT.mode || !EXT.bpm || performance.now() - EXT.clkAt > 1500) return;
+    const beatMs = 60000 / EXT.bpm;
+    for (const id of ['A', 'B']) {
+      const d = DECK[id];
+      if (!d.state || !d.item || !d.item.bpm || !d.meta || d.stopped || d.state.freeze != null || d.slip || d.state.ramp) continue;
+      if (EXT.started && !isBar) continue;                        // con START se alinea por compases
+      if (performance.now() - (d.extFix || 0) < beatMs * 3.5) continue;
+      const p = curPos(d, wall), g = barGrid(d, p), unit = EXT.started ? g.bar : g.bar / 4;
+      let ph = ((p - g.anchor) / unit) % 1; if (ph < 0) ph += 1;
+      const err = (ph > 0.5 ? ph - 1 : ph) * unit;                // segundos de pieza por delante (+) o por detrás (−)
+      if (Math.abs(err) < 0.02 * Math.abs(d.state.rate || 1)) continue;
+      const at = wall + beatMs * (EXT.started ? 4 : 1);
+      if (at < now() + LEAD) continue;
+      const s = d.state;
+      let pos = curPos(d, at) - err;
+      if (pos < s.a || pos >= s.b) pos = VLL.clamp(pos, s.a, s.b - 0.05);
+      commit(d, { pos }, at); queued(d, at);
+      d.extFix = performance.now();
+    }
   }
   // las piezas siguen el tempo de la caja (solo con la entrada encendida y el reloj llegando)
   function extFollow() {
