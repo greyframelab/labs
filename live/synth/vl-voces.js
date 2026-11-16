@@ -30,7 +30,7 @@
     const top = ctx.createBiquadFilter(); top.type = 'lowpass'; top.frequency.value = opt.top || 15500; top.Q.value = 0.5;
     const gate = ctx.createGain();                                           // silencio real (corte → ruptura)
     master.connect(glue).connect(top).connect(lim).connect(gate).connect(dest);
-    function silencio(t1, t2) { gate.gain.setValueAtTime(1, t1 - 0.004); gate.gain.linearRampToValueAtTime(0, t1); gate.gain.setValueAtTime(0, t2 - 0.002); gate.gain.linearRampToValueAtTime(1, t2); }
+    function silencio(t1, t2) { if (t1 < 0.01) return; gate.gain.setValueAtTime(1, t1 - 0.004); gate.gain.linearRampToValueAtTime(0, t1); gate.gain.setValueAtTime(0, t2 - 0.002); gate.gain.linearRampToValueAtTime(1, t2); }
     const drums = ctx.createGain(); drums.connect(master);
     const crushIn = ctx.createBiquadFilter(); crushIn.type = 'highpass'; crushIn.frequency.value = 180;
     const sat = ctx.createWaveShaper(); sat.curve = curveTanh(2.6); sat.oversample = '2x';
@@ -76,7 +76,7 @@
       crackleDens: V(1, 0.3), hatPitch: V(1, 0.06),
     };
     let idx = 0;
-    const at = (voz, t) => t + mt(voz) + jit(voz, ++idx);
+    const at = (voz, t) => Math.max(0, t + mt(voz) + jit(voz, ++idx));
 
     // ================= instrumentos
     // bombo diseñado: cuerpo con barrido de tono, click corto, cola; saturación suave
@@ -139,7 +139,7 @@
     function crackle(t, o) {
       const len = o.len || 0.45, n = Math.round((o.n || 26) * T.crackleDens), vel = (o.vel ?? 1);
       for (let i = 0; i < n; i++) {
-        const u = i / n, tt = t + len * Math.pow(u, 0.62) + (hash(i, o.seed || 5) - 0.5) * 0.008;
+        const u = i / n, tt = Math.max(0, t + len * Math.pow(u, 0.62) + (hash(i, o.seed || 5) - 0.5) * 0.008);
         const src = ctx.createBufferSource(); src.buffer = noiseBuf; const bp = ctx.createBiquadFilter(), g = ctx.createGain();
         bp.type = 'bandpass'; bp.frequency.value = 1800 + 3200 * u + 900 * hash(i, 3); bp.Q.value = 6;
         env(g, tt, 0.0003, (0.12 + 0.18 * u) * vel * (0.5 + hash(i, 9)), 0.004);

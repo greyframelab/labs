@@ -20,7 +20,7 @@
   const PIEZAS = {
     // ESCARCHA · 122 bpm · hielo que cruje y se rompe
     escarcha: {
-      dur: 25.5, room: 0.26, opt: { gain: 0.38, top: 9000, tickLP: 3800, tickGain: 0.55 },
+      g: 'ESC', dur: 25.5, room: 0.26, opt: { gain: 0.32, top: 9000, tickLP: 3800, tickGain: 0.55 },
       play(M, S, t0) {
         const T = S.T, G0 = S.G0 || 220;
         const d = M.Dron({ root: 49.0, parts: [2, 3, 5], cut: 380, partGain: 0.17, sub: 0.32 });
@@ -57,7 +57,7 @@
 
     // CAMPO · campo magnético, pulsos dispersos y luego groove
     campo: {
-      dur: 24.5, room: 0.3, opt: { gain: 0.46 },
+      g: 'CMP', dur: 24.5, room: 0.3, opt: { gain: 0.39 },
       play(M, S, t0) {
         const T = S.T;
         const d = M.Dron({ root: 41.2, parts: [2, 3, 4], cut: 440, partGain: 0.15, sub: 0.55 });
@@ -92,7 +92,7 @@
 
     // ECO · sonar en una sala enorme, anillos que golpean
     eco: {
-      dur: 24.5, room: 0.38, opt: { gain: 0.64, tickGain: 1.7, pingBright: 1.6, tickLP: 9000 },
+      g: 'ECO', dur: 24.5, room: 0.38, opt: { gain: 0.58, tickGain: 1.7, pingBright: 1.6, tickLP: 9000 },
       play(M, S, t0) {
         const T = S.T;
         const d = M.Dron({ root: 27.5, parts: [2, 3, 4, 6], cut: 520, partGain: 0.17, sub: 0.45 });
@@ -115,15 +115,17 @@
     },
   };
 
-  // render sin conexión (validación) → Float32 L/R
-  async function render(nombre, S, seed, sr) {
+  // render sin conexión → AudioBuffer (el live lo usa como el audio grabado: loops, reverse, velocidad…)
+  async function renderBuffer(nombre, S, seed, sr, dur) {
     const P = PIEZAS[nombre]; sr = sr || 48000;
-    const ctx = new OfflineAudioContext(2, Math.ceil(P.dur * sr), sr);
+    const ctx = new OfflineAudioContext(2, Math.ceil((dur || P.dur) * sr), sr);
     const M = root.VLVoces.Motor(ctx, ctx.destination, Object.assign({ seed, room: P.room }, P.opt));
-    P.play(M, S, 0.05);
-    const b = await ctx.startRendering();
-    return [b.getChannelData(0), b.getChannelData(1)];
+    P.play(M, S, 0);
+    return ctx.startRendering();
   }
+  async function render(nombre, S, seed, sr, dur) { const b = await renderBuffer(nombre, S, seed, sr, dur); return [b.getChannelData(0), b.getChannelData(1)]; }
+  // pieza del live (id de carpeta, p. ej. lab-33-escarcha) → mapeo
+  function find(id) { const k = Object.keys(PIEZAS).find((n) => new RegExp('-' + n + '/?$').test(String(id))); return k ? Object.assign({ k }, PIEZAS[k]) : null; }
 
-  root.VLPiezas = { PIEZAS, render };
+  root.VLPiezas = { PIEZAS, render, renderBuffer, find };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -13,7 +13,7 @@
 
   // ================================================================== estado global
   const LIB = [];
-  const MIX = { xf: 0, mode: 'fundido', onAir: 'A', quality: store.get('calidadAuto', 0), imp: store.get('impermanencia', false) };
+  const MIX = { xf: 0, mode: 'fundido', onAir: 'A', quality: store.get('calidadAuto', 0), imp: store.get('impermanencia', false), aud: store.get('audioSintesis', false) };
   const FX = { trail: 0, hits: 0, split: 0, invert: 0, black: 0, bright: 1, glitch: 0, punch: 0, lens: 0, mosaic: 0, tint: 0, scan: 0, mirror: 0, strobe: 0, tintC: '#ffffff',
     pBloom: 1, pFlash: 1, pScan: 0.2, cMix: 0, view: 0, viewOp: 0.85, viewMode: 'full' };
   const AFX = { filter: 0, echo: 0, echoT: 0.375, room: 0.12, master: 0.9, av: store.get('av', 0) };
@@ -47,7 +47,9 @@
   }
   // lee duración y actos de cada pieza cargándola un momento sin dibujarla
   const probeWaiters = new Map();
-  window.VL_LIVE = { register(win, o) { const f = probeWaiters.get(win); if (f) f(o); } };
+  window.VL_LIVE = { register(win, o) { const f = probeWaiters.get(win); if (f) f(o); },
+    // diagnóstico: qué piezas tienen síntesis y qué suena en cada deck
+    estado: () => ({ syn: SYN, sintesis: LIB.filter(canSynth).map((it) => it.id), decks: Object.fromEntries(Object.entries(DECK).map(([k, d]) => [k, { pieza: d.item && d.item.id, semilla: d.state && d.state.seed, sintesis: !!(d.item && d.buf && d.buf !== d.item.buf) }])) }) };
   function probe(item) {
     return new Promise((res) => {
       const fr = document.createElement('iframe');
@@ -59,8 +61,44 @@
       document.body.appendChild(fr);
       fr.src = item.src + '?live';
       probeWaiters.set(fr.contentWindow, (o) => done({ duration: o.duration, acts: o.acts.map(([t, n]) => [+t, String(n)]), accent: o.accent,
-        live: o.live ? JSON.parse(JSON.stringify(o.live)) : null }));
+        live: o.live ? JSON.parse(JSON.stringify(o.live)) : null, score: grabScore(item, fr.contentWindow) }));
     });
+  }
+  // partitura de la pieza (la misma que mueve la imagen), para la síntesis de audio
+  function grabScore(item, win) {
+    const P = window.VLPiezas && VLPiezas.find(item.id);
+    try { return P && win[P.g] ? JSON.parse(JSON.stringify(win[P.g])) : null; } catch (e) { return null; }
+  }
+  // SÍNTESIS: el audio de la pieza se genera en un buffer con la semilla del pase (imagen y sonido comparten semilla)
+  const newSeed = () => 1 + Math.floor(Math.random() * 2147483646);
+  const canSynth = (it) => !!(window.VLPiezas && it && it.score && it.buf && VLPiezas.find(it.id));
+  function reverse(buf) {
+    const rev = ctx.createBuffer(buf.numberOfChannels, buf.length, buf.sampleRate);
+    for (let c = 0; c < buf.numberOfChannels; c++) { const s = buf.getChannelData(c), r = rev.getChannelData(c), n = s.length; for (let i = 0; i < n; i++) r[i] = s[n - 1 - i]; }
+    return rev;
+  }
+  const SYN = {};
+  async function deckAudio(d) {
+    const it = d.item; if (!it) return;
+    const seed = d.state ? d.state.seed || 0 : 0;
+    let buf = it.buf, rev = it.rev;
+    SYN.last = { id: it.id, aud: MIX.aud, can: canSynth(it), seed };
+    if (MIX.aud && canSynth(it)) {
+      const key = it.id + ':' + seed;
+      if (d.synthKey === key && d.synth) ({ buf, rev } = d.synth);
+      else {
+        try {
+          const t0 = performance.now();
+          const b = await VLPiezas.renderBuffer(VLPiezas.find(it.id).k, it.score, seed, ctx.sampleRate, it.buf.duration);
+          SYN.ms = Math.round(performance.now() - t0);
+          if (d.item !== it || (d.state && (d.state.seed || 0) !== seed) || !MIX.aud) { SYN.drop = (SYN.drop || 0) + 1; return; }
+          d.synth = { buf: b, rev: reverse(b) }; d.synthKey = key; ({ buf, rev } = d.synth);
+        } catch (e) { SYN.err = String(e); console.warn('síntesis', it.id, e); }
+      }
+    }
+    if (d.buf === buf) return;
+    d.buf = buf; d.rev = rev;
+    if (d.state) play(d);                        // mismo punto de la pieza, fundido corto
   }
   // golpes: flujo de energía de alta frecuencia con umbral adaptativo
   function onsets(buf) {
@@ -306,8 +344,9 @@
     d.item = item; d.meta = item.meta; d.buf = item.buf; d.rev = item.rev; d.hits = item.hits;
     d.ready = false; d.loop = false; d.stopped = false; d.slip = null; d.rev_ = false; clearTimeout(d.rampT);
     d.state = null;
-    commit(d, { piece: item.id, src: item.src, pos: 0, rate: d.speed, a: 0, b: end(d), x: X0, once: false, freeze: null }, wall);
+    commit(d, { piece: item.id, src: item.src, seed: MIX.imp ? newSeed() : 0, pos: 0, rate: d.speed, a: 0, b: end(d), x: X0, once: false, freeze: null }, wall);
     queued(d, wall);
+    deckAudio(d);
     ch.postMessage({ type: 'hits', piece: item.id, hits: item.hits });
     renderDeckUI(d); markLib();
   }
@@ -962,9 +1001,17 @@
     const qc = document.createElement('div'); qc.className = 'grp'; qc.innerHTML = '<span class="lbl" style="font-size:7.5px">CALIDAD</span><div class="seg" id="qual"><button data-v="0" title="Cada pieza a la resolución que el ordenador aguanta con fluidez">AUTO</button><button data-v="1">100</button><button data-v="0.75">75</button><button data-v="0.5">50</button></div>'; fs.appendChild(qc);
     // IMPERMANENCIA: cada pase, una versión única de la pieza (se aplica a lo que se cargue a partir de ahora)
     const ig = document.createElement('div'); ig.className = 'grp';
-    ig.innerHTML = '<button class="tg" id="tg-imp" title="Cada vez que una pieza entra es una versión única e irrepetible (cámara, geometría). Apagado: la versión canónica de la web y el vídeo.">IMPERMANENCIA</button>';
+    ig.innerHTML = '<button class="tg" id="tg-imp" title="Cada vez que una pieza entra es una versión única e irrepetible (cámara, geometría). Apagado: la versión canónica de la web y el vídeo.">IMPERMANENCIA</button>'
+      + '<button class="tg" id="tg-aud" title="Audio de las piezas. GRABADO: el audio original. SÍNTESIS: generado en el momento a partir de la partitura; con IMPERMANENCIA, cada pase suena distinto.">AUDIO · GRABADO</button>';
     fs.appendChild(ig);
     const ib = $('#tg-imp'); ib.classList.toggle('on', !!MIX.imp);
+    const ab = $('#tg-aud'); const abSet = () => { ab.classList.toggle('on', !!MIX.aud); ab.textContent = 'AUDIO · ' + (MIX.aud ? 'SÍNTESIS' : 'GRABADO'); };
+    abSet();
+    ab.addEventListener('click', () => {
+      MIX.aud = !MIX.aud; store.set('audioSintesis', MIX.aud); abSet(); fitFx();
+      for (const k in DECK) deckAudio(DECK[k]);
+      toast(MIX.aud ? 'AUDIO · SÍNTESIS (' + LIB.filter(canSynth).length + ' PIEZAS; EL RESTO, GRABADO)' : 'AUDIO · GRABADO');
+    });
     ib.addEventListener('click', () => { MIX.imp = !MIX.imp; store.set('impermanencia', MIX.imp); ib.classList.toggle('on', MIX.imp); sendState(); toast(MIX.imp ? 'IMPERMANENCIA · CADA PASE SERÁ ÚNICO (DESDE LA PRÓXIMA PIEZA)' : 'IMPERMANENCIA · VERSIÓN CANÓNICA'); fitFx(); });
     $('#tg-ext').addEventListener('click', extCycle);
     const ob = $('#tg-ojo'); ob.classList.toggle('on', PRES.on);
@@ -1326,9 +1373,7 @@
       try {
         const ab = await fetch(it.audio).then((r) => r.arrayBuffer());
         const buf = await ctx.decodeAudioData(ab);
-        const rev = ctx.createBuffer(buf.numberOfChannels, buf.length, buf.sampleRate);
-        for (let c = 0; c < buf.numberOfChannels; c++) { const s = buf.getChannelData(c), r = rev.getChannelData(c), n = s.length; for (let i = 0; i < n; i++) r[i] = s[n - 1 - i]; }
-        it.buf = buf; it.rev = rev; it.hits = onsets(buf);
+        it.buf = buf; it.rev = reverse(buf); it.hits = onsets(buf);
       } catch (e) { libStatus(it, 'SIN AUDIO'); }
       step();
     });
@@ -1338,6 +1383,7 @@
         const it = queue.shift(); log('LEYENDO ' + it.title + '…');
         const cached = store.get('meta:' + it.id, null);
         const m = await probe(it);
+        if (m) { it.score = m.score; delete m.score; }
         it.meta = m || cached;
         if (m) store.set('meta:' + it.id, m);
         step();

@@ -157,8 +157,8 @@
         const s = m.decks[k], d = D[k];
         if (!s) continue;
         const want = s.piece;
-        const have = d.next ? d.next.dataset.piece : d.frame ? d.frame.dataset.piece : null;
-        if (want && want !== have) loadPiece(k, want, s.src);
+        const fr = d.next || d.frame, have = fr ? fr.dataset.piece : null, seed = s.seed != null ? s.seed : null;
+        if (want && (want !== have || (seed != null && +fr.dataset.seed !== seed))) loadPiece(k, want, s.src, seed);
         if (s.wall > VLL.now()) d.pending.push(s); else { d.st = s; d.pending.length = 0; }
       }
       if (prevQ !== MIX.quality) reloadAll();
