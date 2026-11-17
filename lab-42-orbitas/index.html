@@ -1,0 +1,717 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Órbitas · VØID_LOOM · Greyframe Labs</title>
+<meta name="description" content="VØID_LOOM · Órbitas: un planeta de cromo negro mecanizado y cuatro satélites que avanzan a golpes con la música, en un estudio a oscuras que gira. Las órbitas se cierran hasta alinearse en una conjunción que abre un pasillo de reflejos infinitos.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&display=swap">
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden}
+canvas{width:100vw;height:100vh;display:block}
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920" role="img" aria-label="Órbitas: un planeta de cromo negro con un canal cian en el ecuador y cuatro satélites de cromo y obsidiana que giran a golpes de la música; la luz del estudio barre el metal, las órbitas se cierran y los cinco cuerpos se alinean en un destello cian que abre un pasillo de reflejos infinitos"></canvas>
+<script>
+// web: el lienzo ocupa toda la pantalla (apaisado en escritorio, vertical en móvil); ?render = 1080×1920 para el vídeo
+(function () {
+  if (new URLSearchParams(location.search).has('render')) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), w = innerWidth * dpr, h = innerHeight * dpr;
+  const k = Math.min(1, 1920 / Math.max(w, h));
+  window.VL_SIZE = [Math.round(w * k), Math.round(h * k)];
+  const c = document.getElementById('c'); c.width = window.VL_SIZE[0]; c.height = window.VL_SIZE[1];
+  const r0 = innerWidth / innerHeight; let tm;
+  addEventListener('resize', () => { clearTimeout(tm); tm = setTimeout(() => { const r = innerWidth / innerHeight; if (Math.abs(r - r0) / r0 > 0.12) location.reload(); }, 400); });
+})();
+</script>
+<script>
+/* VØID_LOOM — núcleo compartido + firma animada (sting) de cierre.
+   Todo es determinista: el estado de cada frame depende solo de t.
+   Uso en cualquier lab:  VL.post(...), VL.drawSymbol(...), VL.stingState(t, opts)  */
+(function () {
+  // tamaño del lienzo: 1080×1920 para el vídeo; la web puede fijar window.VL_SIZE = [w, h] antes de cargar
+  const W = (window.VL_SIZE && window.VL_SIZE[0]) || 1080, H = (window.VL_SIZE && window.VL_SIZE[1]) || 1920;
+  const VL = { W, H };
+  // marco virtual de la firma (1080×1920), centrado y escalado dentro del lienzo real
+  VL.FRAME = (function () { const k = Math.min(W / 1080, H / 1920); return { k, ox: (W - 1080 * k) / 2, oy: (H - 1920 * k) / 2 }; })();
+  VL.fx = (x) => VL.FRAME.ox + x * VL.FRAME.k;
+  VL.fy = (y) => VL.FRAME.oy + y * VL.FRAME.k;
+
+  // ---------- utilidades ----------
+  VL.clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+  VL.lerp = (a, b, k) => a + (b - a) * k;
+  VL.seg = (t, a, b) => VL.clamp((t - a) / (b - a));
+  VL.ease = {
+    inOut: (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2),
+    out: (x) => 1 - Math.pow(1 - x, 3),
+    outQuart: (x) => 1 - Math.pow(1 - x, 4),
+    outExpo: (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x)),
+    in: (x) => x * x * x,
+  };
+  VL.rng = function (seed) {
+    let a = seed >>> 0;
+    return function () {
+      a |= 0; a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  };
+  VL.hash = (a, b) => {
+    let h = Math.imul(a * 374761393 + b * 668265263, 1274126177);
+    h = (h ^ (h >>> 13)) * 1103515245;
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  };
+  VL.rgba = (hex, a) => {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  };
+  VL.INK = '#F2F0EA';
+  VL.GREY = '#8F8C86';
+  VL.ACCENTS = {
+    rojo: '#FF1A1A', cian: '#00E5FF', ambar: '#FFB000', verde: '#39FF6A',
+    violeta: '#8A2BFF', magenta: '#FF2BD6', blanco: '#F2F0EA',
+  };
+  VL.FONT = "'JetBrains Mono', ui-monospace, monospace";
+
+  // ---------- geometría del símbolo (viewBox 200 → pantalla) ----------
+  VL.geo = function (cx = 540, cy = 820, s = 3.0) {
+    const cols = [];
+    for (let k = 0; k < 7; k++) cols.push(cx + (k - 3) * 20 * s);
+    return {
+      cx, cy, s, cols,
+      R: 66 * s,                 // radio del vacío
+      top: cy - 86 * s, bottom: cy + 86 * s,
+      wA: [cx - 42 * s, cy + 42 * s], wB: [cx + 42 * s, cy - 42 * s],
+    };
+  };
+
+  // ---------- capas de post-procesado ----------
+  function mk(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+  let P = null;
+  function initPost() {
+    if (P) return P;
+    P = {};
+    P.scene = mk(W, H);
+    P.b1 = mk(W / 4, H / 4);
+    P.b2 = mk(W / 12, H / 12);
+    // grano: 6 texturas precalculadas
+    P.grain = [];
+    const r = VL.rng(77);
+    for (let g = 0; g < 6; g++) {
+      const c = mk(540, 960), x = c.getContext('2d');
+      const im = x.createImageData(540, 960);
+      for (let i = 0; i < im.data.length; i += 4) {
+        const v = (r() * 255) | 0;
+        im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255;
+      }
+      x.putImageData(im, 0, 0);
+      P.grain.push(c);
+    }
+    // scanlines
+    P.scan = mk(W, H);
+    const sx = P.scan.getContext('2d');
+    sx.fillStyle = 'rgba(0,0,0,0.22)';
+    for (let y = 0; y < H; y += 4) sx.fillRect(0, y, W, 1.5);
+    // viñeta
+    P.vig = mk(W, H);
+    const vx = P.vig.getContext('2d');
+    const gr = vx.createRadialGradient(W / 2, H * 0.45, H * 0.18, W / 2, H * 0.45, H * 0.72);
+    gr.addColorStop(0, 'rgba(0,0,0,0)');
+    gr.addColorStop(1, 'rgba(0,0,0,0.78)');
+    vx.fillStyle = gr; vx.fillRect(0, 0, W, H);
+    return P;
+  }
+  VL.sceneCtx = function () {
+    const p = initPost();
+    const c = p.scene.getContext('2d');
+    c.globalCompositeOperation = 'source-over';
+    c.globalAlpha = 1;
+    c.fillStyle = '#000'; c.fillRect(0, 0, W, H);
+    c.globalCompositeOperation = 'lighter';
+    return c;
+  };
+  // compone escena → salida con bloom, flash, scanlines, viñeta y grano
+  VL.post = function (out, frame, opt = {}) {
+    const p = initPost();
+    const bloom = opt.bloom ?? 1, flash = opt.flash ?? 0;
+    const b1 = p.b1.getContext('2d'), b2 = p.b2.getContext('2d');
+    b1.globalCompositeOperation = 'copy'; b1.filter = 'blur(3px)';
+    b1.drawImage(p.scene, 0, 0, p.b1.width, p.b1.height); b1.filter = 'none';
+    b2.globalCompositeOperation = 'copy'; b2.filter = 'blur(4px)';
+    b2.drawImage(p.b1, 0, 0, p.b2.width, p.b2.height); b2.filter = 'none';
+
+    out.globalCompositeOperation = 'source-over'; out.globalAlpha = 1;
+    out.drawImage(p.scene, 0, 0);
+    out.globalCompositeOperation = 'lighter';
+    out.imageSmoothingEnabled = true; out.imageSmoothingQuality = 'high';
+    out.globalAlpha = VL.clamp(0.85 * bloom, 0, 1); out.drawImage(p.b1, 0, 0, W, H);
+    out.globalAlpha = VL.clamp(0.9 * bloom, 0, 1); out.drawImage(p.b2, 0, 0, W, H);
+    if (bloom > 1.1) { out.globalAlpha = VL.clamp((bloom - 1) * 0.5, 0, 1); out.drawImage(p.b2, 0, 0, W, H); }
+    if (flash > 0) {
+      out.globalAlpha = 1;
+      out.fillStyle = opt.flashColor ? VL.rgba(opt.flashColor, flash * 0.22) : `rgba(242,240,234,${flash * 0.22})`;
+      out.fillRect(0, 0, W, H);
+    }
+    out.globalAlpha = 1;
+    out.globalCompositeOperation = 'source-over';
+    out.globalAlpha = opt.scan ?? 1; out.drawImage(p.scan, 0, 0); out.globalAlpha = 1;
+    out.globalAlpha = opt.vig ?? 1; out.drawImage(p.vig, 0, 0); out.globalAlpha = 1;
+    // grano sutil: en zonas planas y luminosas (horizontes, halos) un grano fuerte ensucia la imagen
+    const g = p.grain[frame % p.grain.length], gk = opt.grain ?? 1;
+    out.globalCompositeOperation = 'overlay'; out.globalAlpha = 0.11 * gk;
+    out.drawImage(g, 0, 0, W, H);
+    out.globalCompositeOperation = 'lighter'; out.globalAlpha = 0.01 * gk;
+    out.drawImage(g, 0, 0, W, H);
+    out.globalAlpha = 1; out.globalCompositeOperation = 'source-over';
+  };
+
+  // ---------- primitivas de luz ----------
+  // línea luminosa: halo ancho + cuerpo + núcleo caliente
+  VL.lightLine = function (c, x1, y1, x2, y2, col, w, k = 1) {
+    c.lineCap = 'round';
+    const pass = (lw, a, cc) => { c.strokeStyle = VL.rgba(cc, a * k); c.lineWidth = lw; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); };
+    pass(w * 7, 0.06, col);
+    pass(w * 3.2, 0.16, col);
+    pass(w, 0.95, col);
+    pass(Math.max(1.2, w * 0.3), 0.55, '#FFFFFF');
+  };
+
+  // ---------- el símbolo ----------
+  // st: { threads, top, bottom, vib, open, ring, ringColor, weft, weftGlow, ghost, accent, ca, dim }
+  VL.drawSymbol = function (c, g, st, t) {
+    const acc = st.accent;
+    const R = g.R * (st.open || 0);
+    const thr = st.threads ?? 1;
+    const dim = st.dim ?? 1;
+    const top = st.top ?? g.top, bottom = st.bottom ?? g.bottom;
+    const vib = st.vib || 0;
+    const coreW = 3 * g.s;
+
+    // fantasma de los hilos dentro del vacío
+    if ((st.ghost || 0) > 0 && thr > 0) {
+      c.lineCap = 'butt';
+      c.strokeStyle = VL.rgba(VL.INK, 0.1 * st.ghost * thr * dim);
+      c.lineWidth = coreW;
+      c.beginPath();
+      for (const x of g.cols) { c.moveTo(x, Math.max(top, g.cy - R)); c.lineTo(x, Math.min(bottom, g.cy + R)); }
+      c.stroke();
+    }
+
+    // urdimbre: 7 hilos (con vibración de cuerda y corte del vacío)
+    if (thr > 0) {
+      const passes = [[coreW * 5, 0.05], [coreW * 2.2, 0.14], [coreW, 0.92], [coreW * 0.35, 0.45]];
+      for (let pi = 0; pi < passes.length; pi++) {
+        const [lw, a] = passes[pi];
+        c.lineCap = 'butt';
+        c.lineWidth = lw;
+        c.strokeStyle = pi === 3 ? `rgba(255,255,255,${a * thr * dim})` : VL.rgba(VL.INK, a * thr * dim);
+        c.beginPath();
+        for (let k = 0; k < 7; k++) {
+          const X = g.cols[k], dx = X - g.cx;
+          const h = R > Math.abs(dx) ? Math.sqrt(R * R - dx * dx) : 0;
+          const segs = h > 0 ? [[top, g.cy - h], [g.cy + h, bottom]] : [[top, bottom]];
+          for (const [ya, yb] of segs) {
+            if (yb - ya < 1) continue;
+            const n = vib > 0.3 ? 48 : 1;
+            for (let i = 0; i <= n; i++) {
+              const y = ya + (yb - ya) * (i / n);
+              const u = (y - top) / Math.max(1, bottom - top);
+              const off = vib * Math.sin(Math.PI * u) * Math.sin(t * 23 + k * 1.7 + u * 9.0) * (0.6 + 0.4 * Math.sin(k * 2.3 + t * 3));
+              if (i === 0) c.moveTo(X + off, y); else c.lineTo(X + off, y);
+            }
+          }
+        }
+        c.stroke();
+      }
+    }
+
+    // onda de choque del vacío
+    if (st.ring != null && st.ring >= 0 && st.ring < 1) {
+      const rr = g.R * (1 + 1.9 * VL.ease.out(st.ring));
+      const a = Math.pow(1 - st.ring, 2);
+      const rc = st.ringColor || acc;
+      c.strokeStyle = VL.rgba(rc, 0.9 * a); c.lineWidth = 10 * (1 - st.ring) + 1.5;
+      c.beginPath(); c.arc(g.cx, g.cy, rr, 0, Math.PI * 2); c.stroke();
+      c.strokeStyle = VL.rgba(VL.INK, 0.5 * a); c.lineWidth = 2;
+      c.beginPath(); c.arc(g.cx, g.cy, rr * 0.93, 0, Math.PI * 2); c.stroke();
+    }
+
+    // trama: el hilo de color
+    if ((st.weft || 0) > 0) {
+      const p = st.weft;
+      const [ax, ay] = g.wA, [bx, by] = g.wB;
+      const hx = VL.lerp(ax, bx, p), hy = VL.lerp(ay, by, p);
+      const gk = (st.weftGlow ?? 1) * dim;
+      const ww = 5 * g.s;
+      const ca = st.ca || 0;
+      if (ca > 0.5) {
+        VL.lightLine(c, ax - ca, ay, hx - ca, hy, '#FF2A2A', ww * 0.8, 0.45 * gk);
+        VL.lightLine(c, ax + ca, ay, hx + ca, hy, '#2AB8FF', ww * 0.8, 0.45 * gk);
+      }
+      VL.lightLine(c, ax, ay, hx, hy, acc, ww, gk);
+      if (p < 1) { // cabeza incandescente
+        const gr = c.createRadialGradient(hx, hy, 0, hx, hy, 90);
+        gr.addColorStop(0, 'rgba(255,255,255,0.95)');
+        gr.addColorStop(0.15, VL.rgba(acc, 0.8));
+        gr.addColorStop(1, VL.rgba(acc, 0));
+        c.fillStyle = gr; c.beginPath(); c.arc(hx, hy, 90, 0, Math.PI * 2); c.fill();
+      }
+    }
+  };
+
+  // ---------- texto ----------
+  const GLYPHS = 'Ø#/\\|_=+<>01X:;*%';
+  VL.decodeText = function (c, str, x, y, opt) {
+    const size = opt.size || 40, spacing = opt.spacing ?? 0.42, prog = opt.prog ?? 1;
+    const alpha = opt.alpha ?? 1, align = opt.align || 'center';
+    const weight = opt.weight || 300, t = opt.t || 0, seed = opt.seed || 1;
+    c.font = `${weight} ${size}px ${VL.FONT}`;
+    c.textBaseline = 'middle'; c.textAlign = 'left';
+    const adv = c.measureText('M').width + size * spacing;
+    const total = adv * str.length - size * spacing;
+    let x0 = align === 'center' ? x - total / 2 : align === 'right' ? x - total : x;
+    const n = str.length;
+    for (let i = 0; i < n; i++) {
+      const ch = str[i];
+      if (ch === ' ') continue;
+      const ri = VL.clamp((prog * (n + 3) - i) / 3);
+      if (ri <= 0) continue;
+      let draw = ch;
+      if (ri < 1) draw = GLYPHS[Math.floor(VL.hash(i + seed * 31, Math.floor(t * 24)) * GLYPHS.length)];
+      const isAcc = opt.accentChar && ch === opt.accentChar && ri >= 1;
+      const col = isAcc ? opt.accent : (opt.color || VL.INK);
+      c.font = `${isAcc ? 600 : weight} ${size}px ${VL.FONT}`;
+      c.fillStyle = VL.rgba(col, alpha * (ri < 1 ? 0.55 + 0.45 * ri : 1));
+      c.fillText(draw, x0 + i * adv, y);
+    }
+  };
+
+  // HUD de esquinas (telemetría)
+  VL.hud = function (c, t, opt = {}) {
+    const a = opt.alpha ?? 1;
+    if (a <= 0) return;
+    c.font = `400 22px ${VL.FONT}`;
+    c.textBaseline = 'middle';
+    c.fillStyle = VL.rgba(VL.GREY, 0.9 * a);
+    const fps = 30, tt = Math.max(0, t);
+    const tc = [Math.floor(tt / 3600), Math.floor(tt / 60) % 60, Math.floor(tt) % 60, Math.floor((tt % 1) * fps)]
+      .map((v) => String(v).padStart(2, '0')).join(':');
+    c.textAlign = 'left'; c.fillText(opt.tl || 'VØID_LOOM / SYS.01', 72, 120);
+    c.textAlign = 'right'; c.fillText(tc, W - 72, 120);
+    c.textAlign = 'left'; c.fillText(opt.bl || 'GREYFRAME LABS', 72, 1640);
+    c.textAlign = 'right'; c.fillText(opt.br || 'SEÑAL 07/07', W - 72, 1640);
+    // corchetes de encuadre
+    c.strokeStyle = VL.rgba(VL.GREY, 0.55 * a); c.lineWidth = 2;
+    const m = 48, L = 36;
+    c.beginPath();
+    c.moveTo(m, m + L); c.lineTo(m, m); c.lineTo(m + L, m);
+    c.moveTo(W - m - L, m); c.lineTo(W - m, m); c.lineTo(W - m, m + L);
+    c.moveTo(m, 1700 - L); c.lineTo(m, 1700); c.lineTo(m + L, 1700);
+    c.moveTo(W - m - L, 1700); c.lineTo(W - m, 1700); c.lineTo(W - m, 1700 - L);
+    c.stroke();
+  };
+
+  // ---------- cierre: logotipo + firma ----------
+  VL.drawSignature = function (c, g, st, t) {
+    if ((st.wordAlpha || 0) > 0)
+      VL.decodeText(c, 'VØID_LOOM', g.cx, g.bottom + 150, {
+        size: 70, spacing: 0.42, prog: st.word, alpha: st.wordAlpha, t, seed: 3,
+        accentChar: 'Ø', accent: st.accent, weight: 300,
+      });
+    if ((st.tag || 0) > 0)
+      VL.decodeText(c, 'SEÑAL · RUIDO · MOTION EXPERIMENTAL', g.cx, g.bottom + 240, {
+        size: 22, spacing: 0.5, prog: VL.clamp(st.tag * 1.6), alpha: st.tag, t, seed: 5, color: VL.GREY, weight: 400,
+      });
+    const lines = st.creditLines || ['GREYFRAME LABS', 'greyframelab.github.io/labs'];
+    if ((st.credit || 0) > 0) {
+      VL.decodeText(c, lines[0], g.cx, 1500, { size: 24, spacing: 0.34, prog: VL.clamp(st.credit * 1.5), alpha: st.credit, t, seed: 7, color: '#BDBAB3', weight: 400 });
+      if (lines[1]) VL.decodeText(c, lines[1], g.cx, 1550, { size: 22, spacing: 0.06, prog: VL.clamp(st.credit * 1.5 - 0.3), alpha: st.credit * 0.9, t, seed: 9, color: VL.GREY, weight: 400 });
+    }
+  };
+
+  // ---------- STING: firma animada reutilizable (5.5 s) ----------
+  // Llamar con t local (0 → VL.STING_DUR). opts: { accent, creditLines, skipDrop }
+  VL.STING_DUR = 5.5;
+  VL.stingState = function (t, opts = {}) {
+    const g = opts.geo || VL.geo();
+    const e = VL.ease, sg = VL.seg;
+    const drop = opts.skipDrop ? 1 : e.out(sg(t, 0.0, 0.7));
+    const tOpen = 0.75, tWeft = 1.05;
+    const out = 1 - e.inOut(sg(t, 4.7, 5.5));
+    return {
+      accent: opts.accent || VL.ACCENTS.rojo,
+      creditLines: opts.creditLines,
+      threads: drop * out,
+      top: VL.lerp(g.cy, g.top, drop), bottom: VL.lerp(g.cy, g.bottom, drop),
+      vib: 14 * (1 - sg(t, 0.2, 1.6)) * (t > 0.2 ? 1 : 0),
+      open: e.outExpo(sg(t, tOpen, tOpen + 0.35)),
+      ring: t >= tOpen ? sg(t, tOpen, tOpen + 0.9) : -1,
+      weft: e.outQuart(sg(t, tWeft, tWeft + 0.28)),
+      weftGlow: (1 + 0.12 * Math.sin(t * 2.4)) * VL.clamp(out + (1 - sg(t, 4.7, 5.4)) * 0.6),
+      ghost: sg(t, 1.2, 2.0),
+      ca: 10 * (1 - sg(t, tWeft, tWeft + 0.5)) * (t >= tWeft ? 1 : 0),
+      word: sg(t, 1.5, 2.6), wordAlpha: sg(t, 1.5, 1.7) * out,
+      tag: sg(t, 2.6, 3.2) * out,
+      credit: sg(t, 3.0, 3.6) * out,
+      flash: Math.max(t >= tOpen ? 1 - sg(t, tOpen, tOpen + 0.5) : 0, t >= tWeft ? 0.7 * (1 - sg(t, tWeft, tWeft + 0.45)) : 0),
+    };
+  };
+  // dibuja el sting completo en un contexto de escena
+  VL.drawSting = function (c, t, opts = {}) {
+    const g = opts.geo || VL.geo();
+    const st = VL.stingState(t, opts);
+    const F = VL.FRAME, framed = W !== 1080 || H !== 1920;
+    if (framed) { c.save(); c.translate(F.ox, F.oy); c.scale(F.k, F.k); }
+    VL.drawSymbol(c, g, st, t);
+    VL.drawSignature(c, g, st, t);
+    if (framed) c.restore();
+    return st;
+  };
+
+  window.VL = VL;
+})();
+</script>
+<script src="orbitas-score.js"></script>
+<script>
+/* VØID_LOOM — Lab 42 · Órbitas. Determinista y sin estado: renderFrame(t, frame) depende solo de t.
+   Cinco esferas de cromo y obsidiana en el vacío, trazadas de forma exacta (intersección analítica, hasta 12 rebotes):
+   cada una contiene a las demás y a sus reflejos, en un túnel fractal. La única luz es un anillo cian que gira. */
+(function () {
+  const VL = window.VL, W = VL.W, H = VL.H, clamp = VL.clamp;
+  const ACC = '#00E5FF';
+  const LIVE = /[?&]live\b/.test(location.search), QS = new URLSearchParams(location.search);
+  const SEMILLA = LIVE ? (+QS.get('semilla') || 0) : 0, Q3 = LIVE ? Math.max(0.3, Math.min(1, +QS.get('q3d') || 1)) : 1;
+  window.VL_Q3D = true;
+  const Z = window.ORB, { T, EV, warp } = Z;
+  const DUR = T.sting + VL.STING_DUR;
+  window.DURATION = DUR; window.FPS = 60;
+  const RENDER = /[?&]render\b/.test(location.search);           // la web pública va más ligera que el render del Reel
+  const SS = (window.ORB_SS || (RENDER ? 2.0 : 1.0)) * Q3, SW = Math.round(W * SS), SH_ = Math.round(H * SS);
+
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const gl = cv.getContext('webgl2', { alpha: false, antialias: false, preserveDrawingBuffer: true });
+  gl.getExtension('EXT_color_buffer_float');
+  function prog(vs, fs, attrs) {
+    const sh = (t, s) => { const x = gl.createShader(t); gl.shaderSource(x, s); gl.compileShader(x); if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(x)); return x; };
+    const p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
+    attrs.forEach((a, i) => gl.bindAttribLocation(p, i, a)); gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+    const U = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+    for (let i = 0; i < n; i++) { const nm = gl.getActiveUniform(p, i).name.replace('[0]', ''); U[nm] = gl.getUniformLocation(p, nm); }
+    return { p, U };
+  }
+  const TS = (() => { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA16F, SW, SH_);
+    for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v); return t; })();
+  const FS = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, FS); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, TS, 0);
+
+  const VSQ = `#version 300 es
+  in vec2 aQ; out vec2 vUv; void main(){ vUv = aQ * 0.5 + 0.5; gl_Position = vec4(aQ, 0., 1.); }`;
+  const FSR = `#version 300 es
+  precision highp float; in vec2 vUv; out vec4 o;
+  uniform vec3 uCam, uF, uR, uU, uAcc; uniform float uFy, uAsp;
+  uniform vec4 uSph[5];          // centro, radio
+  uniform vec4 uMat[5];          // x: 1 cromo / 0 obsidiana
+  uniform vec3 uRingN, uRingC; uniform float uRingR, uRingW, uRingI;   // el anillo de luz: normal, centro, radio, ancho, intensidad
+  uniform vec3 uStripN; uniform float uStripI; uniform float uFloor;                        // franja blanca lejana (una sola, tenue)
+  uniform float uPulse; uniform float uPan[7]; uniform float uPanRot; uniform int uAni; uniform vec2 uShock; uniform int uMaxB; uniform vec3 uVel[5]; uniform int uK; vec4 SP[5]; float HS;
+  // entorno: lo que ve un rayo que escapa al vacío — el anillo cian (emisor plano), una franja blanca y negro
+  vec3 env(vec3 ro, vec3 rd){
+    vec3 c = vec3(0.);
+    // tres anillos de luz con inclinaciones distintas, como un giroscopio de luz alrededor del grupo
+    for (int k = 0; k < 3; k++) {
+      vec3 N = k == 0 ? uRingN : k == 1 ? normalize(vec3(uRingN.z, uRingN.x, uRingN.y)) : normalize(vec3(uRingN.y, uRingN.z, -uRingN.x));
+      float R = uRingR * (1. + 0.28 * float(k)), Wd = uRingW * (1. - 0.25 * float(k)), I = uRingI * (1. - 0.25 * float(k));
+      float dn = dot(rd, N);
+      if (abs(dn) > 1e-4) { float t = dot(uRingC - ro, N) / dn; if (t > 0.) { vec3 p = ro + rd * t; float r = length(p - uRingC);
+        float band = exp(-pow((r - R) / Wd, 2.));
+        c += uAcc * I * band * (0.6 + 3. * exp(-pow((r - R) / (Wd * 0.25), 2.)));
+        c += mix(uAcc, vec3(1.), 0.7) * I * 2.5 * exp(-pow((r - R) / (Wd * 0.08), 2.)); } } }
+    // onda expansiva: un anillo cian que nace en el planeta y se abre por el espacio (conjunción, golpe final)
+    if (uShock.y > 0.) { vec3 Ns = normalize(vec3(0.15, 1., 0.25)); float dn = dot(rd, Ns);
+      if (abs(dn) > 1e-4) { float ts_ = -dot(ro, Ns) / dn; if (ts_ > 0.) { float r = length(ro + rd * ts_);
+        c += mix(uAcc, vec3(1.), 0.35) * uShock.y * (exp(-pow((r - uShock.x) / (0.06 + 0.04 * uShock.x), 2.)) * 3. + exp(-pow((r - uShock.x) / (0.6 + 0.2 * uShock.x), 2.)) * 0.35); } } }
+    // franja blanca: un gran plano luminoso lejano y estrecho, para dibujar la forma de las esferas
+    // tres cajas de luz blanca lejanas (como en un estudio de producto) y un degradado casi negro: dibujan la forma del cromo
+    vec3 sb[3]; sb[0] = uStripN; sb[1] = normalize(vec3(0.8, 0.2, -0.55)); sb[2] = normalize(vec3(0.1, -0.85, 0.5));
+    float sbi[3]; sbi[0] = 1.0; sbi[1] = 0.5; sbi[2] = 0.22;
+    for (int k = 0; k < 3; k++) { vec3 ax = sb[k]; vec3 tng = normalize(cross(ax, vec3(0.2, 1., 0.1))); float along = dot(rd, tng); float sk = dot(rd, ax);
+      float wv = dot(rd, normalize(cross(ax, tng)));
+      // tiras de luz finas y largas de borde nítido: dibujan el contorno del cromo como en fotografía de producto
+      float box = step(0.7, sk) * smoothstep(0.03, 0.022, abs(wv)) * smoothstep(0.62, 0.5, abs(along));
+      c += vec3(0.9, 0.93, 1.) * uStripI * sbi[k] * 2.2 * box; }
+    { vec3 bk = normalize(vec3(-0.15, 0.25, -1.)); float sk = dot(rd, bk); c += vec3(0.85, 0.9, 1.) * uStripI * 0.9 * smoothstep(0.93, 0.97, sk) * smoothstep(0.995, 0.975, sk); }
+    c += vec3(0.85, 0.9, 1.) * 0.05 * smoothstep(0.55, 0.95, rd.y) * uStripI;                 // cenital suave
+    c += vec3(0.6, 0.7, 0.8) * 0.02 * exp(-abs(rd.y) * 25.);                                 // horizonte
+    c += vec3(0.5, 0.55, 0.6) * 0.004 * (0.5 + 0.5 * rd.y);
+    // ciclorama de estudio: paneles verticales de borde nítido alrededor + horizonte fino. Dan al cromo reflejos reconocibles
+    { float az = atan(rd.z, rd.x) - uPanRot; for (int k = 0; k < 7; k++) { float a0 = -2.9 + float(k) * 0.83 + 0.2 * sin(float(k) * 3.1);
+        float da = abs(mod(az - a0 + 3.14159, 6.28318) - 3.14159); float w = 0.07 + 0.05 * fract(float(k) * 0.37);
+        float pan = smoothstep(w, w - 0.008, da) * smoothstep(-0.02, 0., rd.y) * smoothstep(0.5 + 0.2 * fract(float(k) * 0.71), 0.48, rd.y);
+        c += vec3(0.85, 0.9, 1.) * uStripI * pan * (0.25 + 0.75 * fract(float(k) * 0.53 + 0.2)) * 1.4 * (1. + uPan[k]); } }
+    c += vec3(0.75, 0.8, 0.85) * 0.6 * exp(-abs(rd.y) * 180.) * uStripI;                     // horizonte nítido
+    c += vec3(0.012, 0.014, 0.017) * smoothstep(0., -0.4, rd.y);                              // suelo lejano                         // degradado de estudio: da volumen al cromo
+    return c; }
+  vec3 trace(vec3 ro, vec3 rd, out float firstT){
+    vec3 col = vec3(0.), thr = vec3(1.); firstT = 1e4; vec3 aT = vec3(0.); int ani = 0;
+    for (int b = 0; b < 12; b++) { if (b >= uMaxB) break;
+      float tb = 1e9; int id = -1;
+      for (int i = 0; i < 5; i++) { vec4 s = SP[i]; vec3 oc = ro - s.xyz; float bb = dot(oc, rd), cc = dot(oc, oc) - s.w * s.w, h = bb * bb - cc;
+        if (h > 0.) { float t = -bb - sqrt(h); if (t > 1e-4 && t < tb) { tb = t; id = i; } } }
+      // suelo: espejo negro pulido que se apaga con la distancia (ancla el grupo, duplica la escultura)
+      bool fl = false; if (rd.y < -1e-4) { float tf = (uFloor - ro.y) / rd.y; if (tf > 1e-4 && tf < tb) { tb = tf; fl = true; id = 9; } }
+      if (id < 0) { if (b > 0) { if (ani == 1) { vec3 e = vec3(0.); vec3 dT = normalize(cross(rd, cross(aT, rd)) + 1e-5) * length(aT);
+            float na = float(uAni); for (int k = 0; k < 8; k++) { if (k >= uAni) break; float u = (float(k) + fract(HS * 3.7 + float(k) * 0.618)) / na * 2. - 1.; e += env(ro, normalize(rd + dT * u * 0.018)) * (1. - 0.5 * u * u); }
+            col += thr * e / (na * 0.8333); } else col += thr * env(ro, rd); } break; }
+      ani = 0;
+      if (fl) { if (b == 0) firstT = tb; vec3 p = ro + rd * tb; float ci = -rd.y; float Ff = 0.035 + 0.965 * pow(1. - ci, 5.);
+        float fade = exp(-length(p.xz) * 0.22); col += thr * vec3(0.0015) * fade; thr *= Ff * 1.6 * fade; ro = p + vec3(0., 1e-4, 0.); rd = reflect(rd, vec3(0., 1., 0.));
+        if (max(thr.x, max(thr.y, thr.z)) < 0.004) break; continue; }
+      if (b == 0) firstT = tb;
+      vec4 s = SP[0]; vec4 m = uMat[0];
+      for (int i = 0; i < 5; i++) if (i == id) { s = SP[i]; m = uMat[i]; }
+      vec3 p = ro + rd * tb, n = normalize(p - s.xyz);
+      float cosi = max(dot(-rd, n), 0.);
+      // cromo: reflectancia alta y casi neutra (Schlick con F0 0.92); obsidiana: dieléctrico negro (F0 0.045)
+      vec3 F0 = m.x > 0.5 ? vec3(0.9, 0.92, 0.94) : vec3(0.045);
+      float glow = 0.;
+      // planeta mecanizado (m.w): surcos de torno finísimos alrededor de un eje inclinado → brillos anisótropos;
+      // canales grabados (obsidiana) a latitudes fijas, el ecuatorial guarda una órbita de luz cian
+      if (m.w > 0.5) { vec3 A = normalize(vec3(0.28, 1., 0.12)); float la = dot(n, A); vec3 Tg = normalize(A - n * la + 1e-5);
+        float fade = smoothstep(0.05, 0.35, cosi);
+        n = normalize(n + Tg * fade * 0.004 * sin(la * 150.));
+        aT = Tg * fade; ani = 1;
+        float ch = 0.; float cl[3]; cl[0] = 0.; cl[1] = 0.42; cl[2] = -0.63; float cw[3]; cw[0] = 0.022; cw[1] = 0.009; cw[2] = 0.006;
+        for (int j = 0; j < 3; j++) ch = max(ch, smoothstep(cw[j], cw[j] * 0.6, abs(la - cl[j])));
+        F0 = mix(F0, vec3(0.03), ch);
+        glow = smoothstep(0.008, 0.002, abs(la)) * (0.35 + uPulse * 2.); cosi = max(dot(-rd, n), 0.); }
+      vec3 F = F0 + (1. - F0) * pow(1. - cosi, 5.);
+      // micro-textura: un rayado finísimo de pulido en el cromo (anillos concéntricos) — rompe la perfección de CG
+      if (m.x > 0.5) { float g = sin(dot(n, normalize(vec3(0.3, 1., 0.2))) * 900. + m.y * 40.) * 0.5 + 0.5; F *= 0.97 + 0.03 * g; }
+      col += thr * (1. - F) * vec3(0.002) ;
+      col += thr * uAcc * glow;                               // un pelo de difuso para que la obsidiana no sea un agujero
+      col += thr * uAcc * uPulse * 0.04 * pow(1. - cosi, 3.) * m.z;        // golpe: la esfera tocada arde en el borde
+      thr *= F;
+      ro = p + n * 1e-4; rd = reflect(rd, n);
+      if (max(thr.x, max(thr.y, thr.z)) < 0.01) break;
+    }
+    return col; }
+  void main(){
+    vec2 sc = (vUv * 2. - 1.) * vec2(uAsp, 1.) * uFy; vec3 rd = normalize(uF + uR * sc.x + uU * sc.y);
+    // obturador estocástico: cada muestra toma un instante distinto (rastro continuo, sin copias)
+    HS = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+    vec3 col = vec3(0.); float ft = 0.;
+    // solo los píxeles cuyo rayo cruza el volumen barrido por una esfera en movimiento pagan el obturador
+    int K = 1;
+    if (uK > 1) for (int i = 0; i < 5; i++) { float vl = length(uVel[i]); if (vl > 1e-4) { vec3 oc = uCam - uSph[i].xyz; float R = uSph[i].w + vl * 0.5 + 0.02;
+      float bb = dot(oc, rd); if (bb * bb - dot(oc, oc) + R * R > 0.) K = uK; } }
+    for (int k = 0; k < 16; k++) { if (k >= K) break;
+      float tau = K > 1 ? (float(k) + fract(HS + float(k) * 0.381966)) / float(K) - 0.5 : 0.;
+      for (int i = 0; i < 5; i++) SP[i] = uSph[i] + vec4(uVel[i] * tau, 0.);
+      float f1; col += trace(uCam, rd, f1); ft += f1; HS = fract(HS * 1.618 + 0.31); }
+    o = vec4(col, ft) / float(K); }`;
+  const FSP = `#version 300 es
+  precision highp float; in vec2 vUv; out vec4 o; uniform sampler2D uS; uniform vec2 uPx; uniform float uFoc, uAp, uExp, uStreak, uRays, uCA; uniform vec2 uRayC;
+  vec3 aces(vec3 x){ return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0., 1.); }
+  void main(){
+    vec4 c0 = texture(uS, vUv); float coc = clamp(abs(c0.a - uFoc) / max(c0.a, 0.3) * uAp, 0., 1.) * 14.;
+    vec3 acc = c0.rgb; float ws = 1.;
+    if (coc > 0.6) for (int i = 0; i < 28; i++) { float a = float(i) * 2.39996, r = sqrt(float(i) + 0.5) / 5.3 * coc; vec2 q = vUv + vec2(cos(a), sin(a)) * r * uPx;
+      vec4 s = texture(uS, q); float sc = clamp(abs(s.a - uFoc) / max(s.a, 0.3) * uAp, 0., 1.) * 14.; float w = smoothstep(r - 0.5, r + 0.5, sc + 0.5); acc += s.rgb * w; ws += w; }
+    vec3 col = acc / ws;
+    // aberración cromática radial (seca, con la chapa)
+    if (uCA > 0.001) { vec2 d = (vUv - 0.5) * uCA; col.r = mix(col.r, texture(uS, vUv + d).r, 0.9); col.b = mix(col.b, texture(uS, vUv - d).b, 0.9); }
+    // destello anamórfico: las luces altas se estiran en horizontal, con un tinte frío
+    if (uStreak > 0.001) { vec3 sk = vec3(0.);
+      for (int i = 1; i <= 14; i++) { float u = float(i) / 14.; float dx = u * u * 0.22;
+        vec3 a = texture(uS, vUv + vec2(dx, 0.)).rgb, b = texture(uS, vUv - vec2(dx, 0.)).rgb;
+        sk += (max(a - 1.4, 0.) + max(b - 1.4, 0.)) * exp(-u * 3.2); }
+      col += sk * vec3(0.55, 0.85, 1.) * uStreak * 0.09; }
+    // rayos de contraluz: desenfoque radial de lo muy brillante hacia el centro del planeta en pantalla
+    if (uRays > 0.001) { vec3 rs = vec3(0.); vec2 dv = (uRayC - vUv);
+      for (int i = 0; i < 20; i++) { float u = (float(i) + 0.5) / 20.; vec3 a = texture(uS, vUv + dv * u * 0.55).rgb; rs += max(a - 0.9, 0.) * (1. - u); }
+      col += rs / 20. * uRays * vec3(0.8, 0.92, 1.); }
+    o = vec4(aces(col * uExp), 1.); }`;
+  const PRT = prog(VSQ, FSR, ['aQ']), PP = prog(VSQ, FSP, ['aQ']);
+  const vaoQ = gl.createVertexArray(); gl.bindVertexArray(vaoQ);
+  { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0); }
+
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const nrm = (a) => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+  // ================= COREOGRAFÍA (todo sale de la partitura de SICIGIA; función pura de t)
+  const BAR = T.bar, ST = T.st, TAU = Math.PI * 2;
+  const sm = (a, b, x) => { const u = clamp((x - a) / (b - a), 0, 1); return u * u * (3 - 2 * u); };
+  const lerp = (a, b, u) => a + (b - a) * u, mix3 = (a, b, u) => a.map((v, i) => v + (b[i] - v) * u);
+  const sel = (v) => EV.filter((e) => e.v === v);
+  const KE = sel('K'), CE = sel('C'), HE = sel('h'), QE = sel('Q'), QA = QE.filter((e) => e.acc);
+  function lastIdx(A, t) { let lo = 0, hi = A.length - 1, r = -1; while (lo <= hi) { const m = (lo + hi) >> 1; if (A[m].t <= t) { r = m; lo = m + 1; } else hi = m - 1; } return r; }
+  function envOf(A, t, dec, n = 3) { let s = 0; for (let i = lastIdx(A, t), k = 0; i >= 0 && k < n; i--, k++) s += A[i].s * Math.exp(-(t - A[i].t) / dec); return s; }
+  // pasos de la secuencia: cada semicorchea hace avanzar las órbitas un paso (los acentos, dos); el movimiento ocurre al inicio
+  const CUM = [0]; for (const e of QE) CUM.push(CUM[CUM.length - 1] + (e.acc ? 2 : 1));
+  function steps(t) {
+    const i = lastIdx(QE, t); if (i < 0) return 0;
+    const w = QE[i].acc ? 2 : 1, f = clamp((t - QE[i].t) / (ST * 0.45), 0, 1), e = 1 - Math.pow(1 - f, 3);
+    return CUM[i] + w * e;
+  }
+  // órbitas (antes de la conjunción): radio, periodo en pasos, inclinación, nodo, fase
+  // impermanencia (?live&semilla): fases de órbita, giro del estudio y orientación de la conjunción cambian con la semilla
+  const VAR = (n) => SEMILLA ? (((Math.sin(SEMILLA * 12.9898 + n * 78.233) * 43758.5453) % 1) + 1) % 1 : 0;
+  const ORBS = [[1.85, 24, 0.35, 0.3, 0.0], [2.45, 40, -0.28, 1.4, 2.1], [3.05, 56, 0.5, 2.6, 4.0], [3.8, 88, -0.15, 4.2, 1.0]];
+  const RS = [1.15, 0.36, 0.3, 0.42, 0.26];
+  function orbitPos(i, st_) {
+    const [r, P, inc, nod, a0] = ORBS[i], a = TAU * st_ / P + a0 + TAU * VAR(i + 1);
+    const x = Math.cos(a) * r, z = Math.sin(a) * r * 0.92;
+    const y = z * Math.sin(inc), zz = z * Math.cos(inc);
+    return [x * Math.cos(nod) - zz * Math.sin(nod), y, x * Math.sin(nod) + zz * Math.cos(nod)];
+  }
+  // la línea de la conjunción gira entera (periodo 2 compases → el loop del clímax cierra perfecto)
+  function lineDir(t) { const a = TAU * (t - T.rupt) / (2 * BAR) + 0.6 + TAU * VAR(9); return [Math.cos(a), 0.18, Math.sin(a)].map((v, _, A) => v / Math.hypot(...A)); }
+  const LINE_D = [2.35, 3.55, -2.3, -3.35];
+  function spheres(t) {
+    if (window.ORB_SPH) return window.ORB_SPH;
+    const st_ = steps(Math.min(t, T.rupt)), out = [[0, 0, 0, RS[0]]];
+    const wA = sm(T.cut, T.rupt, t) ** 1.6;                      // acercamiento: las órbitas se cierran sobre la línea
+    const kE = envOf(KE, t, 0.12);
+    for (let i = 0; i < 4; i++) {
+      let p = orbitPos(i, st_ + (t > T.rupt ? 0 : 0));
+      if (wA > 0) {
+        const L = lineDir(Math.max(t, T.cut)), d = LINE_D[i] * (t >= T.rupt ? 1 + 0.035 * kE : 1);
+        p = mix3(p, L.map((v) => v * d), wA);
+      }
+      if (t > T.dia) { const u = sm(T.dia, T.dia + 1.2, t); p = p.map((v) => v * (1 + 1.6 * u)); }   // tras el golpe final, se abren
+      out.push([...p, RS[i + 1]]);
+    }
+    return out;
+  }
+  // cámara: planos que cortan en el compás (sobre el bombo); dentro de cada plano, movimiento continuo
+  const look = (pos, tgt, roll, fov, foc) => ({ pos, tgt, roll, fov, foc });
+  function shot(t) {
+    const b = t / BAR;
+    if (b < 2) { const u = b / 2, a = 0.25 + 0.55 * u;                                      // GANCHO: bajo, pegado al planeta, girando
+      return look([Math.sin(a) * 3.0, -0.55 + 0.15 * u, Math.cos(a) * 3.0], [-0.2, 0.25, 0], -20 + 6 * u, 46, 2.0); }
+    if (b < 4) { const u = (b - 2) / 2;                                                      // general: el sistema entero
+      return look([0.9 - 0.5 * u, 0.55 + 0.1 * u, 6.4 - 0.8 * u], [0, -0.05, 0], -8 + 4 * u, 38, 6.0 - 0.8 * u); }
+    if (b < 5) { const u = b - 4, P = orbitPos(0, steps(4.55 * BAR)), d = nrm(P), sd_ = nrm(cross(d, [0, 1, 0]));   // rasante: el satélite pasa rozando
+      const pos = [P[0] * 1.32 + sd_[0] * (0.12 + 0.1 * u), P[1] + 0.22, P[2] * 1.32 + sd_[2] * (0.12 + 0.1 * u)];
+      return look(pos, [0, 0.1, 0], -16 + 8 * u, 48, Math.hypot(...pos) - 1.15); }
+    if (b < 7) { const u = (b - 5) / 2, a = 1.2 + 0.9 * u;                                   // cenital que gira: el plano de las órbitas
+      return look([Math.cos(a) * 2.6, 5.4 - 0.6 * u, Math.sin(a) * 2.6], [0, 0, 0], 30 * u, 44, 5.2); }
+    if (t < T.rupt) { const u = sm(T.cut, T.rupt, t), L = lineDir(t);                        // acercamiento: empuje continuo hacia el pasillo
+      const side = nrm(cross(L, [0, 1, 0])), end = [L[0] * 1.62 + side[0] * 0.2, 0.12 + L[1] * 1.62, L[2] * 1.62 + side[2] * 0.2];
+      const start = [3.0, 0.9, 5.6];
+      const ue = u * u * (3 - 2 * u), rad = lerp(Math.hypot(...start), Math.hypot(...end), ue), dir = nrm(mix3(nrm(start), nrm(end), ue));   // rodea el planeta, no lo atraviesa
+      return look(dir.map((v) => v * Math.max(rad, 1.45)), mix3([0, 0, 0], L.map((v) => v * 3.0), u ** 1.5), -10 * (1 - u) + 14 * u, lerp(40, 54, u), lerp(5.5, 0.8, u)); }
+    // CONJUNCIÓN y clímax: la cámara viaja dentro del pasillo, co-rotando con la línea (el estudio gira alrededor)
+    const L = lineDir(t), side = nrm(cross(L, [0, 1, 0])), up = cross(side, L);
+    const ph_ = TAU * (t - T.rupt) / (2 * BAR), along = 1.62 + 0.12 * Math.sin(ph_), lat = 0.2 + 0.08 * Math.cos(ph_), hi = 0.12 + 0.06 * Math.sin(2 * ph_);
+    const pos = [0, 1, 2].map((k) => L[k] * along + side[k] * lat + up[k] * hi);
+    const tgt = L.map((v) => v * 3.0);
+    let c = look(pos, tgt, 14 + 10 * Math.sin(ph_), 54, 0.75);
+    if (t > T.dia) { const u = sm(T.dia, T.sting, t); c = look(mix3(pos, L.map((v, k) => v * -0.6 + side[k] * 4.0 + up[k] * 1.6), u), mix3(tgt, [0, 0, 0], u), c.roll * (1 - u), lerp(54, 38, u), lerp(0.75, 4, u)); }
+    return c;
+  }
+  function drift(c, t) {
+    if (t >= T.cut) return c;
+    const th = 0.075 * t + 0.04 * Math.sin(TAU * t / (2 * BAR)), cs = Math.cos(th), sn = Math.sin(th);
+    const rot = (p) => [p[0] * cs - p[2] * sn, p[1], p[0] * sn + p[2] * cs];
+    return { ...c, pos: rot(c.pos), tgt: rot(c.tgt) };
+  }
+  function camAt(t) {
+    const c = window.ORB_CAM || drift(shot(t), t);
+    // chapa: sacudida seca y amortiguada (determinista)
+    const ce = envOf(CE, t, 0.09, 2), sh = 0.018 * ce;
+    const pos = [c.pos[0] + sh * Math.sin(t * 97), c.pos[1] + sh * Math.sin(t * 131 + 1), c.pos[2] + sh * Math.sin(t * 113 + 2)];
+    const f = nrm(sub(c.tgt, pos)), r0 = nrm(cross(f, [0, 1, 0])), u0 = cross(r0, f), ro = ((c.roll || 0) + 1.5 * ce * Math.sin(t * 89)) * Math.PI / 180;
+    const r = [0, 1, 2].map((i) => r0[i] * Math.cos(ro) + u0[i] * Math.sin(ro)), u = cross(r, f);
+    return { cam: pos, f, r, u, fov: c.fov * Math.PI / 180, foc: c.foc || 3 };
+  }
+  // destellos de los paneles con los hats (cada hat enciende un panel; los abiertos, dos)
+  function panels(t) {
+    const P = new Array(7).fill(0);
+    for (let i = lastIdx(HE, t), k = 0; i >= 0 && k < 6; i--, k++) { const e = HE[i], a = e.s * Math.exp(-(t - e.t) / (e.op ? 0.09 : 0.035));
+      P[e.seed % 7] += 0.9 * a; if (e.op) P[(e.seed + 3) % 7] += 0.6 * a; }
+    return P;
+  }
+
+  let out = null;
+  window.renderFrame = function (tReal, frame) {
+    if (!out) out = document.getElementById('c').getContext('2d');
+    const t = warp(tReal), c = VL.sceneCtx(), ts = tReal - T.sting;
+    const cm = camAt(t), asp = W / H, S = spheres(t);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, FS); gl.viewport(0, 0, SW, SH_);
+    gl.useProgram(PRT.p); gl.bindVertexArray(vaoQ);
+    gl.uniform3f(PRT.U.uCam, ...cm.cam); gl.uniform3f(PRT.U.uF, ...cm.f); gl.uniform3f(PRT.U.uR, ...cm.r); gl.uniform3f(PRT.U.uU, ...cm.u); gl.uniform3f(PRT.U.uAcc, 0.0, 0.85, 1.0);
+    gl.uniform1f(PRT.U.uFy, Math.tan(cm.fov / 2)); gl.uniform1f(PRT.U.uAsp, asp);
+    gl.uniform4fv(PRT.U.uSph, new Float32Array(S.flat()));
+    // desenfoque de movimiento: velocidad de cada esfera durante el obturador (1/60 s)
+    let V = window.ORB_VEL, mv = 0;
+    if (!V && !window.ORB_SPH && !window.ORB_CAM) {
+      const h = 1 / 120, basis = (tt) => { const c = drift(shot(tt), tt), f = nrm(sub(c.tgt, c.pos)), r = nrm(cross(f, [0, 1, 0])), u = cross(r, f); return { p: c.pos, f, r, u }; };
+      const rel = (tt) => { const B_ = basis(tt); return spheres(tt).map((q) => { const d = sub(q, B_.p); return [dot(d, B_.r), dot(d, B_.u), dot(d, B_.f)]; }); };
+      const A = rel(t - h), Bq = rel(t + h), B0 = basis(t);
+      V = A.map((a, i) => { const d = [Bq[i][0] - a[0], Bq[i][1] - a[1], Bq[i][2] - a[2]]; return [0, 1, 2].map((k) => B0.r[k] * d[0] + B0.u[k] * d[1] + B0.f[k] * d[2]); });
+      V[0] = [0, 0, 0];                                         // el planeta no paga obturador: su movimiento relativo es casi nulo y cubre la pantalla
+      if (t > T.rupt - 0.02 && t < T.rupt + 0.02) V = V.map(() => [0, 0, 0]);
+      mv = Math.max(...V.map((v) => Math.hypot(...v))); }
+    const KMAX = LIVE ? (Q3 < 0.7 ? 1 : 3) : (window.ORB_K || (RENDER ? 6 : 3));
+    gl.uniform3fv(PRT.U.uVel, new Float32Array(V ? V.flat() : new Array(15).fill(0))); gl.uniform1i(PRT.U.uK, (window.ORB_VEL || mv > 0.006) ? KMAX : 1);
+    gl.uniform1i(PRT.U.uMaxB, LIVE ? Math.round(5 + 7 * Q3) : (window.ORB_MAXB || (RENDER ? 12 : 8)));
+    gl.uniform1i(PRT.U.uAni, LIVE ? 3 : (window.ORB_ANI || (RENDER ? 8 : 4))); gl.uniform1fv(PRT.U.uPan, new Float32Array(panels(t)));
+    gl.uniform4fv(PRT.U.uMat, new Float32Array(window.ORB_MAT || [1, 0.1, 1, 1, 1, 0.3, 1, 0, 1, 0.5, 1, 0, 0, 0.7, 1, 0, 1, 0.9, 1, 0]));
+    // el estudio gira a pasos con la secuencia (los reflejos barren el cromo en cada paso)
+    // en directo, el giro del clímax da una vuelta exacta cada 2 compases (42 pasos) → el loop cierra sin salto de luz
+    const prot = LIVE && t > T.rupt ? 0.035 * steps(T.rupt) + (TAU / 42) * (steps(Math.min(t, T.dia)) - steps(T.rupt)) : 0.035 * steps(Math.min(t, T.dia));
+    gl.uniform1f(PRT.U.uPanRot, window.ORB_PR ?? prot + TAU * VAR(7) + 0.12 * Math.min(t, T.rupt) + (t > T.rupt ? 0.5 * Math.sin(TAU * (t - T.rupt) / (2 * BAR)) : 0));
+    const shk = (t0, d) => { const u = (t - t0) / d; return u >= 0 && u < 1 ? [1.2 + 13 * Math.pow(u, 0.6), 2.2 * (1 - u) ** 1.5] : null; };
+    const SH = shk(T.rupt, 1.1) || shk(T.dia, 1.0) || [0, 0];
+    gl.uniform2f(PRT.U.uShock, SH[0], SH[1]);
+    const ra = window.ORB_RA ?? 0.4 + (LIVE && t > T.rupt ? T.rupt * 0.09 + 0.09 * (2 * BAR / TAU) * Math.sin(TAU * (t - T.rupt) / (2 * BAR)) : t * 0.09) + 0.5 * sm(T.cut, T.rupt, t), rt = window.ORB_RT ?? 1.2;
+    gl.uniform3f(PRT.U.uRingN, ...nrm([Math.sin(ra) * Math.sin(rt), Math.cos(rt), Math.cos(ra) * Math.sin(rt)])); gl.uniform3f(PRT.U.uRingC, 0, 0, 0);
+    const accE = envOf(QA, t, 0.08, 2), grow = lerp(1.0, 1.25, sm(0, T.rupt, t));
+    gl.uniform1f(PRT.U.uRingR, window.ORB_RR ?? 7.5); gl.uniform1f(PRT.U.uRingW, 0.35); gl.uniform1f(PRT.U.uRingI, window.ORB_RI ?? 3.0 * grow * (0.85 + 0.25 * accE));
+    gl.uniform3f(PRT.U.uStripN, ...nrm([-0.6, 0.75, -0.3])); const rf = Math.exp(-Math.max(0, t - T.rupt) / 0.35) * (t >= T.rupt ? 1 : 0) + Math.exp(-Math.max(0, t - T.dia) / 0.3) * (t >= T.dia ? 0.8 : 0);
+    gl.uniform1f(PRT.U.uStripI, window.ORB_SI ?? grow * (1 + 1.5 * rf)); gl.uniform1f(PRT.U.uPulse, window.ORB_PU ?? Math.min(1.6, envOf(KE, t, 0.13, 2) + 2 * rf)); gl.uniform1f(PRT.U.uFloor, window.ORB_FY ?? -2.3);
+    if (tReal < T.sting + 0.4) gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); else { gl.clearColor(0, 0, 0, 1e4); gl.clear(gl.COLOR_BUFFER_BIT); }   // tras el fundido, la firma sobre negro (sin trazar)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H);
+    gl.useProgram(PP.p); gl.bindVertexArray(vaoQ); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, TS); gl.uniform1i(PP.U.uS, 0);
+    gl.uniform2f(PP.U.uPx, 1 / SW, 1 / SH_); gl.uniform1f(PP.U.uFoc, cm.foc); gl.uniform1f(PP.U.uAp, window.ORB_AP ?? 0.6); gl.uniform1f(PP.U.uExp, (window.ORB_EXP ?? 1) * (1 + 0.1 * envOf(KE, t, 0.08, 1)) * (1 - sm(T.dia + 0.35, T.sting + 0.35, t)) * sm(-0.05, 0.12, tReal));
+    // efectos de lente desde la partitura: destello con bombo y conjunción, rayos en contraluz, aberración con la chapa
+    const kE2 = envOf(KE, t, 0.1, 2), cE2 = envOf(CE, t, 0.07, 2), rfx = (t >= T.rupt ? Math.exp(-(t - T.rupt) / 0.6) : 0) + (t >= T.dia ? Math.exp(-(t - T.dia) / 0.5) : 0);
+    const pc = (() => { const d = sub([0, 0, 0], cm.cam), z = dot(d, cm.f); if (z <= 0.1) return [0.5, 0.5]; const x = dot(d, cm.r) / z / Math.tan(cm.fov / 2) / asp, y = dot(d, cm.u) / z / Math.tan(cm.fov / 2); return [0.5 + 0.5 * x, 0.5 + 0.5 * y]; })();
+    gl.uniform1f(PP.U.uStreak, window.ORB_STK ?? 1.0 + 1.0 * kE2 + 2.5 * rfx); gl.uniform1f(PP.U.uRays, window.ORB_RAYS ?? (0.6 + 0.4 * sm(T.cut, T.rupt, t) + 1.4 * rfx)); gl.uniform2f(PP.U.uRayC, pc[0], pc[1]);
+    gl.uniform1f(PP.U.uCA, window.ORB_CA ?? 0.004 * cE2 + 0.006 * rfx);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    c.drawImage(cv, 0, 0, W, H);
+    let fl = 0, bloom = 1.0;
+    if (ts >= 0) { const st = VL.drawSting(c, ts, { accent: ACC }); fl = st.flash; bloom = 0.8 + 0.5 * st.flash; }
+    VL.post(out, frame, { bloom, flash: fl, grain: 0.12, scan: 0, vig: 1 });
+  };
+})();
+</script>
+<script src="../shared/motion-timeline.js"></script>
+<script>
+(async () => {
+  if (new URLSearchParams(location.search).has('render')) return;
+  await Promise.race([Promise.all([300, 400, 600].map((w) => document.fonts.load(`${w} 40px 'JetBrains Mono'`, 'VØID_LOOMÑ'))), new Promise((r) => setTimeout(r, 2500))]);
+  const Z = window.ORB, T = Z.T;
+  MotionTimeline.mount({
+    duration: window.DURATION,
+    render: (t) => window.renderFrame(t, Math.floor(t * 60)),
+    acts: [[0, 'ÓRBITA'], [+T.mut.toFixed(3), 'RESONANCIA'], [+T.cut.toFixed(3), 'ACERCAMIENTO'], [+T.rupt.toFixed(3), 'CONJUNCIÓN'], [+T.dia.toFixed(3), 'DISPERSIÓN'], [+T.sting.toFixed(3), 'FIRMA']],
+    accent: '#00E5FF',
+    audio: 'orbitas.m4a',
+    live: {
+      loops: Z.LOOPS.map(([a, b]) => [+a.toFixed(4), +b.toFixed(4)]),
+      hits: Z.EV.filter((x) => x.v === 'K' || x.v === 'R' || x.v === 'D').map((x) => +x.t.toFixed(4)),
+      bpm: T.bpm,
+      stems: { dron: 'orbitas-stems/dron.m4a', golpes: 'orbitas-stems/golpes.m4a', ritmo: 'orbitas-stems/ritmo.m4a', ruptura: 'orbitas-stems/ruptura.m4a' },
+    },
+  });
+})();
+</script>
+</body>
+</html>
