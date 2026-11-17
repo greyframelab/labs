@@ -59,6 +59,15 @@ Botón en SISTEMA, junto a IMPERMANENCIA. Por defecto, **GRABADO** (el audio ori
 - Masa y Estratos no tienen lista de golpes en la imagen: su partitura está compuesta en `piezas.js` sobre los momentos visuales (pulso, escaneo, congelado, ruptura).
 - Diagnóstico desde la consola del navegador: `VL_LIVE.estado()`.
 
+
+### AMBIENT · NADIR
+
+Tercera opción del botón AUDIO (GRABADO → SÍNTESIS → AMBIENT · NADIR). Dark ambient cinematográfico, sin batería, al estilo de Tineidae: una pieza propia para cada vídeo, sobre la misma partitura, así que sigue a tiempo con la imagen.
+
+- Cada pieza tiene su instrumento grave (metal arqueado, órgano, FM, zumbido eléctrico, retumbo tectónico, cristal, aurora, motor, CS-80, cinta con wow, órbita…), su materia (coro, acordes en la niebla, radio, arpegiador, fondo marino, tormenta…) y su sala.
+- Cinemática en todas: subida de tensión hasta el corte, silencio real y golpe de ruptura (braam, caída de sub, golpe metálico o de coro).
+- Con IMPERMANENCIA, cada pase varía. Todo en `synth/piezas.js` (bloque NADIR) y `synth/vl-voces.js`.
+
 ## ENTRADA · caja de ritmos externa (TR-09)
 
 Pensado para la Roland **TR-09** conectada por USB: por el mismo cable manda audio y MIDI. Sirve cualquier caja o tarjeta de sonido; si hay una Roland conectada, LIVE la elige sola.
