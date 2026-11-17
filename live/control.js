@@ -23,12 +23,15 @@
   let outWin = null, outOK = false, lastOutMsg = 0;
 
   // ================================================================== biblioteca
+  // piezas que no entran en el live (siguen en la web de Labs)
+  const FUERA = ['lab-35-descarga'];
   async function discover(log) {
     const md = await fetch('../README.md', { cache: 'no-cache' }).then((r) => r.text());
     const rows = [...md.matchAll(/\|\s*(\d+)\s*\|\s*\[([^\]]+)\]\(([^)]+)\)\s*\|\s*Motion/gi)];
     const out = [];
     await Promise.all(rows.map(async ([, n, title, dir]) => {
       dir = dir.replace(/\/?$/, '/');
+      if (FUERA.includes(dir.replace(/\/$/, ''))) return;
       try {
         const html = await fetch('../' + dir + 'index.html', { cache: 'no-cache' }).then((r) => r.text());
         if (!/VØID_LOOM/.test(html) || !/MotionTimeline\.mount/.test(html)) return;
