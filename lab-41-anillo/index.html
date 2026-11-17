@@ -384,11 +384,21 @@ canvas{width:100vw;height:100vh;display:block}
 (function () {
   const VL = window.VL, W = VL.W, H = VL.H, clamp = VL.clamp;
   const ACC = '#EDEFF5';
-  const Z = window.ECL, { T, EV, warp } = Z;
+  // DIRECTO · ?live: la consola de VØID_LOOM LIVE.
+  //   IMPERMANENCIA (?semilla=N): cada pase es otro trozo del anillo — otras rocas, otro rumbo, otra altura y otra luz;
+  //   estructura, actos y sincronía con el sonido no cambian. Semilla 0 (web, vídeo, modo apagado): la versión canónica.
+  //   CALIDAD AUTO (&q3d=x): con gráfica justa baja la resolución interna y el número de rocas, nunca el lienzo.
+  const LIVE = /[?&]live\b/.test(location.search), QS = new URLSearchParams(location.search);
+  const SEMILLA = LIVE ? (+QS.get('semilla') || 0) : 0, Q3 = LIVE ? Math.max(0.3, Math.min(1, +QS.get('q3d') || 1)) : 1;
+  window.VL_Q3D = true;
+  const VR = VL.rng((SEMILLA % 2147483647) || 1), varia = (def, amp) => (SEMILLA ? def + (VR() * 2 - 1) * amp : def);
+  const SEMN = (n) => (SEMILLA ? (n + SEMILLA * 7919) >>> 0 : n);
+  const VAR = { yaw: varia(0, 7), y: varia(0, 0.6), roll: varia(0, 9), sun: varia(0, 5), sunY: varia(0.06, 0.04), z: varia(0, 18), x: varia(0, 6), moonK: varia(0, 0.35) };
+  const Z = window.ANI, { T, EV, warp } = Z;
   const DUR = T.sting + VL.STING_DUR;
   window.DURATION = DUR; window.FPS = 60;
-  const SS = window.ANI_SS || 1.25, SW = Math.round(W * SS), SH_ = Math.round(H * SS);
-  const NR = window.ANI_N || 24000;                 // rocas instanciadas alrededor de la cámara
+  const SS = (window.ANI_SS || 1.25) * Q3, SW = Math.round(W * SS), SH_ = Math.round(H * SS);
+  const NR = window.ANI_N || Math.round(24000 * (0.45 + 0.55 * Q3));                 // rocas instanciadas alrededor de la cámara
   const BOX = [70, 1.8, 70];                        // la caja que se repite alrededor de la cámara (campo infinito)
 
   // ================================================================ geometría: icosaedro subdividido (la roca se deforma en el shader)
@@ -399,7 +409,7 @@ canvas{width:100vw;height:100vh;display:block}
     const out = []; for (const f of F) for (const i of f) out.push(...V[i]); return new Float32Array(out); })();
   const NIV = ICO.length / 3;
   const INST = new Float32Array(NR * 8);
-  { const r = VL.rng(4242); for (let i = 0; i < NR; i++) {
+  { const r = VL.rng(SEMN(4242)); for (let i = 0; i < NR; i++) {
       const sz = 0.008 + 0.38 * Math.pow(r(), 9);                                    // muchas piedras pequeñas, pocas enormes
       INST.set([(r() - 0.5) * BOX[0], (r() - 0.5) * BOX[1] * (0.3 + 0.7 * r()), (r() - 0.5) * BOX[2], sz, r(), r(), r(), r()], i * 8); } }
 
@@ -575,7 +585,7 @@ canvas{width:100vw;height:100vh;display:block}
   const vaoQ = gl.createVertexArray(); gl.bindVertexArray(vaoQ);
   { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0); }
   const ND = 20000, vaoD = gl.createVertexArray(); gl.bindVertexArray(vaoD);
-  { const r = VL.rng(99), a = new Float32Array(ND * 4); for (let i = 0; i < ND; i++) a.set([(r() - 0.5) * BOX[0], (r() - 0.5) * BOX[1], (r() - 0.5) * BOX[2], r()], i * 4);
+  { const r = VL.rng(SEMN(99)), a = new Float32Array(ND * 4); for (let i = 0; i < ND; i++) a.set([(r() - 0.5) * BOX[0], (r() - 0.5) * BOX[1], (r() - 0.5) * BOX[2], r()], i * 4);
     const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, a, gl.STATIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 0, 0); }
 
   const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
@@ -605,8 +615,8 @@ canvas{width:100vw;height:100vh;display:block}
     else if (t < T.rupt) az = -(half + 8) + (2 * half + 7.4) * ss(T.cut, T.rupt - 0.02, t);          // se esconde detrás: la totalidad
     else if (t < LA) az = half + 0.6 + 9 * io(clamp((t - T.rupt) / 2.4, 0, 1));                      // sale por el borde justo en el golpe
     else az = half + 9.6;
-    const a = az * DEG; const cx = -cam[0], cz = -cam[2], base = Math.atan2(cx, -cz);              // relativo a la dirección del planeta
-    return nrm([Math.sin(base + a), 0.06, -Math.cos(base + a)]);
+    const a = (az + (t < T.cut ? VAR.sun : 0)) * DEG; const cx = -cam[0], cz = -cam[2], base = Math.atan2(cx, -cz);              // relativo a la dirección del planeta
+    return nrm([Math.sin(base + a), VAR.sunY, -Math.cos(base + a)]);
   }
   function state(t) {
     const S = {};
@@ -644,13 +654,13 @@ canvas{width:100vw;height:100vh;display:block}
     // sacudida de cada bombo
     let shk = 0; for (const [x, a] of recent('K', t, 2, 0.4)) shk += x.s * Math.exp(-a / 0.07) * Math.sin(a * 50);
     if (t >= T.rupt && t < LA) shk += 5 * Math.exp(-(t - T.rupt) / 0.3) * Math.sin((t - T.rupt) * 33);
-    const cam = [typeof xo === 'number' ? xo : 2 * Math.sin(t * 0.3), y, z];
+    const cam = [(typeof xo === 'number' ? xo : 2 * Math.sin(t * 0.3)) + VAR.x, Math.max(0.15, y + VAR.y), z + VAR.z];
     // encuadre: siempre hacia el borde del planeta por donde está (o saldrá) el sol, desplazado por rumbo y cabeceo
     const sd = sunDir(t, cam), toP = nrm(sub(PL, cam)), side = nrm(cross([0, 1, 0], toP));
     const sgn = Math.sign(dot(sd, side)) || 1, half = Math.asin(Math.min(0.99, PLR / Math.hypot(...cam)));
     let aim = nrm([toP[0] * Math.cos(half * 0.85) + side[0] * Math.sin(half * 0.85) * sgn, toP[1] + 0.02, toP[2] * Math.cos(half * 0.85) + side[2] * Math.sin(half * 0.85) * sgn]);
     const ya0 = Math.atan2(aim[0], -aim[2]), pi0 = Math.asin(aim[1]);
-    const ya = ya0 + (yaw * 0.35 + 0.2 * shk) * DEG, pi = pi0 + ((pitch - 6) * 0.5 + 2 + 0.3 * shk) * DEG, ro = (roll + 0.5 * shk) * DEG;
+    const ya = ya0 + (yaw * 0.35 + VAR.yaw + 0.2 * shk) * DEG, pi = pi0 + ((pitch - 6) * 0.5 + 2 + 0.3 * shk) * DEG, ro = (roll + VAR.roll + 0.5 * shk) * DEG;
     const f = [Math.sin(ya) * Math.cos(pi), Math.sin(pi), -Math.cos(ya) * Math.cos(pi)], r0 = nrm(cross(f, [0, 1, 0])), u0 = cross(r0, f);
     const r = [0, 1, 2].map((i) => r0[i] * Math.cos(ro) + u0[i] * Math.sin(ro)), u = cross(r, f);
     return { cam, f, r, u, fov: (H > W ? fov : fov * 0.72) * DEG, foc: 5 };
@@ -660,7 +670,7 @@ canvas{width:100vw;height:100vh;display:block}
   const HT = [1.3, 3.9, 6.2, 9.6, 13.3, 16.0, 20.2, 23.3];
   let HERO = null, vaoH = null;
   function heroes() {
-    if (HERO) return; const r = VL.rng(7);
+    if (HERO) return; const r = VL.rng(SEMN(7));
     HERO = HT.map((ti, i) => { const c = camAt(ti); const s = i % 2 ? 1 : -1;
       return [c.cam[0] + c.f[0] * 3.2 + c.r[0] * 1.25 * s + c.u[0] * (-0.35), c.cam[1] + c.f[1] * 3.2 + c.r[1] * 1.25 * s - 0.35, c.cam[2] + c.f[2] * 3.2 + c.r[2] * 1.25 * s, 0.55 + 0.35 * r(), r(), r(), r(), r()]; });
     vaoH = gl.createVertexArray(); gl.bindVertexArray(vaoH);
@@ -677,7 +687,7 @@ canvas{width:100vw;height:100vh;display:block}
     const t = warp(tReal), c = VL.sceneCtx(), ts = tReal - T.sting;
     const cm = camAt(t), asp = W / H, VP = viewProj(cm.cam, cm.f, cm.r, cm.u, cm.fov, asp);
     const St = state(t), SUN = sunDir(t, cm.cam);
-    { const toP = nrm(sub(PL, cm.cam)), side = nrm(cross([0, 1, 0], toP)); const k = -1 + 2.2 * St.mu; St.moon = [cm.cam[0] + toP[0] * 38 + side[0] * 22 * k, 2.2, cm.cam[2] + toP[2] * 38 + side[2] * 22 * k, 4.5]; } const sunI = window.ANI_SUN ?? St.sunI, wav = window.ANI_WAV || St.wav, tear = window.ANI_TEAR ?? St.tear, moon = window.ANI_MOON || St.moon, moonA = window.ANI_MOONA ?? St.moonA; window.ANI_SP_ = window.ANI_SP || St.sp;
+    { const toP = nrm(sub(PL, cm.cam)), side = nrm(cross([0, 1, 0], toP)); const k = -1 + 2.2 * St.mu + VAR.moonK; St.moon = [cm.cam[0] + toP[0] * 38 + side[0] * 22 * k, 2.2, cm.cam[2] + toP[2] * 38 + side[2] * 22 * k, 4.5]; } const sunI = window.ANI_SUN ?? St.sunI, wav = window.ANI_WAV || St.wav, tear = window.ANI_TEAR ?? St.tear, moon = window.ANI_MOON || St.moon, moonA = window.ANI_MOONA ?? St.moonA; window.ANI_SP_ = window.ANI_SP || St.sp;
     gl.bindFramebuffer(gl.FRAMEBUFFER, FS); gl.viewport(0, 0, SW, SH_);
     gl.disable(gl.DEPTH_TEST); gl.depthMask(false);
     gl.useProgram(PB.p); gl.bindVertexArray(vaoQ);
@@ -712,7 +722,7 @@ canvas{width:100vw;height:100vh;display:block}
 (async () => {
   if (new URLSearchParams(location.search).has('render')) return;
   await Promise.race([Promise.all([300, 400, 600].map((w) => document.fonts.load(`${w} 40px 'JetBrains Mono'`, 'VØID_LOOMÑ'))), new Promise((r) => setTimeout(r, 2500))]);
-  const Z = window.ECL, T = Z.T;
+  const Z = window.ANI, T = Z.T;
   MotionTimeline.mount({
     duration: window.DURATION,
     render: (t) => window.renderFrame(t, Math.floor(t * 60)),

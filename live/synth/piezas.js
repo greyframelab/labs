@@ -218,6 +218,8 @@
     ciudad:    evPieza({ g: 'CDD', dur: 26.9, root: 49.0, rootPost: 43.65, opt: { gain: 0.36, tickLP: 8000, iceGain: 2.2, tickGain: 1.6, bassGain: 1.3 }, bassCut: 2200, metal: 2300, snare: 1500, room: 0.34 }),
     espejos:   evPieza({ g: 'EDD', dur: 29.3, root: 55.0, opt: { gain: 0.36, tickLP: 8000, iceGain: 2.4, tickGain: 1.9, bassGain: 1.4 }, bassCut: 2400, sub: 0.3, tick: 3400, snare: 1600, hats: 'tick', room: 0.3 }),
     pliegue:   evPieza({ g: 'PLG', dur: 28.3, root: 36.7, parts: [2, 3, 4], opt: { gain: 0.44, tickLP: 8000, iceGain: 2.4, tickGain: 1.9, bassGain: 1.4 }, bassCut: 2400, sub: 0.2, dron: 0.32, kick: 50, tick: 3000, snare: 1500, hats: 'tick', bassOct: 2, room: 0.3 }),
+    // Anillo: UMBRA (fantasmas de bombo → bombo suave, de caja → tick; toms y clics de resonador fuera; 909 en los charles)
+    anillo:    evPieza({ g: 'ANI', dur: 29.25, root: 34.65, parts: [2, 3, 4], prep: (S) => ({ T: S.T, X: S.X, EV: S.EV.filter((e) => e.v !== 'P' && e.v !== 'c').map((e) => e.v === 'k' ? Object.assign({}, e, { v: 'K', s: e.s * 0.6 }) : e.v === 's' ? Object.assign({}, e, { v: 'G' }) : e) }), opt: { gain: 0.4, tickLP: 8000, tickGain: 1.2, bassGain: 1.4 }, bassCut: 2200, sub: 0.3, dron: 0.4, kick: 46, snare: 1400, hats: 'hat', bassOct: 2, room: 0.3 }),
   });
 
   // Teseracto: golpes del hipercubo (k0 fuertes, k1 fantasmas, k2 ruptura) y giros (STEPS); tras la ruptura, groove compuesto
