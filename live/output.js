@@ -420,6 +420,17 @@
   }
   window.addEventListener('message', (e) => { const d = e.data; if (d && d.type === 'ojo-sensor' && ojoFr && e.source === ojoFr.contentWindow) { ojoSt = d.st; ch.postMessage({ type: 'ojo', st: d.st, err: d.err }); } });
   let cur = 0, blackS = 0, fpsN = 0, fpsT = performance.now(), lastPrev = 0, info = {};
+  // monitor de la consola: la salida va en su propio proceso (no comparte hilo con la consola), así que las miniaturas
+  // viajan como JPEG pequeños. Una a la vez y pocas por segundo: cada copia desde la GPU cuesta en gráficas integradas.
+  const PREV = {}; let prevBusy = false;
+  function sendPrev(key, src, w, msg) {
+    if (prevBusy || !src.width) return;
+    const h = Math.round(w * src.height / src.width), c = PREV[key] || (PREV[key] = new OffscreenCanvas(w, h));
+    if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+    prevBusy = true;
+    try { c.getContext('2d').drawImage(src, 0, 0, w, h); } catch (e) { prevBusy = false; return; }
+    c.convertToBlob({ type: 'image/jpeg', quality: 0.72 }).then((blob) => { msg.blob = blob; ch.postMessage(msg); }).catch(() => {}).finally(() => { prevBusy = false; });
+  }
   function drawDeck(k, w, live) {
     const d = D[k];
     while (d.pending.length && d.pending[0].wall <= VLL.now()) d.st = d.pending.shift();
@@ -442,14 +453,7 @@
     }
     // vista previa para la consola: solo se copia un frame que ya se ha dibujado para el proyector.
     // El deck que no está en el aire nunca se dibuja aparte: coste cero en el frame de la salida.
-    if (r.drawn && now_ - (d.lastPrev || 0) > 160) {
-      d.lastPrev = now_;
-      try {
-        const cw = d.api.canvas.width, chh = d.api.canvas.height, pw = 400;
-        createImageBitmap(d.api.canvas, { resizeWidth: pw, resizeHeight: Math.round(pw * chh / cw), resizeQuality: 'low' })
-          .then((bmp) => { try { ch.postMessage({ type: 'dprev', deck: k, bmp }); } catch (e) {} bmp.close(); }).catch(() => {});
-      } catch (e) {}
-    }
+    if (r.drawn && now_ - (d.lastPrev || 0) > 420) { d.lastPrev = now_; sendPrev('d' + k, d.api.canvas, 300, { type: 'dprev', deck: k }); }
     r.env = hitEnv(s.piece, P_.p, s.rate) * w;
     r.ok = true;
     r.p = P_.p;
@@ -606,14 +610,7 @@
     // estadísticas + monitor para la consola
     fpsN++;
     if (now - fpsT > 1000) { ch.postMessage({ type: 'stats', fps: Math.round(fpsN * 1000 / (now - fpsT)), w: cv.width, h: cv.height, q: frameQ(MIX.onAir), q3: frameQ3(MIX.onAir), auto: isAuto() }); fpsN = 0; fpsT = now; }
-    if (now - lastPrev > 150) {
-      lastPrev = now;
-      const pw = 480, ph = Math.round(pw * cv.height / cv.width);
-      createImageBitmap(cv, { resizeWidth: pw, resizeHeight: ph, resizeQuality: 'low' }).then((bmp) => {
-        try { ch.postMessage({ type: 'preview', bmp }); } catch (e) {}
-        bmp.close();
-      }).catch(() => {});
-    }
+    if (now - lastPrev > 240) { lastPrev = now; sendPrev('out', cv, 420, { type: 'preview' }); }
   }
   requestAnimationFrame(frame);
 })();
