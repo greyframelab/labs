@@ -84,22 +84,25 @@
     let buf = it.buf, rev = it.rev;
     SYN.last = { id: it.id, aud: MIX.aud, can: canSynth(it), seed };
     const modo = MIX.aud;
+    const hold = (on) => { if (d.aud) d.aud.wait.gain.setTargetAtTime(on ? 0 : 1, ctx.currentTime, on ? 0.02 : 0.25); };
+    if (modo === 'nadir' && !canSynth(it)) { hold(true); toast('AMBIENT · NADIR · ' + (it.title || it.id).toUpperCase() + ' AÚN SIN PARTITURA: EN SILENCIO'); return; }
     if (modo !== 'grabado' && canSynth(it)) {
       const key = it.id + ':' + seed + ':' + modo;
       if (d.synthKey === key && d.synth) ({ buf, rev } = d.synth);
       else {
+        if (modo === 'nadir') hold(true);
         try {
           const t0 = performance.now();
-          const b = await VLPiezas.renderBuffer(VLPiezas.find(it.id).k, it.score, seed, ctx.sampleRate, it.buf.duration, modo === 'nadir' ? 'nadir' : null);
+          const b = await VLPiezas.renderBuffer(VLPiezas.find(it.id).k, it.score, seed, modo === 'nadir' ? 24000 : ctx.sampleRate, it.buf.duration, modo === 'nadir' ? 'nadir' : null);
           SYN.ms = Math.round(performance.now() - t0);
           if (d.item !== it || (d.state && (d.state.seed || 0) !== seed) || MIX.aud !== modo) { SYN.drop = (SYN.drop || 0) + 1; return; }
           d.synth = { buf: b, rev: reverse(b) }; d.synthKey = key; ({ buf, rev } = d.synth);
-        } catch (e) { SYN.err = String(e); console.warn('síntesis', it.id, e); }
+        } catch (e) { SYN.err = String(e); console.warn('síntesis', it.id, e); if (modo === 'nadir') return; }
       }
     }
-    if (d.buf === buf) return;
-    d.buf = buf; d.rev = rev;
-    if (d.state) play(d);                        // mismo punto de la pieza, fundido corto
+    if (d.item !== it || MIX.aud !== modo) return;
+    if (d.buf !== buf) { d.buf = buf; d.rev = rev; if (d.state) play(d); }
+    hold(false);
   }
   // golpes: flujo de energía de alta frecuencia con umbral adaptativo
   function onsets(buf) {
@@ -193,7 +196,8 @@
     a.in.connect(bq('highpass', 3400)).connect(bq('highpass', 3400)).connect(a.gH).connect(a.sum);
     a.vol = ctx.createGain(); a.xf = ctx.createGain();
     a.an = ctx.createAnalyser(); a.an.fftSize = 512;
-    a.sum.connect(a.vol).connect(a.xf).connect(M.dk); a.xf.connect(a.an);
+    a.wait = ctx.createGain();      // AMBIENT · NADIR: el deck espera en silencio mientras se genera su audio (nunca suena el grabado con batería)
+    a.sum.connect(a.wait).connect(a.vol).connect(a.xf).connect(M.dk); a.xf.connect(a.an);
     a.voices = []; a.sched = null;
     d.aud = a;
   }
