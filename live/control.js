@@ -725,8 +725,8 @@
       $('#ledOut').className = 'led ' + (m.fps >= 50 ? 'on' : m.fps >= 30 ? 'warn' : 'err');
     } else if (m.type === 'ready') { const d = DECK[m.deck]; if (d && d.item && d.item.id === m.piece) { d.ready = true; renderDeckState(d); } }
     else if (m.type === 'loading') { const d = DECK[m.deck]; if (d) { d.ready = false; renderDeckState(d); } }
-    else if (m.type === 'preview') drawPreview(m.bmp);
-    else if (m.type === 'dprev') drawDeckPrev(DECK[m.deck], m.bmp);
+    else if (m.type === 'preview') bmpOf(m).then(drawPreview, () => {});
+    else if (m.type === 'dprev') bmpOf(m).then((b) => drawDeckPrev(DECK[m.deck], b), () => {});
     else if (m.type === 'codeRes') VLC.onCodeRes && VLC.onCodeRes(m);
   };
   const mon = $('#mon'), mctx = mon.getContext('2d');
@@ -750,10 +750,13 @@
     bmp.close && bmp.close();
     d.el.classList.add('live');
   }
+  const bmpOf = (m) => (m.blob ? createImageBitmap(m.blob) : m.bmp ? Promise.resolve(m.bmp) : Promise.reject());
   function openOutput() {
-    outWin = window.open('output.html', 'vll-output', 'popup,width=1280,height=720');
-    if (!outWin) toast('EL NAVEGADOR HA BLOQUEADO LA VENTANA · PERMITE POPUPS');
-    else setTimeout(() => ch.postMessage({ type: 'ping' }), 800);
+    // noopener: la salida va en su propio proceso. Si compartiera hilo con la consola, cualquier trabajo de la consola
+    // (interfaz, ondas, MIDI, generar audio) le quitaría fotogramas a la proyección.
+    window.open('output.html', 'vll-output', 'popup,noopener,width=1280,height=720');
+    setTimeout(() => ch.postMessage({ type: 'ping' }), 800);
+    setTimeout(() => { if (!outOK) toast('NO SE HA ABIERTO LA SALIDA · PERMITE POPUPS'); }, 3500);
   }
 
   // ================================================================== UI: componentes

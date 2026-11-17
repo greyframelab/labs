@@ -15,6 +15,12 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-background-timer-throttling');
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+// rendimiento: usar la gráfica de alto rendimiento si hay dos, no dejar que Chrome descarte gráficas integradas
+// por su lista negra, y rasterizar en GPU
+app.commandLine.appendSwitch('force_high_performance_gpu');
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('enable-zero-copy');
 protocol.registerSchemesAsPrivileged([{ scheme: 'vll', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true, codeCache: true } }]);
 
 if (!app.requestSingleInstanceLock()) { app.quit(); }
@@ -96,30 +102,29 @@ function createConsole() {
   con.once('ready-to-show', () => { con.maximize(); con.show(); });
 
   con.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('vll://labs/live/output.html')) {
-      if (out && !out.isDestroyed()) out.destroy();
-      const ext = external();
-      return {
-        action: 'allow',
-        overrideBrowserWindowOptions: {
-          title: 'VØID_LOOM · SALIDA', backgroundColor: '#000000', autoHideMenuBar: true,
-          frame: !(ext || INSTALL), width: 1280, height: 720,
-          webPreferences: { backgroundThrottling: false },
-        },
-      };
-    }
+    if (url.startsWith('vll://labs/live/output.html')) { openOutputWindow(url); return { action: 'deny' }; }
     if (/^https?:/.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
-  con.webContents.on('did-create-window', (win) => {
+  // la salida es una ventana propia, en su propio proceso: no comparte hilo con la consola, así que nada de lo que
+  // haga la consola (interfaz, MIDI, generar audio) le quita fotogramas a la proyección
+  function openOutputWindow(url) {
+    if (out && !out.isDestroyed()) out.destroy();
+    const ext = external();
+    const win = new BrowserWindow({
+      title: 'VØID_LOOM · SALIDA', backgroundColor: '#000000', autoHideMenuBar: true, show: false,
+      frame: !(ext || INSTALL), width: 1280, height: 720,
+      webPreferences: { backgroundThrottling: false },
+    });
     out = win;
     win.setMenuBarVisibility(false);
-    win.once('ready-to-show', placeOutput);
+    win.once('ready-to-show', () => { placeOutput(); win.show(); });
     setTimeout(placeOutput, 300);
     win.on('closed', () => { if (out === win) out = null; });
     win.webContents.on('render-process-gone', () => { if (!win.isDestroyed()) win.reload(); });
     if (INSTALL) win.webContents.on('before-input-event', (e, i) => { if (i.key === 'Escape') e.preventDefault(); });
-  });
+    win.loadURL(url);
+  }
 
   con.webContents.on('render-process-gone', () => {
     if (out && !out.isDestroyed()) out.destroy();
