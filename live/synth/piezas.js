@@ -218,6 +218,9 @@
     ciudad:    evPieza({ g: 'CDD', dur: 26.9, root: 49.0, rootPost: 43.65, opt: { gain: 0.36, tickLP: 8000, iceGain: 2.2, tickGain: 1.6, bassGain: 1.3 }, bassCut: 2200, metal: 2300, snare: 1500, room: 0.34 }),
     espejos:   evPieza({ g: 'EDD', dur: 29.3, root: 55.0, opt: { gain: 0.36, tickLP: 8000, iceGain: 2.4, tickGain: 1.9, bassGain: 1.4 }, bassCut: 2400, sub: 0.3, tick: 3400, snare: 1600, hats: 'tick', room: 0.3 }),
     pliegue:   evPieza({ g: 'PLG', dur: 28.3, root: 36.7, parts: [2, 3, 4], opt: { gain: 0.44, tickLP: 8000, iceGain: 2.4, tickGain: 1.9, bassGain: 1.4 }, bassCut: 2400, sub: 0.2, dron: 0.32, kick: 50, tick: 3000, snare: 1500, hats: 'tick', bassOct: 2, room: 0.3 }),
+    // Órbitas: SICIGIA (la secuencia de semicorcheas → bajo; acentos más fuertes, octava en los acentos del clímax; chapa → golpe;
+    // sin silencio antes de la conjunción: la transición es continua)
+    orbitas:   evPieza({ g: 'ORB', dur: 29.69, root: 43.65, parts: [2, 3, 4], prep: (S) => ({ T: Object.assign({}, S.T, { cut: S.T.rupt, tense: S.T.cut }), X: S.X, EV: S.EV.filter((e) => e.v !== 'Z' && e.v !== 'D').map((e) => e.v === 'Q' ? { v: 'B', t: e.t, s: e.acc ? 0.95 : 0.4, note: e.oct ? 12 : 0, seed: e.seed } : e.v === 'C' ? Object.assign({}, e, { v: 'S' }) : e.v === 'h' ? Object.assign({}, e, { open: e.op }) : e) }), opt: { gain: 0.38, tickLP: 8000, bassGain: 1.3 }, bassCut: 1400, sub: 0.3, dron: 0.42, kick: 46, snare: 900, hats: 'hat', bassOct: 2, room: 0.3 }),
     // Anillo: UMBRA (fantasmas de bombo → bombo suave, de caja → tick; toms y clics de resonador fuera; 909 en los charles)
     anillo:    evPieza({ g: 'ANI', dur: 29.25, root: 34.65, parts: [2, 3, 4], prep: (S) => ({ T: S.T, X: S.X, EV: S.EV.filter((e) => e.v !== 'P' && e.v !== 'c').map((e) => e.v === 'k' ? Object.assign({}, e, { v: 'K', s: e.s * 0.6 }) : e.v === 's' ? Object.assign({}, e, { v: 'G' }) : e) }), opt: { gain: 0.4, tickLP: 8000, tickGain: 1.2, bassGain: 1.4 }, bassCut: 2200, sub: 0.3, dron: 0.4, kick: 46, snare: 1400, hats: 'hat', bassOct: 2, room: 0.3 }),
   });
@@ -405,6 +408,11 @@ cimatica: { riser: 'up', golpe: 'coro', gain: 1.01, set: [0, 7, 12, 15, 19], off
       x.ch.forEach((c, i) => M.reso(x.t0 + c + 0.5, { f: x.oct(x.st(c) * 6, 160, 400), f2: x.oct(x.st(c) * 6, 160, 400) * (i % 2 ? 0.84 : 1.19), dur: 4, vel: 1.3, pan: i % 2 ? 0.5 : -0.5 }));
       M.reso(x.t0 + x.rupt + 0.3, { f: x.oct(x.r1 * 8, 200, 400), f2: x.oct(x.r1 * 4, 100, 200), dur: 6, vel: 1.4 }); } },
   };
+  ND.orbitas = { gain: 0.95, set: [0, 7, 12, 19], capas: ['pad'], pad: 0.7, bajo: { tipo: 'orbita', cut: 600, vel: 1 }, riser: 'up', golpe: 'subdrop', room: 0.75, sala: { irDur: 9, irDamp: 2300, top: 4000 }, sig(M, x) {
+      // sicigia: los cuatro cuerpos suenan por separado (quinta y octava de Fa) y solo coinciden en la conjunción
+      const fs = [6, 8, 12, 16].map((m) => x.oct(x.r0 * m, 160, 520));
+      for (let r = 0; r < 4; r++) fs.forEach((f, j) => { const t = 1 + r * 2.6 + j * (0.45 + 0.2 * r); if (t < x.rupt - 0.6) M.reso(x.t0 + t, { f, f2: f, dur: 1.6, vel: 0.9, pan: [-0.7, 0.5, -0.3, 0.75][j], send: 1 }); });
+      fs.forEach((f, j) => M.reso(x.t0 + x.rupt + 0.05, { f, f2: f, dur: 5, vel: 1.2, pan: [-0.5, 0.4, -0.2, 0.6][j], send: 1 })); } };
   ND.anillo = { gain: 0.93, set: [0, 7, 10, 14], capas: [], bajo: { tipo: 'orbita', cut: 700, vel: 1 }, riser: 'up', golpe: 'braam', room: 0.8, sala: { irDur: 10, irDamp: 2400, top: 4200 }, sig(M, x) {
       // órbita: las rocas de hielo pasan de lado a lado (tonos que caen al pasar, como un doppler); al salir el sol, el acorde se abre
       let l = -9; x.EV.forEach((e, i) => { if ((e.v === 'S' || e.v === 'K' || e.v === 'B') && ok(x, e) && e.t - l > 0.9) { l = e.t; const f = x.oct(x.st(e.t) * [6, 8, 9, 12][i % 4], 170, 480);
