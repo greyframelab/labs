@@ -24,7 +24,7 @@
 
   // ================================================================== biblioteca
   // piezas que no entran en el live (siguen en la web de Labs)
-  const FUERA = ['lab-35-descarga'];
+  const FUERA = ['lab-35-descarga', 'lab-38-ciudad'];
   async function discover(log) {
     const md = await fetch('../README.md', { cache: 'no-cache' }).then((r) => r.text());
     const rows = [...md.matchAll(/\|\s*(\d+)\s*\|\s*\[([^\]]+)\]\(([^)]+)\)\s*\|\s*Motion/gi)];
