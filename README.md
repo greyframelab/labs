@@ -10,6 +10,7 @@ Experiments in UI, motion and creative coding for games, apps and interfaces.
 
 | # | Lab | Category |
 |---|-----|----------|
+| 41 | [Anillo](lab-41-anillo/) | Motion |
 | 40 | [Pliegue](lab-40-pliegue/) | Motion |
 | 39 | [Espejos](lab-39-espejos/) | Motion |
 | 38 | [Ciudad](lab-38-ciudad/) | Motion |
