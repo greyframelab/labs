@@ -23,8 +23,11 @@
     return Object.assign({ room: 0.28 }, c, {
       play(M, S, t0) {
         if (c.prep) S = c.prep(S);
-        const T = S.T, cut = T.cut != null ? T.cut : T.horizon != null ? T.horizon : T.freeze, rupt = T.rupt != null ? T.rupt : T.align != null ? T.align : T.cut;
-        const TT = { tense: T.tense != null ? T.tense : Math.max(1, cut - 3.5), cut, rupt };
+        const T = S.T, rupt = T.rupt != null ? T.rupt : T.align != null ? T.align : T.cut;
+        let cut = T.cut != null ? T.cut : T.horizon != null ? T.horizon : T.freeze != null ? T.freeze : rupt;
+        const tense0 = T.tense != null ? T.tense : c.sinSilencio ? cut : Math.max(1, cut - 3.5);
+        if (c.sinSilencio) cut = rupt;                      // piezas sin silencio antes de la ruptura (el "corte" es un acercamiento)
+        const TT = { tense: Math.min(tense0, cut - 0.5), cut, rupt };
         const r0 = c.root, r1 = c.rootPost || r0, post = (t) => t >= rupt;
         const d = M.Dron({ root: r0, parts: c.parts || [2, 3, 4], cut: c.dronCut || 420, partGain: c.partGain || 0.15, sub: c.sub ?? 0.45 });
         dronArco(M, d, TT, t0, c.dron || 0.45, this.dur, r1 !== r0 ? r1 : null);
@@ -63,6 +66,10 @@
             case 'M': M.ratchet(t, { n: Math.max(3, Math.min(10, e.n || 4)), d: e.wind ? st / 4 : st / 3, vel: 0.45 + 0.35 * s, f: (c.metal || 1900) * 1.3 }); break;
             case 'V': M.swell(t, { end: t0 + (e.end || e.t + (e.len || 0.6)), vel: 0.8 * s, f: bf(e.t), top: 2400 }); break;
             case 'R': M.impact(t, { vel: 1, f0: Math.max(30, Math.min(38, r1 * (r1 > 40 ? 0.75 : 1))) }); break;
+            case 'Q': M.bass(t, { vel: (e.acc ? 0.95 : 0.55) * Math.min(1, s + 0.3), f: bf(e.t) * (e.oct ? 2 : 1), dur: e.acc ? 0.13 : 0.08, cut: (c.bassCut || 1000) * (e.acc ? 1.3 : 0.8), pan: ((e.seed || i) % 3 - 1) * 0.2 }); break;
+            case 'C': M.ice(t, { vel: Math.min(1.1, 0.6 + 0.4 * s), f: (c.chapa || 900) * (1 + 0.1 * H(e.seed || i, 12)), dec: 0.45, send: 0.5, pan: e.side ? (e.side > 0 ? 0.6 : -0.6) : 0, ratio: 1.41 }); break;
+            case 't': M.tick(t, { vel: 0.35 + 0.4 * s, f: (c.tick || 3000) * (1.2 + 0.4 * ((e.i || 0) % 5) / 5), dec: 0.008, pan: ((e.pos || 0) - 0.5) * 1.4 }); break;
+            case 'D': M.impact(t, { vel: 0.7, f0: Math.max(30, Math.min(40, r1 * 0.75)), dur: 1.6 }); break;
           }
         });
         (S.X || []).forEach((x) => {
@@ -272,12 +279,15 @@
   }
   function nadir(P, S, M, t0, dur) {
     const { T, EV } = eventos(P, S);
-    const cut = T.cut != null ? T.cut : T.horizon != null ? T.horizon : T.freeze, rupt = T.rupt != null ? T.rupt : T.align != null ? T.align : cut;
+    const rupt = T.rupt != null ? T.rupt : T.align != null ? T.align : T.cut;
+    let cut = T.cut != null ? T.cut : T.horizon != null ? T.horizon : T.freeze != null ? T.freeze : rupt;
+    const tense0 = T.tense != null ? T.tense : P.sinSilencio ? cut : null;
+    if (P.sinSilencio) cut = rupt;
     const r0 = P.root, r1 = P.rootPost || r0, V = M.V;
     const oct = (f, lo, hi) => { while (f < lo) f *= 2; while (f > hi) f /= 2; return f; };
     const st = (t) => (t >= rupt ? r1 : r0);
     // dron: raíz + quinta, se abre con la tensión, silencio antes de la ruptura
-    const TT = { tense: T.tense != null ? T.tense : Math.max(1, cut - 3.5), cut, rupt };
+    const TT = { tense: Math.min(tense0 != null ? tense0 : Math.max(1, cut - 3.5), cut - 0.5), cut, rupt };
     const N = P.nd || {}, off = (k) => (k === 'dron' && N.bajo) || (N.capas ? !N.capas.includes(k) : (N.off || []).includes(k));
     if (off('dron')) { if (cut < rupt) M.silencio(t0 + cut, t0 + rupt); }
     else {
@@ -420,9 +430,32 @@ cimatica: { riser: 'up', golpe: 'coro', gain: 1.01, set: [0, 7, 12, 15, 19], off
       const dia = x.T.dia || x.rupt + 7;
       [0, 7, 14, 16, 21].forEach((iv, j) => M.vidrio(x.t0 + dia + j * 0.35, { f: x.oct(x.r1 * Math.pow(2, iv / 12) * 8, 260, 900), dur: 4, vel: 0.9, beat: 0.4 + 0.3 * j, att: 0.5, pan: (j - 2) * 0.35 }));
       M.coro(x.t0 + dia, { notes: x.alturas(dia, 0, 110, 330), dur: 2.5, vocal: 'a', vel: 0.8, att: 0.8 }); } };
-  Object.keys(ND).forEach((k) => { if (PIEZAS[k]) PIEZAS[k].nd = ND[k]; });
+  ND.orbitas = { gain: 0.77, set: [0, 7, 12, 15, 19], capas: [], bajo: { tipo: 'eclipse', cut: 340, vel: 0.85 }, riser: 'up', golpe: 'braam', room: 0.7, sala: { irDur: 8, irDamp: 2600, top: 4000, vidrioGain: 2.4, coroGain: 1.4 }, sig(M, x) {
+      // cuatro satélites: cuatro tonos que dan vueltas por el estéreo en cada acento de la secuencia; en la conjunción se alinean
+      const sat = x.alturas(0, 0, 160, 520).slice(0, 4); let l = -9, k = 0;
+      x.EV.forEach((e, i) => { if (e.v === 'Q' && e.acc && e.t < x.rupt - 0.2 && e.t - l > 0.95) { l = e.t; const j = k++ % 4;
+        M.vidrio(x.t0 + e.t, { f: sat[j], dur: 2.2, vel: 0.75, beat: 0.5 + 0.4 * j, att: 0.12, pan: Math.sin(k * 1.57) * 0.85 }); } });
+      sat.forEach((f, j) => M.vidrio(x.t0 + x.rupt + 0.05, { f, dur: 6, vel: 1, beat: 0.3 + 0.2 * j, att: 0.04, pan: 0 }));
+      M.coro(x.t0 + (x.T.dia || x.rupt + 5.8), { notes: x.alturas(x.rupt, 0, 110, 330), dur: 2.4, vocal: 'o', vel: 0.8, att: 1 }); } };
+  ND.estrella = { gain: 0.68, set: [0, 5, 7, 10, 12, 15, 17], capas: [], bajo: { tipo: 'cuerda', oct: 2, lo: 60, hi: 120, cut: 700, vel: 0.8 }, riser: 'rev', golpe: 'coro', room: 0.75, sala: { irDur: 9, irDamp: 3000, top: 4600, vidrioGain: 2.4, nubeGain: 3 }, sig(M, x) {
+      // el haz salta de faceta en faceta: cada salto es una nota que recorre la estrella {16/5} sobre la escala
+      const esc = x.alturas(0, 0, 220, 900).sort((a, b) => a - b); let n = 0, l = -9;
+      x.EV.forEach((e, i) => { if (e.v === 'K' && e.t < x.rupt - 0.1 && e.t - l > 0.55) { l = e.t; const k = (n++ * 5) % 16;
+        M.vidrio(x.t0 + e.t, { f: esc[k % esc.length] * (k >= esc.length ? 2 : 1) / (k >= 2 * esc.length ? 2 : 1), dur: 1.8, vel: 0.65, beat: 0.8, att: 0.02, pan: Math.cos(k / 16 * 6.283) * 0.8 }); } });
+      // la cáustica: miles de cuerdas de luz → nube densa de cristal que se abre y se apaga
+      M.nube(x.t0 + x.rupt, { dur: (x.T.res || x.rupt + 4.8) - x.rupt + 2, fs: x.alturas(x.rupt, 0, 300, 1300), dens: 45, vel: 1.2, seed: 1616, up: 0.15, shape: 1.4, env: (t, d) => Math.exp(-t / (d * 0.5)) }); } };
 
   const NADIR = { room: 0.65, opt: { gain: 0.44, top: 5200, irDur: 8, irDamp: 2200, nubeGain: 3.2, resoGain: 2.0, bloomGain: 0.6, padGain: 1.3 } };
+
+  Object.assign(PIEZAS, {
+    // Órbitas · «SICIGIA» (Orphx), 124 bpm, Fa estático: bombo hipnótico, secuencia de bajo con acentos, chapa, hats
+    orbitas:  evPieza({ g: 'ORB', dur: 29.7, root: 43.65, sinSilencio: true, opt: { gain: 0.38, tickLP: 6000, tickGain: 0.9, hatGain: 0.7, bassGain: 1.6, iceGain: 1.6 }, sub: 0.22, dron: 0.36, bassCut: 1900, chapa: 820, tick: 2800, room: 0.26 }),
+    // Estrella · «CUERDA» (Phoenicia), 100 bpm con swing por voz, Fa sin melodía: bombo, caja FM, ticks finos de datos, bajo que cambia la forma
+    estrella: evPieza({ g: 'EST', dur: 29.5, root: 43.65, sinSilencio: true, opt: { gain: 0.38, tickLP: 7000, tickGain: 1.1, hatGain: 0.7, bassGain: 1.6, iceGain: 1.6 }, sub: 0.22, dron: 0.36, bassCut: 1800, snare: 1150, tick: 3200, room: 0.24 }),
+  });
+
+  // identidad NADIR de cada pieza (después de registrar todas las piezas)
+  Object.keys(ND).forEach((k) => { if (PIEZAS[k]) PIEZAS[k].nd = ND[k]; });
 
   // render sin conexión → AudioBuffer (el live lo usa como el audio grabado: loops, reverse, velocidad…)
   async function renderBuffer(nombre, S, seed, sr, dur, modo) {

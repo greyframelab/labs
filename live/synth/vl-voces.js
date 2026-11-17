@@ -358,6 +358,8 @@
       switch (tipo) {
         case 'aurora': [1, 1.5, 2, 3, 4].forEach((h, i) => osc('sine', h, [1, 0.5, 0.45, 0.25, 0.15][i], i * 3)); osc('triangle', 2, 0.12); break;
         case 'orbita': [[1, 0], [2.005, 4], [3.01, 9]].forEach(([m, d], i) => { const x = osc('sine', m, [1, 0.4, 0.18][i], d); lfo(0.09 + 0.03 * i, 14, x.detune); }); osc('sine', 0.5, 0.5); break;
+        case 'eclipse': { osc('sine', 1, 1); osc('sine', 1, 0.8, 7); osc('sine', 1.5, 0.35); osc('sine', 1.5, 0.3, 6); osc('sawtooth', 2, 0.12); lp.Q.value = 6; lfo(0.11, (o.cut || 320) * 0.6, lp.frequency); break; }
+        case 'cuerda': { [1, 3, 5, 7, 9].forEach((h, i) => { const x = osc('sine', h, 1 / h); lfo(0.17 + i * 0.05, 4, x.detune); }); osc('sine', 0.5, 0.5); lfo(5.3, 0.06, g.gain); break; }
         case 'organo': [1, 2, 3, 4, 6, 8].forEach((h, i) => osc('sine', h, [1, 0.55, 0.3, 0.28, 0.12, 0.08][i])); break;
         case 'fm': { const c = osc('sine', 1, 1), m = ctx.createOscillator(), mg = ctx.createGain(); m.frequency.setValueAtTime(f * 0.5, t); if (f2 !== f) m.frequency.setTargetAtTime(f2 * 0.5, tr, 0.04);
           mg.gain.value = f * 0.8; lfo(0.07, f * 0.7, mg.gain); m.connect(mg).connect(c.frequency); os.push(m); osc('sine', 0.5, 0.6); break; }
