@@ -115,7 +115,7 @@
   const PIEZAS = {
     // ESCARCHA · 122 bpm · hielo que cruje y se rompe
     escarcha: {
-      g: 'ESC', dur: 25.5, room: 0.26, opt: { gain: 0.32, top: 9000, tickLP: 3800, tickGain: 0.55 },
+      g: 'ESC', dur: 25.5, root: 49.0, rootPost: 39.2, room: 0.26, opt: { gain: 0.32, top: 9000, tickLP: 3800, tickGain: 0.55 },
       play(M, S, t0) {
         const T = S.T, G0 = S.G0 || 220;
         const d = M.Dron({ root: 49.0, parts: [2, 3, 5], cut: 380, partGain: 0.17, sub: 0.32 });
@@ -152,7 +152,7 @@
 
     // CAMPO · campo magnético, pulsos dispersos y luego groove
     campo: {
-      g: 'CMP', dur: 24.5, room: 0.3, opt: { gain: 0.39 },
+      g: 'CMP', dur: 24.5, root: 41.2, room: 0.3, opt: { gain: 0.39 },
       play(M, S, t0) {
         const T = S.T;
         const d = M.Dron({ root: 41.2, parts: [2, 3, 4], cut: 440, partGain: 0.15, sub: 0.55 });
@@ -187,7 +187,7 @@
 
     // ECO · sonar en una sala enorme, anillos que golpean
     eco: {
-      g: 'ECO', dur: 24.5, room: 0.38, opt: { gain: 0.58, tickGain: 1.7, pingBright: 1.6, tickLP: 9000 },
+      g: 'ECO', dur: 24.5, root: 27.5, room: 0.38, opt: { gain: 0.58, tickGain: 1.7, pingBright: 1.6, tickLP: 9000 },
       play(M, S, t0) {
         const T = S.T;
         const d = M.Dron({ root: 27.5, parts: [2, 3, 4, 6], cut: 520, partGain: 0.17, sub: 0.45 });
@@ -253,15 +253,183 @@
       dur: 24.5, root: 41.2, rootPost: 41.2, opt: { gain: 0.44, tickLP: 8000, tickGain: 1.2, iceGain: 1.5 }, tick: 3000, snare: 1300, metal: 2400, room: 0.3 }),
   });
 
+  // ================= NADIR · dark ambient (Blade Runner a la manera de Tineidae): sin batería.
+  // La misma partitura: bombos → olas de sub, golpes → destellos, bajo → cambios de acorde, ruptura → apertura del acorde.
+  function eventos(P, S) {
+    if (P.prep) S = P.prep(S);
+    if (S.EV) return { T: S.T, EV: S.EV };
+    const EV = [];
+    if (P.g === 'ECO') S.PULSES.forEach((p) => EV.push(p.k === 0 ? { v: 'E', t: p.t, s: p.s ?? 1, f: hz(p.v + 48), far: p.far } : p.k === 1 ? { v: 'H', t: p.t, s: p.s ?? 1 } : { v: 'K', t: p.t, s: 1, big: 1 }, ...(p.k === 2 ? [{ v: 'B', t: p.t, s: 1 }] : [])));
+    if (P.g === 'CMP') {
+      S.PULSES.forEach((p) => EV.push({ v: [ 'K', 'S', 'H', 'S', 'B', 'E' ][p.k] || 'H', t: p.t, s: p.s ?? 1 }));
+      S.GROOVE.forEach((g) => EV.push({ v: g.v === 'k' ? 'K' : g.v === 's' ? 'S' : 'H', t: g.t, s: g.s ?? 1 }));
+    }
+    EV.sort((a, b) => a.t - b.t);
+    return { T: S.T, EV };
+  }
+  function nadir(P, S, M, t0, dur) {
+    const { T, EV } = eventos(P, S);
+    const cut = T.cut != null ? T.cut : T.horizon != null ? T.horizon : T.freeze, rupt = T.rupt != null ? T.rupt : T.align != null ? T.align : cut;
+    const r0 = P.root, r1 = P.rootPost || r0, V = M.V;
+    const oct = (f, lo, hi) => { while (f < lo) f *= 2; while (f > hi) f /= 2; return f; };
+    const st = (t) => (t >= rupt ? r1 : r0);
+    // dron: raíz + quinta, se abre con la tensión, silencio antes de la ruptura
+    const TT = { tense: T.tense != null ? T.tense : Math.max(1, cut - 3.5), cut, rupt };
+    const N = P.nd || {}, off = (k) => (k === 'dron' && N.bajo) || (N.capas ? !N.capas.includes(k) : (N.off || []).includes(k));
+    if (off('dron')) { if (cut < rupt) M.silencio(t0 + cut, t0 + rupt); }
+    else {
+      const d = M.Dron({ root: r0, parts: [2, 3, 4, 5], cut: 340, partGain: 0.2, sub: 0.32 });
+      const d5 = M.Dron({ root: r0 * 1.5, parts: [2, 3], cut: 420, partGain: 0.12, sub: 0.2 });
+      const d8 = M.Dron({ root: r0 * 2, parts: [2, 3], cut: 380, partGain: 0.1, sub: 0.15 });   // tercera capa: octava que respira
+      dronArco(M, d, TT, t0, 0.5, dur, r1 !== r0 ? r1 : null); dronArco(M, d5, TT, t0, 0.38, dur, r1 !== r0 ? r1 * 1.5 : null); dronArco(M, d8, TT, t0, 0.3, dur, r1 !== r0 ? r1 * 2 : null);
+    }
+    // armonía: conjunto de alturas por tramo (i · VI · iv · VII o variantes con la semilla), sin acordes protagonistas
+    const PROG = N.prog || V.pick([0, 8, 5, 10], [[0, 8, 5, 10], [0, 5, 8, 3], [0, 8, 3, 10], [0, 10, 8, 5]]);
+    const SET = { 0: [0, 7, 10, 15], 3: [0, 7, 11, 14], 5: [0, 7, 10, 15], 8: [0, 7, 11, 14], 10: [0, 7, 9, 14] };
+    const alturas = (t, k, lo, hi) => { const deg = PROG[k % PROG.length], b = st(t) * Math.pow(2, deg / 12); return (N.set || SET[deg] || SET[0]).map((iv) => oct(b * Math.pow(2, iv / 12), lo, hi)); };
+    const ch = [0.0]; let last = 0;
+    EV.forEach((e) => { if (e.v === 'B' && e.t - last > 3.6 && e.t < cut - 1 && e.t > 2) { ch.push(e.t); last = e.t; } });
+    if (ch.length < 3) for (let x = 4.8; x < cut - 1.5; x += 4.8) if (!ch.some((c) => Math.abs(c - x) < 2)) ch.push(x);
+    ch.sort((a, b) => a - b);
+    const tramo = (t) => { let k = 0; ch.forEach((c, i) => { if (t >= c) k = i; }); return k; };
+    ch.forEach((c, i) => {
+      const end = i + 1 < ch.length ? ch[i + 1] : cut, ten = Math.max(0, Math.min(1, (c - TT.tense) / (cut - TT.tense)));
+      // fondo: pad oscuro, casi sin presencia (raíz + quinta, filtro cerrado)
+      const pb = oct(alturas(c, i, 60, 120)[0], 60, 120);
+      if (!off('pad')) M.cs80(t0 + c, { notes: [pb, pb * 1.5, pb * 2], dur: end - c + 0.4, att: 2.5, rel: 2.5, vel: 0.7 * (N.pad ?? 1), cut: 420 + 260 * ten, send: 0.8 });
+      // nube helada que se densifica con la tensión
+      if (!off('nube')) M.nube(t0 + c, { dur: end - c, fs: alturas(c, i, N.lo || 220, N.hi || 700), dens: (7 + 18 * ten) * (N.nube ?? 1), vel: 0.6 + 0.4 * ten, seed: i * 31 + 7, up: 0.2 + 0.2 * ten });
+      // resonancia metálica lenta en medio del tramo
+      if (!off('reso')) M.reso(t0 + c + (end - c) * 0.25, { f: alturas(c, i, 140, 360)[1], dur: Math.min(5, (end - c) * 0.9), vel: 0.6 * (N.reso ?? 1), pan: i % 2 ? 0.5 : -0.5 });
+    });
+    // ruptura: retumbo lejano enorme y la nube se abre en todo el campo
+    const pr = (T.sting || dur - 5) - rupt;
+    if (!N.golpe) M.bloom(t0 + rupt, { f: oct(r1, 28, 55), vel: 1.4, dec: 7, att: 0.04 });
+    // instrumento grave propio, subida hacia el corte y golpe de ruptura (cinemática)
+    if (N.bajo) M.bajo(t0 + 0.05, t0 + dur - 0.2, Object.assign({ f: oct(r0 * (N.bajo.oct || 1), N.bajo.lo || 30, N.bajo.hi || 62), f2: oct(r1 * (N.bajo.oct || 1), N.bajo.lo || 30, N.bajo.hi || 62), tr: t0 + rupt }, N.bajo));
+    if (N.riser && cut < rupt) M.riser(t0 + Math.max(1, Math.min(TT.tense, cut - 2.5)), t0 + cut, { tipo: N.riser, f: oct(r0 * 4, 90, 180), vel: N.riserVel || 1 });
+    if (N.golpe) M.golpe(t0 + rupt, { tipo: N.golpe, f: oct(r1, 30, 58), vel: N.golpeVel || 1 });
+    if (!off('nube')) M.nube(t0 + rupt, { dur: pr, fs: alturas(rupt, 0, 200, 800), dens: 22, vel: 1.0, seed: 913, up: 0.35, shape: 1.6, env: (x, d) => Math.exp(-x / (d * 0.55)) });
+    if (!off('pad')) M.cs80(t0 + rupt + 0.2, { notes: [oct(r1 * 2, 60, 120), oct(r1 * 3, 90, 180), oct(r1 * 4, 120, 240)], dur: pr, att: 1.6, rel: 4, vel: 0.8, cut: 560, send: 0.9 });
+    if (!off('reso')) M.reso(t0 + rupt + 0.6, { f: alturas(rupt, 0, 140, 360)[2], dur: 6, vel: 0.8, pan: -0.4 });
+    if (!off('reso')) M.reso(t0 + rupt + 2.4, { f: alturas(rupt, 2, 140, 360)[1], dur: 6, vel: 0.6, pan: 0.5 });
+    const silent = (t) => cut < rupt && t >= cut - 0.005 && t < rupt;
+    let lk = -9, lg = -9;
+    EV.forEach((e, i) => {
+      if (e.t < 0 || silent(e.t) || Math.abs(e.t - rupt) < 0.2) return;
+      const t = t0 + e.t, s = e.s ?? 1, k = e.t < rupt ? tramo(e.t) : 0;
+      if (e.v === 'K' && !off('bloom') && !(N.bajo && !(N.capas || []).includes('bloom')) && (s >= 0.7 || e.big) && e.t - lk > 1.4) { lk = e.t; M.bloom(t, { f: oct(st(e.t), 28, 55), vel: (e.big ? 0.9 : 0.6) * Math.min(1, s), dec: 3 }); }
+      else if ((e.v === 'S' || e.v === 'E' || e.v === 'P') && !off('chispa') && e.t - lg > 0.4) { lg = e.t; M.nube(t, { dur: 0.6, fs: e.f ? [oct(e.f, 260, 900)] : alturas(e.t, k, 260, 900), dens: 10, vel: 0.9 * Math.min(1, s), seed: i, shape: 2.2, env: (x, d) => 1 - x / d }); }
+      else if (e.v === 'V') M.swell(t, { end: t0 + (e.end || e.t + 0.6), vel: 0.35, f: oct(st(e.t) * 2, 70, 140), top: 1100 });
+    });
+    if (N.sig) N.sig(M, { T, EV, t0, dur, cut, rupt, r0, r1, st, oct, alturas, tramo, ch, silent, H, V });
+    if (T.sting != null && !off('nube')) M.nube(t0 + T.sting, { dur: 1.6, fs: alturas(T.sting, 0, 260, 900), dens: 12, vel: 0.9, seed: 77, shape: 1.8, env: (x, d) => 1 - x / d });
+  }
+  const ok = (x, e) => !(e.t < 0 || x.silent(e.t));
+  const ND = {
+    masa: { bajo: { tipo: 'arco', oct: 2, lo: 50, hi: 100, cut: 900, vel: 1.1 }, riser: 'rev', golpe: 'slam', gain: 0.67, set: [0, 1, 7, 10], prog: [0, 1, 0, 10], off: ['nube', 'pad', 'chispa'], room: 0.35, sala: { irDur: 3.2, irDamp: 1400, top: 3000 }, sig(M, x) {
+      // metal arqueado muy grave en una cámara cerrada: un arco por latido del núcleo, otro largo que se dobla en la ruptura
+      for (let k = 0; ; k++) { const t = (1.2 + Math.PI / 2 + 2 * Math.PI * k) / 2.6; if (t > x.cut) break; M.arco(x.t0 + Math.max(0, t - 1.1), { f: x.oct(x.r0 * 2, 55, 110) * (k % 2 ? 1.5 : 1), dur: 2.4, vel: 0.8 + 0.1 * k, pan: k % 2 ? 0.3 : -0.3 }); }
+      x.EV.forEach((e, i) => { if ((e.v === 'S' || e.v === 'E') && ok(x, e) && x.H(i, 2) < 0.3) M.arco(x.t0 + e.t, { f: x.oct(x.st(e.t) * 3, 90, 180), dur: 1.4, vel: 0.5, pan: (x.H(i, 3) - 0.5) }); });
+      M.arco(x.t0 + x.rupt, { f: x.oct(x.r1 * 2, 50, 100), f2: x.oct(x.r1 * 2, 50, 100) * 0.75, dur: 6.5, vel: 1.3 }); } },
+estratos: { bajo: { tipo: 'organo', cut: 900, vel: 0.9 }, riser: 'up', golpe: 'braam', gain: 0.82, set: [0, 7, 10, 14, 17], off: ['nube', 'pad', 'reso', 'chispa', 'bloom'], room: 0.8, sala: { irDur: 9, irDamp: 2600, top: 4200 }, sig(M, x) {
+      // acordes en la niebla: cada lámina escaneada es un acorde menor filtrado que se disuelve en una sala enorme
+      x.EV.forEach((e, i) => { if ((e.v === 'E' || e.v === 'S' || (e.v === 'K' && (e.s ?? 1) > 0.8)) && ok(x, e)) {
+        const fs = x.alturas(e.t, x.tramo(e.t), 130, 520); M.niebla(x.t0 + e.t, { notes: fs, vel: 0.6 + 0.3 * Math.min(1, e.s ?? 1), cut: 600 + 700 * x.H(i, 3), dec: 1.6, pan: (x.H(i, 4) - 0.5) * 0.8 }); } });
+      M.niebla(x.t0 + x.rupt, { notes: x.alturas(x.rupt, 0, 90, 400), vel: 1.3, cut: 1400, dec: 5 }); } },
+    eco: { gain: 0.67, set: [0, 7, 10, 19], capas: [], bajo: { tipo: 'glide', vel: 1.1, cut: 500 }, riser: 'rev', golpe: 'subdrop', room: 0.85, sala: { irDur: 11, irDamp: 1800, top: 3200 }, sig(M, x) {
+      // fondo marino: cantos que se deslizan como de ballena y un sonar muy lejano que rebota en la sala
+      let l = -9; x.EV.forEach((e, i) => { if (e.v === 'E' && ok(x, e) && e.t - l > 2.2) { l = e.t; const f = x.oct(e.f || x.r0 * 8, 180, 420);
+        M.reso(x.t0 + e.t, { f, f2: f * (x.H(i, 2) < 0.5 ? 0.75 : 1.33), dur: 2.6 + x.H(i, 3), vel: 1.4, pan: (x.H(i, 4) - 0.5) * 1.4, send: 1.2 }); } });
+      let lp = -9; x.EV.forEach((e, i) => { if (e.v === 'E' && ok(x, e) && e.t - lp > 3) { lp = e.t; M.ping(x.t0 + e.t + 0.4, { f: x.oct(x.r0 * 16, 500, 900), far: 1, vel: 0.35, dec: 0.4, size: 2.6 }); } });
+      M.reso(x.t0 + x.rupt + 0.8, { f: x.oct(x.r1 * 8, 180, 360), f2: x.oct(x.r1 * 4, 90, 180), dur: 7, vel: 1.6, send: 1.2 }); } },
+teseracto: { bajo: { tipo: 'fm', cut: 600, vel: 0.9 }, riser: 'up', golpe: 'braam', gain: 1.03, set: [0, 3, 7, 10, 14], prog: [0, 8, 3, 10], off: ['nube', 'reso', 'chispa'], pad: 0.6, room: 0.7, sala: { irDur: 7, irDamp: 2800, top: 4500, arpGain: 2.2 }, sig(M, x) {
+      // arpegiador en la niebla: un ciclo por tramo, el patrón muta con cada giro del hipercubo; en la ruptura se invierte
+      x.ch.concat([x.cut]).reduce((a, c, i) => { const st = 0.16 + 0.04 * (i % 2); M.arpegio(x.t0 + a, { notes: x.alturas(a, i, 200, 800), step: st, n: Math.floor((c - a) / st), salto: [1, 2, 3, 2][i % 4], seed: i * 11, fase: i, vel: 0.9 }); return c; });
+      const post = (x.T.sting || x.dur - 5) - x.rupt - 0.5;
+      M.arpegio(x.t0 + x.rupt + 0.5, { notes: x.alturas(x.rupt, 0, 200, 800).reverse(), step: 0.3, n: Math.floor(post / 0.3), salto: 3, seed: 99, vel: 0.8, skip: 0.3 }); } },
+campo: { bajo: { tipo: 'hum', cut: 420, vel: 0.8 }, riser: 'pres', golpe: 'slam', gain: 1.11, set: [0, 5, 7, 12], off: ['nube', 'pad', 'reso', 'chispa'], room: 0.5, sala: { irDur: 4, irDamp: 2400, top: 3800, radioGain: 2.2 }, sig(M, x) {
+      // transmisiones: cada pulso del campo es una emisora que se sintoniza; tras la ruptura, una señal larga que se pierde
+      let l = -9; x.EV.forEach((e, i) => { if (e.v !== 'H' && ok(x, e) && e.t - l > 0.7) { l = e.t;
+        const fs = x.alturas(e.t, x.tramo(e.t), 180, 700); M.radio(x.t0 + e.t, { f: fs[Math.floor(x.H(i, 1) * fs.length)], dur: 0.6 + 1.4 * x.H(i, 2), am: 4 + 14 * x.H(i, 3), from: 0.7 + 0.7 * x.H(i, 4), vel: 0.8, pan: (x.H(i, 5) - 0.5) * 1.6 }); } });
+      M.radio(x.t0 + x.rupt + 0.4, { f: x.oct(x.r1 * 8, 250, 500), dur: 7, am: 2.5, from: 2, vel: 1.1 }); } },
+    grieta: { gain: 0.74, set: [0, 1, 5, 7], capas: ['bloom'], bajo: { tipo: 'tecto', vel: 1.2, cut: 260 }, riser: 'down', golpe: 'slam', room: 0.4, sala: { irDur: 3.5, irDamp: 1200, top: 2600 }, sig(M, x) {
+      // tectónica: fricción de piedra (crujido grave) en cada grieta, sin armonía; retumbos de placa
+      let l = -9; x.EV.forEach((e, i) => { if ((e.v === 'S' || e.v === 'G' || e.v === 'E') && ok(x, e) && e.t - l > 0.45) { l = e.t; M.crackle(x.t0 + e.t, { len: 0.3 + 0.5 * x.H(i, 1), n: 10 + Math.round(14 * x.H(i, 2)), vel: 0.6, seed: i, lo: 0.1 + 0.08 * x.H(i, 3) }); } });
+      M.crackle(x.t0 + x.rupt + 0.1, { len: 2.4, n: 60, vel: 0.9, seed: 3, lo: 0.09 }); } },
+cimatica: { riser: 'up', golpe: 'coro', gain: 1.01, set: [0, 7, 12, 15, 19], off: ['nube', 'pad', 'reso', 'chispa', 'dron'], room: 0.7, sala: { irDur: 8, irDamp: 3000, top: 5000 }, sig(M, x) {
+      // coro sintético que cambia de vocal con cada figura de la placa; bajo de órgano muy grave debajo
+      const voc = ['u', 'o', 'a', 'o', 'e'];
+      x.ch.concat([x.cut]).reduce((a, c, i) => { M.coro(x.t0 + a, { notes: x.alturas(a, i, 110, 330), dur: c - a + 0.2, vocal: voc[i % 5], vel: 0.9, att: i ? 1.2 : 2.5 }); return c; });
+      M.Dron && M.coro(x.t0 + 0.2, { notes: [x.oct(x.r0, 30, 60), x.oct(x.r0 * 2, 60, 120)], dur: x.cut - 0.3, vocal: 'u', vel: 0.7, formant: 0.5, att: 3 });
+      M.coro(x.t0 + x.rupt + 0.2, { notes: x.alturas(x.rupt, 0, 90, 360).concat([x.oct(x.r1, 30, 60)]), dur: Math.max(3, (x.T.sting || x.dur - 5) - x.rupt), vocal: 'a', vel: 1.2, att: 0.8 }); } },
+    escarcha: { bajo: { tipo: 'vidrio', oct: 4, lo: 120, hi: 240, cut: 2000, vel: 0.7 }, riser: 'rev', golpe: 'subdrop', gain: 0.57, set: [0, 7, 14, 21], off: ['pad', 'nube', 'reso', 'bloom', 'chispa'], room: 0.25, sala: { irDur: 2.2, irDamp: 5200, top: 7000 }, sig(M, x) {
+      // cristal frotado en una sala pequeña y seca: cada golpe de hielo es un vaso que canta, en quintas apiladas
+      let l = -9; x.EV.forEach((e, i) => { if ((e.v === 'S' || e.v === 'H' || e.v === 'C') && ok(x, e) && e.t - l > 0.55) { l = e.t;
+        const fs = x.alturas(e.t, x.tramo(e.t), 420, 1250); M.vidrio(x.t0 + e.t, { f: fs[Math.floor(x.H(i, 5) * fs.length)], dur: 2 + 1.5 * x.H(i, 6), vel: 0.6 + 0.4 * Math.min(1, e.s ?? 1), beat: 0.4 + 1.6 * x.H(i, 7), pan: (x.H(i, 8) - 0.5) * 1.6 }); } });
+      x.alturas(x.rupt, 0, 420, 1250).forEach((f, j) => M.vidrio(x.t0 + x.rupt + j * 0.18, { f, dur: 6, vel: 0.9, beat: 0.3 + j * 0.4, pan: (j - 1.5) * 0.5, att: 0.08 })); } },
+    horizonte: { gain: 0.67, set: [0, 7, 14, 16, 21], prog: [0, 5, 10, 0], capas: ['pad'], pad: 1.1, bajo: { tipo: 'aurora', cut: 380, open: 1300, cresc: 1.5, rise: 1.0595, vel: 0.9 }, riser: 'up', golpe: 'braam', room: 0.75, sala: { irDur: 9, irDamp: 3200, top: 5200 }, sig(M, x) {
+      // amanecer en otro planeta: un acorde que sube muy despacio hacia la luz; tras la ruptura se abre en mayor
+      M.swell(x.t0 + 0.5, { end: x.t0 + x.cut - 0.1, vel: 0.6, f: x.oct(x.r0 * 2, 70, 140), top: 1600 });
+      x.ch.forEach((c, i) => M.coro(x.t0 + c + 0.5, { notes: x.alturas(c, i, 150, 420).slice(0, 3), dur: 3, vocal: 'o', vel: 0.45 + 0.15 * i, att: 2 }));
+      [0, 4, 7, 11, 14].forEach((iv, j) => M.vidrio(x.t0 + x.rupt + 0.9 + j * 0.55, { f: x.oct(x.r1 * Math.pow(2, iv / 12) * 8, 300, 900), dur: 5, vel: 0.8, beat: 0.5 + j * 0.3, att: 0.6, pan: (j - 2) * 0.3 })); } },
+    descarga: { gain: 1.23, set: [0, 3, 7, 8], capas: ['bloom'], bajo: { tipo: 'braam', cut: 260, open: 700, vel: 0.75, drive: 2 }, riser: 'pres', golpe: 'braam', room: 0.6, sala: { irDur: 6, irDamp: 1600, top: 3000 }, sig(M, x) {
+      // tormenta lejana: truenos (retumbo + crujido grave) y metales graves que amenazan
+      let l = -9; x.EV.forEach((e, i) => { if ((e.v === 'S' || e.v === 'R') && ok(x, e) && e.t - l > 1.6) { l = e.t; M.crackle(x.t0 + e.t, { len: 0.5, n: 16, vel: 0.55, seed: i, lo: 0.16 }); M.bloom(x.t0 + e.t + 0.12, { f: x.oct(x.r0, 28, 50), vel: 0.6, dec: 4, att: 0.25 }); } });
+      x.ch.forEach((c, i) => M.arco(x.t0 + c + 0.8, { f: x.oct(x.st(c) * 3, 70, 150), dur: 3, vel: 0.7, pan: i % 2 ? 0.4 : -0.4 })); } },
+    engranaje: { gain: 1.19, set: [0, 7, 10, 17], capas: [], bajo: { tipo: 'motor', vel: 1.1, cut: 900 }, riser: 'up', golpe: 'slam', room: 0.45, sala: { irDur: 4.5, irDamp: 2000, top: 3600 }, sig(M, x) {
+      // máquina dormida: golpes metálicos graves en ciclo lento que siguen a los engranes, sobre el motor
+      let l = -9; x.EV.forEach((e, i) => { if ((e.v === 'E' || e.v === 'M') && ok(x, e) && e.t - l > 0.9) { l = e.t; M.ice(x.t0 + e.t, { f: x.oct(x.st(e.t) * 6, 180, 420), vel: 0.6, dec: 0.5, send: 0.9, thump: 1, pan: (x.H(i, 2) - 0.5) }); } });
+      for (let t = 1.0, j = 0; t < x.dur - 4; t += 2.2, j++) if (!x.silent(t)) M.arco(x.t0 + t, { f: x.oct(x.st(t) * [3, 4, 3, 5][j % 4], 90, 200), dur: 2, vel: 0.55, pan: j % 2 ? 0.5 : -0.5 }); } },
+    tokamak: { bajo: { tipo: 'subpulso', rate: 1.1, vel: 1 }, golpe: 'subdrop', gain: 0.73, set: [0, 6, 12, 18], off: ['nube', 'pad', 'chispa', 'reso'], room: 0.45, sala: { irDur: 5, irDamp: 2400, top: 5000 }, sig(M, x) {
+      // plasma contenido: presión FM con trémolo cada vez más rápido hasta el corte; en la ruptura se libera en un retumbo y un arco
+      M.presion(x.t0 + 0.4, x.t0 + x.cut, { f: x.oct(x.r0 * 2, 80, 140), vel: 1 });
+      M.presion(x.t0 + 2.5, x.t0 + x.cut, { f: x.oct(x.r0 * 3, 120, 220), vel: 0.6 });
+      M.bloom(x.t0 + x.rupt, { f: x.oct(x.r1, 26, 45), vel: 1.3, dec: 8, att: 0.02 });
+      M.arco(x.t0 + x.rupt + 0.3, { f: x.oct(x.r1 * 2, 55, 110), dur: 7, vel: 1 });
+      M.arco(x.t0 + x.rupt + 2.0, { f: x.oct(x.r1 * 3, 80, 160), dur: 6, vel: 0.7, pan: 0.5 }); } },
+    ciudad: { bajo: { tipo: 'cs80', cut: 520, open: 1200, vel: 0.9 }, riser: 'rev', golpe: 'braam', gain: 1.04, set: [0, 3, 7, 10, 14], off: ['nube', 'chispa'], pad: 1.8, room: 0.75, sala: { irDur: 10, irDamp: 3600, top: 6500 }, sig(M, x) {
+      // metrópolis de noche: acordes CS-80 y una voz solista con portamento que deja frases sueltas, sala infinita
+      x.ch.forEach((c, i) => { const f = x.alturas(c, i, 90, 180); M.cs80(x.t0 + c + 0.3, { notes: [f[1], f[2], f[4] || f[3]], dur: 3.2, att: 1.8, rel: 3.5, vel: 0.6, cut: 1200 }); });
+      const esc = [0, 3, 5, 7, 10, 12].map((iv) => x.oct(x.r0 * 8, 300, 600) * Math.pow(2, iv / 12));
+      const frases = [[3, 2, 0, 1], [4, 3, 1, 0, 2], [5, 4, 3, 1]];
+      x.ch.slice(1).forEach((c, i) => M.lead(x.t0 + c + 0.6, { notes: frases[i % 3].map((j) => esc[j]), step: 0.75, vel: 0.9, pan: i % 2 ? 0.25 : -0.25 }));
+      M.lead(x.t0 + x.rupt + 1.2, { notes: [esc[5], esc[4], esc[3], esc[1], esc[0]].map((f) => f / 2), step: 1.1, vel: 1 }); } },
+    espejos: { gain: 0.99, set: [0, 5, 10, 15], capas: [], bajo: { tipo: 'revswell', periodo: 2.1, cut: 380, vel: 1 }, riser: 'rev', golpe: 'coro', room: 0.7, sala: { irDur: 8, irDamp: 2800, top: 4200 }, sig(M, x) {
+      // todo al revés: cada sonido crece hacia su golpe y se corta; la frase de cuatro notas se refleja y se apaga en el estéreo
+      let l = -9; x.EV.forEach((e, i) => { if ((e.v === 'S' || e.v === 'E' || e.v === 'K') && ok(x, e) && e.t - l > 0.8 && e.t > 0.8) { l = e.t; M.swell(x.t0 + e.t - 0.7, { end: x.t0 + e.t, vel: 0.5, f: x.oct(x.st(e.t) * 4, 110, 220) * [1, 1.335, 1.5, 1.78][i % 4], top: 1500, pan: (i % 2 ? 0.6 : -0.6) }); } });
+      const fr = [0, 10, 5, 15].map((iv) => x.oct(x.r0 * Math.pow(2, iv / 12) * 8, 330, 900));
+      for (let r = 0; r < 5; r++) { const t = 1.2 + r * 2.1; if (t > x.cut - 1) break; fr.forEach((f, j) => M.vidrio(x.t0 + t + j * 0.32, { f, vel: 0.9 * Math.pow(0.72, r), dur: 1.6, beat: 0.6, pan: (r % 2 ? 1 : -1) * (0.2 + 0.15 * r) })); } } },
+    pliegue: { gain: 1.36, set: [0, 2, 7, 9], capas: ['pad'], pad: 0.8, bajo: { tipo: 'wow', cut: 420, vel: 0.9 }, riser: 'down', golpe: 'subdrop', room: 0.65, sala: { irDur: 7, irDamp: 2400, top: 3800 }, sig(M, x) {
+      // cinta deformada: alturas que se curvan (glissandos lentos) sobre un pad con wow
+      x.ch.forEach((c, i) => M.reso(x.t0 + c + 0.5, { f: x.oct(x.st(c) * 6, 160, 400), f2: x.oct(x.st(c) * 6, 160, 400) * (i % 2 ? 0.84 : 1.19), dur: 4, vel: 1.3, pan: i % 2 ? 0.5 : -0.5 }));
+      M.reso(x.t0 + x.rupt + 0.3, { f: x.oct(x.r1 * 8, 200, 400), f2: x.oct(x.r1 * 4, 100, 200), dur: 6, vel: 1.4 }); } },
+  };
+  ND.anillo = { gain: 0.93, set: [0, 7, 10, 14], capas: [], bajo: { tipo: 'orbita', cut: 700, vel: 1 }, riser: 'up', golpe: 'braam', room: 0.8, sala: { irDur: 10, irDamp: 2400, top: 4200 }, sig(M, x) {
+      // órbita: las rocas de hielo pasan de lado a lado (tonos que caen al pasar, como un doppler); al salir el sol, el acorde se abre
+      let l = -9; x.EV.forEach((e, i) => { if ((e.v === 'S' || e.v === 'K' || e.v === 'B') && ok(x, e) && e.t - l > 0.9) { l = e.t; const f = x.oct(x.st(e.t) * [6, 8, 9, 12][i % 4], 170, 480);
+        M.reso(x.t0 + e.t, { f, f2: f * 0.86, dur: 1.4 + 0.8 * x.H(i, 2), vel: 1.1, pan: (i % 2 ? 0.75 : -0.75), send: 1 }); } });
+      const dia = x.T.dia || x.rupt + 7;
+      [0, 7, 14, 16, 21].forEach((iv, j) => M.vidrio(x.t0 + dia + j * 0.35, { f: x.oct(x.r1 * Math.pow(2, iv / 12) * 8, 260, 900), dur: 4, vel: 0.9, beat: 0.4 + 0.3 * j, att: 0.5, pan: (j - 2) * 0.35 }));
+      M.coro(x.t0 + dia, { notes: x.alturas(dia, 0, 110, 330), dur: 2.5, vocal: 'a', vel: 0.8, att: 0.8 }); } };
+  Object.keys(ND).forEach((k) => { if (PIEZAS[k]) PIEZAS[k].nd = ND[k]; });
+
+  const NADIR = { room: 0.65, opt: { gain: 0.44, top: 5200, irDur: 8, irDamp: 2200, nubeGain: 3.2, resoGain: 2.0, bloomGain: 0.6, padGain: 1.3 } };
+
   // render sin conexión → AudioBuffer (el live lo usa como el audio grabado: loops, reverse, velocidad…)
-  async function renderBuffer(nombre, S, seed, sr, dur) {
-    const P = PIEZAS[nombre]; sr = sr || 48000;
-    const ctx = new OfflineAudioContext(2, Math.ceil((dur || P.dur) * sr), sr);
+  async function renderBuffer(nombre, S, seed, sr, dur, modo) {
+    const P = PIEZAS[nombre]; sr = sr || 48000; dur = dur || P.dur;
+    const ctx = new OfflineAudioContext(2, Math.ceil(dur * sr), sr);
+    if (modo === 'nadir') {
+      const M = root.VLVoces.Motor(ctx, ctx.destination, Object.assign({ seed, room: NADIR.room }, NADIR.opt, { gain: NADIR.opt.gain * ((P.nd && P.nd.gain) || 1) }, (P.nd && P.nd.sala) || {}, { room: (P.nd && P.nd.room) != null ? P.nd.room : NADIR.room }));
+      nadir(P, S, M, 0, dur);
+      return ctx.startRendering();
+    }
     const M = root.VLVoces.Motor(ctx, ctx.destination, Object.assign({ seed, room: P.room }, P.opt));
-    Object.assign({}, P, { dur: dur || P.dur }).play(M, S, 0);
+    Object.assign({}, P, { dur }).play(M, S, 0);
     return ctx.startRendering();
   }
-  async function render(nombre, S, seed, sr, dur) { const b = await renderBuffer(nombre, S, seed, sr, dur); return [b.getChannelData(0), b.getChannelData(1)]; }
+  async function render(nombre, S, seed, sr, dur, modo) { const b = await renderBuffer(nombre, S, seed, sr, dur, modo); return [b.getChannelData(0), b.getChannelData(1)]; }
   // pieza del live (id de carpeta, p. ej. lab-33-escarcha) → mapeo
   // partitura: la de la pieza (global g) o la compuesta aquí (build)
   function find(id) { const k = Object.keys(PIEZAS).find((n) => new RegExp('-' + n + '/?$').test(String(id))); return k ? Object.assign({ k }, PIEZAS[k]) : null; }

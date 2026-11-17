@@ -13,7 +13,7 @@
 
   // ================================================================== estado global
   const LIB = [];
-  const MIX = { xf: 0, mode: 'fundido', onAir: 'A', quality: store.get('calidadAuto', 0), imp: store.get('impermanencia', false), aud: store.get('audioSintesis', false) };
+  const MIX = { xf: 0, mode: 'fundido', onAir: 'A', quality: store.get('calidadAuto', 0), imp: store.get('impermanencia', false), aud: store.get('audioModo', store.get('audioSintesis', false) ? 'sintesis' : 'grabado') };
   const FX = { trail: 0, hits: 0, split: 0, invert: 0, black: 0, bright: 1, glitch: 0, punch: 0, lens: 0, mosaic: 0, tint: 0, scan: 0, mirror: 0, strobe: 0, tintC: '#ffffff',
     pBloom: 1, pFlash: 1, pScan: 0.2, cMix: 0, view: 0, viewOp: 0.85, viewMode: 'full' };
   const AFX = { filter: 0, echo: 0, echoT: 0.375, room: 0.12, master: 0.9, av: store.get('av', 0) };
@@ -83,15 +83,16 @@
     const seed = d.state ? d.state.seed || 0 : 0;
     let buf = it.buf, rev = it.rev;
     SYN.last = { id: it.id, aud: MIX.aud, can: canSynth(it), seed };
-    if (MIX.aud && canSynth(it)) {
-      const key = it.id + ':' + seed;
+    const modo = MIX.aud;
+    if (modo !== 'grabado' && canSynth(it)) {
+      const key = it.id + ':' + seed + ':' + modo;
       if (d.synthKey === key && d.synth) ({ buf, rev } = d.synth);
       else {
         try {
           const t0 = performance.now();
-          const b = await VLPiezas.renderBuffer(VLPiezas.find(it.id).k, it.score, seed, ctx.sampleRate, it.buf.duration);
+          const b = await VLPiezas.renderBuffer(VLPiezas.find(it.id).k, it.score, seed, ctx.sampleRate, it.buf.duration, modo === 'nadir' ? 'nadir' : null);
           SYN.ms = Math.round(performance.now() - t0);
-          if (d.item !== it || (d.state && (d.state.seed || 0) !== seed) || !MIX.aud) { SYN.drop = (SYN.drop || 0) + 1; return; }
+          if (d.item !== it || (d.state && (d.state.seed || 0) !== seed) || MIX.aud !== modo) { SYN.drop = (SYN.drop || 0) + 1; return; }
           d.synth = { buf: b, rev: reverse(b) }; d.synthKey = key; ({ buf, rev } = d.synth);
         } catch (e) { SYN.err = String(e); console.warn('síntesis', it.id, e); }
       }
@@ -1005,15 +1006,16 @@
     // IMPERMANENCIA: cada pase, una versión única de la pieza (se aplica a lo que se cargue a partir de ahora)
     const ig = document.createElement('div'); ig.className = 'grp';
     ig.innerHTML = '<button class="tg" id="tg-imp" title="Cada vez que una pieza entra es una versión única e irrepetible (cámara, geometría). Apagado: la versión canónica de la web y el vídeo.">IMPERMANENCIA</button>'
-      + '<button class="tg" id="tg-aud" title="Audio de las piezas. GRABADO: el audio original. SÍNTESIS: generado en el momento a partir de la partitura; con IMPERMANENCIA, cada pase suena distinto.">AUDIO · GRABADO</button>';
+      + '<button class="tg" id="tg-aud" title="Audio de las piezas. GRABADO: el audio original. SÍNTESIS: el mismo tema generado en el momento desde la partitura. NADIR: una pieza de dark ambient propia para cada vídeo, sin batería. Con IMPERMANENCIA, cada pase suena distinto.">AUDIO · GRABADO</button>';
     fs.appendChild(ig);
     const ib = $('#tg-imp'); ib.classList.toggle('on', !!MIX.imp);
-    const ab = $('#tg-aud'); const abSet = () => { ab.classList.toggle('on', !!MIX.aud); ab.textContent = 'AUDIO · ' + (MIX.aud ? 'SÍNTESIS' : 'GRABADO'); };
+    const ab = $('#tg-aud'); const AUDN = { grabado: 'GRABADO', sintesis: 'SÍNTESIS', nadir: 'NADIR' };
+    const abSet = () => { ab.classList.toggle('on', MIX.aud !== 'grabado'); ab.classList.toggle('nadir', MIX.aud === 'nadir'); ab.textContent = 'AUDIO · ' + AUDN[MIX.aud]; };
     abSet();
     ab.addEventListener('click', () => {
-      MIX.aud = !MIX.aud; store.set('audioSintesis', MIX.aud); abSet(); fitFx();
+      MIX.aud = { grabado: 'sintesis', sintesis: 'nadir', nadir: 'grabado' }[MIX.aud] || 'grabado'; store.set('audioModo', MIX.aud); abSet(); fitFx();
       for (const k in DECK) deckAudio(DECK[k]);
-      toast(MIX.aud ? 'AUDIO · SÍNTESIS (' + LIB.filter(canSynth).length + ' PIEZAS; EL RESTO, GRABADO)' : 'AUDIO · GRABADO');
+      toast(MIX.aud === 'grabado' ? 'AUDIO · GRABADO' : MIX.aud === 'nadir' ? 'AUDIO · NADIR · DARK AMBIENT, UNA PIEZA PROPIA POR VÍDEO' : 'AUDIO · SÍNTESIS (' + LIB.filter(canSynth).length + ' PIEZAS; EL RESTO, GRABADO)');
     });
     ib.addEventListener('click', () => { MIX.imp = !MIX.imp; store.set('impermanencia', MIX.imp); ib.classList.toggle('on', MIX.imp); sendState(); toast(MIX.imp ? 'IMPERMANENCIA · CADA PASE SERÁ ÚNICO (DESDE LA PRÓXIMA PIEZA)' : 'IMPERMANENCIA · VERSIÓN CANÓNICA'); fitFx(); });
     $('#tg-ext').addEventListener('click', extCycle);
