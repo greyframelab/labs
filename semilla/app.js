@@ -1,5 +1,5 @@
 /* VØID_LOOM · SEMILLA — consola, modos de sala y reloj común.
-   AUTOMÁTICO: las piezas nacen solas. PÚBLICO: la sala las hace nacer con su presencia (sensor de OJO).
+   AUTOMÁTICO: las piezas nacen solas. PÚBLICO: la sala dice una palabra y la pieza nace de ella (voz.js).
    MANUAL: semilla y mandos a mano. El reloj es el del audio: imagen y sonido leen la misma partitura. */
 (function () {
   'use strict';
@@ -18,7 +18,6 @@
   let ctx, snd, eng, stingC, stingX;
   let cur = null, prev = null, history = [], hIdx = -1;
   let firma = null, black = 0, blackT = 0, lastSig = 0, recording = null, shotReq = false;
-  const pres = { n: 0, energy: 0, contact: 0, x: 0.5, y: 0.5, size: 0, ent: 0, ts: 0, ok: false, cam: '—', emptySince: 0, sleep: 1, ox: 0, oy: 0, lastBirth: -1e9, lastRupt: -1e9, entSeen: null, contactOn: false };
 
   // ---------- tiempo ----------
   const now = () => ctx.currentTime;
@@ -47,7 +46,7 @@
     const t0 = now() + 0.1 - atT;
     const v = snd.piece(P, t0, 1);
     if (cur) { prev = cur; prev.fadeAt = now(); prev.fadeDur = xf; prev.voice.fadeOut(now() + 0.05, xf); }
-    cur = { P, t0, voice: v, born: now(), loopsDone: 0, how };
+    cur = { P, t0, voice: v, born: now(), loopsDone: 0, how, force: o.force };
     if (how !== 'historial') { history = history.slice(0, hIdx + 1); history.push(code); if (history.length > 200) history.shift(); hIdx = history.length - 1; }
     if (how !== 'ruptura') logBirth(P, how);
     paintPiece();
@@ -56,14 +55,14 @@
   // mismos golpes, otros mandos (densidad, caos, acento): cambia en el siguiente evento sin cortar
   function regen(o) {
     if (!cur) return;
-    const P = SM.generate(cur.P.code, o);
+    const P = SM.generate(cur.P.code, Object.assign({}, o, cur.force ? { force: cur.force } : {}));
     cur.P = P; cur.voice.P = P; paintPiece();
   }
 
   // ---------- frame ----------
   let lastFrame = 0, fpsAcc = 0, fpsN = 0, fps = 60, errors = 0, slowT = 0, fastT = 0;
   function size() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 1.5), r = eng.canvas.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2), r = eng.canvas.getBoundingClientRect();
     eng.resize(r.width * dpr, r.height * dpr, eng.scale);
   }
   function envOf(s, t) {
@@ -91,8 +90,7 @@
         slots.push({ P: prev.P, e: envOf(prev, t), w: 1 - k }); wCur = k;
         if (x >= 1) prev = null;
       }
-      const Pv = cfg.mode === 'publico' ? withPresence(cur.P) : cur.P;
-      slots.push({ P: Pv, e: envOf(cur, t), w: wCur });
+      slots.push({ P: cur.P, e: envOf(cur, t), w: wCur });
       // firma: la pieza se apaga y entra el sting
       let fade = cfg.bri / 100, stingA = 0;
       if (firma) {
@@ -106,7 +104,6 @@
         } else if (st >= VL.STING_DUR) { firmaEnd(); }
         if (firma && st > VL.STING_DUR - 0.8) fade = cfg.bri / 100 * Math.min(1, (st - (VL.STING_DUR - 0.8)) / 0.8);
       }
-      if (cfg.mode === 'publico') fade *= 0.12 + 0.88 * (1 - pres.sleep);
       black += ((blackT ? 0 : 1) - black) * Math.min(1, dt / 2.5);
       fade *= black;
       const live = cfg.mode !== 'manual';
@@ -123,7 +120,7 @@
   // resolución de la escena según lo que aguante el ordenador
   function adapt() {
     if (fps < 48) { slowT++; fastT = 0; } else if (fps > 58) { fastT++; slowT = 0; } else { slowT = fastT = 0; }
-    if (slowT >= 2 && eng.scale > 0.4) { eng.resize(eng.size[0], eng.size[1], +(eng.scale - 0.1).toFixed(2)); slowT = 0; }
+    if (slowT >= 2 && eng.scale > 0.55) { eng.resize(eng.size[0], eng.size[1], +(eng.scale - 0.1).toFixed(2)); slowT = 0; }
     if (fastT >= 8 && eng.scale < 1) { eng.resize(eng.size[0], eng.size[1], +(eng.scale + 0.05).toFixed(2)); fastT = 0; }
   }
 
@@ -149,80 +146,39 @@
         start(nextCode(P), 'automático', 8);
         lastLoopIdx = -1;
       }
-    } else if (cfg.mode === 'publico') publico(t, dt, pt);
+    } else if (cfg.mode === 'publico') publico();
   }
 
-  // ---------- PÚBLICO ----------
-  function withPresence(P) {
-    // la luz se desplaza un poco hacia donde está el visitante
-    return Object.assign({}, P, { vis: Object.assign({}, P.vis, { off: [P.vis.off[0] + pres.ox, P.vis.off[1] + pres.oy] }) });
+  // ---------- PÚBLICO: la palabra ----------
+  // La sala dice una palabra y la obra nace de ella. La palabra nunca se proyecta ni se guarda.
+  const voz = { state: '—', last: '', fam: '', lastAt: -1e9, lastBirth: -1e9, pending: null, listener: null };
+  function vozOn() {
+    if (!voz.listener) voz.listener = new window.SemillaVoz.Listener(onWord, (st) => (voz.state = st));
+    voz.listener.start();
   }
-  let barSeen = -1;
-  function publico(t, dt, pt) {
-    const fresh = pres.ok && Date.now() - pres.ts < 2500, n = fresh ? pres.n : 0;
-    if (n > 0) pres.emptySince = 0; else if (!pres.emptySince) pres.emptySince = now();
-    const empty = pres.emptySince && now() - pres.emptySince > 6;
-    pres.sleep += ((empty ? 1 : 0) - pres.sleep) * Math.min(1, dt / (empty ? 9 : 2));
-    pres.ox += (((pres.x - 0.5) * 0.35 * (n ? 1 : 0)) - pres.ox) * Math.min(1, dt / 3);
-    pres.oy += (((0.5 - pres.y) * 0.2 * (n ? 1 : 0)) - pres.oy) * Math.min(1, dt / 3);
-    snd.voices.forEach((v) => { if (v === cur.voice && !v.stopAt) { const g = 0.22 + 0.78 * (1 - pres.sleep); if (Math.abs((v._g || 1) - g) > 0.01) { v.out.gain.setTargetAtTime(g, now(), 0.4); v._g = g; } } });
-    // alguien entra: nace una pieza (como mucho una cada 25 s)
-    if (pres.entSeen == null) pres.entSeen = pres.ent;
-    if (fresh && pres.ent > pres.entSeen) {
-      pres.entSeen = pres.ent;
-      if (now() - pres.lastBirth > 25) {
-        pres.lastBirth = now();
-        const code = codeFromMoment();
-        start(code, 'público', 3, { density: dens(n), chaos: chaosOf(), accent: 'auto' });
-        lastLoopIdx = -1; return;
-      }
+  function vozOff() { if (voz.listener) voz.listener.stop(); }
+  function onWord(w) {
+    voz.last = w; voz.lastAt = now();
+    if (cfg.mode !== 'publico') return;
+    if (now() - voz.lastBirth > 12) birth(w); else voz.pending = w;
+  }
+  function birth(w) {
+    const c = window.SemillaVoz.character(w);
+    voz.lastBirth = now(); voz.pending = null; voz.fam = c.fam;
+    // mismo carácter, nunca la misma pieza: la semilla es la palabra y el instante
+    const code = SM.cleanCode(SM.hashStr(w + ':' + Date.now()).toString(36).toUpperCase()).slice(0, 6).padEnd(6, '0');
+    start(code, 'voz', 3, { density: c.density, chaos: c.chaos, accent: 'auto', force: Object.assign({ word: w }, c) });
+    lastLoopIdx = -1;
+  }
+  function publico() {
+    if (voz.pending && now() - voz.lastBirth > 12) birth(voz.pending);
+    // la sala en silencio: la obra sigue sola, latente, sin apagarse nunca
+    if (now() - voz.lastAt > 240 && now() - voz.lastBirth > 240 && cur.loopsDone >= 3) {
+      voz.lastBirth = now();
+      start(nextCode(cur.P), 'latente', 8, { density: 0.3, chaos: 0.3, accent: 'auto' });
+      lastLoopIdx = -1;
     }
-    // la sala mueve densidad y caos en cada compás
-    const bar = Math.floor(pt / cur.P.bar);
-    if (bar !== barSeen) {
-      barSeen = bar;
-      const d = dens(n), c = chaosOf();
-      if (Math.abs(d - cur.P.density) > 0.06 || Math.abs(c - cur.P.chaos) > 0.06) { cfg.den = d; cfg.cha = c; regen({ density: d, chaos: c, accent: 'auto' }); syncSliders(); }
-    }
-    // mirada sostenida: la obra devuelve la RUPTURA
-    const c = fresh ? pres.contact : 0;
-    if (c > 0.6 && !pres.contactOn) {
-      pres.contactOn = true;
-      const inRupt = (pt % cur.P.L) >= 8 * cur.P.bar && (pt % cur.P.L) < 12 * cur.P.bar;
-      if (!inRupt && now() - pres.lastRupt > 40) {
-        pres.lastRupt = now();
-        start(cur.P.code, 'ruptura', 0.15, { density: cur.P.density, chaos: cur.P.chaos, accent: 'auto' }, 8 * cur.P.bar - 0.02);
-        lastLoopIdx = -1;
-      }
-    }
-    if (c < 0.3) pres.contactOn = false;
   }
-  const dens = (n) => clamp(0.25 + 0.16 * Math.min(n, 4) + 0.5 * pres.energy, 0.2, 0.95);
-  const chaosOf = () => clamp(0.2 + 0.75 * pres.energy + 0.25 * pres.size, 0.15, 0.95);
-  function codeFromMoment() {
-    const s = Date.now() + ':' + pres.x.toFixed(3) + ':' + pres.y.toFixed(3) + ':' + pres.size.toFixed(3);
-    const ABC = '0123456789ABCDEFGHJKLMNPQRSTUVWXYZ'; let h = SM.hashStr(s), out = '';
-    for (let i = 0; i < 6; i++) { out += ABC[h % ABC.length]; h = Math.floor(h / ABC.length) ^ SM.hashStr(out + s); h >>>= 0; }
-    return out;
-  }
-  let sensor = null;
-  function sensorOn() {
-    if (sensor) return;
-    pres.cam = 'ARRANCANDO'; pres.ok = false; pres.entSeen = null;
-    sensor = document.createElement('iframe'); sensor.id = 'sensor'; sensor.allow = 'camera';
-    sensor.src = '../ojo/sensor.html' + (Q.get('cam') ? '?cam=' + encodeURIComponent(Q.get('cam')) : '');
-    document.body.appendChild(sensor);
-  }
-  function sensorOff() { if (sensor) { sensor.remove(); sensor = null; } pres.ok = false; pres.cam = '—'; }
-  const presCh = new BroadcastChannel('voidloom-presencia');
-  presCh.onmessage = (e) => {
-    const m = e.data; if (!m || m.type !== 'presencia' || !sensor) return;
-    Object.assign(pres, { n: m.n || 0, energy: clamp(m.energy || 0), contact: m.contact || 0, x: m.x ?? 0.5, y: m.y ?? 0.5, size: m.size || 0, ent: m.ent || 0, ts: Date.now(), ok: true });
-  };
-  window.addEventListener('message', (e) => {
-    const d = e.data; if (!d || d.type !== 'ojo-sensor') return;
-    pres.cam = { camara: 'PIDIENDO CÁMARA', 'sin-camara': 'SIN CÁMARA', ia: 'CARGANDO IA', ok: 'VIENDO', 'error-ia': 'ERROR DE IA' }[d.st] || d.st.toUpperCase();
-  });
 
   // ---------- firma ----------
   function firmaStart(thenNext) {
@@ -263,7 +219,7 @@
   const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
   const MODE_NOTE = {
     auto: 'Las piezas nacen solas y se suceden sin repetirse. Cada vuelta muta un poco: el mismo frame no vuelve a salir.',
-    publico: 'La sala genera la pieza. Vacía, la obra queda latente; alguien entra y nace una pieza; el movimiento la densifica; una mirada sostenida le devuelve la ruptura.',
+    publico: 'La sala dice una palabra y la obra nace de ella: su significado elige la forma, la luz, los trazos y el sonido, y el dron canta sus vocales. En silencio, la obra sigue sola.',
     manual: 'Semilla, acento, densidad y caos a mano, para estudio y montaje. La pieza repite su vuelta perfecta.',
   };
   function setMode(m) {
@@ -277,7 +233,7 @@
     ['rDen', 'rCha', 'inCode'].forEach((id) => ($(id).disabled = !man));
     ['bNew', 'bPrev', 'bNext'].forEach((id) => ($(id).disabled = m === 'publico'));
     document.querySelectorAll('#swAcc button').forEach((b) => (b.disabled = !man));
-    if (m === 'publico') sensorOn(); else { sensorOff(); pres.sleep = 0; }
+    if (m === 'publico') vozOn(); else vozOff();
     if (cur && snd) { snd.voices.forEach((v) => { if (v === cur.voice && !v.stopAt) { v.out.gain.setTargetAtTime(1, now(), 0.4); v._g = 1; } }); regen(opts()); }
   }
   function paintPiece() {
@@ -287,7 +243,7 @@
     $('pieceRef').textContent = P.sp.name + ' · ' + P.ref.name + ' · ' + P.rootName;
     if (document.activeElement !== $('inCode')) $('inCode').value = P.code;
     $('bigName').textContent = P.sp.name; $('bigIdea').textContent = P.sp.idea;
-    $('tagTxt').textContent = P.code + ' · ' + P.pal.name + ' · ' + P.bpm + ' BPM · ' + P.rootName;
+    $('tagTxt').textContent = P.code + ' · ' + SM.MATS[P.vis.mat] + ' · ' + SM.RIGS[P.vis.rig] + ' · ' + SM.ACCENT_NAMES[P.accentKey] + ' · ' + P.bpm + ' BPM';
     document.querySelectorAll('#swAcc button').forEach((b) => b.classList.toggle('on', b.dataset.a === (cfg.mode === 'manual' ? cfg.accent : 'auto')));
     const tl = $('tl'); tl.innerHTML = '<i id="tlBar"></i>';
     P.acts.forEach(([t, n]) => { const x = (100 * t) / P.L; tl.insertAdjacentHTML('beforeend', `<em style="left:${x}%"></em><span style="left:${x}%">${n}</span>`); });
@@ -300,12 +256,11 @@
     $('chAct').textContent = P.acts.reduce((a, x) => (lt >= x[0] ? x[1] : a), 'SEÑAL');
     $('chFps').textContent = Math.round(fps) + ' · ' + Math.round(eng.scale * 100) + '%';
     if (cfg.mode === 'publico') {
-      const fresh = pres.ok && Date.now() - pres.ts < 2500;
-      $('pCam').textContent = pres.cam; $('pN').textContent = fresh ? pres.n : 0;
-      $('pState').textContent = pres.sleep > 0.6 ? 'LATENTE' : 'DESPIERTA';
-      $('pMov').style.width = 100 * (fresh ? pres.energy : 0) + '%'; $('pCon').style.width = 100 * Math.min(1, fresh ? pres.contact : 0) + '%';
-      $('chSala').textContent = (fresh ? pres.n : 0) + ' · ' + (pres.sleep > 0.6 ? 'LATENTE' : 'DESPIERTA');
-      $('ledCam').className = 'led ' + (fresh ? 'on' : pres.cam === 'SIN CÁMARA' || pres.cam.startsWith('ERROR') ? 'err' : 'warn');
+      $('pMic').textContent = voz.state; $('pWord').textContent = voz.last ? voz.last.toUpperCase() : '—';
+      $('pFam').textContent = voz.fam ? voz.fam.toUpperCase() : '—';
+      $('pNext').textContent = voz.pending ? 'EN ESPERA: ' + voz.pending.toUpperCase() : now() - voz.lastAt > 240 ? 'LATENTE' : '—';
+      $('chSala').textContent = voz.state;
+      $('ledCam').className = 'led ' + (voz.state === 'ESCUCHANDO' ? 'on' : voz.state.startsWith('SIN') || voz.state.startsWith('ERROR') ? 'err' : 'warn');
     }
   }
   function syncSliders() {
@@ -355,6 +310,7 @@
     $('bNew').onclick = () => { start(nextCode(cur.P), cfg.mode === 'manual' ? 'manual' : 'automático', 1.5); lastLoopIdx = -1; };
     $('bPrev').onclick = () => hist(-1); $('bNext').onclick = () => hist(1);
     $('inCode').onkeydown = (e) => { if (e.key === 'Enter') { goCode(e.target.value); e.target.blur(); } e.stopPropagation(); };
+    $('inWord').onkeydown = (e) => { if (e.key === 'Enter') { const w = window.SemillaVoz.pickWord(e.target.value) || ''; if (w) { if (cfg.mode !== 'publico') setMode('publico'); voz.last = w; voz.lastAt = now(); birth(w); } e.target.value = ''; } e.stopPropagation(); };
     $('bRec').onclick = rec; $('bShot').onclick = () => (shotReq = true);  $('bSave').onclick = save; $('bCsv').onclick = csv;
     const listClick = (e) => { const g = e.target.closest('[data-c]'), d = e.target.closest('[data-del]'); if (d) { const s = store.get('guardadas', []); s.splice(+d.dataset.del, 1); store.set('guardadas', s); renderSaved(); } else if (g) goCode(g.dataset.c); };
     $('listSaved').onclick = listClick; $('listLog').onclick = listClick;

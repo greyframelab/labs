@@ -88,451 +88,182 @@ vec3 lit(vec3 base, float h, float gloss){
   const FS_VERT = `#version 300 es
 void main(){ vec2 p=vec2((gl_VertexID<<1)&2, gl_VertexID&2); gl_Position=vec4(p*2.0-1.0,0.0,1.0); }`;
 
-  // ---------- especies (fragment) ----------
-  // Cada especie pinta su cuadro entero (fondo incluido). Los fundidos entre piezas suman pesos que dan 1.
+  // ---------- OBJETO ----------
+  // Una sola familia, infinita: materia negra que gira en el vacío, tocada por una luz que no se ve.
+  // La semilla decide la forma, el material, el aparejo de luces, el encuadre y el acento.
   const SP = {};
-
-  // GESTO: pincel cargado con dos o tres colores, empaste con relieve y brillo húmedo; el ECO lo disuelve en el fondo
-  SP.gesto = `
+  SP.objeto = `
 out vec4 o;
-uniform float uBar;
+uniform int uForm, uMat, uRig, uStroke; uniform float uBar; uniform vec3 uSC1, uSC2;
 vec2 bz(vec2 a,vec2 b,vec2 c,float t){ return mix(mix(a,b,t),mix(b,c,t),t); }
-void main(){
-  vec2 q=screenP(), p=frameP();
-  float bars=uT/uBar;
+// TRAZOS: la palabra pinta luz sobre la materia negra; cada familia de sentido tiene su gesto.
+// Unos trazos pasan por delante del objeto y otros por detrás (los tapa).
+vec3 trazos(vec2 q, float bars, float hit){
+  if(uStroke==0) return vec3(0.0);
+  int N=uStroke==5?9:uStroke==4?7:uStroke==2?4:uStroke==1?6:uStroke==6?8:5;
   float wash=bars>=12.0?smoothstep(12.0,15.6,bars):0.0;
-  vec3 g=ground(q), col=g; float h=0.0, wet=0.0;
-  for(int i=0;i<7;i++){
-    float fi=float(i), ti=i==6?8.0:0.6+fi*1.25;
+  vec3 acc=vec3(0.0);
+  for(int i=0;i<9;i++){ if(i>=N) break;
+    float fi=float(i), ti=0.4+fi*(7.2/float(N));
     if(bars<ti) break;
-    float prog=clamp((bars-ti)/0.6,0.0,1.0); prog=1.0-pow(1.0-prog,3.0);
-    float hA=h11(fi*3.1+uV0.x*40.0), hB=h11(fi*5.7+uV0.y*40.0), hC=h11(fi*9.3+uV0.z*40.0), hD=h11(fi*1.9+uV0.w*40.0), hE=h11(fi*4.7+uV1.x*40.0);
-    float big=i==6?1.0:0.0, wide=step(0.68,hE)*(1.0-big);
-    float ang=(hA<0.4?1.5708:hA<0.75?0.6:-0.6)+(hB-0.5)*0.7;
-    vec2 dir=vec2(cos(ang),sin(ang)), nrm=vec2(-dir.y,dir.x);
-    float len=0.55+0.7*hC+0.35*big;
-    vec2 a=vec2((hB-0.5)*0.9,(hD-0.5)*0.5)-dir*len*0.5;
-    vec2 c=a+dir*len, b=(a+c)*0.5+nrm*(hD-0.5)*(0.45+0.5*wide)*(0.4+uChaos);
-    float w=(0.03+0.05*hD+0.06*big+0.07*wide)*(0.8+0.4*uDen);
-    float best=9.0, bs=0.0, side=0.0; vec2 pr=a;
-    for(int k=1;k<=20;k++){
-      float tk=float(k)/20.0; if(tk>prog+0.05) break;
-      vec2 pk=bz(a,b,c,min(tk,prog)), ab=pk-pr, ap=p-pr;
-      float hh=clamp(dot(ap,ab)/max(dot(ab,ab),1e-6),0.0,1.0); vec2 cl=pr+ab*hh; float dd=length(p-cl);
-      if(dd<best){ best=dd; bs=(float(k-1)+hh)/20.0; side=dot(p-cl,normalize(vec2(-ab.y,ab.x)+1e-6)); }
+    float dur=uStroke==1?0.22:uStroke==4?1.1:uStroke==2?0.9:0.5;
+    float prog=clamp((bars-ti)/dur,0.0,1.0); prog=1.0-pow(1.0-prog,3.0);
+    float hA=h11(fi*3.1+uV0.x*41.0), hB=h11(fi*5.7+uV0.y*41.0), hC=h11(fi*9.3+uV0.z*41.0), hD=h11(fi*1.9+uV0.w*41.0);
+    vec2 a,b,c; float w, jit=0.0, jf=0.0;
+    if(uStroke==1){        // fuego: subidas rápidas y cortantes
+      float x=(hA-0.5)*1.1; a=vec2(x,-0.44-0.05*hB); c=a+vec2((hC-0.5)*0.3,0.42+0.38*hD); b=(a+c)*0.5+vec2((hB-0.5)*0.18,0.0); w=0.005+0.012*hD; jit=0.012; jf=22.0;
+    } else if(uStroke==2){ // agua: ondas largas
+      float y=(fi/float(N)-0.5)*0.55+(hA-0.5)*0.08; a=vec2(-0.98,y); c=vec2(0.98,y+(hB-0.5)*0.12); b=vec2((hC-0.5)*0.4,y+(hD-0.5)*0.28); w=0.003+0.007*hD; jit=0.03; jf=9.0;
+    } else if(uStroke==3){ // amor: arcos redondos
+      vec2 cc=vec2((hA-0.5)*0.45,(hB-0.5)*0.25); float r=0.16+0.24*hC, th=hD*6.283, dt=1.5+1.7*hA;
+      a=cc+r*vec2(cos(th),sin(th)); c=cc+r*vec2(cos(th+dt),sin(th+dt)); b=cc+r/cos(dt*0.5)*vec2(cos(th+dt*0.5),sin(th+dt*0.5)); w=0.006+0.012*hD;
+    } else if(uStroke==4){ // miedo: líneas finas que tiemblan
+      float x=(hA-0.5)*1.2; a=vec2(x,-0.46+0.2*hB); c=vec2(x+(hC-0.5)*0.3,0.46-0.2*hD); b=(a+c)*0.5; w=0.0016+0.0022*hD; jit=0.009; jf=70.0;
+    } else if(uStroke==5){ // caos / máquina: rectas que se cruzan
+      a=(vec2(hA,hB)-0.5)*vec2(1.6,0.9); c=a+rot(floor(hC*8.0)*0.785)*vec2(0.45+0.5*hD,0.0); b=(a+c)*0.5; w=0.0025+0.009*hD*hD;
+    } else if(uStroke==6){ // luz: rayos desde el centro
+      float an=fi/float(N)*6.283+hA*0.5; vec2 dv=vec2(cos(an),sin(an)); a=dv*(0.2+0.06*hC); c=dv*(0.5+0.35*hB); b=(a+c)*0.5; w=0.002+0.005*hC;
+    } else {               // tiempo y sin familia: gesto amplio
+      float an=(hA-0.5)*2.4; vec2 dv=vec2(cos(an),sin(an)); a=vec2((hB-0.5)*0.8,(hD-0.5)*0.4)-dv*0.35; c=a+dv*(0.5+0.4*hC); b=(a+c)*0.5+vec2(-dv.y,dv.x)*(hD-0.5)*0.3; w=0.008+0.016*hD;
+    }
+    float best=9.0, bs=0.0; vec2 pr=a;
+    for(int k=1;k<=18;k++){
+      float tk=float(k)/18.0; if(tk>prog+0.06) break;
+      float tt=min(tk,prog); vec2 pk=bz(a,b,c,tt);
+      vec2 tg=normalize(bz(a,b,c,min(tt+0.02,1.0))-bz(a,b,c,max(tt-0.02,0.0))+1e-5);
+      float wob=uStroke==1?0.6*sin(tt*jf*0.7+fi*3.0+uPhase*6.0)+0.4*sin(tt*jf*1.9-fi+uPhase*11.0):sin(tt*jf+fi*3.0+uPhase*(uStroke==4?40.0:2.0));
+      pk+=vec2(-tg.y,tg.x)*jit*wob*(uStroke==1?tt:1.0);   // la llama se abre arriba
+      vec2 ab=pk-pr, ap=q-pr; float hh=clamp(dot(ap,ab)/max(dot(ab,ab),1e-7),0.0,1.0);
+      float dd=length(q-pr-ab*hh); if(dd<best){ best=dd; bs=(float(k-1)+hh)/18.0; }
       pr=pk;
     }
-    if(best>w*1.6) continue;
-    float s=bs, taper=(0.6+0.4*smoothstep(0.0,0.05,s))*(1.0-smoothstep(0.8,1.0,s/max(prog,0.01))*0.4);
-    float across=side/w;
-    float rough=fbmL(vec2(s*5.0+fi,across*1.3),0.3,2)*0.22;
-    float body=1.0-smoothstep(0.82-rough,1.0-rough,best/w/max(taper,0.05));
-    float bristle=fbmL(vec2(s*(3.0+5.0*hC)+fi*4.0,across*(wide>0.5?4.0:10.0)),0.25,3);
-    float load=1.0-s*(0.5+0.4*hC);
-    float dry=smoothstep(-0.35+0.8*(1.0-load),0.3+0.8*(1.0-load),bristle+0.25);
-    float paint=body*dry;
-    int ia=int(mod(fi,3.0)), ib=int(mod(fi+1.0+floor(hB*2.0),3.0)), ic=int(mod(fi+2.0,3.0));
-    float band=smoothstep(-0.18,0.18,across+0.7*fbmL(vec2(s*2.0,fi),0.3,2)-(hA-0.5)*0.8);
-    vec3 sc=mix(PAL(ia),PAL(ib),band);
-    sc=mix(sc,PAL(ic),smoothstep(0.5,0.75,bristle)*0.45*(1.0-uDark*0.5));
-    if(big>0.5) sc=mix(uAcc,uAcc*0.72,band*0.6);
-    float hs=paint*(0.35+0.65*bristle)*(0.55+0.45*load)*(1.0+big*0.4);
-    col=mix(col,sc,paint);
-    h=mix(h,h*0.35+hs,paint);
-    wet=max(wet,paint*exp(-(bars-ti)*0.5));
+    float taper=(0.55+0.45*smoothstep(0.0,0.06,bs))*(1.0-0.65*smoothstep(0.55,1.0,bs/max(prog,0.01)));
+    float bristle=fbmL(vec2(bs*7.0+fi*3.0,best/max(w,1e-4)*1.5),0.25,2);
+    float body=1.0-smoothstep(w*0.55*taper,w*taper+1.0/uRes.y,best);
+    float dry=smoothstep(-0.3+0.7*bs,0.25+0.7*bs,bristle+0.3);
+    float press=0.45+0.55*fbmL(vec2(bs*5.0+fi*7.0,fi),0.3,2)+0.15*sin(bs*70.0+fi);  // la mano no aprieta igual
+    float paint=body*(0.35+0.65*dry)*clamp(press,0.15,1.2);
+    float core=1.0-smoothstep(0.0,w*0.32*taper+0.6/uRes.y,best);
+    float halo=exp(-best/(w*2.2+0.0015))*0.06;
+    float behind=step(0.55,h11(fi*11.3+uV1.w*7.0));
+    float occl=behind>0.5?1.0-hit:1.0;
+    vec3 sc=mix(uSC1,uSC2,step(0.68,hA));
+    float br=(0.4+0.5*uEnergy)*(1.0+uImpact*0.6+uKick*0.12)*(bars>=8.0&&bars<12.0?1.15:1.0);
+    vec3 lightc=mix(sc,vec3(1.0,0.97,0.92),core*0.55*press);               // núcleo caliente de luz, borde de color
+    acc+=(lightc*paint+sc*halo)*br*occl;
   }
-  col=lit(col,h,0.25+0.9*wet);
-  col=mix(col,g,wash);
-  o=vec4(col*(1.0+uKick*0.05)*uW,1.0);
-}`;
-
-  // ESPÁTULA: pasadas de rasqueta en horizontal; lo de debajo asoma donde la rasqueta salta; el ECO lo cubre con el fondo
-  SP.espatula = `
-out vec4 o;
-uniform float uBar;
-void main(){
-  vec2 q=screenP(), uv=gl_FragCoord.xy/uRes;
-  float bars=uT/uBar;
-  vec3 col=ground(q); float h=0.0;
-  for(int i=0;i<5;i++){
-    float fi=float(i), ti=i==3?8.0:i==4?12.2:0.4+fi*2.4;
-    if(bars<ti) break;
-    float hA=h11(fi*3.7+uV0.x*30.0), hB=h11(fi*7.1+uV0.y*30.0), hC=h11(fi*2.3+uV0.z*30.0);
-    float pr=clamp((bars-ti)/(i==4?3.0:1.15),0.0,1.0); pr=pr*pr*(3.0-2.0*pr);
-    float y0=i==4?-0.1:hB*0.45, y1=i==4?1.1:y0+0.45+0.5*hC;
-    float x=hA<0.5?uv.x:1.0-uv.x;
-    float front=pr*1.12-0.04+0.025*fbmL(vec2(uv.y*5.0,fi),0.3,2);
-    float edgeN=0.02*fbmL(vec2(uv.x*4.0,fi*3.0),0.3,2);
-    float inBand=smoothstep(y0-0.015+edgeN,y0+0.015+edgeN,uv.y)*smoothstep(y1+0.015+edgeN,y1-0.015+edgeN,uv.y);
-    float swept=smoothstep(front+0.004,front-0.004,x)*inBand;
-    float st=0.6*fbmL(vec2(uv.x*0.9+fi*5.0,uv.y*22.0+fi*3.0),0.2,3)+0.4*fbmL(vec2(uv.x*0.35,uv.y*6.0+fi),0.2,2)+0.12*fbmL(vec2(uv.x*1.5,uv.y*90.0+fi),0.15,1);
-    float skip=fbmL(vec2(uv.x*1.6+fi,uv.y*3.5),0.25,2);
-    float thr=(i==4?-0.8:-0.12+0.25*uChaos)+0.45*skip;
-    float cov=smoothstep(thr-0.12,thr+0.08,st)*swept;
-    vec3 c=i==3?uAcc:i==4?uGround:PAL(i);
-    float smear=smoothstep(0.0,0.6,st-thr)*(1.0-smoothstep(0.6,1.0,st-thr));
-    c=mix(c,mix(col,PAL(int(mod(fi+1.0,3.0))),0.3),0.35*smear*(i==4?0.0:1.0));
-    cov*=i==4?1.0:(0.75+0.25*smoothstep(-0.2,0.4,st));
-    float ridge=exp(-pow((x-front)*140.0,2.0))*inBand*(1.0-step(0.999,pr));
-    col=mix(col,c,cov);
-    h=mix(h,0.25+0.35*st+0.08*fbmL(vec2(uv.x*2.0,uv.y*120.0),0.1,1),cov)+ridge*0.5;
-  }
-  col=lit(col,h,0.6);
-  o=vec4(col*uW,1.0);
-}`;
-
-  // RASGADO: carteles superpuestos que se arrancan hasta el muro; borde de fibra blanca y sombra del papel; el ECO pega uno nuevo
-  SP.rasgado = `
-out vec4 o;
-uniform float uBar;
-float tear(vec2 p, float k, float grow){
-  vec2 an=vec2(h11(k*3.1+uV0.x*20.0)-0.5,h11(k*5.3+uV0.y*20.0)-0.5)*vec2(1.1,0.6);
-  float d=length((p-an)*vec2(1.0,1.2+0.7*h11(k*9.0)));
-  float n=fbmL(p*2.0+k*7.0,0.25,3)*0.34+fbmL(p*16.0+k,0.2,2)*0.05;
-  return grow-(d+n);
+  return acc*(1.0-wash);
 }
-vec3 poster(vec2 p, int k){
-  float fk=float(k);
-  vec3 base=k==0?uGround:PAL(k-1), ink2=PAL(int(mod(fk+1.0,3.0)));
-  vec2 c=vec2(h11(fk*4.4+uV1.x*9.0)-0.5,h11(fk*6.6+uV1.y*9.0)-0.5)*0.8;
-  vec2 d=abs(p-c)-vec2(0.15+0.35*h11(fk*2.2+uV1.z),0.06+0.22*h11(fk*8.8+uV1.w));
-  float blk=1.0-smoothstep(-0.002,0.002,max(d.x,d.y));
-  vec2 g=gl_FragCoord.xy*(1080.0/uRes.y)/6.0;
-  float dots=1.0-smoothstep(0.24,0.3,length(fract(rot(0.4)*g)-0.5)/(0.35+0.65*smoothstep(-0.4,0.4,p.x-c.x)));
-  float band=step(0.5,h11(fk*1.3))*(1.0-smoothstep(0.025,0.03,abs(p.y-c.y+0.22)));
-  vec3 r=mix(base,ink2,blk*(0.82+0.18*dots));
-  r=mix(r,ink2,band*0.9);
-  return r*(0.97+0.03*fbmL(p*30.0+fk,0.1,1));
-}
-void main(){
-  vec2 q=screenP(), p=frameP(), uv=gl_FragCoord.xy/uRes;
-  float bars=uT/uBar;
-  vec3 col=uDark>0.5?vec3(0.012):mix(uGround,vec3(0.12),0.75); // el muro
-  col*=0.85+0.15*fbmL(p*4.0,0.2,2);
-  float paste=bars>=12.0?smoothstep(12.0,15.5,bars):0.0;
-  float h=0.0;
-  for(int k=3;k>=0;k--){
-    float fk=float(k);
-    float t0=1.0+fk*2.4;
-    float grow=clamp((bars-t0)/5.5,0.0,1.0)*(0.35+0.3*uDen)+(bars>=8.0?0.18*smoothstep(8.0,8.4,bars):0.0)+uKick*0.006;
-    grow*=1.0-fk*0.18;
-    float e=bars<t0?-1.0:tear(p,fk,grow);
-    if(k==0 && 1.0-uv.y<paste*1.12) e=-1.0;
-    float present=1.0-smoothstep(-0.002,0.002,e);
-    float fiber=smoothstep(-0.018,-0.004,e+fbmL(p*40.0+fk,0.1,1)*0.006)*present;
-    float shadow=(1.0-smoothstep(0.0,0.03,e))*(1.0-present);
-    col*=1.0-0.35*shadow;
-    vec3 pc=poster(p,k);
-    pc=mix(pc,vec3(0.96,0.94,0.9),fiber*0.92);
-    col=mix(col,pc,present);
-    h=mix(h,0.2+fiber*0.6,present);
-  }
-  col=lit(col,h,0.08);
-  o=vec4(col*uW,1.0);
-}`;
-
-  // VELADURA: capas de color translúcido sobre papel (multiplican), con chorreos, recortes y una línea a lápiz
-  SP.veladura = `
-out vec4 o;
-uniform float uBar;
-void main(){
-  vec2 q=screenP(), p=frameP();
-  float bars=uT/uBar;
-  float dry=bars>=12.0?smoothstep(12.0,15.6,bars):0.0;
-  vec3 paperC=ground(q), col=paperC;
-  for(int i=0;i<6;i++){
-    float fi=float(i), ti=i==5?8.0:0.3+fi*1.4;
-    if(bars<ti) break;
-    float grow=smoothstep(ti,ti+0.9,bars);
-    float hA=h11(fi*2.9+uV0.x*30.0), hB=h11(fi*6.1+uV0.y*30.0), hC=h11(fi*8.3+uV0.z*30.0);
-    vec2 c=vec2((hA-0.5)*0.9,(hB-0.5)*0.4);
-    vec2 hs=vec2(0.18+0.3*hC,0.22+0.25*hB)*(0.6+0.4*grow);
-    vec2 d=abs(p-c)-hs;
-    float n=fbmL(p*3.5+fi*5.0,0.3,3)*0.05;
-    float sd=max(d.x,d.y)+n;
-    float area=1.0-smoothstep(-0.006,0.006,sd);
-    float edge=exp(-pow(sd*60.0,2.0))*area*0.6;                  // el pigmento se acumula en el borde
-    float gran=0.7+0.3*fbmL(p*18.0+fi,0.2,2);
-    // chorreos desde el borde inferior
-    float cw=22.0+10.0*hC, col_x=floor((p.x-c.x)*cw+fbmL(vec2(p.y*3.0,fi),0.2,1)*0.6); float hx=h11(col_x*1.7+fi*13.0);
-    float dl=(0.03+0.4*hx*hx*hx)*smoothstep(ti+0.3,ti+3.5,bars);
-    float yb=c.y-hs.y+n, dx=abs(fract((p.x-c.x)*cw+fbmL(vec2(p.y*3.0,fi),0.2,1)*0.6)-0.5);
-    float wd=(0.06+0.12*hx)*(1.0-0.5*clamp((yb-p.y)/max(dl,1e-3),0.0,1.0));
-    float drip=step(0.78,hx)*(1.0-smoothstep(wd,wd+0.06,dx))*smoothstep(yb+0.01,yb-0.005,p.y)*smoothstep(yb-dl-0.004,yb-dl+0.004,p.y)*step(abs(p.x-c.x),hs.x);
-    float bulb=0.0;
-    float a=clamp((area*(0.55+0.3*gran)+edge+drip*0.7+bulb*0.8)*grow,0.0,1.0)*(i==5?0.95:0.75);
-    vec3 tint=i==5?uAcc:PAL(int(mod(fi,3.0)));
-    col*=mix(vec3(1.0),tint,a);
-  }
-  // recortes de papel (collage) con líneas impresas
-  for(int j=0;j<2;j++){ float fj=float(j);
-    if(bars<2.5+fj*3.0) break;
-    vec2 c=vec2(h11(fj*4.1+uV1.x*9.0)-0.5,h11(fj*7.7+uV1.y*9.0)-0.5)*vec2(0.9,0.5);
-    vec2 d=abs(rot(0.12*(fj-0.5))*(p-c))-vec2(0.07,0.1);
-    float sq=1.0-smoothstep(-0.001,0.001,max(d.x,d.y));
-    float lines=step(0.55,fract((p.y-c.y)*90.0))*0.25*step(abs(p.x-c.x+0.01),0.05);
-    col=mix(col,paperC*(1.0-lines),sq*0.85*smoothstep(2.5+fj*3.0,3.0+fj*3.0,bars));
-  }
-  // una línea a lápiz que recorre la hoja
-  float lx=p.x*1.3, ly=0.18*fbmL(vec2(lx*1.2,3.0),0.3,3)+0.15*sin(lx*2.0+uV0.w*6.0)-0.05;
-  float ld=abs(p.y-ly)*uRes.y;
-  float pencil=(1.0-smoothstep(0.6,1.8,ld))*step(lx,(bars-2.0)/5.0*2.6-1.3)*(0.5+0.5*h12(floor(gl_FragCoord.xy*0.5)));
-  col=mix(col,PAL(2)*0.45,pencil*0.75);
-  col=mix(col,paperC,dry*0.92);
-  o=vec4(col*uW,1.0);
-}`;
-
-  // VELO: campos de color que respiran sobre su fondo; uno en el acento
-  SP.velo = `
-out vec4 o;
-float field(vec2 q, vec2 c, vec2 hs, float soft, float seed){
-  vec2 d=abs(q-c)-hs;
-  float n=fbmL(q*3.0+seed,0.35,3)*0.035+fbmL(q*14.0+seed,0.3,2)*0.008;
-  float sd=length(max(d,0.0))+min(max(d.x,d.y),0.0)+n;
-  return 1.0-smoothstep(-soft,soft,sd);
-}
-void main(){
-  vec2 q=screenP();
-  float A=uRes.x/uRes.y, wdt=min(0.36*A,0.62)*(0.85+0.2*uV0.x);
-  int NF=2+int(uV0.y*1.99);
-  float gap=0.03+0.02*uImpact+0.01*uKick, H=0.78, y=H*0.5;
-  vec3 col=ground(q);
-  for(int i=0;i<3;i++){ if(i>=NF) break; float fi=float(i);
-    float hh=(H-gap*float(NF-1))*(i==0?(0.38+0.25*uV1.x):(NF==2?1.0-(0.38+0.25*uV1.x):(i==1?0.4:0.6-0.25*uV1.x)));
-    vec2 c=vec2(uOff.x*0.2,y-hh*0.5); y-=hh+gap;
-    float soft=0.035+0.03*uChaos;
-    float f=field(q,c,vec2(wdt,hh*0.5),soft,fi*7.0+uV0.z*9.0);
-    float core=field(q,c,vec2(wdt,hh*0.5)*0.82,soft*2.5,fi*7.0+uV0.z*9.0+3.0);
-    float halo=field(q,c,vec2(wdt,hh*0.5),soft*6.0,fi*5.0)*(1.0-f);
-    float inner=0.72+0.28*fbmL(q*1.2+vec2(fi*3.0,0.0),0.4,3)+0.05*fbmL(vec2(q.x*2.0,q.y*60.0)+fi,0.3,2);
-    bool hot=(i==int(uV0.w*float(NF)));
-    vec3 tone;
-    if(uDark>0.5) tone=hot?uAcc*(0.05+0.05*uEnergy):vec3(1.0,0.9,0.82)*(0.012+0.01*uEnergy+0.006*fi);
-    else tone=hot?uAcc:PAL(i);
-    float lum=(0.78+0.35*core)*(1.0+uKick*0.08+uBass*0.06)*(0.9+0.12*uEnergy);
-    col=mix(col,tone*inner*lum,f*0.94);
-    col=mix(col,tone,halo*0.18);
-    col+=(hot?uAcc:vec3(1.0))*core*uMetal*(uDark>0.5?0.05:0.03);
-  }
-  o=vec4(col*uW,1.0);
-}`;
-
-  // CORTE: lienzo de un color que se abre; dentro, vacío y una luz que solo aparece en la ruptura; el ECO lo cierra
-  SP.corte = `
-out vec4 o;
-uniform float uBar;
-void main(){
-  vec2 q=screenP(), p=frameP();
-  float bars=uT/uBar;
-  float heal=bars>=12.0?smoothstep(12.0,15.5,bars):0.0;
-  float h=0.0, inside=0.0, glow=0.0;
-  for(int i=0;i<5;i++){ float fi=float(i), ti=i==4?8.0:1.0+fi*1.7;
-    if(bars<ti) break;
-    float hA=h11(fi*3.3+uV0.x*30.0), hB=h11(fi*5.9+uV0.y*30.0);
-    float big=i==4?1.0:0.0;
-    vec2 c=vec2((fi-1.5)*0.16+(hA-0.5)*0.06+(big>0.5?0.04:0.0),(hB-0.5)*0.12);
-    float ang=0.18+(hB-0.5)*0.16;
-    vec2 l=rot(ang)*(p-c);
-    float L=0.18+0.18*h11(fi*7.1)+0.12*big;
-    float u=l.y/L;
-    if(abs(u)>1.2) continue;
-    float open=smoothstep(ti,ti+0.35,bars)*(1.0-heal)*(1.0+uKick*0.05);
-    float w=open*(0.01+0.016*big+0.006*h11(fi))*pow(max(0.0,1.0-u*u),0.65);
-    float v=abs(l.x);
-    inside=max(inside,1.0-smoothstep(w*0.8,w,v));
-    h+=-0.9*exp(-v/(w*3.5+0.006))*max(0.0,1.0-u*u)*open+0.25*exp(-pow((v-w*1.1)/(w*0.6+0.002),2.0))*open;
-    glow=max(glow,exp(-v/(w*0.35+0.001))*(1.0-smoothstep(w*0.5,w,v))*max(0.0,1.0-u*u));
-  }
-  vec3 canvas=lit(ground(q),h,0.05);
-  vec3 col=mix(canvas,vec3(0.004),inside);
-  col+=uAcc*glow*inside*(0.04+uImpact*0.5+uMetal*0.12)*(bars>=8.0&&bars<12.0?1.0:0.3);
-  o=vec4(col*uW,1.0);
-}`;
-
-  // VERTIDO: pintura derramada en vetas con celdas; brillo de pintura mojada; el ECO lo cubre otro vertido del fondo
-  SP.vertido = `
-out vec4 o;
-uniform float uBar;
-void main(){
-  vec2 q=screenP(), p=frameP()*0.9;
-  float bars=uT/uBar;
-  float r=0.12+1.15*smoothstep(0.2,9.0,bars);
-  float cover=bars>=12.0?smoothstep(12.0,15.6,bars):0.0;
-  vec2 w=vec2(fbmL(p*0.6,0.4,3),fbmL(p*0.6+4.0,0.4,3));
-  vec2 pw=p+w*(0.8+0.6*uChaos+0.25*uBass);
-  vec2 w2=vec2(fbmL(pw*1.6+9.0,0.4,3),fbmL(pw*1.6+2.0,0.4,3));
-  pw+=w2*0.35;
-  float f=fbmL(pw*0.9,0.45,4)+length(p)*0.5;
-  float x=f*(7.0+3.0*uDen);
-  float id=floor(x), fr=fract(x);
-  int ci=int(mod(id,4.0));
-  vec3 c=ci==3?uGround*0.9+0.1*PAL(0):PAL(ci);
-  float lace=1.0-smoothstep(0.0,max(fwidth(x),1e-4)*1.4,min(fr,1.0-fr));
-  float cn=fbmL(pw*26.0,0.2,2); float cells=smoothstep(0.3,0.36,cn)*step(1.5,mod(id,4.0))*step(mod(id,4.0),2.5);
-  float cellRim=(smoothstep(0.26,0.3,cn)-smoothstep(0.3,0.34,cn))*step(1.5,mod(id,4.0))*step(mod(id,4.0),2.5);
-  c=mix(c,PAL(2),cells*0.85); c=mix(c,vec3(1.0),cellRim*0.6);
-  c=mix(c,uDark>0.5?vec3(0.9):vec3(1.0),lace*0.75);
-  c=mix(c,uAcc,lace*uMetal*0.6);
-  float d=length(p*vec2(0.9,1.1))+0.06*fbmL(p*3.0,0.3,2);
-  float inPour=1.0-smoothstep(r-0.01,r+0.01,d);
-  float inCover=1.0-smoothstep(1.4*(1.0-cover)-0.01,1.4*(1.0-cover)+0.01,1.6-d);
-  vec3 g=ground(q);
-  vec3 col=mix(g,c,inPour);
-  col=mix(col,g,inCover*step(0.001,cover));
-  col=lit(col,(f*0.6+lace*0.1)*inPour*(1.0-inCover),0.9);
-  o=vec4(col*uW,1.0);
-}`;
-
-  SP.isobara = `
-out vec4 o;
-void main(){
-  vec2 q=screenP(), p=frameP()*(1.0-uKick*0.045);
-  vec2 w=vec2(fbmL(p*0.9+uV0.xy*10.0,0.55,3), fbmL(p*0.9+uV0.zw*10.0+5.2,0.55,3));
-  vec2 pw=p+w*(0.45+0.6*uChaos+0.35*uBass);
-  float f=fbmL(pw*1.25+uV1.xy*7.0,0.75,4);
-  float x=f*(12.0+16.0*uDen);
-  float fw=max(fwidth(x),1e-4);
-  float dd=0.5-abs(fract(x)-0.5);
-  float line=1.0-smoothstep(0.0,fw*(1.1+1.6*uKick),dd);
-  float lvl=floor(x+0.5);
-  float major=1.0-step(0.5,mod(lvl,5.0));
-  float m=smoothstep(-0.12,0.5,fbmL(p*0.5+3.1,0.45,2)+(uEnergy-0.5)*0.7)*compMask(q);
-  float sel=step(0.88,h11(lvl*1.73+uMetalN*13.1));
-  vec3 col;
-  if(uDark>0.5){
-    col=ground(q)+INK*line*m*(0.1+0.42*uEnergy+major*0.55*(0.4+uEnergy));
-    col+=uAcc*line*sel*uMetal*3.6*(0.35+m)+INK*line*m*uKick*0.55+uAcc*line*m*uImpact*2.2;
-  } else {
-    // grafito sobre papel: presión que cambia y grano del papel que se come la línea
-    float press=0.45+0.55*fbmL(p*2.0+lvl*0.37,0.3,2);
-    float grain=0.55+0.45*h12(floor(gl_FragCoord.xy*0.7));
-    float a=clamp(line*m*grain*(0.75+0.4*uEnergy+major*0.5)*(0.8+press)*1.3,0.0,1.0);
-    col=mix(ground(q),vec3(0.07,0.07,0.08),a);
-    col=mix(col,uAcc,clamp(line*sel*m*uMetal*1.2,0.0,1.0)*0.9);
-  }
-  o=vec4(col*uW,1.0);
-}`;
-
-  // LACA: superficie negra trabajada a pincel; la luz solo existe en las crestas de los surcos
-  SP.laca = `
-out vec4 o;
-float groove(vec2 d, float bi){
-  return fbmL(vec2(d.x*0.55+bi*3.1, d.y*34.0+bi*11.0),0.35,3)+0.35*sin(d.y*170.0+fbmL(vec2(d.x*0.3,bi),0.3,2)*6.0);
-}
-void main(){
-  vec2 q=screenP(), p=frameP();
-  float nb=3.0+floor(uDen*4.0);
-  float yy=p.y*nb*0.9+fbmL(vec2(p.x*0.6,3.0),0.3,2)*0.6;
-  float bi=floor(yy), bf=fract(yy);
-  float ang=(h11(bi+uV0.x*20.0)-0.5)*(0.25+0.5*uChaos);
-  vec2 d=rot(ang)*p;
-  float e=0.0025;
-  float h=groove(d,bi), h2=groove(d+vec2(0.0,e),bi);
-  vec3 n=normalize(vec3(0.0,-(h2-h)/e*0.006,1.0));
-  n.xy=rot(-ang)*n.xy;
-  float la=uPhase+uV1.x*6.0;
-  vec3 L=normalize(vec3(cos(la)*0.8,sin(la)*0.5+0.3,0.55)), V=vec3(0.0,0.0,1.0);
-  vec3 Hv=normalize(L+V), H2=normalize(normalize(vec3(-0.35,0.75,0.6))+V); float sp=pow(max(dot(n,Hv),0.0),70.0)*1.6+pow(max(dot(n,Hv),0.0),8.0)*0.05+pow(max(dot(n,H2),0.0),90.0)*0.45;
-  float seam=smoothstep(0.0,0.06,bf)*smoothstep(1.0,0.94,bf);
-  float m=compMask(q)*seam*smoothstep(-0.6,0.2,fbmL(p*0.4+5.0,0.3,2)+(uEnergy-0.5)*0.6);
-  vec3 col=ground(q)*0.7+vec3(0.9,0.93,1.0)*sp*(0.35+1.1*uEnergy)*m;
-  col*=1.0+uKick*0.3;
-  float pick=step(0.8,fract(h11(bi*7.7)+max(uMetalN,0.0)*0.618));
-  col+=uAcc*sp*pick*uMetal*2.4*m;
-  col+=uAcc*sp*uImpact*1.8*m;
-  o=vec4(col*uW,1.0);
-}`;
-
-  SP.lente = `
-out vec4 o;
 float smin(float a,float b,float k){ float h=clamp(0.5+0.5*(b-a)/k,0.0,1.0); return mix(b,a,h)-k*h*(1.0-h); }
-float sdTorus(vec3 p, vec2 t){ vec2 q=vec2(length(p.xz)-t.x,p.y); return length(q)-t.y; }
+float sdBox(vec3 p, vec3 b){ vec3 q=abs(p)-b; return length(max(q,0.0))+min(max(q.x,max(q.y,q.z)),0.0); }
+float gyr(vec3 p){ return dot(sin(p),cos(p.yzx)); }
+vec3 twistY(vec3 p,float k){ float c=cos(k*p.y), s=sin(k*p.y); return vec3(c*p.x-s*p.z,p.y,s*p.x+c*p.z); }
+float tw(){ return (uV1.x-0.5)*2.0*(0.5+uChaos); }
 float map(vec3 p){
-  float d=1e9;
-  if(uVar==3||uVar==1){
-    vec3 r=p; r.xz=rot(r.y*(1.2+uChaos)+uPhase)*r.xz; vec3 b=abs(r)-vec3(0.42,0.9,0.42);
-    d=length(max(b,0.0))+min(max(b.x,max(b.y,b.z)),0.0)-0.12-uKick*0.03;
-  } else {
-    int NB=3+int(uDen*2.0+0.5);
+  float ph=uPhase;
+  p.xz=rot(ph+uV0.w*6.28)*p.xz;
+  p.xy=rot(0.22*sin(ph)+uRot*0.25)*p.xy;
+  float sc=1.0+uKick*0.025; p/=sc;
+  float d;
+  if(uForm==0){            // MASA: cuerpos que se funden
+    d=1e9; int NB=3+int(uDen*2.0+0.5);
     for(int i=0;i<5;i++){ if(i>=NB) break; float fi=float(i);
-      vec3 c=vec3(cos(uPhase+fi*1.7+uV0.x*6.0)*0.6, sin(uPhase*float(1+i%2)+fi*2.3)*0.38, sin(uPhase+fi*1.1+uV0.y*6.0)*0.45);
-      d=smin(d,length(p-c)-(0.36+0.14*fract(fi*0.37+uV0.z)+uKick*0.05),0.32+0.25*uChaos);
+      vec3 c=vec3(cos(ph+fi*1.7+uV0.x*6.0)*0.6, sin(ph*float(1+i%2)+fi*2.3)*0.38, sin(ph+fi*1.1+uV0.y*6.0)*0.45);
+      d=smin(d,length(p-c)-(0.36+0.14*fract(fi*0.37+uV0.z)),0.32+0.25*uChaos);
     }
+  } else if(uForm==1){     // TORSIÓN: un monolito que se retuerce
+    d=sdBox(twistY(p,0.9+tw()*1.4+0.25*sin(ph)),vec3(0.36,0.95,0.36))-0.1;
+  } else if(uForm==2){     // CONCHA: cáscara calada por una superficie mínima
+    float k=4.5+4.0*uDen;
+    float s=abs(length(p)-0.82)-0.07;
+    float g=abs(gyr(p*k+vec3(0.0,ph,ph*0.0)))/k-(0.03+0.025*uBass+0.02*uChaos);
+    d=max(s,g)*0.8;
+  } else if(uForm==3){     // PLIEGUE: una lámina gruesa que se dobla
+    float w=0.2*sin(p.x*2.6+ph*2.0)+0.13*sin(p.z*3.4-ph)+0.08*sin((p.x+p.z)*6.0+ph*3.0)*(0.3+uChaos);
+    d=max(abs(p.y-w)-0.045,sdBox(p,vec3(1.05,0.7,0.62))-0.04)*0.7;
+  } else if(uForm==4){     // COLUMNAS: arquitectura que respira
+    float cell=0.27, n=floor(2.0+uDen*2.0);
+    float id=clamp(floor(p.x/cell+0.5),-n,n); vec3 r=p; r.x-=id*cell;
+    float hh=(0.3+0.55*fract(sin(id*12.9+uV0.x*40.0)*43758.5))*(0.8+0.2*sin(ph+id*1.3));
+    d=(sdBox(r-vec3(0.0,hh-0.85,0.0),vec3(0.075,hh,0.075+0.05*uV0.y))-0.008)*0.8;
+  } else if(uForm==5){     // FRACTURA: un bloque en lonchas que se separan en la ruptura
+    float gap=0.015+0.16*uImpact+0.03*uKick, sl=0.26;
+    float id=clamp(floor(p.y/sl+0.5),-3.0,3.0); vec3 r=p; r.y-=id*sl;
+    r.xz=rot(id*0.12*tw())*r.xz; r.x+=id*gap*0.6*sin(id*2.3+uV0.z*6.0);
+    d=sdBox(r,vec3(0.68,sl*0.5-gap*0.5,0.44))-0.012;
+    d=max(d,sdBox(p,vec3(1.3,0.95,1.0)))*0.85;
+  } else if(uForm==6){     // ESPINA: un cuerpo erizado
+    vec3 n=normalize(p);
+    float sp=pow(max(0.0,sin(n.x*7.0+ph)*sin(n.y*7.0)*sin(n.z*7.0-ph)),1.6);
+    d=(length(p)-0.55-sp*(0.45+0.3*uBass+0.2*uChaos))*0.45;
+  } else {                 // MONOLITO: una losa y una grieta de luz
+    vec3 r=p; r.xz=rot(0.3*sin(ph))*r.xz;
+    d=sdBox(r,vec3(0.26,1.02,0.1))-0.015;
   }
-  d+=0.03*(0.35+uBass+uChaos)*sin(p.x*9.0+uPhase*2.0)*sin(p.y*8.0-uPhase)*sin(p.z*10.0+uPhase*3.0);
-  return d;
+  d+=0.018*(0.3+uBass+uChaos)*sin(p.x*9.0+ph*2.0)*sin(p.y*8.0-ph)*sin(p.z*10.0+ph*3.0);
+  return d*sc;
 }
-vec3 nrm(vec3 p){ const vec2 e=vec2(0.0015,-0.0015);
+vec3 nrm(vec3 p, float t){ vec2 e=vec2(max(0.00035,0.00018*t),-max(0.00035,0.00018*t));
   return normalize(e.xyy*map(p+e.xyy)+e.yyx*map(p+e.yyx)+e.yxy*map(p+e.yxy)+e.xxx*map(p+e.xxx)); }
+// oclusión ambiental: cuánto se esconde la materia en sus propios pliegues
+float occ(vec3 p, vec3 n){ float o=0.0, w=1.0; for(int i=1;i<=5;i++){ float h=0.02+0.06*float(i); o+=(h-map(p+n*h))*w; w*=0.7; } return clamp(1.0-1.6*o,0.0,1.0); }
+// sombra suave de la luz principal
+float shadow(vec3 ro, vec3 rd){ float r=1.0, t=0.02; for(int i=0;i<28;i++){ float h=map(ro+rd*t); r=min(r,10.0*h/t); t+=clamp(h,0.02,0.25); if(r<0.01||t>4.0) break; } return clamp(r,0.0,1.0); }
+// aparejo de luces leído en una dirección (para la materia y para su reflejo en el suelo)
+void rigLight(vec3 p, vec3 r, vec3 n, float fr, float bars, out float key, out float acc){
+  key=0.0; acc=0.0;
+  if(uRig==0){ key=exp(-pow((r.y-0.48-0.12*sin(uPhase))*15.0,2.0))*smoothstep(-0.6,0.5,r.x+0.2); acc=exp(-pow((r.x+0.55+0.1*cos(uPhase))*16.0,2.0))*smoothstep(-0.3,0.6,r.y+0.3); }
+  else if(uRig==1){ float a=acos(clamp(dot(r,normalize(vec3(0.25,0.45,1.0))),-1.0,1.0)); key=exp(-pow((a-0.55)*13.0,2.0)); acc=exp(-pow((acos(clamp(dot(r,normalize(vec3(-0.8,-0.1,0.4))),-1.0,1.0))-0.3)*16.0,2.0)); }
+  else if(uRig==2){ float sx=-1.3+2.6*fract(bars*0.5); key=exp(-pow((p.x-sx)*9.0,2.0))*0.9+exp(-pow((r.y-0.6)*10.0,2.0))*0.25; acc=exp(-pow((p.y-(fract(max(uMetalN,0.0)*0.618)*1.6-0.8))*14.0,2.0))*0.8; }
+  else { key=pow(fr,1.2)*1.4*smoothstep(-0.2,0.6,dot(n,normalize(vec3(0.2,0.5,-1.0)))+0.4); acc=exp(-pow((r.x+0.5)*14.0,2.0))*0.5; }
+}
+vec3 shade(vec3 p, vec3 rd, float t, float bars, float lift, bool full){
+  vec3 n=nrm(p,t), v=-rd, r=reflect(rd,n);
+  float cosv=max(dot(n,v),0.0), fr=pow(1.0-cosv,4.0);
+  float F0=uMat==2?0.45:0.04, F=F0+(1.0-F0)*pow(1.0-cosv,5.0);
+  float ao=full?occ(p,n):0.8;
+  vec3 Ld=normalize(vec3(0.6,0.7,0.4));
+  float sh=full&&uMat!=3?mix(0.35,1.0,shadow(p+n*0.01,Ld)):1.0;
+  float key, acc; rigLight(p,r,n,fr,bars,key,acc);
+  float spec=pow(max(dot(r,Ld),0.0),uMat==0?140.0:uMat==1?90.0:60.0)*sh;
+  vec3 base;
+  if(uMat==0)      base=INK*(key*(0.12+F*1.4)*1.15+spec*1.1+fr*0.03);
+  else if(uMat==1) base=INK*(key*(0.18+F*1.1)+spec*0.8+fr*0.025);
+  else if(uMat==2) base=mix(INK,uAcc,0.12)*(key*(0.35+0.7*F)*1.3+spec*1.3)+fr*0.02;
+  else             base=INK*(pow(fr,1.3)*1.1*(0.5+key)+key*0.12);
+  vec3 col=base*lift*ao;
+  col+=INK*key*uKick*0.55*lift*ao;
+  col+=uAcc*acc*(0.1+uMetal*2.2+uImpact*1.8)*(0.3+fr)*ao;
+  float vein=exp(-abs(gyr(p*7.0+vec3(uPhase)))*16.0);
+  col+=uAcc*vein*(uImpact*1.6+(bars>=8.0&&bars<12.0?0.08:0.0));
+  if(uMat==1&&full){ float inside=clamp(-map(p-n*0.07)/0.07,0.0,1.0); col+=uAcc*(1.0-inside)*0.06*uEnergy*uEnergy*(1.0-fr); }
+  return col+INK*0.003;
+}
 void main(){
-  vec2 q=screenP(); vec2 sp=rot(uRot*0.4)*q;
-  float ca=uPhase+uV0.w*6.0;
-  vec3 ro=vec3(sin(ca)*0.6,0.2+0.12*cos(ca),3.9)/(0.75+0.3*uZoom);
-  vec3 ta=vec3(uOff*0.5,0.0), fw=normalize(ta-ro), rt=normalize(cross(fw,vec3(0,1,0))), up=cross(rt,fw);
-  vec3 rd=normalize(fw*1.7+rt*sp.x+up*sp.y);
-  float t=0.0, d=1.0; int it=0;
-  for(int i=0;i<84;i++){ d=map(ro+rd*t); if(d<0.0012||t>7.0) break; t+=d*0.9; it=i; }
+  vec2 q=screenP(); vec2 sp=rot(uRot*0.3)*q;
+  float ca=uPhase+uV0.w*6.0, dist=(4.1+1.5*uV1.y)/(0.75+0.35*uZoom);
+  vec3 ro=vec3(sin(ca)*0.55,0.18+0.14*cos(ca)+0.3*(uV1.z-0.5),dist);
+  vec3 ta=vec3(uOff*0.55,0.0), fw=normalize(ta-ro), rt=normalize(cross(fw,vec3(0,1,0))), up=cross(rt,fw);
+  vec3 rd=normalize(fw*(1.5+0.6*uV1.w)+rt*sp.x+up*sp.y);
+  float t=0.0, d=1.0, minD=9.0;
+  for(int i=0;i<128;i++){ d=map(ro+rd*t); minD=min(minD,d); if(d<0.0004*t+0.0002||t>9.0) break; t+=d*0.9; }
+  float bars=uT/uBar;
   vec3 col=vec3(0.0);
-  if(t<7.0){
-    vec3 p=ro+rd*t, n=nrm(p), v=-rd, r=reflect(rd,n);
-    float fr=pow(1.0-max(dot(n,v),0.0),4.0);
-    float strip=exp(-pow((r.y-0.48-0.12*sin(uPhase))*15.0,2.0))*smoothstep(-0.6,0.5,r.x+0.2);
-    float strip2=exp(-pow((r.x+0.55+0.1*cos(uPhase))*16.0,2.0))*smoothstep(-0.3,0.6,r.y+0.3);
-    float spec=pow(max(dot(r,normalize(vec3(0.6,0.7,0.4))),0.0),90.0);
-    float ao=clamp(1.0-float(it)/90.0,0.0,1.0);
-    col=INK*(strip*(0.7+1.1*uEnergy)*(0.2+fr)+spec*0.9+fr*0.035)*ao;
-    col+=INK*strip*uKick*0.8;
-    col+=mix(PAL(1),uAcc,clamp(uMetal+uImpact,0.0,1.0))*strip2*(0.25+uMetal*2.0+uImpact*2.0)*(0.3+fr);
-    col+=uAcc*fr*uImpact*2.5;
-    col+=INK*0.004;
-  }
-  // suelo negro que refleja una banda tenue
-  if(rd.y<0.0){ float tp=(-0.95-ro.y)/rd.y; if(tp>0.0&&(tp<t||t>=7.0)){ vec3 pp=ro+rd*tp; col+=INK*0.03*exp(-length(pp.xz)*0.9)*(0.4+uEnergy)+uAcc*0.04*uMetal*exp(-length(pp.xz)*1.4); } }
-  col=ground(q)*(t<7.0?0.0:1.0)+col*compMask(q*0.8);
+  float lift=0.35+0.95*uEnergy;               // la SEÑAL casi a oscuras, la RUPTURA a plena luz
+  if(t<9.0) col=shade(ro+rd*t,rd,t,bars,lift,true);
+  col+=uAcc*exp(-minD*9.0)*(t>=9.0?1.0:0.0)*(uRig==3?0.16+uImpact*0.3:0.02)*(0.5+uEnergy);
+  // suelo negro pulido: refleja de verdad la materia, cada vez más difuso con la distancia
+  if(rd.y<0.0){ float tp=(-1.0-ro.y)/rd.y; if(tp>0.0&&(tp<t||t>=9.0)){
+    vec3 pp=ro+rd*tp, rr=reflect(rd,vec3(0.0,1.0,0.0));
+    float tr=0.02, dr=1.0; for(int i=0;i<56;i++){ dr=map(pp+rr*tr); if(dr<0.002||tr>5.0) break; tr+=dr; }
+    float fade=exp(-length(pp.xz)*0.7);
+    float Fr=0.03+0.5*pow(1.0-max(dot(-rd,vec3(0.0,1.0,0.0)),0.0),5.0);
+    if(tr<5.0) col+=shade(pp+rr*tr,rr,tr,bars,lift,false)*Fr*fade*exp(-tr*0.9)*0.9;
+    col+=INK*0.02*fade*(0.4+uEnergy)+uAcc*0.03*uMetal*fade; } }
+  col*=compMask(q*0.8);
+  col+=trazos(q,bars,t<9.0?1.0:0.0);
   o=vec4(col*uW,1.0);
 }`;
-
-  SP.fondo = `
-out vec4 o;
-void main(){ o=vec4(ground(screenP())*uW,1.0); }`;
-
-  // POLVO: partículas (gl.POINTS), una forma que casi se deshace
-  const POLVO_VS = `
-out vec3 vC; out float vA;
-vec3 knot(float s){ return vec3((2.0+cos(3.0*s))*cos(2.0*s),(2.0+cos(3.0*s))*sin(2.0*s),-sin(3.0*s)*1.4)*0.3; }
-float hu(uint x){ x^=x>>16; x*=0x7feb352du; x^=x>>15; x*=0x846ca68bu; x^=x>>16; return float(x)/4294967295.0; }
-vec3 liss(float s){ return vec3(sin(2.0*s),sin(3.0*s+0.5),sin(5.0*s)*0.7)*0.82; }
-void main(){
-  float fid=float(gl_VertexID);
-  float u=hu(uint(gl_VertexID)*2u+1u), v=hu(uint(gl_VertexID)*2u+7919u);
-  vec3 pos, n;
-  int var=uVar%3;
-  if(var==0){ float th=TAU*u, ph=acos(1.0-2.0*v); n=vec3(sin(ph)*cos(th),cos(ph),sin(ph)*sin(th)); pos=n*0.82; }
-  else { float s=v*TAU; vec3 c=var==1?knot(s):liss(s), c2=var==1?knot(s+0.01):liss(s+0.01);
-    vec3 T=normalize(c2-c), B=normalize(cross(T,vec3(0.3,0.2,1.0))), N=cross(B,T);
-    float th=TAU*u;
-    if(var==1){ n=cos(th)*B+sin(th)*N; pos=c+n*0.12; } else { n=N; pos=c+B*(u*2.0-1.0)*0.2; } }
-  float a=uPhase;
-  float nz=snoise(vec4(pos*1.7+uV0.xyz*5.0+vec3(uDrift*0.09,0.0,0.55*cos(a)),0.55*sin(a)+uDrift*0.04));
-  float hs=hu(uint(gl_VertexID)+104729u);
-  pos+=n*nz*(0.14+0.3*uChaos+0.22*uBass);
-  pos+=n*uKick*0.1*hs*hs*hs+n*uImpact*0.5*hs*hs;
-  pos.xz=rot(uPhase+uV0.w*6.28)*pos.xz; pos.yz=rot(0.35+uRot*0.3)*pos.yz;
-  vec3 cp=pos; cp.z+=2.6/(0.75+0.4*uZoom);
-  float f=1.75;
-  gl_Position=vec4(cp.x*f/cp.z/uAspect+uOff.x*0.4, cp.y*f/cp.z+uOff.y*0.3, 0.0, 1.0);
-  float depth=smoothstep(3.6,1.6,cp.z);
-  gl_PointSize=max(1.0,(1.2+1.6*depth)*uRes.y/1080.0);
-  float yb=fract(max(uMetalN,0.0)*0.618)*1.5-0.75;
-  float slab=exp(-pow((pos.y-yb)*12.0,2.0))*uMetal;
-  float spark=step(0.985,hs)*uTick*2.0;
-  vec3 pig=hs<0.55?INK:hs<0.82?PAL(1)*1.4:PAL(2)*1.4;
-  vC=mix(pig,uAcc*2.4,clamp(slab*1.4+uImpact*0.6,0.0,1.0));
-  vA=(0.05+0.2*uEnergy+spark)*(0.35+depth)*(1.0+uKick*0.8)*(0.7+0.6*hs);
-}`;
-  const POLVO_FS = `
-in vec3 vC; in float vA; out vec4 o;
-void main(){ vec2 c=gl_PointCoord-0.5; float f=exp(-dot(c,c)*9.0); o=vec4(vC*vA*f*uW,1.0); }`;
 
   // CONTRAPUNTO: una sola línea de luz del acento, en sección áurea. Crece con la tensión, se parte en la ruptura.
   const CONTRA = `
@@ -579,6 +310,9 @@ float hh(vec2 p){ vec3 p3=fract(vec3(p.xyx)*0.1031); p3+=dot(p3,p3.yzx+33.33); r
 void main(){
   vec2 uv=gl_FragCoord.xy/uOut, dc=uv-0.5; float ca=uCA*dot(dc,dc);
   vec3 c=vec3(texture(uScene,uv-dc*ca).r, texture(uScene,uv).g, texture(uScene,uv+dc*ca).b);
+  vec2 px=1.0/vec2(textureSize(uScene,0));
+  vec3 nb=(texture(uScene,uv+vec2(px.x,0)).rgb+texture(uScene,uv-vec2(px.x,0)).rgb+texture(uScene,uv+vec2(0,px.y)).rgb+texture(uScene,uv-vec2(0,px.y)).rgb)*0.25;
+  c=max(c+(c-nb)*0.35,0.0);   // enfoque fino: define bordes y reflejos sin halos
   c+=texture(uBloom,uv).rgb*uBloomAmt;
   c+=uFlashC*uFlash*0.22;
   c*=uFade;
@@ -601,7 +335,7 @@ void main(){
     gl.getExtension('OES_texture_float_linear');
     this.vao = gl.createVertexArray();
     this.progs = {};
-    this.scale = 0.75; this.frame = 0;
+    this.scale = 1.0; this.frame = 0;
     this.post = { down: this.prog(FS_VERT, DOWN), up: this.prog(FS_VERT, UP), fin: this.prog(FS_VERT, FINAL) };
     this.sting = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.sting);
@@ -635,15 +369,11 @@ void main(){
   E.species = function (id) {
     if (this.progs[id]) return this.progs[id];
     if (id === 'contra') return (this.progs[id] = this.prog(FS_VERT, HEAD + FRAG + CONTRA));
-    if (id === 'fondo') return (this.progs[id] = this.prog(FS_VERT, HEAD + FRAG + SP.fondo));
-    if (id === 'polvo') {
-      const vs = HEAD + POLVO_VS;
-      this.progs[id] = this.prog(vs, HEAD + FRAG + POLVO_FS);
-    } else this.progs[id] = this.prog(FS_VERT, HEAD + FRAG + SP[id]);
+    this.progs[id] = this.prog(FS_VERT, HEAD + FRAG + SP[id]);
     return this.progs[id];
   };
   // compila todo de antemano (evita el tirón la primera vez que sale una especie)
-  E.warm = function () { for (const s of window.SEMILLA.SPECIES) this.species(s.id); this.species('contra'); this.species('fondo'); };
+  E.warm = function () { this.species('objeto'); this.species('contra'); };
   E.fbo = function (w, h) {
     const gl = this.gl, tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, tex);
@@ -657,7 +387,7 @@ void main(){
   E.free = function (f) { if (!f) return; this.gl.deleteFramebuffer(f.fb); this.gl.deleteTexture(f.tex); };
   E.resize = function (w, h, scale) {
     w = Math.max(2, Math.round(w)); h = Math.max(2, Math.round(h));
-    scale = Math.max(0.3, Math.min(1, scale || this.scale));
+    scale = Math.max(0.5, Math.min(1, scale || this.scale));
     if (w === this.size[0] && h === this.size[1] && scale === this.scale && this.scene) return;
     this.canvas.width = w; this.canvas.height = h; this.size = [w, h]; this.scale = scale;
     this.free(this.scene); (this.chain || []).forEach((f) => this.free(f));
@@ -700,9 +430,9 @@ void main(){
     let grow = Math.min(1, Math.max(0, (bars - 2.5) / 5.5));           // nace en la SEÑAL, crece en la TENSIÓN
     if (bars >= 12) grow *= Math.max(0, 1 - (bars - 12) / 3.6);        // se retira en el ECO
     const cut = bars >= 8 && bars < 12 ? Math.min(1, e.impact * 1.4 + 0.35) : 0;
-    return [golden + (v[7] - 0.5) * 0.03, horiz, grow * grow * (0.55 + 0.45 * e.energy), cut];
+    const on = v[4] < 0.6 ? 1 : 0;   // no todas las piezas lo llevan
+    return [golden + (v[7] - 0.5) * 0.03, horiz, on * grow * grow * (0.55 + 0.45 * e.energy), cut];
   }
-  E.pointCount = (P) => Math.round(110000 + 160000 * P.density);
   // slots: [{ P, e, w }]  ·  o: { bloom, flash, flashColor, fade, grain, scan, sting (canvas), stingA }
   E.draw = function (slots, o = {}) {
     const gl = this.gl, S = this.scene;
@@ -712,16 +442,14 @@ void main(){
     gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
     for (const s of slots) {
       if (!s || s.w < 0.002) continue;
-      const pr = this.species(s.P.sp.id);
+      const pr = this.species('objeto');
       gl.useProgram(pr.p);
-      const N = s.P.sp.id === 'polvo' ? this.pointCount(s.P) : 0;
       gl.uniform2f(pr.u.uRes, S.w, S.h);
-      setU(gl, pr.u, s.P, s.e, s.w, { uAspect: S.w / S.h, uN: N, uDrift: o.drift || 0, uBar: s.P.bar });
-      if (N) {
-        const fp = this.species('fondo'); gl.useProgram(fp.p); gl.uniform2f(fp.u.uRes, S.w, S.h);
-        setU(gl, fp.u, s.P, s.e, s.w, { uDrift: o.drift || 0 }); gl.drawArrays(gl.TRIANGLES, 0, 3);
-        gl.useProgram(pr.p); gl.drawArrays(gl.POINTS, 0, N);
-      } else gl.drawArrays(gl.TRIANGLES, 0, 3);
+      setU(gl, pr.u, s.P, s.e, s.w, { uDrift: o.drift || 0, uBar: s.P.bar });
+      gl.uniform1i(pr.u.uForm, s.P.sp.form); gl.uniform1i(pr.u.uMat, s.P.vis.mat); gl.uniform1i(pr.u.uRig, s.P.vis.rig);
+      const st = s.P.stroke, c1 = hex(st.c1), c2 = hex(st.c2);
+      gl.uniform1i(pr.u.uStroke, st.style); gl.uniform3f(pr.u.uSC1, c1[0], c1[1], c1[2]); gl.uniform3f(pr.u.uSC2, c2[0], c2[1], c2[2]);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
       const c = contraOf(s.P, s.e);
       if (c[2] > 0.002) {
         const cp = this.species('contra'); gl.useProgram(cp.p);

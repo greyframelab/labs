@@ -9,38 +9,26 @@
   };
   const ACCENT_NAMES = { paleta: 'PALETA', rojo: 'ROJO', cian: 'CIAN', ambar: 'ÁMBAR', verde: 'VERDE', violeta: 'VIOLETA', magenta: 'MAGENTA', blanco: 'BLANCO' };
 
-  // paletas curadas a mano: un fondo, tres colores de pintura y un acento. Color fuerte, paleta controlada.
+  // fondo siempre negro: la oscuridad de VØID_LOOM; el color es un evento (un solo acento)
   const PALETTES = {
     vacio: { name: 'VACÍO', ground: '#000000', ink: ['#F2F0EA', '#8F8C86', '#3A3835'], acc: null, dark: 1 },
-    carbon: { name: 'CARBÓN', ground: '#060606', ink: ['#F2F0EA', '#2B2B2B', '#7A1010'], acc: '#FF1A1A', dark: 1 },
-    noche: { name: 'NOCHE', ground: '#0A0C18', ink: ['#F2F0EA', '#4F63FF', '#FF6B4A'], acc: '#FFB000', dark: 1 },
-    botella: { name: 'BOTELLA', ground: '#0E3A2D', ink: ['#EDE6D6', '#E9A23B', '#141414'], acc: '#FF2BD6', dark: 0 },
-    ultramar: { name: 'ULTRAMAR', ground: '#14227A', ink: ['#F2EDE3', '#F0592F', '#F6B8C8'], acc: '#FFC21A', dark: 0 },
-    ocre: { name: 'OCRE', ground: '#C99532', ink: ['#151311', '#F2EDE3', '#7E2A1A'], acc: '#1F3FD1', dark: 0 },
-    naranja: { name: 'NARANJA', ground: '#E25A1C', ink: ['#161413', '#F5EBDD', '#F7A9C4'], acc: '#2338D6', dark: 0 },
-    rosa: { name: 'ROSA', ground: '#EBC6C2', ink: ['#C8151D', '#121212', '#F7F2E8'], acc: '#2346FF', dark: 0 },
-    hueso: { name: 'HUESO', ground: '#EEE8DC', ink: ['#111111', '#D4241C', '#9B958B'], acc: '#D4241C', dark: 0 },
-    cartel: { name: 'CARTEL', ground: '#F3EFE6', ink: ['#D3141B', '#0C0C0C', '#E2DCCE'], acc: '#D3141B', dark: 0 },
-    gris: { name: 'GRIS', ground: '#8E8B86', ink: ['#2A2927', '#DAD5CB', '#B33A2A'], acc: '#E9C548', dark: 0 },
-    fluor: { name: 'FLÚOR', ground: '#F6F4EF', ink: ['#FF1F8E', '#FFE11A', '#00A2FF'], acc: '#FF5A1F', dark: 0 },
-    cobalto: { name: 'COBALTO', ground: '#F1ECE3', ink: ['#1F43E0', '#FF4A93', '#FFC12B'], acc: '#0F0F0F', dark: 0 },
+    carbon: { name: 'CARBÓN', ground: '#030303', ink: ['#F2F0EA', '#2B2B2B', '#5A5856'], acc: null, dark: 1 },
   };
-  // especies: cada una es un gesto pictórico, con sus paletas posibles
+  // FORMAS: una familia infinita de materia negra; la semilla elige forma, material, luces y encuadre
   const SPECIES = [
-    { id: 'gesto', name: 'GESTO', idea: 'pinceladas con cuerpo que se pintan ahora y luego se disuelven en el fondo', acc: ['rojo', 'blanco', 'cian', 'ambar'], bloom: 0.16, w: 3, pals: ['vacio', 'carbon', 'noche', 'botella', 'ultramar', 'ocre', 'naranja', 'rosa', 'hueso', 'cobalto', 'gris'] },
-    { id: 'espatula', name: 'ESPÁTULA', idea: 'capas de color arrastradas con rasqueta; lo de debajo aparece donde la rasqueta salta', acc: ['rojo', 'ambar'], bloom: 0.1, w: 3, pals: ['ultramar', 'ocre', 'naranja', 'rosa', 'gris', 'cobalto', 'carbon', 'botella'] },
-    { id: 'rasgado', name: 'RASGADO', idea: 'carteles superpuestos que se arrancan en directo hasta dejar ver el muro', acc: ['rojo'], bloom: 0.1, w: 3, pals: ['cartel', 'hueso', 'rosa', 'naranja', 'ultramar', 'carbon'] },
-    { id: 'veladura', name: 'VELADURA', idea: 'veladuras de color translúcido que se superponen, chorrean y se secan', acc: ['magenta'], bloom: 0.05, w: 3, pals: ['fluor', 'cobalto', 'hueso', 'rosa'] },
-    { id: 'velo', name: 'VELO', idea: 'campos de color que respiran y una línea que los parte', acc: ['rojo', 'violeta', 'ambar', 'cian'], bloom: 0.14, w: 2, pals: ['vacio', 'carbon', 'noche', 'botella', 'ultramar', 'ocre', 'naranja', 'rosa'] },
-    { id: 'corte', name: 'CORTE', idea: 'un lienzo de un solo color que se abre y deja ver lo que hay detrás', acc: ['rojo', 'blanco', 'ambar'], bloom: 0.12, w: 2, pals: ['rosa', 'ocre', 'naranja', 'ultramar', 'botella', 'hueso', 'gris', 'vacio', 'carbon'] },
-    { id: 'vertido', name: 'VERTIDO', idea: 'pintura derramada que se extiende en vetas y celdas', acc: ['magenta', 'cian'], bloom: 0.08, w: 2, pals: ['cobalto', 'fluor', 'ultramar', 'naranja', 'rosa', 'botella', 'noche'] },
-    { id: 'laca', name: 'LACA', idea: 'negro trabajado a pincel; la luz solo vive en los surcos', acc: ['blanco', 'ambar', 'rojo'], bloom: 0.2, w: 2, pals: ['vacio', 'carbon', 'noche'] },
-    { id: 'isobara', name: 'ISOBARA', idea: 'un dibujo que respira: líneas de nivel de una presión invisible', acc: ['cian', 'ambar', 'blanco', 'violeta'], bloom: 0.2, w: 1, pals: ['hueso', 'rosa', 'gris', 'cartel', 'vacio'] },
-    { id: 'lente', name: 'LENTE', idea: 'materia negra pulida que refleja una luz que no se ve', acc: ['rojo', 'violeta', 'ambar', 'blanco'], bloom: 0.26, w: 1, pals: ['vacio', 'noche', 'botella', 'carbon'] },
-    { id: 'polvo', name: 'POLVO', idea: 'una forma hecha de pigmento en polvo que casi se deshace', acc: ['ambar', 'cian', 'rojo', 'verde'], bloom: 0.28, w: 1, pals: ['vacio', 'noche', 'carbon'] },
+    { id: 'masa', form: 0, name: 'MASA', idea: 'cuerpos negros que se funden y se separan', acc: ['rojo', 'violeta', 'ambar'], w: 3 },
+    { id: 'torsion', form: 1, name: 'TORSIÓN', idea: 'un monolito que se retuerce sobre sí mismo', acc: ['rojo', 'cian', 'blanco'], w: 3 },
+    { id: 'concha', form: 2, name: 'CONCHA', idea: 'una cáscara calada por una superficie mínima', acc: ['ambar', 'cian', 'violeta'], w: 3 },
+    { id: 'pliegue', form: 3, name: 'PLIEGUE', idea: 'una lámina de materia que se dobla como un pensamiento', acc: ['blanco', 'cian', 'magenta'], w: 2 },
+    { id: 'columnas', form: 4, name: 'COLUMNAS', idea: 'una arquitectura que respira con el pulso', acc: ['ambar', 'verde', 'rojo'], w: 2 },
+    { id: 'fractura', form: 5, name: 'FRACTURA', idea: 'un bloque que se abre en lonchas en la ruptura', acc: ['rojo', 'magenta', 'ambar'], w: 3 },
+    { id: 'espina', form: 6, name: 'ESPINA', idea: 'un cuerpo erizado que se defiende de la luz', acc: ['rojo', 'verde', 'violeta'], w: 2 },
+    { id: 'monolito', form: 7, name: 'MONOLITO', idea: 'una losa en el vacío y una luz que la recorre', acc: ['blanco', 'rojo', 'cian'], w: 2 },
   ];
+  SPECIES.forEach((s) => { s.bloom = 0.26; s.pals = ['vacio', 'carbon']; });
   const SP_W = SPECIES.reduce((a, s) => a + s.w, 0);
   const pickSpecies = (r) => { let x = r * SP_W; for (const s of SPECIES) { x -= s.w; if (x < 0) return s; } return SPECIES[0]; };
+  const MATS = ['LACA', 'OBSIDIANA', 'CROMO', 'TERCIOPELO'], RIGS = ['TIRAS', 'ARO', 'BARRIDO', 'CONTRALUZ'];
 
   // una referencia manda en cada pieza: decide ritmo, espacio y gesto
   const REFS = {
@@ -104,14 +92,15 @@
   // ---------- generar una pieza ----------
   function generate(code, opts = {}) {
     code = cleanCode(code) || '000000';
-    const density = clamp(opts.density ?? 0.5), chaos = clamp(opts.chaos ?? 0.5);
+    const density = clamp((opts.force && opts.force.density) ?? opts.density ?? 0.5), chaos = clamp((opts.force && opts.force.chaos) ?? opts.chaos ?? 0.5);
     const S = hashStr(code), R = mulberry(S);
-    const sp = pickSpecies(R());
-    const refIds = Object.keys(REFS), refId = refIds[Math.floor(R() * refIds.length)], ref = REFS[refId];
+    const F = opts.force || {};
+    let sp = pickSpecies(R()); if (F.form) sp = SPECIES.find((s) => s.id === F.form) || sp;
+    const refIds = Object.keys(REFS); let refId = refIds[Math.floor(R() * refIds.length)]; if (F.ref && REFS[F.ref]) refId = F.ref; const ref = REFS[refId];
     const bpm = Math.round(ref.bpm[0] + R() * (ref.bpm[1] - ref.bpm[0]));
     const roots = [28, 29, 30, 31, 33, 34, 35];
     const root = roots[Math.floor(R() * roots.length)];
-    const accAuto = sp.acc[Math.floor(R() * sp.acc.length)];
+    let accAuto = sp.acc[Math.floor(R() * sp.acc.length)]; if (F.accent && ACCENTS[F.accent]) accAuto = F.accent;
     const palId = sp.pals[Math.floor(R() * sp.pals.length)], pal = PALETTES[palId];
     const manualAcc = opts.accent && opts.accent !== 'auto' && ACCENTS[opts.accent];
     const accentKey = manualAcc ? opts.accent : pal.acc ? 'paleta' : accAuto;
@@ -123,7 +112,9 @@
       zoom: 0.8 + R() * 0.7, rot: (R() - 0.5) * 1.2,
       off: [(R() - 0.5) * 0.5, (R() - 0.5) * 0.3],
       mask: Math.floor(R() * 4), variant: Math.floor(R() * 4),
+      mat: Math.floor(R() * 4), rig: Math.floor(R() * 4),
     };
+    if (F.mat != null) vis.mat = F.mat; if (F.rig != null) vis.rig = F.rig;
     const kickK = 3 + Math.floor(R() * 3), tickK = 7 + Math.floor(R() * 6);
     const tickN = [16, 12, 14, 18, 10][Math.floor(R() * 5)];
     const metalN = [5, 7, 9, 11, 13, 20][Math.floor(R() * 6)], metalK = 2 + Math.floor(R() * 2);
@@ -155,6 +146,11 @@
           const T = KICK_T[ref.kick];
           const k = (Math.floor(b / 2) + (chaos > 0.6 ? b : 0)) % T.length;
           steps = T[k].slice();
+        }
+        if (F.syll) { // la palabra escribe el bombo: tantos golpes como sílabas, rotados por su acento
+          const k = Math.min(7, F.syll + 1), rot = (F.syll * 3 + (F.vowels || []).length) % 16;
+          steps = []; for (let s = 0; s < 16; s++) if (euclid(k, 16, s + rot)) steps.push(s);
+          if (!steps.includes(0)) steps.unshift(0);
         }
         if (sec === 0) steps = steps.filter((s) => s % 8 === 0); // en la SEÑAL, solo el pulso grande
         for (const s of steps) add('kick', b, s, s === 0 ? 1 : 0.8 + h4(S, 1, b, s) * 0.12);
@@ -219,7 +215,8 @@
       code, seed: S, sp, refId, ref, bpm, beat, bar, step, bars: BARS, L,
       root, rootName: NOTE[root % 12], accentKey, accentAuto: accAuto, accent, palId, pal, light: lum > 0.45 ? 1 : 0, look,
       vis, energy: E, ev, warps, hits, density, chaos, droneShape, roomSeed, metalBase,
-      acts: ACTS.map(([b, n]) => [b * bar, n]),
+      acts: ACTS.map(([b, n]) => [b * bar, n]), word: F.word || null, fam: F.fam || null,
+      stroke: F.stroke || { style: 0, c1: '#000000', c2: '#000000' }, vowels: F.vowels || null,
     };
   }
 
@@ -261,5 +258,5 @@
     };
   }
 
-  window.SEMILLA = { PALETTES, ACCENTS, ACCENT_NAMES, SPECIES, REFS, ACTS, NOTE, BARS, newCode, cleanCode, generate, env, warp, energyAt, hashStr, mulberry, h4 };
+  window.SEMILLA = { MATS, RIGS, PALETTES, ACCENTS, ACCENT_NAMES, SPECIES, REFS, ACTS, NOTE, BARS, newCode, cleanCode, generate, env, warp, energyAt, hashStr, mulberry, h4 };
 })();

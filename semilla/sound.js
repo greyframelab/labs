@@ -104,7 +104,11 @@
     const fm = ctx.createBiquadFilter(); fm.type = 'bandpass'; fm.Q.value = 4; fm.frequency.value = 640;
     const g = ctx.createGain(); g.gain.value = 0.0001; this.droneGain = g; this.droneF = f;
     const fg = ctx.createGain(); fg.gain.value = 0.9;
-    f.connect(g); fm.connect(fg); fg.connect(g); g.connect(this.out); g.connect(this.send);
+    const fm2 = ctx.createBiquadFilter(); fm2.type = 'bandpass'; fm2.Q.value = 9; fm2.frequency.value = 1200;
+    const fg2 = ctx.createGain(); fg2.gain.value = P.vowels ? 0.55 : 0;
+    if (P.vowels) { fm.Q.value = 9; fg.gain.value = 1.4; }
+    this.fm = fm; this.fm2 = fm2;
+    f.connect(g); fm.connect(fg); fg.connect(g); fm2.connect(fg2); fg2.connect(g); g.connect(this.out); g.connect(this.send);
     const mk = (freq, det, type, gain, dest) => {
       const o = ctx.createOscillator(); if (type === 'saw') o.setPeriodicWave(this.S.saw); else o.type = type;
       o.frequency.value = freq; o.detune.value = det; const og = ctx.createGain(); og.gain.value = gain;
@@ -113,14 +117,15 @@
     const r = P.root + 12, sh = P.droneShape;
     const a = mk(hz(r), -7, 'saw', 0.32, f), b = mk(hz(r), 6, 'saw', 0.32, f);
     mk(hz(r + 7), -3 + sh * 4, 'saw', 0.14, f);
-    mk(hz(r + 12 + (sh > 0.5 ? 3 : 0)), 2, 'saw', 0.07, fm);
+    mk(hz(r + 12 + (sh > 0.5 ? 3 : 0)), 2, 'saw', P.vowels ? 0.16 : 0.07, fm);
+    if (P.vowels) { mk(hz(r + 12), -4, 'saw', 0.16, fm2); mk(hz(r + 7), 5, 'saw', 0.12, fm); }
     const sub = ctx.createOscillator(); sub.frequency.value = hz(P.root); const sg = ctx.createGain(); sg.gain.value = 0.13;
     sub.connect(sg); sg.connect(g); sub.start(now); oscs.push(sub);
     // respiración ligada al bucle (2 ciclos por vuelta) y barrido del formante
     const lfo = ctx.createOscillator(); lfo.frequency.value = 2 / P.L; const lg = ctx.createGain(); lg.gain.value = 110;
     lfo.connect(lg); lg.connect(f.frequency); lfo.start(now); oscs.push(lfo);
     const lfo2 = ctx.createOscillator(); lfo2.frequency.value = 1 / P.L; const lg2 = ctx.createGain(); lg2.gain.value = 260;
-    lfo2.connect(lg2); lg2.connect(fm.frequency); lfo2.start(now); oscs.push(lfo2);
+    if (!P.vowels) lg2.connect(fm.frequency); lfo2.connect(lg2); lfo2.start(now); oscs.push(lfo2);
     if (P.ref.wow) {
       const w = ctx.createOscillator(); w.frequency.value = 0.47; const wg = ctx.createGain(); wg.gain.value = 9;
       w.connect(wg); wg.connect(a.detune); wg.connect(b.detune); w.start(now); oscs.push(w);
@@ -134,6 +139,11 @@
     else if (bi === 8) { f.cancelScheduledValues(T); f.setValueAtTime(380, T); f.setTargetAtTime(cut, T + 0.05, P.bar * 0.3); }
     else f.setTargetAtTime(cut, T, P.bar * 0.35);
     g.setTargetAtTime(this.droneLevel(bi), T, P.bar * 0.3);
+    if (P.vowels) { // el dron pronuncia la palabra: una vocal por medio compás
+      const FMT = { a: [800, 1250], e: [480, 1900], i: [300, 2250], o: [500, 880], u: [330, 760] }, n = P.vowels.length;
+      for (let h = 0; h < 2; h++) { const [f1, f2] = FMT[P.vowels[(bi * 2 + h) % n]] || FMT.a, tt = T + h * P.bar * 0.5;
+        this.fm.frequency.setTargetAtTime(f1, tt, 0.09); this.fm2.frequency.setTargetAtTime(Math.min(f2, 1400), tt, 0.09); }
+    }
     if (bi === 7) this.riser(T, P.bar);
   };
   V.droneLevel = function (bi) { return this.S.lv.drone * (0.45 + 0.75 * this.P.energy[bi]); };

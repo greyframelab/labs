@@ -116,7 +116,6 @@ body.solo{cursor:none}
 #help .box{border:1px solid var(--line2);background:#070707;padding:28px 34px;display:grid;grid-template-columns:auto auto;gap:9px 34px;font-size:10px;letter-spacing:.16em;color:var(--tx2)}
 #help .box b{color:var(--acc);font-weight:400}
 #help h4{grid-column:1/-1;margin:0 0 8px;font-weight:400;letter-spacing:.3em;color:var(--tx)}
-#sensor{position:fixed;left:0;bottom:0;width:4px;height:4px;border:0;opacity:.01;pointer-events:none}
 </style>
 <script>
   // marco de la firma: apaisado en proyección, vertical en pantallas en vertical
@@ -127,7 +126,7 @@ body.solo{cursor:none}
 <div id="boot">
   <div class="boot-in">
     <div class="mark">VØID<i>_</i>LOOM</div>
-    <div class="sub">SEMILLA<br>ARTE ABSTRACTO QUE SE PINTA EN DIRECTO · CADA PIEZA EXISTE UNA VEZ</div>
+    <div class="sub">SEMILLA<br>MATERIA QUE NACE DE UNA PALABRA · CADA PIEZA EXISTE UNA VEZ</div>
     <button id="go">ARRANCAR</button>
     <div id="bootlog"></div>
   </div>
@@ -143,7 +142,7 @@ body.solo{cursor:none}
       <div class="chip">REFERENCIA <b id="chRef">—</b></div>
       <div class="chip">BPM <b id="chBpm">—</b></div>
       <div class="chip">ACTO <b id="chAct">—</b></div>
-      <div class="chip hide" id="chipSala"><span class="led" id="ledCam"></span>SALA <b id="chSala">—</b></div>
+      <div class="chip hide" id="chipSala"><span class="led" id="ledCam"></span>VOZ <b id="chSala">—</b></div>
       <div class="chip">FPS <b id="chFps">—</b></div>
     </div>
     <div class="tools">
@@ -172,13 +171,13 @@ body.solo{cursor:none}
         </div>
         <div id="boxPub" class="hide" style="display:flex;flex-direction:column;gap:10px">
           <div class="kv">
-            <span>CÁMARA</span><b id="pCam">—</b>
-            <span>PERSONAS</span><b id="pN">0</b>
-            <span>ESTADO</span><b id="pState">—</b>
+            <span>MICRÓFONO</span><b id="pMic">—</b>
+            <span>ÚLTIMA PALABRA</span><b id="pWord">—</b>
+            <span>CARÁCTER</span><b id="pFam">—</b>
+            <span>SIGUIENTE</span><b id="pNext">—</b>
           </div>
-          <div class="note">MOVIMIENTO</div><div class="meter"><i id="pMov"></i></div>
-          <div class="note">MIRADA</div><div class="meter"><i id="pCon"></i></div>
-          <div class="note">La imagen de la cámara no se muestra, no se guarda ni sale del ordenador: solo se usan números (cuántas personas, dónde están y cuánto se mueven).</div>
+          <div class="code"><input id="inWord" placeholder="PROBAR UNA PALABRA" spellcheck="false" aria-label="Probar una palabra" style="font-size:11px;letter-spacing:.2em"></div>
+          <div class="note">La palabra solo se ve en esta consola: nunca se proyecta ni se guarda. El reconocimiento de voz es el de Chrome y necesita internet en sala.</div>
         </div>
       </div>
       <div class="sect">
@@ -222,7 +221,7 @@ body.solo{cursor:none}
 <div id="help"><div class="box">
   <h4>VØID_LOOM · SEMILLA</h4>
   <b>1</b><span>AUTOMÁTICO: las piezas nacen y se suceden solas</span>
-  <b>2</b><span>PÚBLICO: la sala hace nacer la pieza con su presencia</span>
+  <b>2</b><span>PÚBLICO: la sala dice una palabra y la pieza nace de ella</span>
   <b>3</b><span>MANUAL: semilla, acento, densidad y caos a mano</span>
   <b>ESPACIO</b><span>pieza nueva</span>
   <b>← →</b><span>pieza anterior / siguiente del historial</span>
@@ -237,6 +236,7 @@ body.solo{cursor:none}
 <script src="score.js"></script>
 <script src="engine.js"></script>
 <script src="sound.js"></script>
+<script src="voz.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
