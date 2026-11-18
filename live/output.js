@@ -9,7 +9,11 @@
   const gl = cv.getContext('webgl2', { antialias: false, alpha: false, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
   // si la gráfica falla, decirlo en pantalla en vez de quedarse en negro
   const avisoGPU = (msg) => { const h = document.getElementById('hint'); if (h) { h.className = ''; h.textContent = msg; } };
-  if (!gl) avisoGPU('LA GRÁFICA NO DA WEBGL2 · ACTUALIZA EL DRIVER O ABRE EL LIVE EN CHROME');
+  if (!gl) {
+    const app_ = window.VLL_APP && window.VLL_APP.gpuFail;
+    avisoGPU(app_ ? 'LA GRÁFICA NO DA WEBGL2 · CAMBIA EL MODO EN EL MENÚ GRÁFICA DE LA APP' : 'LA GRÁFICA NO DA WEBGL2 · REINICIA EL ORDENADOR O ACTUALIZA EL DRIVER');
+    if (app_) window.VLL_APP.gpuFail();             // la app propone pasar a modo compatible / software
+  }
   cv.addEventListener('webglcontextlost', (e) => { e.preventDefault(); avisoGPU('LA GRÁFICA SE HA REINICIADO · RECARGANDO LA SALIDA…'); setTimeout(() => location.reload(), 1500); });
 
   // ------------------------------------------------------------------ estado recibido

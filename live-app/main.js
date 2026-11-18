@@ -15,12 +15,6 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-background-timer-throttling');
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
-// rendimiento: usar la gráfica de alto rendimiento si hay dos; no dejar que Chrome descarte la gráfica por su lista
-// negra (sin esto, en el portátil de Toni la salida se queda sin WebGL2) y rasterizar en GPU.
-// enable-zero-copy queda fuera: es el sospechoso habitual de salidas WebGL en negro en gráficas integradas.
-app.commandLine.appendSwitch('force_high_performance_gpu');
-app.commandLine.appendSwitch('ignore-gpu-blocklist');
-app.commandLine.appendSwitch('enable-gpu-rasterization');
 protocol.registerSchemesAsPrivileged([{ scheme: 'vll', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true, codeCache: true } }]);
 
 if (!app.requestSingleInstanceLock()) { app.quit(); }
@@ -31,6 +25,33 @@ const CFG_FILE = path.join(app.getPath('userData'), 'ajustes.json');
 const cfg = Object.assign({ instalacion: false }, (() => { try { return JSON.parse(fs.readFileSync(CFG_FILE, 'utf8')); } catch (e) { return {}; } })());
 const saveCfg = () => { try { fs.writeFileSync(CFG_FILE, JSON.stringify(cfg, null, 2)); } catch (e) {} };
 const INSTALL = cfg.instalacion || process.argv.includes('--instalacion');
+
+// ---------------------------------------------------------------- gráfica (menú Gráfica; se aplica al reiniciar)
+// auto:       gráfica de alto rendimiento, sin lista negra de Chrome, rasterizado en GPU
+// compatible: lo mismo dibujando con OpenGL en vez de DirectX (salva drivers de Windows rotos)
+// software:   dibuja con el procesador (más lento, pero siempre da WebGL2)
+// enable-zero-copy queda fuera siempre: es el sospechoso habitual de salidas WebGL en negro.
+const GRAFICA = ['auto', 'compatible', 'software'].includes(cfg.grafica) ? cfg.grafica : 'auto';
+if (GRAFICA === 'software') {
+  app.commandLine.appendSwitch('use-angle', 'swiftshader');
+  app.commandLine.appendSwitch('enable-unsafe-swiftshader');
+} else {
+  app.commandLine.appendSwitch('force_high_performance_gpu');
+  app.commandLine.appendSwitch('ignore-gpu-blocklist');
+  app.commandLine.appendSwitch('enable-gpu-rasterization');
+  if (GRAFICA === 'compatible' && process.platform === 'win32') app.commandLine.appendSwitch('use-angle', 'gl');
+}
+const GRAF_TXT = { auto: 'Automático (recomendado)', compatible: 'Compatible (OpenGL)', software: 'Software (lento, siempre se ve)' };
+async function setGrafica(modo, porFallo) {
+  const a = await dialog.showMessageBox(con, { type: porFallo ? 'warning' : 'info', buttons: ['Reiniciar ahora', 'Cancelar'], defaultId: 0, cancelId: 1,
+    message: (porFallo ? 'La gráfica no da WebGL2 a la salida.\n' : '') + 'Gráfica: ' + GRAF_TXT[modo], detail: 'La app se reinicia para aplicarlo. Se puede cambiar cuando quieras en el menú Gráfica.' });
+  if (a.response !== 0) { buildMenu(); return; }
+  cfg.grafica = modo; saveCfg(); quitting = true; app.relaunch(); app.quit();
+}
+function verGrafica() {
+  const w = new BrowserWindow({ width: 900, height: 800, title: 'Estado de la gráfica', autoHideMenuBar: true });
+  w.loadURL('chrome://gpu');
+}
 const liveURL = () => 'vll://labs/live/index.html' + (INSTALL ? '?instalacion' : '');
 
 let con = null, out = null, quitting = false, syncing = null;
@@ -114,7 +135,7 @@ function createConsole() {
     const win = new BrowserWindow({
       title: 'VØID_LOOM · SALIDA', backgroundColor: '#000000', autoHideMenuBar: true, show: false,
       frame: !(ext || INSTALL), width: 1280, height: 720,
-      webPreferences: { backgroundThrottling: false },
+      webPreferences: { backgroundThrottling: false, preload: path.join(__dirname, 'preload.js') },
     });
     out = win;
     win.setMenuBarVisibility(false);
@@ -172,6 +193,12 @@ async function manualUpdate() {
 }
 
 // ---------------------------------------------------------------- menú
+let avisoGPU = false;
+require('electron').ipcMain.on('vll-gpu-fail', () => {
+  if (avisoGPU) return; avisoGPU = true;
+  setGrafica(GRAFICA === 'auto' ? 'compatible' : 'software', true);
+});
+
 function buildMenu() {
   const mac = process.platform === 'darwin';
   const t = [
@@ -194,6 +221,11 @@ function buildMenu() {
       { label: 'Abrir salida', accelerator: 'CmdOrCtrl+Shift+O', click: openOutput },
       { label: 'Pantalla completa sí / no', accelerator: 'CmdOrCtrl+Shift+F', click: toggleOutputFull },
       { label: 'Mover a la siguiente pantalla', accelerator: 'CmdOrCtrl+Shift+M', click: moveOutput },
+    ] },
+    { label: 'Gráfica', submenu: [
+      ...['auto', 'compatible', 'software'].map((m) => ({ label: GRAF_TXT[m], type: 'radio', checked: GRAFICA === m, click: () => { if (m !== GRAFICA) setGrafica(m); } })),
+      { type: 'separator' },
+      { label: 'Ver estado de la gráfica', click: verGrafica },
     ] },
     { label: 'Ver', submenu: [
       { role: 'togglefullscreen', label: 'Consola a pantalla completa' },
