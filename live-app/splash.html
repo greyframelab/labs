@@ -8,7 +8,9 @@
   html,body{margin:0;height:100%;background:#050505;color:#f2f0ea;font:400 11px/1.6 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.24em;cursor:default;user-select:none}
   body{display:grid;place-items:center}
   .w{width:min(420px,80vw)}
+  .sym{display:block;width:92px;height:92px;margin:0 0 26px -10px}
   h1{font-weight:400;font-size:13px;letter-spacing:.5em;margin:0 0 34px}
+  h1 b{font-weight:400;color:#00E5FF;text-shadow:0 0 10px rgba(0,229,255,.55)}
   h1 span{color:#6f6c66;letter-spacing:.3em;font-size:10px;margin-left:10px}
   .bar{height:1px;background:#1c1b19;position:relative;overflow:hidden}
   .bar i{position:absolute;left:0;top:0;bottom:0;width:0;background:#f2f0ea;transition:width .2s}
@@ -19,7 +21,8 @@
 </head>
 <body>
 <div class="w">
-  <h1>VØID_LOOM<span>LIVE</span></h1>
+  <svg class="sym" viewBox="-100 -100 200 200" aria-hidden="true"><defs><filter id="g" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="7"/></filter></defs><rect x="-61.35" y="-86" width="2.7" height="172" fill="#222"/><rect x="-61.35" y="-86" width="2.7" height="58.50" fill="#F2F0EA"/><rect x="-61.35" y="27.50" width="2.7" height="58.50" fill="#F2F0EA"/><rect x="-41.35" y="-86" width="2.7" height="172" fill="#222"/><rect x="-41.35" y="-86" width="2.7" height="33.50" fill="#F2F0EA"/><rect x="-41.35" y="52.50" width="2.7" height="33.50" fill="#F2F0EA"/><rect x="-21.35" y="-86" width="2.7" height="172" fill="#222"/><rect x="-21.35" y="-86" width="2.7" height="23.10" fill="#F2F0EA"/><rect x="-21.35" y="62.90" width="2.7" height="23.10" fill="#F2F0EA"/><rect x="-1.35" y="-86" width="2.7" height="172" fill="#222"/><rect x="-1.35" y="-86" width="2.7" height="20.00" fill="#F2F0EA"/><rect x="-1.35" y="66.00" width="2.7" height="20.00" fill="#F2F0EA"/><rect x="18.65" y="-86" width="2.7" height="172" fill="#222"/><rect x="18.65" y="-86" width="2.7" height="23.10" fill="#F2F0EA"/><rect x="18.65" y="62.90" width="2.7" height="23.10" fill="#F2F0EA"/><rect x="38.65" y="-86" width="2.7" height="172" fill="#222"/><rect x="38.65" y="-86" width="2.7" height="33.50" fill="#F2F0EA"/><rect x="38.65" y="52.50" width="2.7" height="33.50" fill="#F2F0EA"/><rect x="58.65" y="-86" width="2.7" height="172" fill="#222"/><rect x="58.65" y="-86" width="2.7" height="58.50" fill="#F2F0EA"/><rect x="58.65" y="27.50" width="2.7" height="58.50" fill="#F2F0EA"/><line x1="-41.72" y1="41.72" x2="41.72" y2="-41.72" stroke="#00E5FF" stroke-width="16" stroke-opacity=".55" filter="url(#g)"/><line x1="-41.72" y1="41.72" x2="41.72" y2="-41.72" stroke="#00E5FF" stroke-width="5.4" stroke-linecap="round"/></svg>
+  <h1>V<b>Ø</b>ID_LOOM<span>LIVE</span></h1>
   <div class="bar scan" id="bar"><i></i></div>
   <div id="st">BUSCANDO PIEZAS NUEVAS EN LABS…</div>
 </div>
