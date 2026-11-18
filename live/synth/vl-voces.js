@@ -76,11 +76,22 @@
       crackleDens: V(1, 0.3), hatPitch: V(1, 0.06),
     };
     let idx = 0;
+
+    // ================= KIT por pase (SÍNTESIS): cada semilla elige una versión de cada instrumento y un transporte;
+    // en la ruptura entra otro kit. Semilla 0 = el kit canónico (variante 0, sin transporte).
+    const rk = rng(((opt.seed || 0) ^ 0x5bd1e995) >>> 0 || 1);
+    const pk = (n) => (opt.seed ? Math.floor(rk() * n) : 0);
+    const nuevoKit = () => ({ kick: pk(4), bass: pk(4), tick: pk(3), hat: pk(3), ice: pk(4) });
+    const KITS = [nuevoKit(), nuevoKit()];
+    const TR = opt.seed && !opt.modoNadir ? [0, 0, -2, 3, -5, 2, -3][Math.floor(rk() * 7)] : 0, TRF = Math.pow(2, TR / 12);
+    let swapAt = Infinity;
+    const kitAt = (t) => KITS[t >= swapAt ? 1 : 0];
+    const conF = (o, def) => Object.assign({}, o, { f: (o.f || def) * TRF });
     const at = (voz, t) => Math.max(0, t + mt(voz) + jit(voz, ++idx));
 
     // ================= instrumentos
     // bombo diseñado: cuerpo con barrido de tono, click corto, cola; saturación suave
-    function kick(t, o) {
+    function kick0(t, o) {
       t = at('kick', t); const vel = (o.vel ?? 1) * dyn(idx), f0 = (o.f0 || 46) * T.kickF0, f1 = o.f1 || 150, tail = (o.tail || 0.26) * T.kickTail;
       const osc = ctx.createOscillator(), g = ctx.createGain(), sh = ctx.createWaveShaper(); sh.curve = curveTanh(1.8);
       osc.frequency.setValueAtTime(f1, t); osc.frequency.exponentialRampToValueAtTime(f0, t + 0.045); osc.frequency.exponentialRampToValueAtTime(f0 * 0.9, t + tail * 2);
@@ -91,7 +102,7 @@
       osc.start(t); c.start(t); stop([osc], t + tail * 5 + 0.1); stop([c], t + 0.05);
     }
     // bajo con armónicos 2–5 (se oye en móvil) y sub controlado
-    function bass(t, o) {
+    function bass0(t, o) {
       t = at('bass', t); const vel = (o.vel ?? 1) * dyn(idx) * (opt.bassGain || 1), f = o.f || 98, d = o.dur || 0.12;
       const s = ctx.createOscillator(), q = ctx.createOscillator(), lp = ctx.createBiquadFilter(), g = ctx.createGain(), sh = ctx.createWaveShaper();
       s.type = 'sawtooth'; s.frequency.value = f; q.type = 'sine'; q.frequency.value = f / 2;
@@ -104,7 +115,7 @@
       s.start(t); q.start(t); stop([s, q], t + d * 3 + 0.2);
     }
     // tick FM sin ruido, corto, recortado por arriba (los "destellos")
-    function tick(t, o) {
+    function tick0(t, o) {
       t = at('tick', t); const vel = (o.vel ?? 1) * dyn(idx) * (opt.tickGain || 1), fc = (o.f || 3200) * T.tickF, dec = (o.dec || 0.022) * T.tickDec, ratio = o.ratio || T.tickRatio;
       const car = ctx.createOscillator(), mod = ctx.createOscillator(), mg = ctx.createGain(), g = ctx.createGain(), lp = ctx.createBiquadFilter();
       car.frequency.value = fc; mod.frequency.value = fc * ratio;
@@ -115,7 +126,7 @@
       car.start(t); mod.start(t); stop([car, mod], t + dec * 6 + 0.05);
     }
     // charles 909: seis cuadradas metálicas inarmónicas, paso banda 6,8–11,5 kHz, bajo en mezcla
-    function hat(t, o) {
+    function hat0(t, o) {
       t = at('hat', t); const vel = (o.vel ?? 1) * dyn(idx) * (opt.hatGain || 1), dec = o.open ? 0.22 : 0.035;
       const g = ctx.createGain(), hp = ctx.createBiquadFilter(), lp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 6800; lp.type = 'lowpass'; lp.frequency.value = 11500;
       const os = [205.3, 304.4, 369.6, 522.7, 540, 800].map((f) => { const x = ctx.createOscillator(); x.type = 'square'; x.frequency.value = f * 2.1 * T.hatPitch; x.connect(hp); x.start(t); return x; });
@@ -124,7 +135,7 @@
       stop(os, t + dec * 5 + 0.05);
     }
     // golpe de hielo / metal mecanizado: FM inarmónica corta + golpe grave, sin campana
-    function ice(t, o) {
+    function ice0(t, o) {
       t = at('ice', t); const vel = (o.vel ?? 1) * dyn(idx) * (opt.iceGain || 1), fc = (o.f || 1650) * T.iceF, dec = o.dec || 0.11, ratio = o.ratio || T.iceRatio;
       const car = ctx.createOscillator(), mod = ctx.createOscillator(), mg = ctx.createGain(), g = ctx.createGain(), lp = ctx.createBiquadFilter();
       car.frequency.setValueAtTime(fc * 1.04, t); car.frequency.exponentialRampToValueAtTime(fc, t + 0.03);
@@ -159,7 +170,7 @@
       src.start(t); src.stop(t + 1.2);
     }
     // sonar: seno corto con reflexiones de la sala (taps oscurecidos), "far" = más lejos y oscuro
-    function ping(t, o) {
+    function ping0(t, o) {
       t = at('ping', t); const vel = (o.vel ?? 1) * dyn(idx), f = (o.f || 1320) * T.pingF, far = o.far ? 1 : 0;
       const osc = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter();
       osc.frequency.setValueAtTime(f * 1.02, t); osc.frequency.exponentialRampToValueAtTime(f, t + 0.02);
@@ -445,9 +456,79 @@
       for (let i = 0; i < n; i++) tick(t + i * d, { vel: (o.vel ?? 1) * (0.4 + 0.6 * i / n), f: (o.f || 2600) * (1 + 0.06 * i), dec: 0.012, pan: (i % 2 ? 0.3 : -0.3) });
     }
 
+    // ---------- variantes del kit
+    function kick(t, o) {
+      const v = kitAt(t).kick;
+      if (v === 1) return kick0(t, Object.assign({}, o, { f0: (o.f0 || 46) * 0.85, f1: 95, tail: (o.tail || 0.26) * 1.7, click: (o.click ?? 1) * 0.3 }));   // sub largo
+      if (v === 2) return kick0(t, Object.assign({}, o, { f1: 270, tail: (o.tail || 0.26) * 0.5, click: (o.click ?? 1) * 1.8 }));                        // seco y corto
+      if (v === 3) {                                                                                                                            // FM: golpe metálico grave
+        const tt = at('kick', t), vel = (o.vel ?? 1) * dyn(idx), f0 = (o.f0 || 46) * T.kickF0, tail = (o.tail || 0.26) * 0.9;
+        const c = ctx.createOscillator(), m = ctx.createOscillator(), mg = ctx.createGain(), g = ctx.createGain(), sh = ctx.createWaveShaper(); sh.curve = curveTanh(2.2);
+        c.frequency.setValueAtTime(f0 * 3, tt); c.frequency.exponentialRampToValueAtTime(f0, tt + 0.04); m.frequency.value = f0 * 1.5;
+        mg.gain.setValueAtTime(f0 * 6, tt); mg.gain.setTargetAtTime(0, tt, 0.02); env(g, tt, 0.001, vel, tail);
+        m.connect(mg).connect(c.frequency); c.connect(g).connect(sh); out(sh, drums); c.start(tt); m.start(tt); stop([c, m], tt + tail * 5 + 0.1); return;
+      }
+      return kick0(t, o);
+    }
+    function bass(t, o) {
+      const v = kitAt(t).bass; o = conF(o, 98);
+      if (v === 0) return bass0(t, o);
+      const tt = at('bass', t), vel = (o.vel ?? 1) * dyn(idx) * (opt.bassGain || 1), f = o.f, d = o.dur || 0.12;
+      const g = ctx.createGain(), lp = ctx.createBiquadFilter(), os = [];
+      lp.type = 'lowpass'; env(g, tt, 0.002, 0.42 * vel, d, d * 0.3);
+      if (v === 1) {                       // FM: carrier + modulador a la octava, índice que cae
+        const c = ctx.createOscillator(), m = ctx.createOscillator(), mg = ctx.createGain(); c.frequency.value = f; m.frequency.value = f * 2;
+        mg.gain.setValueAtTime(f * 3, tt); mg.gain.setTargetAtTime(f * 0.3, tt, d / 2); m.connect(mg).connect(c.frequency); c.connect(lp); os.push(c, m); lp.frequency.value = 2400;
+      } else if (v === 2) {                // cuadrada que se cierra rápido (pluck resonante)
+        const x = ctx.createOscillator(); x.type = 'square'; x.frequency.value = f; x.connect(lp); os.push(x);
+        lp.Q.value = 7; lp.frequency.setValueAtTime(2600, tt); lp.frequency.exponentialRampToValueAtTime(220, tt + d * 1.2);
+      } else {                             // seno plegado: saturación fuerte + octava
+        const x = ctx.createOscillator(), y = ctx.createOscillator(), yg = ctx.createGain(), sh = ctx.createWaveShaper(); sh.curve = curveTanh(4.5);
+        x.frequency.value = f; y.frequency.value = f / 2; yg.gain.value = 0.6; x.connect(sh); y.connect(yg).connect(sh); sh.connect(lp); os.push(x, y); lp.frequency.value = 1800;
+      }
+      lp.connect(g); out(g, voices, o.pan || 0, o.send || 0); os.forEach((x) => x.start(tt)); stop(os, tt + d * 3 + 0.2);
+    }
+    function tick(t, o) {
+      const v = kitAt(t).tick; o = conF(o, 3200);
+      if (v === 0) return tick0(t, o);
+      const tt = at('tick', t), vel = (o.vel ?? 1) * dyn(idx) * (opt.tickGain || 1), dec = (o.dec || 0.022) * T.tickDec;
+      const x = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = opt.tickLP || 7200;
+      if (v === 1) { x.frequency.setValueAtTime(o.f * 1.6, tt); x.frequency.exponentialRampToValueAtTime(o.f * 0.7, tt + dec); }          // blip de seno que cae
+      else { x.type = 'triangle'; x.frequency.setValueAtTime(o.f * 0.5, tt); x.frequency.exponentialRampToValueAtTime(o.f * 0.25, tt + dec * 1.5); }   // gota grave
+      env(g, tt, 0.0005, 0.17 * vel, dec); x.connect(g).connect(lp); out(lp, voices, o.pan || 0, o.send ?? 0.12); x.start(tt); stop([x], tt + dec * 6 + 0.05);
+    }
+    function hat(t, o) {
+      const v = kitAt(t).hat;
+      if (v === 0) return hat0(t, o);
+      if (v === 2) return tick0(t, { vel: (o.vel ?? 1) * 0.7, f: 5200 * TRF, dec: o.open ? 0.06 : 0.012, pan: o.pan || 0 });   // hat de tick muy corto
+      const tt = at('hat', t), vel = (o.vel ?? 1) * dyn(idx) * (opt.hatGain || 1), dec = o.open ? 0.18 : 0.03;       // FM metálico
+      const c = ctx.createOscillator(), m = ctx.createOscillator(), mg = ctx.createGain(), g = ctx.createGain(), hp = ctx.createBiquadFilter();
+      c.frequency.value = 6100; m.frequency.value = 6100 * 1.414; mg.gain.value = 9000; hp.type = 'highpass'; hp.frequency.value = 5200;
+      env(g, tt, 0.0006, 0.05 * vel, dec); m.connect(mg).connect(c.frequency); c.connect(hp).connect(g); out(g, voices, o.pan || 0, 0.05);
+      c.start(tt); m.start(tt); stop([c, m], tt + dec * 5 + 0.05);
+    }
+    function ice(t, o) {
+      const v = kitAt(t).ice; o = conF(o, 1650);
+      if (v === 0) return ice0(t, o);
+      if (v === 3) return ice0(t, Object.assign({}, o, { ratio: 3.5, dec: (o.dec || 0.11) * 1.8, f: o.f * 0.6 }));   // chapa grave
+      const tt = at('ice', t), vel = (o.vel ?? 1) * dyn(idx) * (opt.iceGain || 1), dec = o.dec || 0.11;
+      const g = ctx.createGain(), os = [];
+      if (v === 1) {                       // tom/clave: seno afinado que cae, con un toque de FM
+        const x = ctx.createOscillator(), m = ctx.createOscillator(), mg = ctx.createGain(); const f = o.f * 0.25;
+        x.frequency.setValueAtTime(f * 1.5, tt); x.frequency.exponentialRampToValueAtTime(f, tt + 0.05); m.frequency.value = f * 2.7; mg.gain.setValueAtTime(f * 1.5, tt); mg.gain.setTargetAtTime(0, tt, 0.02);
+        m.connect(mg).connect(x.frequency); x.connect(g); os.push(x, m); env(g, tt, 0.001, 0.45 * vel, dec * 1.6);
+      } else {                             // chasquido de cristal: dos senos inarmónicos muy cortos
+        [1, 2.76, 5.4].forEach((r, i) => { const x = ctx.createOscillator(), xg = ctx.createGain(); x.frequency.value = o.f * 0.8 * r; xg.gain.value = [1, 0.5, 0.2][i]; x.connect(xg).connect(g); os.push(x); });
+        env(g, tt, 0.0006, 0.2 * vel, dec * 0.7);
+      }
+      out(g, voices, o.pan || 0, o.send ?? 0.3); os.forEach((x) => x.start(tt)); stop(os, tt + dec * 8 + 0.05);
+      if (o.thump !== 0) kick0(tt, { vel: 0.3 * vel, f0: 70, f1: 120, tail: 0.07, click: 0 });
+    }
+    function ping(t, o) { return ping0(t, conF(o, 1320)); }
+
     // ================= dron vivo: sub + parciales con batido + capa filtrada que respira
     function Dron(o) {
-      const root = o.root, g = ctx.createGain(); g.gain.value = 0;
+      const root = o.root * TRF, g = ctx.createGain(); g.gain.value = 0;
       const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 0.8; lp.frequency.value = (o.cut || 420) * T.droneOpen;
       const lfo = ctx.createOscillator(), lfog = ctx.createGain(); lfo.frequency.value = T.droneLfo; lfog.gain.value = (o.cut || 420) * 0.45;
       lfo.connect(lfog).connect(lp.frequency);
@@ -467,12 +548,12 @@
       return {
         level(t, v, tau) { g.gain.setTargetAtTime(v, t, tau || 0.4); },
         cut(t) { g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(0, t); },
-        glide(t, f, tau) { oscs.forEach((x, i) => { const ratio = x.frequency.value / root; x.frequency.setTargetAtTime(f * ratio, t, tau || 0.6); }); },
+        glide(t, f, tau) { oscs.forEach((x, i) => { const ratio = x.frequency.value / root; x.frequency.setTargetAtTime(f * TRF * ratio, t, tau || 0.6); }); },
         stop(t) { oscs.forEach((x) => { try { x.stop(t); } catch (e) {} }); try { lfo.stop(t); } catch (e) {} },
       };
     }
 
-    return { ctx, master, silencio, voices, drums, verbIn, V, T, kick, bass, tick, hat, ice, crackle, impact, ping, ratchet, swell, cs80, glint, bloom, nube, reso, arco, vidrio, presion, lead, niebla, radio, coro, arpegio, bajo, riser, golpe, Dron };
+    return { ctx, master, silencio, kitEn: (t) => { swapAt = t; }, KITS, TR, voices, drums, verbIn, V, T, kick, bass, tick, hat, ice, crackle, impact, ping, ratchet, swell, cs80, glint, bloom, nube, reso, arco, vidrio, presion, lead, niebla, radio, coro, arpegio, bajo, riser, golpe, Dron };
   }
 
   root.VLVoces = { Motor, Variacion, rng, hash };

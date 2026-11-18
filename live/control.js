@@ -93,7 +93,7 @@
       const key = it.id + ':' + seed + ':' + modo;
       if (d.synthKey === key && d.synth) ({ buf, rev } = d.synth);
       else {
-        if (modo === 'nadir') hold(true);
+        hold(true); d.audioOK = false;      // espera en silencio: nunca se mezcla el grabado con lo generado
         try {
           const t0 = performance.now();
           const b = await VLPiezas.renderBuffer(VLPiezas.find(it.id).k, it.score, seed, modo === 'nadir' ? 24000 : ctx.sampleRate, it.buf.duration, modo === 'nadir' ? 'nadir' : null);
@@ -105,7 +105,7 @@
     }
     if (d.item !== it || MIX.aud !== modo) return;
     if (d.buf !== buf) { d.buf = buf; d.rev = rev; if (d.state) play(d); }
-    hold(false);
+    hold(false); d.audioOK = true;
   }
   // golpes: flujo de energía de alta frecuencia con umbral adaptativo
   function onsets(buf) {
@@ -1112,11 +1112,11 @@
     if (p < AP.lastP - 1) AP.lap++;                                  // ha dado la vuelta
     AP.lastP = p;
     const remain = (end(air) - p) / Math.abs(air.state.rate), lastLap = AP.lap >= AP.laps - 1;
-    if (AP.stage === 0 && lastLap && remain < autoDur + 4) {         // 1 · precargar la siguiente en el deck que no está en el aire
+    if (AP.stage === 0 && lastLap && remain < autoDur + (MIX.aud === 'grabado' ? 4 : 14)) {   // 1 · precargar la siguiente (antes si hay que generar su audio)
       const it = apBagNext(air.item); if (!it) return;
       AP.next = it; apClean(other); load(other.id, it); other.state && commit(other, { a: 0, b: end(other), x: X0, rate: 1 });
       $('#apNext').textContent = it.title; AP.stage = 1;
-    } else if (AP.stage === 1 && remain < autoDur + 0.3) {           // 2 · arrancarla desde el principio y fundir
+    } else if (AP.stage === 1 && remain < autoDur + 0.3 && (other.audioOK !== false || remain < 0.6)) {   // 2 · arrancarla y fundir (con su audio ya listo)
       if (other.state) commit(other, { pos: 0, a: 0, b: end(other), x: X0, once: false, freeze: null, rate: 1 });
       MIX.mode = Math.random() < 0.5 ? 'fundido' : 'congelar'; CTL.xmode && CTL.xmode.mark && CTL.xmode.mark(MIX.mode);
       if (!autoAnim) auto();

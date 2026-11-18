@@ -31,6 +31,7 @@
         const r0 = c.root, r1 = c.rootPost || r0, post = (t) => t >= rupt;
         const d = M.Dron({ root: r0, parts: c.parts || [2, 3, 4], cut: c.dronCut || 420, partGain: c.partGain || 0.15, sub: c.sub ?? 0.45 });
         dronArco(M, d, TT, t0, c.dron || 0.45, this.dur, r1 !== r0 ? r1 : null);
+        M.kitEn(t0 + rupt);
         const silent = (t) => cut < rupt && t >= cut - 0.005 && t < rupt;
         const pan = (e, i, k) => e.px != null ? Math.max(-0.9, Math.min(0.9, e.px * 0.6)) : e.side != null ? (e.side > 0 ? 0.5 : -0.5) : (H(e.seed || i, k) - 0.5) * 1.1;
         const kf = (t) => c.kick || Math.max(42, Math.min(56, (post(t) ? r1 : r0) * (r0 < 40 ? 1.5 : 1)));
@@ -125,6 +126,7 @@
       g: 'ESC', dur: 25.5, root: 49.0, rootPost: 39.2, room: 0.26, opt: { gain: 0.32, top: 9000, tickLP: 3800, tickGain: 0.55 },
       play(M, S, t0) {
         const T = S.T, G0 = S.G0 || 220;
+        M.kitEn(t0 + T.rupt);
         const d = M.Dron({ root: 49.0, parts: [2, 3, 5], cut: 380, partGain: 0.17, sub: 0.32 });
         dronArco(M, d, T, t0, 0.5, this.dur, 39.2);
         const inCut = (t) => t >= T.cut - 0.005 && t < T.rupt;
@@ -162,6 +164,7 @@
       g: 'CMP', dur: 24.5, root: 41.2, room: 0.3, opt: { gain: 0.39 },
       play(M, S, t0) {
         const T = S.T;
+        M.kitEn(t0 + T.rupt);
         const d = M.Dron({ root: 41.2, parts: [2, 3, 4], cut: 440, partGain: 0.15, sub: 0.55 });
         const d2 = M.Dron({ root: 30.87, parts: [2], cut: 260, partGain: 0.08, sub: 0.35 });
         dronArco(M, d, T, t0, 0.48, this.dur);
@@ -197,6 +200,7 @@
       g: 'ECO', dur: 24.5, root: 27.5, room: 0.38, opt: { gain: 0.58, tickGain: 1.7, pingBright: 1.6, tickLP: 9000 },
       play(M, S, t0) {
         const T = S.T;
+        M.kitEn(t0 + T.rupt);
         const d = M.Dron({ root: 27.5, parts: [2, 3, 4, 6], cut: 520, partGain: 0.17, sub: 0.45 });
         dronArco(M, d, T, t0, 0.55, this.dur);
         const inCut = (t) => t >= T.cut - 0.005 && t < T.rupt;
@@ -462,7 +466,7 @@ cimatica: { riser: 'up', golpe: 'coro', gain: 1.01, set: [0, 7, 12, 15, 19], off
     const P = PIEZAS[nombre]; sr = sr || 48000; dur = dur || P.dur;
     const ctx = new OfflineAudioContext(2, Math.ceil(dur * sr), sr);
     if (modo === 'nadir') {
-      const M = root.VLVoces.Motor(ctx, ctx.destination, Object.assign({ seed, room: NADIR.room }, NADIR.opt, { gain: NADIR.opt.gain * ((P.nd && P.nd.gain) || 1) }, (P.nd && P.nd.sala) || {}, { room: (P.nd && P.nd.room) != null ? P.nd.room : NADIR.room }));
+      const M = root.VLVoces.Motor(ctx, ctx.destination, Object.assign({ seed, room: NADIR.room, modoNadir: true }, NADIR.opt, { gain: NADIR.opt.gain * ((P.nd && P.nd.gain) || 1) }, (P.nd && P.nd.sala) || {}, { room: (P.nd && P.nd.room) != null ? P.nd.room : NADIR.room }));
       nadir(P, S, M, 0, dur);
       return ctx.startRendering();
     }

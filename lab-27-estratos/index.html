@@ -390,7 +390,7 @@ canvas{width:100vw;height:100vh;display:block}
   const VR = VL.rng((SEMILLA % 2147483647) || 1);
   const varia = (def, amp) => (SEMILLA ? def + (VR() * 2 - 1) * amp : def);
   const SEMN = (n) => (SEMILLA ? (n + SEMILLA * 7919) >>> 0 : n);
-  const AZ0 = varia(0, 0.35), DK = varia(1, 0.1), YK = varia(1, 0.12), RL0 = varia(0, 0.03);
+  const AZ0 = varia(0, 0.8), DK = varia(1, 0.15), YK = varia(1, 0.25), RL0 = varia(0, 0.06);
   // gira la cámara de un plano alrededor de su punto de mira (y su vector up, si lo tiene)
   function variaCm(cm) {
     if (!SEMILLA || !cm || !cm.cam || !cm.tgt) return cm;
