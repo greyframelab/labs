@@ -396,7 +396,7 @@ canvas{width:100vw;height:100vh;display:block}
   const SEMILLA = /[?&]live\b/.test(location.search) ? (+new URLSearchParams(location.search).get('semilla') || 0) : 0;
   const VR = VL.rng((SEMILLA % 2147483647) || 1);
   const varia = (def, amp) => (SEMILLA ? def + (VR() * 2 - 1) * amp : def);
-  const XROT = varia(0, Math.PI / 6);   // giro del cristal
+  const XROT = varia(0, Math.PI / 3);   // giro del cristal
 
   // ================================================================ 1 · el cristal: crecimiento precalculado
   // Campo N×N sobre el cristal (coordenadas -1..1). Por texel: llegada efectiva del frente (eff), perfil de la rama (h) y variación.
