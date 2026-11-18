@@ -458,6 +458,33 @@ cimatica: { riser: 'up', golpe: 'coro', gain: 1.01, set: [0, 7, 12, 15, 19], off
     estrella: evPieza({ g: 'EST', dur: 29.5, root: 43.65, sinSilencio: true, opt: { gain: 0.38, tickLP: 7000, tickGain: 1.1, hatGain: 0.7, bassGain: 1.6, iceGain: 1.6 }, sub: 0.22, dron: 0.36, bassCut: 1800, snare: 1150, tick: 3200, room: 0.24 }),
   });
 
+  // Surco · «VIRUTA» (Autechre), 172 bpm a medio tiempo, Re: la aguja talla la partitura en la laca.
+  // P (la aguja aprieta) → subida hasta la ruptura; L (surco de salida) → el surco cerrado: un golpe por vuelta hasta el final.
+  const surco = (S) => {
+    const T = Object.assign({}, S.T, { tense: S.T.pres }), vuelta = 60 / 33.333;
+    const EV = S.EV.filter((e) => e.v !== 'P' && e.v !== 'L').map((e) => (e.v === 'h' ? Object.assign({}, e, { open: e.op, rat: e.rat }) : e));
+    const P = S.EV.find((e) => e.v === 'P'), L = S.EV.find((e) => e.v === 'L');
+    if (P) EV.push({ v: 'V', t: P.t, end: S.T.rupt, s: 1 });
+    if (L) for (let t = L.t, k = 0; t < (S.T.sting || L.t + 6) + 4; t += vuelta, k++) EV.push({ v: 'G', t, s: 0.9, seed: k }, { v: 'K', t, s: 0.45 });
+    EV.sort((a, b) => a.t - b.t);
+    return { T, EV, X: S.X };
+  };
+  Object.assign(PIEZAS, {
+    surco: evPieza({ g: 'SURCO', dur: 29.2, root: 36.7, sinSilencio: true, prep: surco, opt: { gain: 0.33, tickLP: 4200, tickGain: 0.7, hatGain: 0.5, bassGain: 1.8, iceGain: 2 }, sub: 0.25, dron: 0.4, bassCut: 2200, snare: 1350, tick: 3000, metal: 1800, room: 0.18 }),
+  });
+  ND.surco = { gain: 1.12, set: [0, 1, 7, 10, 13], capas: ['bloom'], bajo: { tipo: 'laca', cut: 520, rise: 0.944, vel: 0.8 }, riser: 'down', golpe: 'subdrop', room: 0.6, sala: { irDur: 7, irDamp: 2200, top: 3800, vidrioGain: 2.2 }, sig(M, x) {
+      // la aguja: un hilo tonal fino que baja despacio mientras la espiral se cierra hacia el centro
+      const f0 = x.oct(x.r0 * 16, 420, 700);
+      for (let t = 0.4, j = 0; t < x.rupt - 0.2; t += 3.2, j++) M.reso(x.t0 + t, { f: f0 * Math.pow(0.985, j), f2: f0 * Math.pow(0.985, j + 1), dur: 3.4, vel: 0.7, pan: j % 2 ? 0.25 : -0.25, send: 0.9 });
+      // cada golpe de bajo talla una muesca grave en la laca
+      let l = -9; x.EV.forEach((e, i) => { if ((e.v === 'S') && ok(x, e) && e.t - l > 0.9) { l = e.t; M.arco(x.t0 + e.t, { f: x.oct(x.st(e.t) * 3, 80, 160), dur: 1.1, vel: 0.55, pan: (x.H(i, 2) - 0.5) }); } });
+      // ruptura: el disco entero se revela
+      x.alturas(x.rupt, 0, 260, 900).forEach((f, j) => M.vidrio(x.t0 + x.rupt + 0.3 + j * 0.3, { f, dur: 5, vel: 0.9, beat: 0.4 + j * 0.3, att: 0.3, pan: (j - 2) * 0.35 }));
+      M.coro(x.t0 + x.rupt + 0.2, { notes: x.alturas(x.rupt, 0, 110, 330), dur: 3, vocal: 'o', vel: 0.8, att: 1 });
+      // surco de salida: el surco cerrado, un clic grave por vuelta hasta el final
+      const L = (x.T.sal || x.rupt + 5.6), vuelta = 60 / 33.333;
+      for (let t = L, k = 0; t < x.dur - 0.5; t += vuelta, k++) { M.glint(x.t0 + t, { f: x.oct(x.r1 * 8, 240, 480), vel: 0.6 * Math.pow(0.9, k), dec: 1.4, att: 0.004 }); M.bloom(x.t0 + t, { f: x.oct(x.r1, 30, 55), vel: 0.35, dec: 1.2, att: 0.01 }); } } };
+  ND.surco.prog = [0, 1, 10, 0];
   // identidad NADIR de cada pieza (después de registrar todas las piezas)
   Object.keys(ND).forEach((k) => { if (PIEZAS[k]) PIEZAS[k].nd = ND[k]; });
 
