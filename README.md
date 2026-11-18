@@ -10,6 +10,7 @@ Experiments in UI, motion and creative coding for games, apps and interfaces.
 
 | # | Lab | Category |
 |---|-----|----------|
+| 44 | [Surco](lab-44-surco/) | Motion |
 | 43 | [Estrella](lab-43-estrella/) | Motion |
 | 42 | [Órbitas](lab-42-orbitas/) | Motion |
 | 41 | [Anillo](lab-41-anillo/) | Motion |
