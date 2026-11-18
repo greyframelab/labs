@@ -7,6 +7,10 @@
   const hint = document.getElementById('hint');
   const cv = document.getElementById('out');
   const gl = cv.getContext('webgl2', { antialias: false, alpha: false, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
+  // si la gráfica falla, decirlo en pantalla en vez de quedarse en negro
+  const avisoGPU = (msg) => { const h = document.getElementById('hint'); if (h) { h.className = ''; h.textContent = msg; } };
+  if (!gl) avisoGPU('LA GRÁFICA NO DA WEBGL2 · ACTUALIZA EL DRIVER O ABRE EL LIVE EN CHROME');
+  cv.addEventListener('webglcontextlost', (e) => { e.preventDefault(); avisoGPU('LA GRÁFICA SE HA REINICIADO · RECARGANDO LA SALIDA…'); setTimeout(() => location.reload(), 1500); });
 
   // ------------------------------------------------------------------ estado recibido
   let MIX = { xf: 0, mode: 'fundido', onAir: 'A', quality: 1 };
