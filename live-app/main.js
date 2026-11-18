@@ -15,9 +15,12 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-background-timer-throttling');
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
-// rendimiento: usar la gráfica de alto rendimiento si hay dos. (Sin ignore-gpu-blocklist ni enable-zero-copy:
-// en algunas gráficas integradas de Windows dejaban la salida WebGL en negro.)
+// rendimiento: usar la gráfica de alto rendimiento si hay dos; no dejar que Chrome descarte la gráfica por su lista
+// negra (sin esto, en el portátil de Toni la salida se queda sin WebGL2) y rasterizar en GPU.
+// enable-zero-copy queda fuera: es el sospechoso habitual de salidas WebGL en negro en gráficas integradas.
 app.commandLine.appendSwitch('force_high_performance_gpu');
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
+app.commandLine.appendSwitch('enable-gpu-rasterization');
 protocol.registerSchemesAsPrivileged([{ scheme: 'vll', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true, codeCache: true } }]);
 
 if (!app.requestSingleInstanceLock()) { app.quit(); }
