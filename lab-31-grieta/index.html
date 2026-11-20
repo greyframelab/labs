@@ -22,7 +22,7 @@ canvas{width:100vw;height:100vh;display:block}
   const dpr = Math.min(window.devicePixelRatio || 1, 2), w = innerWidth * dpr, h = innerHeight * dpr;
   const k = Math.min(1, 1920 / Math.max(w, h));
   window.VL_SIZE = [Math.round(w * k), Math.round(h * k)];
-  window.GRT_SCALE = 0.6;   // web en tiempo real
+  window.GRT_SCALE = matchMedia('(pointer:coarse)').matches ? 0.6 : 1;  // web en tiempo real
   const c = document.getElementById('c'); c.width = window.VL_SIZE[0]; c.height = window.VL_SIZE[1];
   const r0 = innerWidth / innerHeight; let tm;
   addEventListener('resize', () => { clearTimeout(tm); tm = setTimeout(() => { const r = innerWidth / innerHeight; if (Math.abs(r - r0) / r0 > 0.12) location.reload(); }, 400); });
@@ -116,7 +116,7 @@ canvas{width:100vw;height:100vh;display:block}
     // scanlines
     P.scan = mk(W, H);
     const sx = P.scan.getContext('2d');
-    sx.fillStyle = 'rgba(0,0,0,0.22)';
+    sx.fillStyle = 'rgba(0,0,0,0)';
     for (let y = 0; y < H; y += 4) sx.fillRect(0, y, W, 1.5);
     // viñeta
     P.vig = mk(W, H);
@@ -164,7 +164,7 @@ canvas{width:100vw;height:100vh;display:block}
     out.drawImage(p.vig, 0, 0);
     // grano sutil: en zonas planas y luminosas (horizontes, halos) un grano fuerte ensucia la imagen
     const g = p.grain[frame % p.grain.length], gk = opt.grain ?? 1;
-    out.globalCompositeOperation = 'overlay'; out.globalAlpha = 0.11 * gk;
+    out.globalCompositeOperation = 'overlay'; out.globalAlpha = 0.05 * gk;
     out.drawImage(g, 0, 0, W, H);
     out.globalCompositeOperation = 'lighter'; out.globalAlpha = 0.01 * gk;
     out.drawImage(g, 0, 0, W, H);
@@ -469,7 +469,7 @@ canvas{width:100vw;height:100vh;display:block}
   const g = VL.geo();
   // en el live: el 3D a la calidad que pida CALIDAD AUTO (q3d); grano, líneas y composición siempre a resolución completa
   window.VL_Q3D = true;
-  const SCALE = /[?&]live\b/.test(location.search) ? (+new URLSearchParams(location.search).get('q3d') || 1) : (window.GRT_SCALE || 0.65);
+  const SCALE = /[?&]live\b/.test(location.search) ? (+new URLSearchParams(location.search).get('q3d') || 1) : (window.GRT_SCALE || 0.85);
   const RW = Math.round(W * SCALE), RH = Math.round(H * SCALE);
   const NC = 40;
 
@@ -706,6 +706,47 @@ canvas{width:100vw;height:100vh;display:block}
     return { p, U };
   }
   const PM = prog(FS), PC = prog(FSC);
+
+  // antialiasing FXAA: el 3D se dibuja en una textura y un pase FXAA suaviza los escalones y los destellos de un píxel
+  const AA = (() => {
+    let fb, tx, p, uC, uPx;
+    const FSA = `#version 300 es
+    precision highp float; in vec2 vUv; out vec4 o; uniform sampler2D uC; uniform vec2 uPx;
+    float L(vec3 c){ return dot(c, vec3(.299, .587, .114)); }
+    void main(){
+      vec3 nw = texture(uC, vUv + vec2(-1., -1.) * uPx).rgb, ne = texture(uC, vUv + vec2(1., -1.) * uPx).rgb;
+      vec3 sw = texture(uC, vUv + vec2(-1., 1.) * uPx).rgb, se = texture(uC, vUv + vec2(1., 1.) * uPx).rgb, m = texture(uC, vUv).rgb;
+      float lNW = L(nw), lNE = L(ne), lSW = L(sw), lSE = L(se), lM = L(m);
+      float lMin = min(lM, min(min(lNW, lNE), min(lSW, lSE))), lMax = max(lM, max(max(lNW, lNE), max(lSW, lSE)));
+      vec2 dir = vec2(-((lNW + lNE) - (lSW + lSE)), (lNW + lSW) - (lNE + lSE));
+      float red = max((lNW + lNE + lSW + lSE) * (.25 / 8.), 1. / 128.);
+      dir = clamp(dir / (min(abs(dir.x), abs(dir.y)) + red), vec2(-8.), vec2(8.)) * uPx;
+      vec3 A = .5 * (texture(uC, vUv + dir * (1. / 3. - .5)).rgb + texture(uC, vUv + dir * (2. / 3. - .5)).rgb);
+      vec3 B = A * .5 + .25 * (texture(uC, vUv - dir * .5).rgb + texture(uC, vUv + dir * .5).rgb);
+      float lB = L(B); o = vec4((lB < lMin || lB > lMax) ? A : B, 1.);
+    }`;
+    const VSA = `#version 300 es
+    in vec2 aPos; out vec2 vUv; void main(){ vUv = aPos * .5 + .5; gl_Position = vec4(aPos, 0., 1.); }`;
+    function init() {
+      tx = gl.createTexture(); gl.activeTexture(gl.TEXTURE7); gl.bindTexture(gl.TEXTURE_2D, tx);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, RW, RH, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.activeTexture(gl.TEXTURE0);
+      fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tx, 0);
+      const mk = (t, s) => { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); return o; };
+      p = gl.createProgram(); gl.attachShader(p, mk(gl.VERTEX_SHADER, VSA)); gl.attachShader(p, mk(gl.FRAGMENT_SHADER, FSA));
+      gl.bindAttribLocation(p, 0, 'aPos'); gl.linkProgram(p); uC = gl.getUniformLocation(p, 'uC'); uPx = gl.getUniformLocation(p, 'uPx');
+    }
+    return {
+      begin() { if (!fb) init(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); },
+      end() {
+        gl.useProgram(p); gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, RW, RH);
+        gl.activeTexture(gl.TEXTURE7); gl.bindTexture(gl.TEXTURE_2D, tx); gl.uniform1i(uC, 7); gl.uniform2f(uPx, 1 / RW, 1 / RH);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); gl.activeTexture(gl.TEXTURE0);
+      },
+    };
+  })();
   const CW = 320, CH = 1280;
   const ctex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, ctex);
   gl.getExtension('EXT_color_buffer_float'); gl.getExtension('OES_texture_float_linear');
@@ -774,7 +815,7 @@ canvas{width:100vw;height:100vh;display:block}
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       gl.bindTexture(gl.TEXTURE_2D, ctex); gl.generateMipmap(gl.TEXTURE_2D);
       const U = PM.U;
-      gl.useProgram(PM.p); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, ctex); gl.uniform1i(U.uC, 0); gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, RW, RH);
+      gl.useProgram(PM.p); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, ctex); gl.uniform1i(U.uC, 0); AA.begin(); gl.viewport(0, 0, RW, RH);
       gl.uniform2f(U.uRes, RW, RH); gl.uniform2f(U.uShift, 0, (H / 2 - VL.fy(g.cy)) / H);
       gl.uniform3f(U.uCam, ...cam); gl.uniform3f(U.uTgt, ...tg); gl.uniform3f(U.uB, ...B);
       gl.uniform1f(U.uFov, W > H ? 0.72 : 0.8);
@@ -782,7 +823,7 @@ canvas{width:100vw;height:100vh;display:block}
             gl.uniform1f(U.uGlow, glow); gl.uniform1f(U.uGap, gap);
       gl.uniform1f(U.uKey, fade * (cut ? 0.25 : 1)); gl.uniform1f(U.uEnvA, 0.03 * t); gl.uniform1f(U.uFog, 0.07); gl.uniform1f(U.uSpot, fade * (cut ? 0 : a >= 0 ? 0.35 : 1));
       gl.uniform1f(U.uSeed, (frame % 64) * 0.137); gl.uniform1f(U.uTime, t);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); AA.end();
       c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
       c.drawImage(cv, 0, 0, W, H);
     }

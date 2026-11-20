@@ -115,7 +115,7 @@ canvas{width:100vw;height:100vh;display:block}
     // scanlines
     P.scan = mk(W, H);
     const sx = P.scan.getContext('2d');
-    sx.fillStyle = 'rgba(0,0,0,0.22)';
+    sx.fillStyle = 'rgba(0,0,0,0)';
     for (let y = 0; y < H; y += 4) sx.fillRect(0, y, W, 1.5);
     // viñeta
     P.vig = mk(W, H);
@@ -163,7 +163,7 @@ canvas{width:100vw;height:100vh;display:block}
     out.drawImage(p.vig, 0, 0);
     // grano sutil: en zonas planas y luminosas (horizontes, halos) un grano fuerte ensucia la imagen
     const g = p.grain[frame % p.grain.length], gk = opt.grain ?? 1;
-    out.globalCompositeOperation = 'overlay'; out.globalAlpha = 0.11 * gk;
+    out.globalCompositeOperation = 'overlay'; out.globalAlpha = 0.05 * gk;
     out.drawImage(g, 0, 0, W, H);
     out.globalCompositeOperation = 'lighter'; out.globalAlpha = 0.01 * gk;
     out.drawImage(g, 0, 0, W, H);

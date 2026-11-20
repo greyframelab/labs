@@ -28,7 +28,7 @@ canvas{width:100vw;height:100vh;display:block}
 })();
 </script>
 
-<script>window.MASA_SCALE = Math.min(0.5, (matchMedia('(pointer:coarse)').matches ? 0.34 : 0.5));</script>
+<script>window.MASA_SCALE = matchMedia('(pointer:coarse)').matches ? 0.5 : 1;</script>
 <script>
 /* VØID_LOOM — núcleo compartido + firma animada (sting) de cierre.
    Todo es determinista: el estado de cada frame depende solo de t.
@@ -116,7 +116,7 @@ canvas{width:100vw;height:100vh;display:block}
     // scanlines
     P.scan = mk(W, H);
     const sx = P.scan.getContext('2d');
-    sx.fillStyle = 'rgba(0,0,0,0.22)';
+    sx.fillStyle = 'rgba(0,0,0,0)';
     for (let y = 0; y < H; y += 4) sx.fillRect(0, y, W, 1.5);
     // viñeta
     P.vig = mk(W, H);
@@ -163,9 +163,9 @@ canvas{width:100vw;height:100vh;display:block}
     out.globalAlpha = opt.scan ?? 1; out.drawImage(p.scan, 0, 0); out.globalAlpha = 1;
     out.drawImage(p.vig, 0, 0);
     const g = p.grain[frame % p.grain.length];
-    out.globalCompositeOperation = 'overlay'; out.globalAlpha = 0.32;
+    out.globalCompositeOperation = 'overlay'; out.globalAlpha = 0.05;
     out.drawImage(g, 0, 0, W, H);
-    out.globalCompositeOperation = 'lighter'; out.globalAlpha = 0.03;
+    out.globalCompositeOperation = 'lighter'; out.globalAlpha = 0.012;
     out.drawImage(g, 0, 0, W, H);
     out.globalAlpha = 1; out.globalCompositeOperation = 'source-over';
   };
@@ -552,6 +552,47 @@ canvas{width:100vw;height:100vh;display:block}
   gl.bindAttribLocation(pr, 0, 'aPos'); gl.linkProgram(pr);
   if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr));
   gl.useProgram(pr);
+
+  // antialiasing FXAA: el 3D se dibuja en una textura y un pase FXAA suaviza los escalones y los destellos de un píxel
+  const AA = (() => {
+    let fb, tx, p, uC, uPx;
+    const FSA = `#version 300 es
+    precision highp float; in vec2 vUv; out vec4 o; uniform sampler2D uC; uniform vec2 uPx;
+    float L(vec3 c){ return dot(c, vec3(.299, .587, .114)); }
+    void main(){
+      vec3 nw = texture(uC, vUv + vec2(-1., -1.) * uPx).rgb, ne = texture(uC, vUv + vec2(1., -1.) * uPx).rgb;
+      vec3 sw = texture(uC, vUv + vec2(-1., 1.) * uPx).rgb, se = texture(uC, vUv + vec2(1., 1.) * uPx).rgb, m = texture(uC, vUv).rgb;
+      float lNW = L(nw), lNE = L(ne), lSW = L(sw), lSE = L(se), lM = L(m);
+      float lMin = min(lM, min(min(lNW, lNE), min(lSW, lSE))), lMax = max(lM, max(max(lNW, lNE), max(lSW, lSE)));
+      vec2 dir = vec2(-((lNW + lNE) - (lSW + lSE)), (lNW + lSW) - (lNE + lSE));
+      float red = max((lNW + lNE + lSW + lSE) * (.25 / 8.), 1. / 128.);
+      dir = clamp(dir / (min(abs(dir.x), abs(dir.y)) + red), vec2(-8.), vec2(8.)) * uPx;
+      vec3 A = .5 * (texture(uC, vUv + dir * (1. / 3. - .5)).rgb + texture(uC, vUv + dir * (2. / 3. - .5)).rgb);
+      vec3 B = A * .5 + .25 * (texture(uC, vUv - dir * .5).rgb + texture(uC, vUv + dir * .5).rgb);
+      float lB = L(B); o = vec4((lB < lMin || lB > lMax) ? A : B, 1.);
+    }`;
+    const VSA = `#version 300 es
+    in vec2 aPos; out vec2 vUv; void main(){ vUv = aPos * .5 + .5; gl_Position = vec4(aPos, 0., 1.); }`;
+    function init() {
+      tx = gl.createTexture(); gl.activeTexture(gl.TEXTURE7); gl.bindTexture(gl.TEXTURE_2D, tx);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, RW, RH, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.activeTexture(gl.TEXTURE0);
+      fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tx, 0);
+      const mk = (t, s) => { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); return o; };
+      p = gl.createProgram(); gl.attachShader(p, mk(gl.VERTEX_SHADER, VSA)); gl.attachShader(p, mk(gl.FRAGMENT_SHADER, FSA));
+      gl.bindAttribLocation(p, 0, 'aPos'); gl.linkProgram(p); uC = gl.getUniformLocation(p, 'uC'); uPx = gl.getUniformLocation(p, 'uPx');
+    }
+    return {
+      begin() { if (!fb) init(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); },
+      end() {
+        gl.useProgram(p); gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, RW, RH);
+        gl.activeTexture(gl.TEXTURE7); gl.bindTexture(gl.TEXTURE_2D, tx); gl.uniform1i(uC, 7); gl.uniform2f(uPx, 1 / RW, 1 / RH);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); gl.activeTexture(gl.TEXTURE0);
+      },
+    };
+  })();
   const U = (n) => gl.getUniformLocation(pr, n);
   const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
@@ -603,12 +644,14 @@ canvas{width:100vw;height:100vh;display:block}
   }
 
   function drawMass(s) {
+    gl.useProgram(pr); AA.begin();
     gl.viewport(0, 0, RW, RH);
     gl.uniform3f(U('uCam'), ...s.cam); gl.uniform1f(U('uHook'), s.hook); gl.uniform1f(U('uLR'), s.lr); gl.uniform1f(U('uVein'), s.vein * s.fade); gl.uniform3f(U('uHookDir'), ...s.hk); gl.uniform3f(U('uTgt'), ...s.tgt);
     gl.uniform1f(U('uFov'), s.fov); gl.uniform1f(U('uTime'), s.time); gl.uniform1f(U('uAmp'), s.amp);
     gl.uniform1f(U('uCrack'), s.crack); gl.uniform1f(U('uCrackGlow'), s.crackGlow * s.fade); gl.uniform1f(U('uExpl'), s.expl);
     gl.uniform1f(U('uCore'), s.core * s.fade); gl.uniform1f(U('uRim'), s.rim); gl.uniform1f(U('uSpec'), s.spec); gl.uniform1f(U('uTrem'), s.trem);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    AA.end();
   }
 
 

@@ -115,7 +115,7 @@ canvas{width:100vw;height:100vh;display:block}
     // scanlines
     P.scan = mk(W, H);
     const sx = P.scan.getContext('2d');
-    sx.fillStyle = 'rgba(0,0,0,0.22)';
+    sx.fillStyle = 'rgba(0,0,0,0)';
     for (let y = 0; y < H; y += 4) sx.fillRect(0, y, W, 1.5);
     // viñeta
     P.vig = mk(W, H);
@@ -162,9 +162,9 @@ canvas{width:100vw;height:100vh;display:block}
     out.globalAlpha = opt.scan ?? 1; out.drawImage(p.scan, 0, 0); out.globalAlpha = 1;
     out.drawImage(p.vig, 0, 0);
     const g = p.grain[frame % p.grain.length];
-    out.globalCompositeOperation = 'overlay'; out.globalAlpha = 0.32;
+    out.globalCompositeOperation = 'overlay'; out.globalAlpha = 0.05;
     out.drawImage(g, 0, 0, W, H);
-    out.globalCompositeOperation = 'lighter'; out.globalAlpha = 0.03;
+    out.globalCompositeOperation = 'lighter'; out.globalAlpha = 0.012;
     out.drawImage(g, 0, 0, W, H);
     out.globalAlpha = 1; out.globalCompositeOperation = 'source-over';
   };
@@ -434,7 +434,7 @@ canvas{width:100vw;height:100vh;display:block}
   const g = VL.geo();
   // en el live: el 3D a la calidad que pida CALIDAD AUTO (q3d); grano, líneas y composición siempre a resolución completa
   window.VL_Q3D = true;
-  const SCALE = /[?&]live\b/.test(location.search) ? (+new URLSearchParams(location.search).get('q3d') || 1) : (window.TSR_SCALE || 0.6);
+  const SCALE = /[?&]live\b/.test(location.search) ? (+new URLSearchParams(location.search).get('q3d') || 1) : (window.TSR_SCALE || (matchMedia('(pointer:coarse)').matches ? 0.6 : 1));
   const RW = Math.round(W * SCALE), RH = Math.round(H * SCALE);
   const SW = 1024, SH = 512;                         // mapa de sombras equirectangular
 
@@ -583,6 +583,47 @@ canvas{width:100vw;height:100vh;display:block}
     return { p, U };
   }
   const PS = prog(FS_SHADOW), PM = prog(FS_MAIN);
+
+  // antialiasing FXAA: el 3D se dibuja en una textura y un pase FXAA suaviza los escalones y los destellos de un píxel
+  const AA = (() => {
+    let fb, tx, p, uC, uPx;
+    const FSA = `#version 300 es
+    precision highp float; in vec2 vUv; out vec4 o; uniform sampler2D uC; uniform vec2 uPx;
+    float L(vec3 c){ return dot(c, vec3(.299, .587, .114)); }
+    void main(){
+      vec3 nw = texture(uC, vUv + vec2(-1., -1.) * uPx).rgb, ne = texture(uC, vUv + vec2(1., -1.) * uPx).rgb;
+      vec3 sw = texture(uC, vUv + vec2(-1., 1.) * uPx).rgb, se = texture(uC, vUv + vec2(1., 1.) * uPx).rgb, m = texture(uC, vUv).rgb;
+      float lNW = L(nw), lNE = L(ne), lSW = L(sw), lSE = L(se), lM = L(m);
+      float lMin = min(lM, min(min(lNW, lNE), min(lSW, lSE))), lMax = max(lM, max(max(lNW, lNE), max(lSW, lSE)));
+      vec2 dir = vec2(-((lNW + lNE) - (lSW + lSE)), (lNW + lSW) - (lNE + lSE));
+      float red = max((lNW + lNE + lSW + lSE) * (.25 / 8.), 1. / 128.);
+      dir = clamp(dir / (min(abs(dir.x), abs(dir.y)) + red), vec2(-8.), vec2(8.)) * uPx;
+      vec3 A = .5 * (texture(uC, vUv + dir * (1. / 3. - .5)).rgb + texture(uC, vUv + dir * (2. / 3. - .5)).rgb);
+      vec3 B = A * .5 + .25 * (texture(uC, vUv - dir * .5).rgb + texture(uC, vUv + dir * .5).rgb);
+      float lB = L(B); o = vec4((lB < lMin || lB > lMax) ? A : B, 1.);
+    }`;
+    const VSA = `#version 300 es
+    in vec2 aPos; out vec2 vUv; void main(){ vUv = aPos * .5 + .5; gl_Position = vec4(aPos, 0., 1.); }`;
+    function init() {
+      tx = gl.createTexture(); gl.activeTexture(gl.TEXTURE7); gl.bindTexture(gl.TEXTURE_2D, tx);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, RW, RH, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.activeTexture(gl.TEXTURE0);
+      fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tx, 0);
+      const mk = (t, s) => { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); return o; };
+      p = gl.createProgram(); gl.attachShader(p, mk(gl.VERTEX_SHADER, VSA)); gl.attachShader(p, mk(gl.FRAGMENT_SHADER, FSA));
+      gl.bindAttribLocation(p, 0, 'aPos'); gl.linkProgram(p); uC = gl.getUniformLocation(p, 'uC'); uPx = gl.getUniformLocation(p, 'uPx');
+    }
+    return {
+      begin() { if (!fb) init(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); },
+      end() {
+        gl.useProgram(p); gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, RW, RH);
+        gl.activeTexture(gl.TEXTURE7); gl.bindTexture(gl.TEXTURE_2D, tx); gl.uniform1i(uC, 7); gl.uniform2f(uPx, 1 / RW, 1 / RH);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); gl.activeTexture(gl.TEXTURE0);
+      },
+    };
+  })();
   const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
   gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
@@ -621,7 +662,7 @@ canvas{width:100vw;height:100vh;display:block}
       const cam = [Math.sin(az + AZ0) * R * DK, y * YK, Math.cos(az + AZ0) * R * DK];
       let shk = a > 0 && a < 1 ? 0.12 * Math.exp(-a * 4) : 0; shk += 0.03 * ten * ten * (t < T.cut ? 1 : 0);
       const tg = [(VL.hash(frame, 1) - 0.5) * shk, -0.3 + (VL.hash(frame, 2) - 0.5) * shk, 0];
-      gl.useProgram(PM.p); gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, RW, RH);
+      gl.useProgram(PM.p); AA.begin(); gl.viewport(0, 0, RW, RH);
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, stex); gl.uniform1i(PM.U.uShadow, 0);
       gl.uniform3fv(PM.U.uA, A); gl.uniform3fv(PM.U.uB, B); gl.uniform1f(PM.U.uR, 0.055);
       gl.uniform2f(PM.U.uRes, RW, RH); gl.uniform2f(PM.U.uShift, 0, (H / 2 - VL.fy(g.cy)) / H);
@@ -629,7 +670,7 @@ canvas{width:100vw;height:100vh;display:block}
       gl.uniform1f(PM.U.uFov, W > H ? 0.6 : 0.85); gl.uniform1f(PM.U.uLight, light(t) * fade);
       gl.uniform1f(PM.U.uRed, a > 0 ? 1 : 0); gl.uniform1f(PM.U.uFog, 0.06 + 0.02 * ten);
       gl.uniform1f(PM.U.uExp, window.TSR_EXP || 3.2); gl.uniform1f(PM.U.uSeed, (frame % 64) * 0.137); gl.uniform1f(PM.U.uTime, t);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); AA.end();
       c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
       c.drawImage(cv, 0, 0, W, H);
     }
