@@ -5,7 +5,7 @@
 (function () {
   'use strict';
   const SM = window.SEMILLA, eng = new window.SemillaEngine(document.getElementById('c'));
-  eng.warm();
+  eng.warm().catch((e) => console.error('[SEMILLA_GPU_FALLO]', e && e.message));
   const wc = document.getElementById('w'), wx = wc.getContext('2d');
   const sizeW = () => { const v = innerWidth >= innerHeight ? [1920, 1080] : [1080, 1920]; if (wc.width !== v[0]) { wc.width = v[0]; wc.height = v[1]; } };
   const ch = new BroadcastChannel('semilla-salida');
@@ -43,7 +43,7 @@
     if (last.word) { sizeW(); stingA = window.SemillaPalabra.draw(wx, wc.width, wc.height, last.word.w, last.word.t + late, last.word.acc); }
     const top = slots[slots.length - 1], sh = top ? last.slots[last.slots.length - 1].code + ':' + SM.shotAt(top.P, top.e.u / top.P.bar).i : '';
     pacer.cut(sh !== lastShot, dt); lastShot = sh;   // la resolución solo cambia en un corte de plano
-    eng.draw(slots, Object.assign({}, last.look, { sting: wc, stingA }));
+    try { eng.draw(slots, Object.assign({}, last.look, { sting: wc, stingA })); } catch (e) { console.error(e); }
     pacer.done(ts);
   }
   requestAnimationFrame(frame);

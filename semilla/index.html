@@ -30,6 +30,10 @@ button[disabled]{opacity:.35;pointer-events:none}
 #go:hover{border-color:var(--acc);color:#fff;background:rgba(0,229,255,.06)}
 #bootlog{min-height:14px;color:var(--dim);font-size:9.5px;letter-spacing:.2em;max-width:560px;line-height:1.8}
 #bootlog.err{color:var(--red)}
+#go.off{display:none}
+#bootbar{width:260px;height:1px;background:var(--line);overflow:hidden;opacity:0;transition:opacity .4s}
+#bootbar.on{opacity:1}
+#bootfill{display:block;height:100%;background:var(--acc);transform:scaleX(0);transform-origin:left;transition:transform .25s}
 
 .app{display:grid;grid-template-rows:46px 1fr 30px;height:100vh}
 header{display:flex;align-items:center;gap:22px;padding:0 18px;border-bottom:1px solid var(--line);background:#050505;min-width:0}
@@ -128,6 +132,7 @@ body.solo{cursor:none}
     <div class="mark">VØID<i>_</i>LOOM</div>
     <div class="sub">SEMILLA<br>MATERIA QUE NACE DE UNA PALABRA · CADA PIEZA EXISTE UNA VEZ</div>
     <button id="go">ARRANCAR</button>
+    <div id="bootbar"><i id="bootfill"></i></div>
     <div id="bootlog"></div>
   </div>
 </div>
