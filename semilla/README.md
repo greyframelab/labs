@@ -26,7 +26,7 @@ Cada vuelta tiene cuatro actos: SEÑAL (casi a oscuras), TENSIÓN, RUPTURA (las 
 - La palabra **pinta trazos de luz** sobre la materia con el gesto de su sentido: subidas cortantes para el fuego, ondas largas para el agua, arcos para el amor, líneas que tiemblan para el miedo, rayos para la luz, rectas cruzadas para la máquina y el caos. Unos pasan por delante del objeto y otros por detrás.
 - Sus sílabas escriben el ritmo del bombo y **el dron canta sus vocales** con sus formantes.
 - Mismo carácter, nunca la misma pieza: la semilla es la palabra y el instante.
-- La palabra nunca se proyecta ni se guarda: solo aparece en la consola. Para probar sin micrófono, escribe una palabra en PROBAR UNA PALABRA.
+- La palabra se proyecta un instante: se descifra desde glifos, se sostiene y se deshace en la pieza que nace, para que el visitante sepa que la obra es suya. No se guarda en ningún sitio (el registro anota la pieza, nunca la palabra). Para probar sin micrófono, escribe una palabra en PROBAR UNA PALABRA.
 
 ## Sonido
 Sintetizado en el navegador desde la partitura: industrial, abstracto y ambient. Cada corte de plano es un golpe de chapa y cambia el intervalo del dron; cada forma suena con sus resonadores metálicos y un pulso de máquina; el plano decide el espacio (el macro, cercano y seco; el general, con mucha sala). Dron vivo como columna y una gran ruptura metálica. El master tiene limitador y techo de seguridad; el nivel de la sala se ajusta con VOLUMEN.
