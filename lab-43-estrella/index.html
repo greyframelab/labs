@@ -498,11 +498,11 @@ canvas{width:100vw;height:100vh;display:block}
   const cv = document.createElement('canvas'); cv.width = GW; cv.height = GH;
   const gl = cv.getContext('webgl2', { alpha: false, antialias: false, preserveDrawingBuffer: true });
   // si la gráfica pierde el contexto, se deja de dibujar el 3D (en vez de quemar la pantalla); el resto de la pieza sigue
-  let glLost = false;
+  let glLost = !gl || /[?&]nogl\b/.test(location.search);
   cv.addEventListener('webglcontextlost', (e) => { e.preventDefault(); glLost = true; });
   // gráficas con DirectX (ANGLE D3D11, p. ej. AMD Radeon integradas): el shader completo no compila al dibujar y se pierde el contexto;
   // ahí se usa una versión ligera (sin reflejo interno del haz ni reflejo del cubo en el suelo), con la misma luz en las caras
-  const LITE = (() => { try { const x = gl.getExtension('WEBGL_debug_renderer_info'); const r = x ? gl.getParameter(x.UNMASKED_RENDERER_WEBGL) : ''; return /Direct3D|D3D11|D3D9/i.test(r) || /[?&]lite\b/.test(location.search); } catch (e) { return false; } })();
+  const LITE = (() => { try { const x = gl && gl.getExtension('WEBGL_debug_renderer_info'); const r = x ? gl.getParameter(x.UNMASKED_RENDERER_WEBGL) : ''; return /Direct3D|D3D11|D3D9/i.test(r) || /[?&]lite\b/.test(location.search); } catch (e) { return false; } })();
   const NSEG = 48, NIMP = 8;
   const VS = `#version 300 es
   in vec2 p; out vec2 uv; void main(){ uv=p*.5+.5; gl_Position=vec4(p,0,1); }`;
@@ -546,10 +546,8 @@ canvas{width:100vw;height:100vh;display:block}
       vec3 ap=abs(p); float e=n.x!=0.?min(1.-ap.y,1.-ap.z):n.y!=0.?min(1.-ap.x,1.-ap.z):min(1.-ap.x,1.-ap.y);
       float bev=(1.-smoothstep(.0,.022,e))*(n.y>.5?.35:1.), bev2=(1.-smoothstep(.0,.006,e));
       vec3 rb=normalize(rr+vec3(0,.6,0)*bev);
-      // luz de las caras: velo de vidrio (degradado suave desde arriba) + reflejo de estudio más presente
-      float up=n.y>.5?(.55+.45*smoothstep(-1.,1.,p.x-p.z)):smoothstep(-1.1,1.,p.y);
-      float veil=uEnv*(n.y>.5?.05:.085)*up*(.55+.45*fr);
-      float spec=studio(rr)*fr*3.6*(n.y>.5?.18:1.) + .22*studio(rr)*(n.y>.5?.3:1.) + veil + bev*(.3*studio(rb)+.06) + bev2*.07*uEnv;
+      // reflejo de estudio en las caras (el velo de vidrio va en 2D, igual en todas las gráficas)
+      float spec=studio(rr)*fr*3.6*(n.y>.5?.18:1.) + .22*studio(rr)*(n.y>.5?.3:1.) + bev*(.3*studio(rb)+.06) + bev2*.07*uEnv;
       float th=bx.y-bx.x; float tr=exp(-th*.28);
       vec3 pe=ro+rd*bx.y, ne=boxN(pe), r2=reflect(rd,-ne);
       vec3 g=beams(p,rd,th,pe,r2,.32*(1.-refl))+imps(p,pe,.8/1.2)*1.2;
@@ -583,12 +581,18 @@ canvas{width:100vw;height:100vh;display:block}
     o=vec4(clamp(col,0.,64.),1);
   }`;
   function sh(t, s) { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o; }
-  const PG = gl.createProgram(); gl.attachShader(PG, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(PG, sh(gl.FRAGMENT_SHADER, FS)); gl.bindAttribLocation(PG, 0, 'p'); gl.linkProgram(PG);
-  const U = {}; for (const n of ['uCam', 'uF', 'uR', 'uU', 'uHalf', 'uFoc', 'uSA', 'uSB', 'uNs', 'uImp', 'uNi', 'uFill', 'uEnv', 'uFloor', 'uAcc']) U[n] = gl.getUniformLocation(PG, n);
-  const vao = gl.createVertexArray(); gl.bindVertexArray(vao); const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  // sin WebGL2 (o si el navegador lo ha bloqueado) la pieza sigue en 2D: aristas, caras, haces y cáusticas
+  let PG = null, vao = null; const U = {};
+  try {
+    PG = gl.createProgram(); gl.attachShader(PG, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(PG, sh(gl.FRAGMENT_SHADER, FS)); gl.bindAttribLocation(PG, 0, 'p'); gl.linkProgram(PG);
+    for (const n of ['uCam', 'uF', 'uR', 'uU', 'uHalf', 'uFoc', 'uSA', 'uSB', 'uNs', 'uImp', 'uNi', 'uFill', 'uEnv', 'uFloor', 'uAcc']) U[n] = gl.getUniformLocation(PG, n);
+    vao = gl.createVertexArray(); gl.bindVertexArray(vao); const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  } catch (e) { glLost = true; PG = null; }
+  const has3D = () => !!PG && !glLost && !gl.isContextLost();
 
   function drawGL(LT, fill, envI) {
+    if (!has3D()) return;
     const segs = LT.L.slice().sort((a, b) => b.I - a.I).slice(0, NSEG);
     const SA = new Float32Array(NSEG * 4), SB = new Float32Array(NSEG * 4);
     segs.forEach((s, i) => { SA.set([...s.A, s.I * (s.thin ? 0.3 : 1)], i * 4); SB.set([...s.B, s.thin ? 0.006 : 0.009 + 0.006 * s.fresh], i * 4); });
@@ -636,6 +640,25 @@ canvas{width:100vw;height:100vh;display:block}
       g.addColorStop(0, WH(vis * base * 0.5)); g.addColorStop(clamp(ph - 0.12 + dk * 2), WH(vis * base)); g.addColorStop(clamp(ph + dk * 2), WH(vis * (base + gl_))); g.addColorStop(clamp(ph + 0.12 + dk * 2), WH(vis * base)); g.addColorStop(1, WH(vis * base * 0.4));
       c.strokeStyle = g; c.lineWidth = 1.1; c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
     });
+  }
+  // luz de las caras en 2D (no depende de la gráfica): velo de vidrio, más claro arriba y en ángulo rasante; las caras de atrás, tenues
+  function faces(vis) {
+    if (vis < 0.01) return;
+    for (let q = 0; q < 3; q++) for (const sg of [-1, 1]) {
+      if (q === 1 && sg < 0) continue;
+      const vs = CV.filter((v) => v[q] === sg), P = vs.map((v) => proj(...v)); if (P.some((p) => !p)) continue;
+      const cx = P.reduce((a, p) => a + p[0], 0) / 4, cy = P.reduce((a, p) => a + p[1], 0) / 4;
+      const o = P.map((p, i) => [Math.atan2(p[1] - cy, p[0] - cx), i]).sort((a, b) => a[0] - b[0]).map((x) => P[x[1]]);
+      const d = [CM.p[0], CM.p[1], CM.p[2]]; d[q] -= sg; const dl = Math.hypot(...d), cs = d[q] * sg / dl, front = cs > 0;
+      const graz = 1 - Math.abs(cs), kf = (front ? 1 : 0.32) * (0.65 + 0.55 * graz * graz) * vis;
+      let A, B, a0, a1;
+      if (q === 1) { A = proj(-1, 1, 1); B = proj(1, 1, -1); a0 = 0.035; a1 = 0.075; }
+      else { const ctr = [0, 0, 0]; ctr[q] = sg; A = proj(ctr[0], -1, ctr[2]); B = proj(ctr[0], 1, ctr[2]); a0 = 0.012; a1 = 0.105; }
+      if (!A || !B) continue;
+      const g = c.createLinearGradient(A[0], A[1], B[0], B[1]);
+      g.addColorStop(0, WH(a0 * kf)); g.addColorStop(0.7, WH((a0 + (a1 - a0) * 0.55) * kf)); g.addColorStop(1, WH(a1 * kf));
+      c.fillStyle = g; c.beginPath(); c.moveTo(o[0][0], o[0][1]); for (let i = 1; i < 4; i++) c.lineTo(o[i][0], o[i][1]); c.closePath(); c.fill();
+    }
   }
   const DUST = []; { const r = VL.rng(909 + SEMILLA); for (let i = 0; i < 900; i++) DUST.push([r() * 1.9 - 0.95, r() * 1.9 - 0.95, r() * 1.9 - 0.95, r()]); }
   function dust(t, L, vis) {
@@ -695,7 +718,8 @@ canvas{width:100vw;height:100vh;display:block}
     if (fade > 0) {
       drawGL({ L: LT.L.map((s) => ({ ...s, I: s.I * fade })), IMP: LT.IMP.map((s) => ({ ...s, I: s.I * fade })) }, fill * fade, (0.55 + 0.25 * kE) * fade);
       c.globalCompositeOperation = 'source-over'; c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
-      if (!glLost && !gl.isContextLost()) c.drawImage(cv, 0, 0, W, H); c.globalCompositeOperation = 'lighter';
+      if (has3D()) c.drawImage(cv, 0, 0, W, H); c.globalCompositeOperation = 'lighter';
+      faces((0.55 + 0.25 * kE) * fade / 0.8);
       halo(fade * (0.006 + 0.016 * kE + 0.08 * fill) * seg(tReal, 0.6, 2.4));
       if (tReal >= T.rupt) { const u = tReal - T.rupt; floorRing(1.15 + 5.5 * E.outQuart(clamp(u / 1.6)), 1.4 * Math.exp(-u / 0.5), 2.2); }
       if (C && tReal < T.res) { const b0 = T.rupt + Math.floor((tReal - T.rupt) / BAR) * BAR, u = tReal - b0; if (b0 > T.rupt) floorRing(1.15 + 3.5 * E.outQuart(clamp(u / 1.4)), 0.5 * Math.exp(-u / 0.45), 1.4); }
