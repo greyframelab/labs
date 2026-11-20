@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VØID_LOOM · SEMILLA · Greyframe Labs</title>
+<meta name="description" content="VØID_LOOM · SEMILLA: arte abstracto que se pinta en directo. Cada pieza nace de una semilla, con imagen y sonido de la misma partitura, y existe una sola vez.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+:root{
+  --bg:#060606;--panel:#0b0b0b;--panel2:#101010;--line:#1d1c1b;--line2:#2a2927;
+  --tx:#f2f0ea;--tx2:#bdbab3;--mute:#8f8c86;--dim:#5d5b57;
+  --red:#FF1A1A;--acc:#00E5FF;
+  --f:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--tx);font:400 11px var(--f);letter-spacing:.06em;overflow:hidden;-webkit-font-smoothing:antialiased}
+button{all:unset;cursor:pointer;box-sizing:border-box}
+button:focus-visible,input:focus-visible{outline:1px solid var(--acc);outline-offset:2px}
+button[disabled]{opacity:.35;pointer-events:none}
+
+#boot{position:fixed;inset:0;z-index:100;background:#000;display:grid;place-items:center;transition:opacity .9s}
+#boot.off{opacity:0;pointer-events:none}
+.boot-in{display:flex;flex-direction:column;align-items:center;gap:34px;text-align:center}
+.boot-in .mark{font-size:34px;font-weight:300;letter-spacing:.42em;margin-right:-.42em}
+.boot-in .mark i{font-style:normal;color:var(--acc)}
+.boot-in .sub{color:var(--mute);letter-spacing:.32em;font-size:10px;margin-top:-18px;line-height:2}
+#go{border:1px solid var(--line2);padding:16px 34px;letter-spacing:.36em;font-size:11px;transition:border-color .2s,color .2s,background .2s;background:#000}
+#go:hover{border-color:var(--acc);color:#fff;background:rgba(0,229,255,.06)}
+#bootlog{min-height:14px;color:var(--dim);font-size:9.5px;letter-spacing:.2em;max-width:560px;line-height:1.8}
+#bootlog.err{color:var(--red)}
+
+.app{display:grid;grid-template-rows:46px 1fr 30px;height:100vh}
+header{display:flex;align-items:center;gap:22px;padding:0 18px;border-bottom:1px solid var(--line);background:#050505;min-width:0}
+.brand{display:flex;align-items:baseline;gap:12px;letter-spacing:.34em;font-size:12px;white-space:nowrap}
+.brand i{font-style:normal;color:var(--acc)}
+.brand span{color:var(--mute);font-size:9px;letter-spacing:.3em}
+.chips{display:flex;gap:18px;margin-left:8px;min-width:0;overflow:hidden}
+.chip{display:flex;align-items:center;gap:8px;font-size:9px;letter-spacing:.22em;color:var(--mute);white-space:nowrap}
+.chip b{font-weight:400;color:var(--tx2);font-variant-numeric:tabular-nums}
+.led{width:6px;height:6px;border-radius:50%;background:#2a2927;flex:none}
+.led.on{background:#39FF6A;box-shadow:0 0 8px #39FF6A}
+.led.warn{background:#FFB000;box-shadow:0 0 8px #FFB000}
+.led.err{background:var(--red);box-shadow:0 0 8px var(--red)}
+.tools{margin-left:auto;display:flex;align-items:center;gap:10px}
+.seg{display:flex;border:1px solid var(--line2)}
+.seg button{padding:7px 10px;font-size:9px;letter-spacing:.22em;color:var(--mute);transition:color .15s,background .15s;white-space:nowrap;flex:1;text-align:center}
+.seg button+button{border-left:1px solid var(--line2)}
+.seg button:hover{color:var(--tx)}
+.seg button.on{color:#000;background:var(--tx)}
+.tbtn{border:1px solid var(--line2);padding:7px 11px;font-size:9px;letter-spacing:.22em;color:var(--tx2);transition:all .15s;white-space:nowrap;text-align:center}
+.tbtn:hover{border-color:var(--mute);color:var(--tx)}
+.tbtn.on{border-color:var(--acc);color:#fff;background:color-mix(in srgb,var(--acc) 12%,transparent)}
+.tbtn.rec.on{border-color:var(--red);background:rgba(255,26,26,.14);animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:.55}}
+
+main{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:1px;background:var(--line);min-height:0}
+main>*{background:var(--panel);min-height:0}
+.params{overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:#2a2927 transparent}
+.view{position:relative;background:#000;overflow:hidden}
+#c{position:absolute;inset:0;width:100%;height:100%;display:block}
+.v-tag{position:absolute;left:16px;top:14px;display:flex;gap:10px;align-items:center;font-size:9px;letter-spacing:.24em;color:var(--tx2);text-shadow:0 0 12px #000;pointer-events:none}
+.v-tag .air{border:1px solid var(--acc);color:var(--acc);padding:3px 6px;font-size:8px}
+.v-big{position:absolute;left:16px;bottom:34px;display:flex;flex-direction:column;gap:8px;pointer-events:none;text-shadow:0 0 18px rgba(0,0,0,.9)}
+.v-big b{font-size:22px;font-weight:300;letter-spacing:.36em}
+.v-big span{font-size:9px;letter-spacing:.2em;color:var(--mute);max-width:520px;line-height:1.7}
+.tl{position:absolute;left:0;right:0;bottom:0;height:20px;pointer-events:none}
+.tl i{position:absolute;left:0;bottom:0;height:2px;background:var(--acc);box-shadow:0 0 8px var(--acc)}
+.tl span{position:absolute;bottom:6px;font-size:8px;letter-spacing:.2em;color:var(--dim);transform:translateX(4px)}
+.tl em{position:absolute;bottom:0;width:1px;height:8px;background:var(--line2)}
+
+.sect{padding:14px 16px 16px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:12px}
+.sect h3{margin:0;font-weight:400;font-size:9px;letter-spacing:.26em;color:var(--mute);display:flex;justify-content:space-between}
+.sect h3 em{font-style:normal;color:var(--acc)}
+.note{font-size:9px;letter-spacing:.06em;color:var(--mute);line-height:1.6}
+.sl{display:grid;grid-template-columns:86px 1fr 34px;align-items:center;gap:10px;font-size:9px;letter-spacing:.18em;color:var(--tx2)}
+.sl output{text-align:right;color:var(--dim);font-variant-numeric:tabular-nums}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:18px;background:transparent;margin:0;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:1px;background:linear-gradient(90deg,var(--acc) var(--v,50%),var(--line2) var(--v,50%))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:9px;height:9px;margin-top:-4px;background:var(--tx);border:0;transform:rotate(45deg)}
+input[type=range]::-moz-range-track{height:1px;background:var(--line2)}
+input[type=range]::-moz-range-progress{height:1px;background:var(--acc)}
+input[type=range]::-moz-range-thumb{width:8px;height:8px;background:var(--tx);border:0;border-radius:0}
+input[type=range][disabled]{opacity:.45;pointer-events:none}
+.sw{display:flex;gap:6px;flex-wrap:wrap}
+.sw button{width:30px;height:18px;border:1px solid var(--line2);position:relative;font-size:8px;letter-spacing:.1em;color:var(--mute);text-align:center;line-height:16px}
+.sw button i{position:absolute;inset:4px;background:var(--c)}
+.sw button.on{border-color:var(--tx);color:var(--tx)}
+.row{display:flex;gap:6px;flex-wrap:wrap}
+.row .tbtn{flex:1}
+.code{display:flex;gap:6px;align-items:stretch}
+.code input{all:unset;box-sizing:border-box;flex:1;min-width:0;border:1px solid var(--line2);padding:8px 10px;font:300 17px var(--f);letter-spacing:.34em;color:var(--tx);text-transform:uppercase}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;font-size:9px;letter-spacing:.18em;color:var(--mute)}
+.kv b{font-weight:400;color:var(--tx2);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meter{height:2px;background:var(--line2);position:relative;overflow:hidden}
+.meter i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--acc);box-shadow:0 0 8px var(--acc);transition:width .15s}
+.list{display:flex;flex-direction:column;max-height:160px;overflow-y:auto;scrollbar-width:thin}
+.list div{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #141413;font-size:9px;letter-spacing:.16em;color:var(--tx2)}
+.list div button{color:var(--mute)}
+.list div button:hover{color:var(--tx)}
+.list div .go{flex:1;color:var(--tx2)}
+.list div i{font-style:normal;color:var(--dim)}
+.hide{display:none!important}
+
+footer{display:flex;align-items:center;gap:18px;padding:0 18px;border-top:1px solid var(--line);background:#050505;color:var(--dim);font-size:8.5px;letter-spacing:.2em;white-space:nowrap;overflow:hidden}
+footer b{color:var(--tx2);font-weight:400}
+
+body.solo .app{grid-template-rows:1fr}
+body.solo header,body.solo footer,body.solo .params,body.solo .v-tag,body.solo .v-big,body.solo .tl{display:none}
+body.solo main{grid-template-columns:1fr}
+body.solo{cursor:none}
+
+#help{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.88);display:none;place-items:center}
+#help.on{display:grid}
+#help .box{border:1px solid var(--line2);background:#070707;padding:28px 34px;display:grid;grid-template-columns:auto auto;gap:9px 34px;font-size:10px;letter-spacing:.16em;color:var(--tx2)}
+#help .box b{color:var(--acc);font-weight:400}
+#help h4{grid-column:1/-1;margin:0 0 8px;font-weight:400;letter-spacing:.3em;color:var(--tx)}
+</style>
+<script>
+  // marco de la firma: apaisado en proyección, vertical en pantallas en vertical
+  window.VL_SIZE = innerWidth >= innerHeight ? [1920, 1080] : [1080, 1920];
+</script>
+</head>
+<body>
+<div id="boot">
+  <div class="boot-in">
+    <div class="mark">VØID<i>_</i>LOOM</div>
+    <div class="sub">SEMILLA<br>MATERIA QUE NACE DE UNA PALABRA · CADA PIEZA EXISTE UNA VEZ</div>
+    <button id="go">ARRANCAR</button>
+    <div id="bootlog"></div>
+  </div>
+</div>
+
+<div class="app">
+  <header>
+    <div class="brand">VØID<i>_</i>LOOM <span>SEMILLA</span></div>
+    <div class="chips">
+      <div class="chip"><span class="led on" id="ledAir"></span>MODO <b id="chMode">AUTOMÁTICO</b></div>
+      <div class="chip">PIEZA <b id="chCode">—</b></div>
+      <div class="chip">ESPECIE <b id="chSp">—</b></div>
+      <div class="chip">REFERENCIA <b id="chRef">—</b></div>
+      <div class="chip">BPM <b id="chBpm">—</b></div>
+      <div class="chip">ACTO <b id="chAct">—</b></div>
+      <div class="chip hide" id="chipSala"><span class="led" id="ledCam"></span>VOZ <b id="chSala">—</b></div>
+      <div class="chip">FPS <b id="chFps">—</b></div>
+    </div>
+    <div class="tools">
+      <button class="tbtn" id="bSound" title="S">SONIDO</button>
+      <button class="tbtn" id="bProj" title="H">PROYECTAR</button>
+      <button class="tbtn" id="bHelp" title="?">?</button>
+    </div>
+  </header>
+  <main>
+    <div class="view">
+      <canvas id="c"></canvas>
+      <div class="v-tag"><span class="air">EN EL AIRE</span><span id="tagTxt">—</span></div>
+      <div class="v-big"><b id="bigName">—</b><span id="bigIdea">—</span></div>
+      <div class="tl" id="tl"></div>
+    </div>
+    <div class="params">
+      <div class="sect">
+        <h3>MODO <em id="modeHint">1 · 2 · 3</em></h3>
+        <div class="seg" id="segMode">
+          <button data-m="auto">AUTOMÁTICO</button><button data-m="publico">PÚBLICO</button><button data-m="manual">MANUAL</button>
+        </div>
+        <div class="note" id="modeNote"></div>
+        <div id="boxAuto" class="hide" style="display:flex;flex-direction:column;gap:10px">
+          <div class="sl"><span>CADA PIEZA</span><div class="seg" id="segLoops"><button data-v="2">2</button><button data-v="3">3</button><button data-v="5">5</button></div><output>VUELTAS</output></div>
+          <div class="meter"><i id="autoBar"></i></div>
+        </div>
+        <div id="boxPub" class="hide" style="display:flex;flex-direction:column;gap:10px">
+          <div class="kv">
+            <span>MICRÓFONO</span><b id="pMic">—</b>
+            <span>ÚLTIMA PALABRA</span><b id="pWord">—</b>
+            <span>CARÁCTER</span><b id="pFam">—</b>
+            <span>SIGUIENTE</span><b id="pNext">—</b>
+          </div>
+          <div class="code"><input id="inWord" placeholder="PROBAR UNA PALABRA" spellcheck="false" aria-label="Probar una palabra" style="font-size:11px;letter-spacing:.2em"></div>
+          <div class="note">La palabra solo se ve en esta consola: nunca se proyecta ni se guarda. <span id="vozNote">El reconocimiento de voz es el de Chrome y necesita internet en sala.</span></div>
+        </div>
+      </div>
+      <div class="sect">
+        <h3>PIEZA <em id="pieceRef">—</em></h3>
+        <div class="code"><input id="inCode" maxlength="10" spellcheck="false" aria-label="Semilla"><button class="tbtn" id="bNew" title="espacio">NUEVA</button></div>
+        <div class="row"><button class="tbtn" id="bPrev">‹ ANTERIOR</button><button class="tbtn" id="bNext">SIGUIENTE ›</button></div>
+        <div class="note">ACENTO</div>
+        <div class="sw" id="swAcc"></div>
+        <div class="sl"><span>DENSIDAD</span><input type="range" id="rDen" min="0" max="100" value="50"><output id="oDen">50</output></div>
+        <div class="sl"><span>CAOS</span><input type="range" id="rCha" min="0" max="100" value="50"><output id="oCha">50</output></div>
+      </div>
+      <div class="sect">
+        <h3>SALA</h3>
+        <div class="sl"><span>VOLUMEN</span><input type="range" id="rVol" min="0" max="100" value="70"><output id="oVol">70</output></div>
+        <div class="sl"><span>BRILLO</span><input type="range" id="rBri" min="40" max="130" value="100"><output id="oBri">100</output></div>
+        <div class="row"><button class="tbtn on" id="bSafe" title="destellos limitados para público general">DESTELLOS SEGUROS</button><button class="tbtn" id="bBlack" title="B">APAGAR</button></div>
+      </div>
+      <div class="sect">
+        <h3>SALIDAS</h3>
+        <div class="row"><button class="tbtn rec" id="bRec" title="R">GRABAR VUELTA</button><button class="tbtn" id="bShot" title="C">CAPTURA</button></div>
+        <div class="row"><button class="tbtn" id="bSave" title="G">GUARDAR</button></div>
+      </div>
+      <div class="sect">
+        <h3>GUARDADAS <em id="nSaved">0</em></h3>
+        <div class="list" id="listSaved"></div>
+      </div>
+      <div class="sect">
+        <h3>REGISTRO <em id="nLog">0</em></h3>
+        <div class="note">Cada pieza que nace queda anotada con su semilla y su hora.</div>
+        <div class="list" id="listLog"></div>
+        <div class="row"><button class="tbtn" id="bCsv">EXPORTAR CSV</button></div>
+      </div>
+    </div>
+  </main>
+  <footer>
+    <span><b>1 2 3</b> MODO</span><span><b>ESPACIO</b> NUEVA</span><span><b>← →</b> HISTORIAL</span><span><b>H</b> PROYECTAR</span>
+    <span><b>B</b> APAGAR</span><span><b>S</b> SONIDO</span><span><b>↑ ↓</b> VOLUMEN</span><span><b>R</b> GRABAR</span><span><b>C</b> CAPTURA</span><span><b>G</b> GUARDAR</span><span><b>?</b> AYUDA</span>
+  </footer>
+</div>
+
+<div id="help"><div class="box">
+  <h4>VØID_LOOM · SEMILLA</h4>
+  <b>1</b><span>AUTOMÁTICO: las piezas nacen y se suceden solas</span>
+  <b>2</b><span>PÚBLICO: la sala dice una palabra y la pieza nace de ella</span>
+  <b>3</b><span>MANUAL: semilla, acento, densidad y caos a mano</span>
+  <b>ESPACIO</b><span>pieza nueva</span>
+  <b>← →</b><span>pieza anterior / siguiente del historial</span>
+  <b>H</b><span>proyectar: solo la pieza, a pantalla completa</span>
+  <b>B</b><span>apagar / encender con fundido</span>
+  <b>S · ↑ ↓</b><span>sonido · volumen de sala</span>
+  <b>R · C · G</b><span>grabar una vuelta · captura · guardar semilla</span>
+</div></div>
+
+<canvas id="sting" class="hide"></canvas>
+<script src="void-loom-sting.js"></script>
+<script src="score.js"></script>
+<script src="engine.js"></script>
+<script src="sound.js"></script>
+<script src="voz.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

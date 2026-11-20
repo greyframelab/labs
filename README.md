@@ -8,6 +8,8 @@ Experiments in UI, motion and creative coding for games, apps and interfaces.
 
 **VØID_LOOM · OJO** (la cámara proyectada tal como la ve una máquina): https://greyframelab.github.io/labs/ojo/
 
+**VØID_LOOM · SEMILLA** (materia negra que nace de una palabra, generador infinito en tiempo real): https://greyframelab.github.io/labs/semilla/
+
 | # | Lab | Category |
 |---|-----|----------|
 | 44 | [Surco](lab-44-surco/) | Motion |
