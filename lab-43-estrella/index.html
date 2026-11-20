@@ -497,6 +497,9 @@ canvas{width:100vw;height:100vh;display:block}
   const SS_ = (/[?&]render\b/.test(location.search) ? 1 : 0.62) * Q3, GW = Math.round(W * SS_), GH = Math.round(H * SS_);
   const cv = document.createElement('canvas'); cv.width = GW; cv.height = GH;
   const gl = cv.getContext('webgl2', { alpha: false, antialias: false, preserveDrawingBuffer: true });
+  // si la gráfica pierde el contexto, se deja de dibujar el 3D (en vez de quemar la pantalla); el resto de la pieza sigue
+  let glLost = false;
+  cv.addEventListener('webglcontextlost', (e) => { e.preventDefault(); glLost = true; });
   const NSEG = 48, NIMP = 8;
   const VS = `#version 300 es
   in vec2 p; out vec2 uv; void main(){ uv=p*.5+.5; gl_Position=vec4(p,0,1); }`;
@@ -512,13 +515,13 @@ canvas{width:100vw;height:100vh;display:block}
   float studio(vec3 r){ float top=smoothstep(.7,.98,r.y)*smoothstep(.4,.0,abs(r.x+.25*r.z))*.45;
     float side=smoothstep(.25,.0,abs(r.y-.08))*smoothstep(.35,.9,-r.x*.8+r.z*.6)*.55; float rim=smoothstep(.2,.0,abs(r.y+.02))*smoothstep(.6,1.,r.x)*.35; return (top+side+rim)*uEnv; }
   vec3 beams(vec3 ro, vec3 rd, float tm){ vec3 g=vec3(0);
-    for(int i=0;i<${NSEG};i++){ if(i>=uNs) break; vec3 a=uSA[i].xyz, b=uSB[i].xyz; float I=uSA[i].w, w=uSB[i].w;
+    for(int i=0;i<uNs;i++){ vec3 a=uSA[i].xyz, b=uSB[i].xyz; float I=uSA[i].w, w=uSB[i].w;
       vec3 v=b-a, w0=ro-a; float bb=dot(rd,v), cc=max(dot(v,v),1e-7), dd=dot(rd,w0), ee=dot(v,w0), D=cc-bb*bb;
       float s=clamp(D>1e-6?(ee-bb*dd)/D:0.,0.,1.); vec3 q=a+v*s; float t=clamp(dot(q-ro,rd),0.,tm); vec3 pr=ro+rd*t;
       s=clamp(dot(pr-a,v)/cc,0.,1.); q=a+v*s; float d2=dot(pr-q,pr-q);
       float hh=w*w/max(d2+w*w,1e-8); g+=I*(mix(uAcc,vec3(1),hh*hh*.8)*hh*.7 + uAcc*.028*.035/(d2+.035)); }
     return g; }
-  vec3 imps(vec3 p){ vec3 g=vec3(0); for(int i=0;i<${NIMP};i++){ if(i>=uNi) break; vec3 d=p-uImp[i].xyz; float d2=dot(d,d); float a=.0016/(d2+.0016); g+=uImp[i].w*(mix(uAcc,vec3(1),a)*a+uAcc*.07*exp(-d2*9.)); } return g; }
+  vec3 imps(vec3 p){ vec3 g=vec3(0); for(int i=0;i<uNi;i++){ vec3 d=p-uImp[i].xyz; float d2=dot(d,d); float a=.0016/(d2+.0016); g+=uImp[i].w*(mix(uAcc,vec3(1),a)*a+uAcc*.07*exp(-d2*9.)); } return g; }
   vec3 scene(vec3 ro, vec3 rd, bool refl){
     vec3 col=vec3(0); vec2 bx=box(ro,rd);
     if(bx.x>0.){
@@ -546,8 +549,8 @@ canvas{width:100vw;height:100vh;display:block}
     if(rd.y<0.){ float tf=(FL-ro.y)/rd.y; if(bx.x<0.||tf<bx.x){
       vec3 p=ro+rd*tf; vec3 rr=reflect(rd,vec3(0,1,0)); float ct=clamp(-rd.y,0.,1.), fr=.03+.97*pow(max(1.-ct,0.),5.);
       float fade=exp(-max(0.,length(p.xz)-1.5)*.55);
-      vec3 rf=vec3(0); for(int k=0;k<3;k++){ vec3 jr=normalize(rr+.012*vec3(sin(float(k)*2.1+p.x*40.),0.,cos(float(k)*1.7+p.z*40.))); rf+=scene(p,jr,true); }
-      rf/=3.;
+      // una sola muestra de reflejo (con tres, el shader no compilaba en DirectX/ANGLE en algunas gráficas de Windows)
+      vec3 rf=scene(p,normalize(rr+.006*vec3(sin(p.x*40.),0.,cos(p.z*40.))),true);
       vec3 pool=vec3(.9,.95,1.)*uFill*.25*exp(-dot(p.xz,p.xz)*.8)+imps(vec3(p.x,-1.,p.z))*.07;
       col=rf*(.14+.45*fr)*fade*uFloor + pool*fade*.7;
       col+=studio(rr)*fr*.18*fade;
@@ -571,8 +574,8 @@ canvas{width:100vw;height:100vh;display:block}
     gl.viewport(0, 0, GW, GH); gl.useProgram(PG); gl.bindVertexArray(vao);
     gl.uniform3f(U.uCam, ...CM.p); gl.uniform3f(U.uF, ...CM.f); gl.uniform3f(U.uR, ...CM.r); gl.uniform3f(U.uU, ...CM.u);
     gl.uniform2f(U.uHalf, W / 2, H / 2); gl.uniform1f(U.uFoc, FOC);
-    gl.uniform4fv(U.uSA, SA); gl.uniform4fv(U.uSB, SB); gl.uniform1i(U.uNs, segs.length);
-    gl.uniform4fv(U.uImp, IM); gl.uniform1i(U.uNi, imp.length);
+    gl.uniform4fv(U.uSA, SA); gl.uniform4fv(U.uSB, SB); gl.uniform1i(U.uNs, Math.min(segs.length, NSEG));
+    gl.uniform4fv(U.uImp, IM); gl.uniform1i(U.uNi, Math.min(imp.length, NIMP));
     gl.uniform1f(U.uFill, fill); gl.uniform1f(U.uEnv, envI); gl.uniform1f(U.uFloor, 1); gl.uniform3f(U.uAcc, AC[0] / 255, AC[1] / 255, AC[2] / 255);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
@@ -669,7 +672,7 @@ canvas{width:100vw;height:100vh;display:block}
     if (fade > 0) {
       drawGL({ L: LT.L.map((s) => ({ ...s, I: s.I * fade })), IMP: LT.IMP.map((s) => ({ ...s, I: s.I * fade })) }, fill * fade, (0.55 + 0.25 * kE) * fade);
       c.globalCompositeOperation = 'source-over'; c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
-      c.drawImage(cv, 0, 0, W, H); c.globalCompositeOperation = 'lighter';
+      if (!glLost && !gl.isContextLost()) c.drawImage(cv, 0, 0, W, H); c.globalCompositeOperation = 'lighter';
       halo(fade * (0.006 + 0.016 * kE + 0.08 * fill) * seg(tReal, 0.6, 2.4));
       if (tReal >= T.rupt) { const u = tReal - T.rupt; floorRing(1.15 + 5.5 * E.outQuart(clamp(u / 1.6)), 1.4 * Math.exp(-u / 0.5), 2.2); }
       if (C && tReal < T.res) { const b0 = T.rupt + Math.floor((tReal - T.rupt) / BAR) * BAR, u = tReal - b0; if (b0 > T.rupt) floorRing(1.15 + 3.5 * E.outQuart(clamp(u / 1.4)), 0.5 * Math.exp(-u / 0.45), 1.4); }
