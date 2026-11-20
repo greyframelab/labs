@@ -22,7 +22,7 @@ canvas{width:100vw;height:100vh;display:block}
   const dpr = Math.min(window.devicePixelRatio || 1, 2), w = innerWidth * dpr, h = innerHeight * dpr;
   const k = Math.min(1, 1920 / Math.max(w, h));
   window.VL_SIZE = [Math.round(w * k), Math.round(h * k)];
-  window.CMP_SCALE = 0.7;   // web en tiempo real: el raymarch a 60 % y reescalado
+  window.CMP_SCALE = 0.9;   // web en tiempo real: el raymarch casi a resolución completa
   const c = document.getElementById('c'); c.width = window.VL_SIZE[0]; c.height = window.VL_SIZE[1];
   const r0 = innerWidth / innerHeight; let tm;
   addEventListener('resize', () => { clearTimeout(tm); tm = setTimeout(() => { const r = innerWidth / innerHeight; if (Math.abs(r - r0) / r0 > 0.12) location.reload(); }, 400); });
@@ -116,7 +116,7 @@ canvas{width:100vw;height:100vh;display:block}
     // scanlines
     P.scan = mk(W, H);
     const sx = P.scan.getContext('2d');
-    sx.fillStyle = 'rgba(0,0,0,0.22)';
+    sx.fillStyle = 'rgba(0,0,0,0.08)';
     for (let y = 0; y < H; y += 4) sx.fillRect(0, y, W, 1.5);
     // viñeta
     P.vig = mk(W, H);
@@ -163,9 +163,9 @@ canvas{width:100vw;height:100vh;display:block}
     out.globalAlpha = opt.scan ?? 1; out.drawImage(p.scan, 0, 0); out.globalAlpha = 1;
     out.drawImage(p.vig, 0, 0);
     const g = p.grain[frame % p.grain.length];
-    out.globalCompositeOperation = 'overlay'; out.globalAlpha = 0.32;
+    out.globalCompositeOperation = 'overlay'; out.globalAlpha = 0.11;
     out.drawImage(g, 0, 0, W, H);
-    out.globalCompositeOperation = 'lighter'; out.globalAlpha = 0.03;
+    out.globalCompositeOperation = 'lighter'; out.globalAlpha = 0.012;
     out.drawImage(g, 0, 0, W, H);
     out.globalAlpha = 1; out.globalCompositeOperation = 'source-over';
   };
@@ -442,7 +442,7 @@ canvas{width:100vw;height:100vh;display:block}
   const AZ0 = varia(0, 0.75), RK = varia(1, 0.13), YK = varia(1, 0.16), GLR = varia(0, 0.7);   // giro de la cámara, distancia, altura, luz
   // en el live: el 3D a la calidad que pida CALIDAD AUTO (q3d); grano, líneas y composición siempre a resolución completa
   window.VL_Q3D = true;
-  const SCALE = /[?&]live\b/.test(location.search) ? (+new URLSearchParams(location.search).get('q3d') || 1) : (window.CMP_SCALE || 0.75);
+  const SCALE = /[?&]live\b/.test(location.search) ? (+new URLSearchParams(location.search).get('q3d') || 1) : (window.CMP_SCALE || 0.95);
   const RW = Math.round(W * SCALE), RH = Math.round(H * SCALE);
   const FS = 512, DOM = 5.0;                          // textura del campo: [-DOM, DOM]²
   const NP = 40;

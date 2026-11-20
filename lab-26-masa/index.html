@@ -28,7 +28,7 @@ canvas{width:100vw;height:100vh;display:block}
 })();
 </script>
 
-<script>window.MASA_SCALE = Math.min(0.5, (matchMedia('(pointer:coarse)').matches ? 0.34 : 0.5));</script>
+<script>window.MASA_SCALE = matchMedia('(pointer:coarse)').matches ? 0.5 : 0.8;</script>
 <script>
 /* VØID_LOOM — núcleo compartido + firma animada (sting) de cierre.
    Todo es determinista: el estado de cada frame depende solo de t.
@@ -116,7 +116,7 @@ canvas{width:100vw;height:100vh;display:block}
     // scanlines
     P.scan = mk(W, H);
     const sx = P.scan.getContext('2d');
-    sx.fillStyle = 'rgba(0,0,0,0.22)';
+    sx.fillStyle = 'rgba(0,0,0,0.08)';
     for (let y = 0; y < H; y += 4) sx.fillRect(0, y, W, 1.5);
     // viñeta
     P.vig = mk(W, H);
@@ -163,9 +163,9 @@ canvas{width:100vw;height:100vh;display:block}
     out.globalAlpha = opt.scan ?? 1; out.drawImage(p.scan, 0, 0); out.globalAlpha = 1;
     out.drawImage(p.vig, 0, 0);
     const g = p.grain[frame % p.grain.length];
-    out.globalCompositeOperation = 'overlay'; out.globalAlpha = 0.32;
+    out.globalCompositeOperation = 'overlay'; out.globalAlpha = 0.11;
     out.drawImage(g, 0, 0, W, H);
-    out.globalCompositeOperation = 'lighter'; out.globalAlpha = 0.03;
+    out.globalCompositeOperation = 'lighter'; out.globalAlpha = 0.012;
     out.drawImage(g, 0, 0, W, H);
     out.globalAlpha = 1; out.globalCompositeOperation = 'source-over';
   };

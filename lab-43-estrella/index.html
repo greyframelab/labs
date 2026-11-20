@@ -114,7 +114,7 @@ canvas{width:100vw;height:100vh;display:block}
     // scanlines
     P.scan = mk(W, H);
     const sx = P.scan.getContext('2d');
-    sx.fillStyle = 'rgba(0,0,0,0.22)';
+    sx.fillStyle = 'rgba(0,0,0,0.08)';
     for (let y = 0; y < H; y += 4) sx.fillRect(0, y, W, 1.5);
     // viñeta
     P.vig = mk(W, H);
@@ -507,22 +507,22 @@ canvas{width:100vw;height:100vh;display:block}
   uniform vec4 uImp[${NIMP}]; uniform int uNi;
   uniform float uFill, uEnv, uFloor; uniform vec3 uAcc;
   const float FL=${FLOOR.toFixed(3)};
-  vec2 box(vec3 ro, vec3 rd){ vec3 m=1./rd, n=m*ro, k=abs(m); vec3 t1=-n-k, t2=-n+k; float tn=max(max(t1.x,t1.y),t1.z), tf=min(min(t2.x,t2.y),t2.z); return (tn>tf||tf<0.)?vec2(-1.):vec2(tn,tf); }
+  vec2 box(vec3 ro, vec3 rd){ vec3 rs=vec3(rd.x<0.?-1.:1.,rd.y<0.?-1.:1.,rd.z<0.?-1.:1.)*max(abs(rd),vec3(1e-6)); vec3 m=1./rs, n=m*ro, k=abs(m); vec3 t1=-n-k, t2=-n+k; float tn=max(max(t1.x,t1.y),t1.z), tf=min(min(t2.x,t2.y),t2.z); return (tn>tf||tf<0.)?vec2(-1.):vec2(tn,tf); }
   vec3 boxN(vec3 p){ vec3 a=abs(p); return a.x>a.y&&a.x>a.z?vec3(sign(p.x),0,0):a.y>a.z?vec3(0,sign(p.y),0):vec3(0,0,sign(p.z)); }
   float studio(vec3 r){ float top=smoothstep(.7,.98,r.y)*smoothstep(.4,.0,abs(r.x+.25*r.z))*.45;
     float side=smoothstep(.25,.0,abs(r.y-.08))*smoothstep(.35,.9,-r.x*.8+r.z*.6)*.55; float rim=smoothstep(.2,.0,abs(r.y+.02))*smoothstep(.6,1.,r.x)*.35; return (top+side+rim)*uEnv; }
   vec3 beams(vec3 ro, vec3 rd, float tm){ vec3 g=vec3(0);
     for(int i=0;i<${NSEG};i++){ if(i>=uNs) break; vec3 a=uSA[i].xyz, b=uSB[i].xyz; float I=uSA[i].w, w=uSB[i].w;
-      vec3 v=b-a, w0=ro-a; float bb=dot(rd,v), cc=dot(v,v), dd=dot(rd,w0), ee=dot(v,w0), D=cc-bb*bb;
+      vec3 v=b-a, w0=ro-a; float bb=dot(rd,v), cc=max(dot(v,v),1e-7), dd=dot(rd,w0), ee=dot(v,w0), D=cc-bb*bb;
       float s=clamp(D>1e-6?(ee-bb*dd)/D:0.,0.,1.); vec3 q=a+v*s; float t=clamp(dot(q-ro,rd),0.,tm); vec3 pr=ro+rd*t;
       s=clamp(dot(pr-a,v)/cc,0.,1.); q=a+v*s; float d2=dot(pr-q,pr-q);
-      float hh=w*w/(d2+w*w); g+=I*(mix(uAcc,vec3(1),hh*hh*.8)*hh*.7 + uAcc*.028*.035/(d2+.035)); }
+      float hh=w*w/max(d2+w*w,1e-8); g+=I*(mix(uAcc,vec3(1),hh*hh*.8)*hh*.7 + uAcc*.028*.035/(d2+.035)); }
     return g; }
   vec3 imps(vec3 p){ vec3 g=vec3(0); for(int i=0;i<${NIMP};i++){ if(i>=uNi) break; vec3 d=p-uImp[i].xyz; float d2=dot(d,d); float a=.0016/(d2+.0016); g+=uImp[i].w*(mix(uAcc,vec3(1),a)*a+uAcc*.07*exp(-d2*9.)); } return g; }
   vec3 scene(vec3 ro, vec3 rd, bool refl){
     vec3 col=vec3(0); vec2 bx=box(ro,rd);
     if(bx.x>0.){
-      vec3 p=ro+rd*bx.x, n=boxN(p); float ct=max(0.,dot(-rd,n)), fr=.04+.96*pow(1.-ct,5.);
+      vec3 p=ro+rd*bx.x, n=boxN(p); float ct=clamp(dot(-rd,n),0.,1.), fr=.04+.96*pow(max(1.-ct,0.),5.);
       vec3 rr=reflect(rd,n);
       vec3 ap=abs(p); float e=n.x!=0.?min(1.-ap.y,1.-ap.z):n.y!=0.?min(1.-ap.x,1.-ap.z):min(1.-ap.x,1.-ap.y);
       float bev=smoothstep(.022,.0,e)*(n.y>.5?.35:1.), bev2=smoothstep(.006,.0,e);
@@ -544,7 +544,7 @@ canvas{width:100vw;height:100vh;display:block}
     vec3 col=scene(ro,rd,false);
     vec2 bx=box(ro,rd);
     if(rd.y<0.){ float tf=(FL-ro.y)/rd.y; if(bx.x<0.||tf<bx.x){
-      vec3 p=ro+rd*tf; vec3 rr=reflect(rd,vec3(0,1,0)); float ct=-rd.y, fr=.03+.97*pow(1.-ct,5.);
+      vec3 p=ro+rd*tf; vec3 rr=reflect(rd,vec3(0,1,0)); float ct=clamp(-rd.y,0.,1.), fr=.03+.97*pow(max(1.-ct,0.),5.);
       float fade=exp(-max(0.,length(p.xz)-1.5)*.55);
       vec3 rf=vec3(0); for(int k=0;k<3;k++){ vec3 jr=normalize(rr+.012*vec3(sin(float(k)*2.1+p.x*40.),0.,cos(float(k)*1.7+p.z*40.))); rf+=scene(p,jr,true); }
       rf/=3.;
@@ -552,7 +552,9 @@ canvas{width:100vw;height:100vh;display:block}
       col=rf*(.14+.45*fr)*fade*uFloor + pool*fade*.7;
       col+=studio(rr)*fr*.18*fade;
     } }
-    o=vec4(col,1);
+    // seguro: un valor no válido (NaN/infinito) en una sola gráfica quemaba toda la pantalla a través del halo
+    if(any(isnan(col))||any(isinf(col))) col=vec3(0);
+    o=vec4(clamp(col,0.,64.),1);
   }`;
   function sh(t, s) { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o; }
   const PG = gl.createProgram(); gl.attachShader(PG, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(PG, sh(gl.FRAGMENT_SHADER, FS)); gl.bindAttribLocation(PG, 0, 'p'); gl.linkProgram(PG);
