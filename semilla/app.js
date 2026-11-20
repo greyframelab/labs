@@ -11,7 +11,7 @@
     set(k, v) { try { localStorage.setItem('semilla.' + k, JSON.stringify(v)); } catch (e) {} },
   };
 
-  const cfg = Object.assign({ mode: window.SemillaVoz && window.SemillaVoz.isApp ? 'publico' : 'auto', loops: 3, sig: 30, vol: 70, bri: 100, safe: true, sound: true, accent: 'auto', den: 0.5, cha: 0.5 }, store.get('cfg', {}));
+  const cfg = Object.assign({ mode: window.SemillaVoz && window.SemillaVoz.isApp ? 'publico' : 'auto', loops: 3, sig: 30, vol: 70, bri: 100, safe: true, sound: true, accent: 'auto', den: 0.5, cha: 0.5, code: false }, store.get('cfg', {}));
   if (Q.get('modo')) cfg.mode = { automatico: 'auto', auto: 'auto', publico: 'publico', manual: 'manual' }[Q.get('modo')] || cfg.mode;
   const saveCfg = () => store.set('cfg', cfg);
 
@@ -142,7 +142,7 @@
       fade *= black;
       const live = cfg.mode !== 'manual';
       const lk = cur.P.look;
-      const look = { bloomBase: lk.bloom, tone: lk.tone, vig: lk.vig, grain: lk.grain, fade, drift: live ? now() * 0.02 : 0, scan: 0, ca: lk.tone ? 0.004 : 0.01 };
+      const look = { code: cfg.code === true, bloomBase: lk.bloom, tone: lk.tone, vig: lk.vig, grain: lk.grain, fade, drift: live ? now() * 0.02 : 0, scan: 0, ca: lk.tone ? 0.004 : 0.01 };
       // con la ventana de salida abierta, la vista previa de la consola se dibuja a 15 fps y pequeña: la GPU es para el proyector
       const draw = salidaOn() ? (++previewN % 4 === 0) : pacer.tick();
       if (draw) { eng.draw(slots, Object.assign({ sting: stingC, stingA }, look)); if (!salidaOn()) pacer.done(ts); }
@@ -150,6 +150,7 @@
       if (shotReq) { shotReq = false; shot(); }
       errors = 0;
       hud(t);
+      window.SemillaCodigo.draw($('code'), cur.P, pieceT(cur, t), cur.P.word, cfg.code === true);   // vista código en tiempo real (apagada por defecto)
     } catch (err) {
       console.error(err);
       if (++errors > 40) reload('error');
@@ -346,6 +347,9 @@
     $('bSafe').classList.toggle('on', cfg.safe);
     $('bSafe').onclick = () => { cfg.safe = !cfg.safe; saveCfg(); $('bSafe').classList.toggle('on', cfg.safe); };
     $('bBlack').onclick = toggleBlack;
+    const paintCode = () => $('bCode').classList.toggle('on', cfg.code === true);
+    window.toggleCode = () => { cfg.code = cfg.code !== true; saveCfg(); paintCode(); };
+    $('bCode').onclick = window.toggleCode; paintCode();
     $('bSound').onclick = () => { cfg.sound = !cfg.sound; saveCfg(); setVol(); };
     $('bProj').onclick = salida;
     $('bHelp').onclick = () => $('help').classList.toggle('on');
@@ -365,7 +369,7 @@
       if (k === '1') setMode('auto'); else if (k === '2') setMode('publico'); else if (k === '3') setMode('manual');
       else if (k === ' ') { e.preventDefault(); if (cfg.mode !== 'publico') $('bNew').click(); }
       else if (k === 'arrowleft') hist(-1); else if (k === 'arrowright') hist(1);
-      else if (k === 'h') proj(); else if (k === 'p') salida(); else if (k === 'f' && FIRMA) firmaStart(false); else if (k === 'b') toggleBlack();
+      else if (k === 'h') proj(); else if (k === 'p') salida(); else if (k === 'f' && FIRMA) firmaStart(false); else if (k === 'b') toggleBlack(); else if (k === 'k') window.toggleCode();
       else if (k === 's') $('bSound').click(); else if (k === 'r') rec(); else if (k === 'c') shotReq = true; else if (k === 'g') save();
       else if (k === 'arrowup' || k === 'arrowdown') { e.preventDefault(); cfg.vol = clamp(cfg.vol + (k === 'arrowup' ? 5 : -5), 0, 100); $('rVol').value = cfg.vol; $('oVol').textContent = cfg.vol; syncSliders(); saveCfg(); setVol(); }
       else if (k === '?' || k === '/') $('help').classList.toggle('on');

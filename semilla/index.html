@@ -64,6 +64,15 @@ main>*{background:var(--panel);min-height:0}
 .params{overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:#2a2927 transparent}
 .view{position:relative;background:#000;overflow:hidden}
 #c{position:absolute;inset:0;width:100%;height:100%;display:block}
+.cv{position:absolute;left:2.4%;bottom:3.2%;margin:0;white-space:pre;display:flex;flex-direction:column;font:400 clamp(8px,1.05vh,13px)/1.65 'JetBrains Mono',ui-monospace,monospace;letter-spacing:.04em;color:rgba(242,240,234,.5);pointer-events:none;transition:opacity .5s;z-index:3}
+.cv.off{opacity:0}
+.cv s,.cv u{text-decoration:none;color:rgba(242,240,234,.3)}
+.cv i,.cv b,.cv em{font-style:normal;color:var(--acc,#F2F0EA)}
+.cv b{font-weight:600}
+.cv>*{display:block}
+.cv .now{color:rgba(242,240,234,.88)}
+.view .cv{left:auto;right:2.4%;bottom:46px}
+
 .v-tag{position:absolute;left:16px;top:14px;display:flex;gap:10px;align-items:center;font-size:9px;letter-spacing:.24em;color:var(--tx2);text-shadow:0 0 12px #000;pointer-events:none}
 .v-tag .air{border:1px solid var(--acc);color:var(--acc);padding:3px 6px;font-size:8px}
 .v-big{position:absolute;left:16px;bottom:34px;display:flex;flex-direction:column;gap:8px;pointer-events:none;text-shadow:0 0 18px rgba(0,0,0,.9)}
@@ -158,6 +167,7 @@ body.solo{cursor:none}
   <main>
     <div class="view">
       <canvas id="c"></canvas>
+      <div class="cv" id="code"></div>
       <div class="v-tag"><span class="air">EN EL AIRE</span><span id="tagTxt">—</span></div>
       <div class="v-big"><b id="bigName">—</b><span id="bigIdea">—</span></div>
       <div class="tl" id="tl"></div>
@@ -201,6 +211,7 @@ body.solo{cursor:none}
         <div class="sl"><span>VOLUMEN</span><input type="range" id="rVol" min="0" max="100" value="70"><output id="oVol">70</output></div>
         <div class="sl"><span>BRILLO</span><input type="range" id="rBri" min="40" max="130" value="100"><output id="oBri">100</output></div>
         <div class="row"><button class="tbtn on" id="bSafe" title="destellos limitados para público general">DESTELLOS SEGUROS</button><button class="tbtn" id="bBlack" title="B">APAGAR</button></div>
+        <div class="row"><button class="tbtn" id="bCode" title="K: vista código en tiempo real, abajo de la obra">VISTA CÓDIGO</button></div>
       </div>
       <div class="sect">
         <h3>SALIDAS</h3>
@@ -246,6 +257,7 @@ body.solo{cursor:none}
 <script src="sound.js"></script>
 <script src="voz.js"></script>
 <script src="palabra.js"></script>
+<script src="codigo.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

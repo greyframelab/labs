@@ -54,7 +54,7 @@ Por defecto:
 - **REGISTRO:** anota cada pieza que nace (semilla, forma y hora, nunca la palabra) y se exporta a CSV.
 
 ## Atajos
-`1 2 3` modo · `espacio` nueva · `← →` historial · `P` proyectar (salida) · `H` vista limpia · `B` apagar · `S` sonido · `↑ ↓` volumen · `R` grabar · `C` captura · `G` guardar · `?` ayuda.
+`1 2 3` modo · `espacio` nueva · `← →` historial · `P` proyectar (salida) · `H` vista limpia · `B` apagar · `K` vista código · `S` sonido · `↑ ↓` volumen · `R` grabar · `C` captura · `G` guardar · `?` ayuda.
 
 ## Archivos
 - `score.js`: partitura (semilla → pieza).
@@ -65,5 +65,6 @@ Por defecto:
 - `app.js` + `index.html`: consola y modos.
 - `salida.html` + `salida.js`: ventana de salida.
 - `palabra.js`: la palabra proyectada.
+- `codigo.js`: VISTA CÓDIGO, una franja pequeña abajo con lo que la máquina ejecuta en tiempo real (semilla, forma, acto y cada evento). Apagada por defecto; se activa en SALA o con `K`.
 - `void-loom-sting.js`: la firma, desactivada de momento.
 - `fonts/`: JetBrains Mono (OFL).
