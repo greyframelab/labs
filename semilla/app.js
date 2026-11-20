@@ -379,9 +379,16 @@
       await ctx.resume();
       snd = new window.SemillaSound(ctx);
       eng = new window.SemillaEngine($('c')); pacer = new window.SemillaEngine.Pacer(eng);
-      logEl.textContent = 'PREPARANDO LAS ESPECIES…';
-      await new Promise((r) => setTimeout(r, 30));
-      eng.warm();
+      // pantalla de carga: la materia se prepara (la primera vez en cada ordenador tarda más; luego queda en caché)
+      $('go').classList.add('off'); $('bootbar').classList.add('on');
+      const t0 = performance.now();
+      await eng.warm((ok, n) => {
+        $('bootfill').style.transform = 'scaleX(' + (ok / n).toFixed(3) + ')';
+        const sec = (performance.now() - t0) / 1000;
+        logEl.textContent = 'PREPARANDO LA MATERIA · ' + ok + ' / ' + n + (sec > 6 ? ' · LA PRIMERA VEZ TARDA MÁS' : '');
+      });
+      logEl.textContent = 'CARGANDO EL SENTIDO DE LAS PALABRAS…'; $('bootfill').style.transform = 'scaleX(1)';
+      await Promise.race([window.SemillaVoz.sentidoReady, new Promise((r) => setTimeout(r, 4000))]);
       stingC = $('sting'); const vs = window.VL ? [VL.W, VL.H] : innerWidth >= innerHeight ? [1920, 1080] : [1080, 1920]; stingC.width = vs[0]; stingC.height = vs[1]; stingX = stingC.getContext('2d');
       $('c').addEventListener('webglcontextlost', (e) => { e.preventDefault(); setTimeout(() => reload('gpu'), 800); });
       if (window.SemillaVoz.isApp) $('vozNote').textContent = 'En la app la voz se reconoce en este ordenador, sin internet.';
@@ -397,7 +404,9 @@
       else if (Q.has('museo') || Q.has('instalacion') || Q.get('reanudar')) proj(true);
     } catch (err) {
       console.error(err);
-      logEl.classList.add('err'); logEl.textContent = 'NO SE PUDO ARRANCAR: ' + (err && err.message || err);
+      $('go').classList.remove('off'); $('bootbar').classList.remove('on');
+      logEl.classList.add('err');
+      logEl.textContent = err && err.gpu ? 'LA TARJETA GRÁFICA NO PUDO PREPARAR LA MATERIA · ' + (window.SemillaVoz.isApp ? 'LA APP SE REINICIA CON OTRO MODO GRÁFICO…' : 'PRUEBA EN CHROME ACTUALIZADO') : 'NO SE PUDO ARRANCAR: ' + (err && err.message || err);
     }
   }
   $('go').onclick = boot;

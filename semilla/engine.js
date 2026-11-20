@@ -95,7 +95,7 @@ void main(){ vec2 p=vec2((gl_VertexID<<1)&2, gl_VertexID&2); gl_Position=vec4(p*
   SP.objeto = `
 out vec4 o;
 // uQ: calidad (1 alta, 0 ligera para ordenadores modestos)
-uniform int uForm, uMat, uRig, uStroke, uShot, uFam; uniform float uQ; uniform float uBar, uShotK, uShotT; uniform vec3 uSC1, uSC2;
+uniform int uMat, uRig, uStroke, uShot, uFam; uniform float uQ; uniform float uBar, uShotK, uShotT; uniform vec3 uSC1, uSC2;
 uniform sampler2D uWord; uniform vec4 uWH, uCG; uniform vec2 uWL; uniform vec2 uAim[8];   // uAim: celdas encendidas de la palabra   // uWL: número de letras y paso entre ellas   // la palabra como campo de distancias: semiancho, semialto, rango, fondo
 // distancia 2D a las letras de la palabra (positiva fuera)
 float wordD(vec2 xy){
@@ -482,9 +482,11 @@ void main(){
     this.half = !gl.getExtension('EXT_color_buffer_float');
     gl.getExtension('OES_texture_float_linear');
     this.vao = gl.createVertexArray();
+    this.par = gl.getExtension('KHR_parallel_shader_compile');
     this.progs = {};
     this.scale = 1.0; this.frame = 0;
-    this.post = { down: this.prog(FS_VERT, DOWN), up: this.prog(FS_VERT, UP), fin: this.prog(FS_VERT, FINAL) };
+    this.post = { down: this.prog(FS_VERT, DOWN, 'down'), up: this.prog(FS_VERT, UP, 'up'), fin: this.prog(FS_VERT, FINAL, 'final') };
+    for (const k in this.post) this.finish(this.post[k]);
     this.sting = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.sting);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
@@ -497,28 +499,62 @@ void main(){
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, f); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, f);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   };
-  E.prog = function (vs, fs) {
-    const gl = this.gl;
-    const mk = (type, src) => {
-      const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
-      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
-        const log = gl.getShaderInfoLog(s); console.error(log, src.split('\n').map((l, i) => i + 1 + ': ' + l).join('\n'));
-        throw new Error('Shader: ' + log);
-      }
-      return s;
-    };
-    const p = gl.createProgram();
-    gl.attachShader(p, mk(gl.VERTEX_SHADER, vs)); gl.attachShader(p, mk(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(p);
-    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error('Link: ' + gl.getProgramInfoLog(p));
+  // PROGRAMAS: se compilan en segundo plano si la GPU lo permite (KHR_parallel_shader_compile) y se terminan al estar listos.
+  // Cada FORMA tiene su propio programa, pequeño: en Windows (Direct3D) un shader con todas las formas a la vez
+  // tarda mucho en compilar o directamente no enlaza.
+  E.prog = function (vs, fs, name = '') {
+    const gl = this.gl, mk = (type, src) => { const sh = gl.createShader(type); gl.shaderSource(sh, src); gl.compileShader(sh); return sh; };
+    const p = gl.createProgram(), v = mk(gl.VERTEX_SHADER, vs), f = mk(gl.FRAGMENT_SHADER, fs);
+    gl.attachShader(p, v); gl.attachShader(p, f); gl.linkProgram(p);
+    const rec = { p, u: null, v, f, fs, name, ready: false };
+    if (!this.par) this.finish(rec);   // sin compilación en paralelo: se termina ya (bloquea)
+    return rec;
+  };
+  // ¿terminó de compilar? (si terminó, comprueba errores y lee los uniformes)
+  E.done = function (rec) {
+    if (rec.ready) return true;
+    if (this.par && !this.gl.getProgramParameter(rec.p, this.par.COMPLETION_STATUS_KHR)) return false;
+    this.finish(rec); return true;
+  };
+  E.finish = function (rec) {
+    const gl = this.gl, p = rec.p;
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+      const log = (gl.getShaderInfoLog(rec.f) || '') + ' ' + (gl.getProgramInfoLog(p) || '');
+      console.error('[SEMILLA_GPU_FALLO]', rec.name, log);
+      if (!gl.getShaderParameter(rec.f, gl.COMPILE_STATUS)) console.error(rec.fs.split('\n').map((l, i) => i + 1 + ': ' + l).join('\n'));
+      const err = new Error('GPU · ' + rec.name + ' · ' + (log.trim() || 'el shader no enlaza en esta tarjeta gráfica')); err.gpu = true; throw err;
+    }
     const u = {}, n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
     for (let i = 0; i < n; i++) { const info = gl.getActiveUniform(p, i); u[info.name] = gl.getUniformLocation(p, info.name); }
-    return { p, u };
+    rec.u = u; rec.ready = true;
   };
+  const FORMS = 12;
+  // id: 'contra' o 'objeto:<forma>'. Devuelve el programa solo si está listo (si no, lo encarga y devuelve null)
   E.species = function (id) {
-    if (this.progs[id]) return this.progs[id];
-    if (id === 'contra') return (this.progs[id] = this.prog(FS_VERT, HEAD + FRAG + CONTRA));
-    this.progs[id] = this.prog(FS_VERT, HEAD + FRAG + SP[id]);
-    return this.progs[id];
+    let rec = this.progs[id];
+    if (!rec) {
+      if (id === 'contra') rec = this.prog(FS_VERT, HEAD + FRAG + CONTRA, id);
+      else { const form = +id.split(':')[1] || 0; rec = this.prog(FS_VERT, HEAD.replace('\n', `\n#define uForm ${form}\n`) + FRAG + SP.objeto, id); }
+      this.progs[id] = rec;
+    }
+    return this.done(rec) ? rec : null;
+  };
+  // prepara todas las formas; onStep(hechas, total) para la pantalla de carga. Resuelve cuando están todas listas.
+  E.warm = function (onStep) {
+    const ids = ['contra', ...Array.from({ length: FORMS }, (_, i) => 'objeto:' + i)];
+    return new Promise((res, rej) => {
+      let i = 0;
+      const step = () => {
+        try {
+          if (this.par) { ids.forEach((id) => this.species(id)); }      // en paralelo: se encargan todas a la vez
+          else if (i < ids.length) this.species(ids[i++]);             // sin paralelo: una por vuelta, para que la pantalla respire
+          const ok = ids.filter((id) => this.progs[id] && this.done(this.progs[id])).length;
+          onStep && onStep(ok, ids.length);
+          if (ok === ids.length) res(); else setTimeout(step, 16);
+        } catch (e) { rej(e); }
+      };
+      step();
+    });
   };
   // LA PALABRA COMO MATERIA: las letras se dibujan en un lienzo y se convierten en un campo de distancias
   // (transformada de distancia exacta, Felzenszwalb) que el shader extruye en 3D.
@@ -583,8 +619,6 @@ void main(){
     }
     return null;
   };
-  // compila todo de antemano (evita el tirón la primera vez que sale una especie)
-  E.warm = function () { this.species('objeto'); this.species('contra'); };
   E.fbo = function (w, h) {
     const gl = this.gl, tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, tex);
@@ -655,11 +689,12 @@ void main(){
     gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
     for (const s of slots) {
       if (!s || s.w < 0.002) continue;
-      const pr = this.species('objeto');
+      const pr = this.species('objeto:' + s.P.sp.form);
+      if (!pr) continue;   // aún compilando esta forma: no se dibuja (nunca bloquea la imagen)
       gl.useProgram(pr.p);
       gl.uniform2f(pr.u.uRes, S.w, S.h);
       setU(gl, pr.u, s.P, s.e, s.w, { uDrift: o.drift || 0, uBar: s.P.bar });
-      gl.uniform1i(pr.u.uForm, s.P.sp.form); gl.uniform1i(pr.u.uMat, s.P.vis.mat); gl.uniform1i(pr.u.uRig, s.P.vis.rig);
+      gl.uniform1i(pr.u.uMat, s.P.vis.mat); gl.uniform1i(pr.u.uRig, s.P.vis.rig);
       u1i(gl, pr.u.uFam, s.P.vis.fam || 0); pr.u.uQ && gl.uniform1f(pr.u.uQ, this.quality ?? 1);
       if (!this.blankTex) { this.blankTex = gl.createTexture(); gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, this.blankTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 1, 1, 0, gl.RED, gl.UNSIGNED_BYTE, new Uint8Array([255])); this.texParams(gl.LINEAR); gl.activeTexture(gl.TEXTURE0); }
       let wtex = this.blankTex;
@@ -679,11 +714,12 @@ void main(){
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       const c = contraOf(s.P, s.e);
       if (c[2] > 0.002) {
-        const cp = this.species('contra'); gl.useProgram(cp.p);
+        const cp = this.species('contra');
+        if (cp) { gl.useProgram(cp.p);
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
         gl.uniform2f(cp.u.uRes, S.w, S.h); setU(gl, cp.u, s.P, s.e, s.w, { uDrift: o.drift || 0 });
         gl.uniform4f(cp.u.uC, c[0], c[1], c[2], c[3]); gl.drawArrays(gl.TRIANGLES, 0, 3);
-        gl.blendFunc(gl.ONE, gl.ONE);
+        gl.blendFunc(gl.ONE, gl.ONE); }
       }
     }
     gl.disable(gl.BLEND);

@@ -16,6 +16,12 @@ app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-background-timer-throttling');
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 app.commandLine.appendSwitch('ignore-gpu-blocklist');
+// MODO GRÁFICO: si la tarjeta no consigue preparar la materia con el modo por defecto (Direct3D en Windows),
+// la app se reinicia sola probando otro (OpenGL, Vulkan…). El que funciona se queda guardado.
+const ANGLES = process.platform === 'win32' ? ['', 'gl', 'd3d11on12', 'vulkan'] : [''];
+const GPU_FILE = (() => { try { return require('path').join(app.getPath('userData'), 'grafico.json'); } catch (e) { return null; } })();
+const gpu = (() => { try { return JSON.parse(require('fs').readFileSync(GPU_FILE, 'utf8')); } catch (e) { return { i: 0 }; } })();
+if (ANGLES[gpu.i]) app.commandLine.appendSwitch('use-angle', ANGLES[gpu.i]);
 protocol.registerSchemesAsPrivileged([{ scheme: 'semilla', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true, codeCache: true } }]);
 
 if (!app.requestSingleInstanceLock()) { app.quit(); }
@@ -87,6 +93,16 @@ function createWindow() {
     w.webContents.on('before-input-event', (e, i) => { if (i.key === 'Escape') e.preventDefault(); });
   });
   win.webContents.on('render-process-gone', () => { if (!win.isDestroyed()) win.loadURL(pageURL()); });
+  // la página avisa si la GPU no pudo preparar la materia: se prueba el siguiente modo gráfico
+  win.webContents.on('console-message', (...args) => {
+    const msg = typeof args[2] === 'string' ? args[2] : (args[0] && args[0].message) || '';
+    if (!msg.includes('[SEMILLA_GPU_FALLO]') || gpu.tried) return;
+    gpu.tried = true;
+    if (gpu.i + 1 < ANGLES.length) {
+      try { fs.writeFileSync(GPU_FILE, JSON.stringify({ i: gpu.i + 1 })); } catch (e) {}
+      setTimeout(() => { app.relaunch(); app.exit(0); }, 2500);
+    }
+  });
   if (INSTALL) win.webContents.on('before-input-event', (e, i) => { if (i.key === 'Escape') e.preventDefault(); });
   win.on('close', (e) => {
     if (quitting) return;
