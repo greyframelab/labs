@@ -327,7 +327,7 @@
     // PALABRA: fragmentos de letra en macro; solo en el ECO la cámara se aleja y se lee entera
     // un macro sobre una superficie lisa es una mancha: en formas lisas y solas, se cambia por un rasante
     if (type === 1 && P.sp.form < 8 && !P.vis.surf && !P.vis.comp) type = 2;
-    if (P.sp.form === 11) type = i === 0 || i === CUTS.length - 1 ? 0 : r < 0.6 ? 1 : r < 0.85 ? 2 : 3;   // al nacer y en el ECO, la palabra entera
+    if (P.sp.form === 11) type = i === 0 || i === CUTS.length - 1 || r < 0.35 ? 0 : 1;   // la palabra siempre de frente: entera o en macro de letra (desde arriba o a ras solo se veían rodajas)
     return { i, type, K, since: bars - CUTS[i] };
   }
   window.SEMILLA = { MATRIX, matrix, FAMS, KITS, TEXS, CUTS, shotAt, MATS, RIGS, PALETTES, ACCENTS, ACCENT_NAMES, SPECIES, REFS, ACTS, NOTE, BARS, newCode, cleanCode, generate, env, warp, energyAt, hashStr, mulberry, h4 };
