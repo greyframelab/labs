@@ -110,7 +110,9 @@ float slotGlyph(float i, float bars){
   if(bars<1.4+i*0.09) return -1.0;                             // al nacer, la palabra se ve entera (justo después de decirla); luego se abstrae
   float rate=(bars>=8.0&&bars<12.0)?8.0:bars>=4.0?4.0:2.0;     // compila más deprisa con la tensión y en la ruptura
   float k=floor(uT/uBar*rate+hh2(vec2(i,3.1))*3.0);
-  if(hh2(vec2(i,k))<0.18) return -2.0;                        // a veces el hueco parpadea vacío (dato que aún no llega)
+  float hk=hh2(vec2(i,k));
+  if(hk<0.1) return -2.0;                                     // a veces el hueco parpadea vacío (dato que aún no llega)
+  if(hk>0.5) return -1.0;                                     // la mitad de los pulsos muestra su letra: la palabra se reconoce aun abstraída
   return floor(hh2(vec2(i*7.1,k))*uAt.y);
 }
 // distancia 2D a lo que muestra la palabra (positiva fuera)
@@ -281,10 +283,10 @@ float map(vec3 p){
     float sh=uAt.w/15.0, sid=floor(r.y/sh), li=floor((r.x+uWL.x*uAt.z*0.5)/uAt.z);
     float hs=hh2(vec2(sid,li+0.5));
     // DISPERSIÓN: en la tensión y la ruptura las láminas se separan (abstracción); en el ECO se recogen y la palabra se lee
-    float scat=(0.04+0.24*smoothstep(1.0,7.5,bars)+0.3*uImpact+0.04*uKick)*(1.0-eco);
+    float scat=(0.04+0.24*smoothstep(1.0,7.5,bars)+0.3*uImpact)*(1.0-eco)*(1.0-0.8*clamp(uKick,0.0,1.0));   // con cada bombo las láminas encajan y la letra se forma un instante
     r.z-=(hs-0.5)*scat; r.x+=(hh2(vec2(sid*1.7,li))-0.5)*scat*0.7*step(0.62,hs);   // algunas láminas se corren de lado (glitch)
     // ESTELA DE DATOS: en la tensión cada lámina se alarga hacia atrás como un flujo; en el ECO se recoge en una placa
-    float trail=(0.15*smoothstep(1.5,4.0,bars)+0.9*smoothstep(4.0,7.5,bars)+0.4*uImpact)*(1.0-eco)*(0.25+hs);
+    float trail=(0.05*smoothstep(1.5,4.0,bars)+0.22*smoothstep(4.0,7.5,bars)+0.2*uImpact)*(1.0-eco)*(0.25+hs)*(1.0-0.6*clamp(uKick,0.0,1.0));   // estela corta: la letra manda
     float d2=wordD(r.xy,bars); vec2 w=vec2(d2,abs(r.z+trail*0.5)-(uWH.w+trail*0.5));
     d=min(max(w.x,w.y),0.0)+length(max(w,0.0))-0.002;
     float g=(0.5-abs(fract(r.y/sh)-0.5))*sh-0.0035*(1.0-0.6*eco);   // ranura fina entre láminas
@@ -383,7 +385,8 @@ void main(){
     vec3 aim=uForm==11?vec3(ap,0.0):vec3(0.0);
     vec3 so=aim+dir*2.6+vec3(0.0,(K-0.5)*0.6,0.0), sd=normalize(aim-so); float st=0.0;
     for(int j=0;j<32;j++){ float dd=map(so+sd*st); if(dd<0.002||st>4.0) break; st+=dd; }
-    ta=field?dir:uForm==11?aim:so+sd*min(st,3.0); ro=ta+normalize(dir+vec3(0.3*sin(K*9.0),0.25,0.0))*(field?0.8:uForm==11?1.35-push*1.5:(uComp>0?1.8:1.4)-push*2.0); lens=1.7+0.8*fract(K*7.0);   // macro con aire y lente moderada: se lee la materia, no una mancha   // las composiciones se ven mejor con algo de aire
+    ta=field?dir:uForm==11?aim:so+sd*min(st,3.0); vec3 md=uForm==11?normalize(vec3(dir.x*0.45,dir.y*0.25,1.0)):normalize(dir+vec3(0.3*sin(K*9.0),0.25,0.0));   // la palabra, siempre casi de frente
+    ro=ta+md*(field?0.8:uForm==11?1.35-push*1.5:(uComp>0?1.8:1.4)-push*2.0); lens=1.7+0.8*fract(K*7.0);   // macro con aire y lente moderada: se lee la materia, no una mancha   // las composiciones se ven mejor con algo de aire
   } else if(uShot==2){     // RASANTE: desde el suelo, a contraluz
     ro=vec3(sin(K*12.0)*2.6,-0.86,cos(K*12.0)*2.6)*(1.0-push); ta=vec3(0.0,-0.25+0.3*fract(K*5.0),0.0); lens=2.2;
   } else if(uShot==3){     // CENITAL: desde arriba, la forma como signo
@@ -825,7 +828,7 @@ void main(){
         const wr = this.word(s.P.word || s.P.code);
         if (wr) { // la mayoría, teselas finas casi planas; algunas piezas, vóxeles en 3D
           const wi = wr.info, deep = s.P.vis.v[2] < 0.35; wtex = wr.tex;
-          pr.u.uWH && gl.uniform4f(pr.u.uWH, wi[0], wi[1], wi[2], deep ? wi[3] * 0.16 : wi[3] * 0.035);   // bloque 3D o lámina
+          pr.u.uWH && gl.uniform4f(pr.u.uWH, wi[0], wi[1], wi[2], deep ? wi[3] * 0.09 : wi[3] * 0.03);   // bloque 3D o lámina
           pr.u.uAt && gl.uniform4f(pr.u.uAt, wr.at[0], wr.at[1], wr.at[2], wr.at[3]);
           const ua = pr.u['uAim[0]'] || pr.u.uAim; ua && gl.uniform2fv(ua, wr.aim); pr.u.uWL && gl.uniform2f(pr.u.uWL, wr.L[0], wr.L[1]);
         } else pr.u.uWH && gl.uniform4f(pr.u.uWH, 0.01, 0.01, 0.001, 0.001);   // aún calculándose (unos ms): no hay letra todavía
