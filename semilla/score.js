@@ -126,6 +126,7 @@
       mat: Math.floor(R() * 4), rig: Math.floor(R() * 4),
     };
     if (F.mat != null) vis.mat = F.mat; if (F.rig != null) vis.rig = F.rig;
+    if (sp.form >= 8 && sp.form <= 10 && vis.mat === 3) vis.mat = 1;   // en los campos el terciopelo se pierde en el negro: obsidiana
     // tratamiento por sentido: la palabra lo decide; sin palabra, casi la mitad de las piezas llevan uno al azar
     let fam = F.fam && FAMS.indexOf(F.fam) > 0 ? FAMS.indexOf(F.fam) : 0;
     if (!F.fam && h4(S, 300, 1, 2) < 0.45) fam = 1 + Math.floor(h4(S, 301, 3, 4) * 10);
@@ -321,8 +322,11 @@
     bars = ((bars % P.bars) + P.bars) % P.bars; let i = 0;
     for (let k = 0; k < CUTS.length; k++) if (bars >= CUTS[k]) i = k;
     const K = h4(P.seed, 77, i, 3), r = h4(P.seed, 78, i, 5);
-    let type = P.sp.form >= 8 && P.sp.form <= 10 ? (r < 0.25 ? 3 : 1) : r < 0.45 ? 1 : r < 0.7 ? 2 : r < 0.85 ? 3 : 0;
+    let type = P.sp.form >= 8 && P.sp.form <= 10 ? 1 :   // en los campos, siempre desde dentro (el cenital solo veía bruma)
+       r < 0.45 ? 1 : r < 0.7 ? 2 : r < 0.85 ? 3 : 0;
     // PALABRA: fragmentos de letra en macro; solo en el ECO la cámara se aleja y se lee entera
+    // un macro sobre una superficie lisa es una mancha: en formas lisas y solas, se cambia por un rasante
+    if (type === 1 && P.sp.form < 8 && !P.vis.surf && !P.vis.comp) type = 2;
     if (P.sp.form === 11) type = i === 0 || i === CUTS.length - 1 ? 0 : r < 0.6 ? 1 : r < 0.85 ? 2 : 3;   // al nacer y en el ECO, la palabra entera
     return { i, type, K, since: bars - CUTS[i] };
   }

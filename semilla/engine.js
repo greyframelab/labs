@@ -255,7 +255,7 @@ float map(vec3 p){
     float sp=pow(max(0.0,sin(n.x*7.0+ph)*sin(n.y*7.0)*sin(n.z*7.0-ph)),1.6);
     d=(length(p)-0.55-sp*(0.45+0.3*uBass+0.2*uChaos))*0.45;
   } else if(uForm==8){     // RED: una superficie mínima infinita, vista desde dentro
-    float k=2.2+1.6*uDen;
+    float k=3.2+2.0*uDen;   // más estructura a la vista: paredes más finas y más cercanas entre sí
     vec3 r=p+vec3(0.0,0.0,uPhase/k*2.0);
     d=(abs(gyr(r*k))/k-(0.05+0.05*uChaos+0.02*uBass))*0.6;
     return d;
@@ -382,7 +382,7 @@ void main(){
     vec3 aim=uForm==11?vec3(ap,0.0):vec3(0.0);
     vec3 so=aim+dir*2.6+vec3(0.0,(K-0.5)*0.6,0.0), sd=normalize(aim-so); float st=0.0;
     for(int j=0;j<32;j++){ float dd=map(so+sd*st); if(dd<0.002||st>4.0) break; st+=dd; }
-    ta=field?dir:uForm==11?aim:so+sd*min(st,3.0); ro=ta+normalize(dir+vec3(0.3*sin(K*9.0),0.25,0.0))*(field?0.8:uForm==11?1.35-push*1.5:(uComp>0?1.7:1.05)-push*2.0); lens=2.4+1.4*fract(K*7.0);   // las composiciones se ven mejor con algo de aire
+    ta=field?dir:uForm==11?aim:so+sd*min(st,3.0); ro=ta+normalize(dir+vec3(0.3*sin(K*9.0),0.25,0.0))*(field?0.8:uForm==11?1.35-push*1.5:(uComp>0?1.8:1.4)-push*2.0); lens=1.7+0.8*fract(K*7.0);   // macro con aire y lente moderada: se lee la materia, no una mancha   // las composiciones se ven mejor con algo de aire
   } else if(uShot==2){     // RASANTE: desde el suelo, a contraluz
     ro=vec3(sin(K*12.0)*2.6,-0.86,cos(K*12.0)*2.6)*(1.0-push); ta=vec3(0.0,-0.25+0.3*fract(K*5.0),0.0); lens=2.2;
   } else if(uShot==3){     // CENITAL: desde arriba, la forma como signo
@@ -395,8 +395,13 @@ void main(){
   if(field&&uShot!=3){
     // dentro del campo: busca un hueco abierto y mira a lo largo de él
     ro=vec3(0.15*sin(K*5.0),0.1*cos(K*3.0),0.0);
-    for(int j=0;j<10;j++){ if(map(ro)>0.16) break; ro+=vec3(0.13,0.07,0.11)*(1.0+float(j)*0.3); }
-    ta=ro+dir; lens=1.05+0.6*fract(K*11.0);
+    for(int j=0;j<16;j++){ if(map(ro)>0.24) break; ro+=vec3(0.13,0.07,0.11)*(1.0+float(j)*0.3); }
+    // mira por el hueco más abierto de cuatro: así se ve el túnel, no una pared pegada a la lente
+    vec3 best=dir; float bd=-1.0;
+    for(int j=0;j<4;j++){ vec3 dj=normalize(dir+0.6*vec3(cos(float(j)*1.57+K*6.0),sin(float(j)*1.57+K*6.0),0.3)); float tj=0.0;
+      for(int k=0;k<12;k++){ float dd=map(ro+dj*tj); if(dd<0.01) break; tj+=dd; if(tj>4.0) break; }
+      if(tj>bd){ bd=tj; best=dj; } }
+    ta=ro+best; lens=1.05+0.6*fract(K*11.0);
   }
   if(uForm==9&&uShot!=3){ ro.y=(floor(ro.y/0.32)+0.5)*0.32; ta.y=ro.y+(K-0.5)*0.3; }
   for(int j=0;j<6;j++){ float dc=map(ro); if(dc>0.06) break; ro+=normalize(ro-ta+vec3(0.0,0.001,0.0))*0.12; }
@@ -404,7 +409,7 @@ void main(){
   vec3 rd=normalize(fw*lens+rt*sp.x+up*sp.y);
   // foco: el macro enfoca el filo que mira y desenfoca todo lo demás (lente larga = poca profundidad)
   float fd=uShot==1?length(ta-ro):uShot==3?length(ro)-0.6:field?1.1+0.8*fract(K*5.0):length(ro-ta)-0.4;
-  float dofK=uShot==1?1.2:field?0.7:uShot==2?0.4:0.2;   // desenfoque contenido: que se lea la materia
+  float dofK=uShot==1?0.8:field?0.18:uShot==2?0.35:0.2;   // desenfoque contenido: que se lea la materia
   float t=0.0, d=1.0, minD=9.0;
   int maxI=uQ>0.5?100:64;
   // ANTIALIAS DE SILUETA: se guarda dónde el rayo pasó más cerca de la materia, en tamaño de píxel
@@ -421,7 +426,7 @@ void main(){
   if(t<9.0) col=shade(ro+rd*t,rd,t,bars,lift,true)*(field?mix(0.45,1.0,smoothstep(0.15,1.3,t)):mix(0.5,1.0,smoothstep(0.25,2.6,t)));
   if(cov>0.0&&!field) col=mix(col,shade(ro+rd*tMin,rd,tMin,bars,lift,false)*mix(0.5,1.0,smoothstep(0.25,2.6,tMin)),cov);   // bordes suaves, sin dientes de sierra   // la materia pegada a la lente se hunde en negro, no en gris
   col+=uAcc*exp(-minD*9.0)*(t>=9.0?1.0:0.0)*(uRig==3?0.16+uImpact*0.3:0.02)*(0.5+uEnergy);
-  if(field) col=mix(col,uAcc*(0.004+0.045*uEnergy*uEnergy+0.1*uImpact),1.0-exp(-min(t,9.0)*0.22));   // bruma de profundidad: se lee el túnel
+  if(field) col=mix(col,uAcc*(0.003+0.018*uEnergy*uEnergy+0.06*uImpact),1.0-exp(-min(t,9.0)*0.13));   // bruma de profundidad: se lee el túnel
   // suelo negro pulido: refleja de verdad la materia, cada vez más difuso con la distancia
   if(rd.y<0.0&&!field&&uQ>0.5){ float tp=(-1.0-ro.y)/rd.y; if(tp>0.0&&(tp<t||t>=9.0)){
     vec3 pp=ro+rd*tp, rr=reflect(rd,vec3(0.0,1.0,0.0));
@@ -441,8 +446,9 @@ void main(){
   if(uForm!=11) col*=mix(0.22,1.0,compMask(q*0.8));   // la composición guía la mirada sin apagar la forma; la palabra no se recorta
   // MIEDO: la oscuridad se cierra sobre la forma y solo se abre en el ECO
   if(uFam==4){ float cl=mix(1.5,0.5,smoothstep(0.0,11.0,bars)); cl=mix(cl,1.3,smoothstep(12.0,15.0,bars)); col*=1.0-smoothstep(cl-0.55,cl,length(q)); }
-  col+=trazos(q,bars,t<9.0?1.0:0.0);
+  vec3 tz=trazos(q,bars,t<9.0?1.0:0.0); col+=tz;
   float tt=min(t,9.0), coc=clamp(abs(tt-fd)/max(tt,0.35)*dofK,0.0,1.0);
+  coc*=1.0-clamp(dot(tz,vec3(0.3,0.59,0.11))*4.0,0.0,1.0);   // los trazos de luz siempre nítidos (el desenfoque los convertía en bruma)
   if(any(isnan(col))||any(isinf(col))) col=vec3(0.0);
   { float L=dot(col,vec3(0.3,0.59,0.11)); col*=min(1.0,1.9/(L+1e-4)); }   // techo de luz: ninguna zona se quema (el blanco nunca satura)
   o=vec4(col*uW,coc*uW);
@@ -469,7 +475,7 @@ void main(){
   } else {
     vec3 col=uAcc*(core*1.6+halo)*seg*cut*flick*(0.6+uMetal*0.9+uImpact*1.2);
     col+=INK*core*seg*uKick*0.25;
-    o=vec4(col*uW,0.0);
+    o=vec4(col*uW,clamp((core+halo*2.0)*seg*cut*1.5,0.0,1.0)*uW);   // el alfa marca la línea como enfocada (no se emborrona)
   }
 }`;
 
@@ -831,7 +837,7 @@ void main(){
       if (c[2] > 0.002) {
         const cp = this.species('contra');
         if (cp) { gl.useProgram(cp.p);
-        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        if (s.P.light) gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); else gl.blendFuncSeparate(gl.ONE, gl.ONE, gl.ZERO, gl.ONE_MINUS_SRC_ALPHA);
         gl.uniform2f(cp.u.uRes, S.w, S.h); setU(gl, cp.u, s.P, s.e, s.w, { uDrift: o.drift || 0 });
         gl.uniform4f(cp.u.uC, c[0], c[1], c[2], c[3]); gl.drawArrays(gl.TRIANGLES, 0, 3);
         gl.blendFunc(gl.ONE, gl.ONE); }
