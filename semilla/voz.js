@@ -93,5 +93,37 @@
   Listener.prototype.start = function () { if (!this.ok || this.on) return; this.on = true; this.lastStart = Date.now(); try { this.r.start(); } catch (e) {} };
   Listener.prototype.stop = function () { this.on = false; if (this.ok) try { this.r.stop(); } catch (e) {} this.onState('APAGADA'); };
 
-  window.SemillaVoz = { character, pickWord, family, Listener, FAMILIES: Object.keys(FAM) };
+  // ---------- escucha offline (app de escritorio): Vosk en WebAssembly con el modelo español dentro de la app ----------
+  // El reconocimiento de Chrome no existe dentro de una app de escritorio; aquí todo ocurre en el ordenador, sin internet.
+  function OfflineListener(onWord, onState) {
+    this.onWord = onWord; this.onState = onState || (() => {}); this.on = false; this.ok = true; this.ready = null;
+  }
+  OfflineListener.prototype.load = function () {
+    if (this.ready) return this.ready;
+    const st = this.onState;
+    this.ready = (async () => {
+      st('CARGANDO MODELO DE VOZ');
+      if (!window.Vosk) await new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'vosk/vosk.js'; s.onload = res; s.onerror = () => rej(new Error('sin vosk.js')); document.head.appendChild(s); });
+      const r = await fetch('vosk/model.tar.gz'); if (!r.ok) throw new Error('sin modelo de voz');
+      const model = await window.Vosk.createModel(URL.createObjectURL(await r.blob()));
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 }, video: false });
+      const ac = new AudioContext();
+      const rec = new model.KaldiRecognizer(ac.sampleRate);
+      rec.on('result', (m) => { const txt = m && m.result && m.result.text; const w = this.on && pickWord(txt); if (w) this.onWord(w, txt); });
+      const src = ac.createMediaStreamSource(stream), node = ac.createScriptProcessor(4096, 1, 1), mute = ac.createGain(); mute.gain.value = 0;
+      node.onaudioprocess = (e) => { if (this.on) try { rec.acceptWaveform(e.inputBuffer); } catch (err) {} };
+      src.connect(node); node.connect(mute); mute.connect(ac.destination);
+      this.ac = ac;
+    })();
+    this.ready.then(() => this.on && st('ESCUCHANDO'), (e) => { this.ok = false; st(/modelo|vosk/i.test(e.message) ? 'SIN MODELO DE VOZ' : /Permission|NotAllowed/i.test(e.name + e.message) ? 'SIN PERMISO DE MICRÓFONO' : 'SIN MICRÓFONO'); this.ready = null; });
+    return this.ready;
+  };
+  OfflineListener.prototype.start = function () { this.on = true; this.load().then(() => { if (this.ac) this.ac.resume(); }, () => {}); };
+  OfflineListener.prototype.stop = function () { this.on = false; this.onState('APAGADA'); };
+
+  // dentro de la app de escritorio, offline; en el navegador, el reconocimiento de Chrome
+  const isApp = /Electron/i.test(navigator.userAgent);
+  function makeListener(onWord, onState) { return isApp ? new OfflineListener(onWord, onState) : new Listener(onWord, onState); }
+
+  window.SemillaVoz = { character, pickWord, family, Listener, OfflineListener, makeListener, isApp, FAMILIES: Object.keys(FAM) };
 })();

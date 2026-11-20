@@ -1,0 +1,71 @@
+{
+  "name": "voidloom-semilla",
+  "productName": "VØID_LOOM SEMILLA",
+  "version": "1.0.0",
+  "description": "VØID_LOOM · SEMILLA · materia negra que nace de una palabra, generador infinito en tiempo real, sin internet",
+  "author": "VØID_LOOM",
+  "license": "MIT",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "model": "node scripts/model.js",
+    "copy": "node scripts/copy.js",
+    "start": "npm run copy && electron .",
+    "dist:win": "npm run copy && electron-builder --win --publish never",
+    "dist:mac": "npm run copy && electron-builder --mac --publish never"
+  },
+  "devDependencies": {
+    "electron": "45.3.2",
+    "electron-builder": "26.18.0",
+    "vosk-browser": "0.0.8"
+  },
+  "build": {
+    "appId": "labs.greyframe.voidloom.semilla",
+    "productName": "VØID_LOOM SEMILLA",
+    "copyright": "VØID_LOOM",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "package.json",
+      "www/**/*"
+    ],
+    "asar": true,
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "VØID_LOOM SEMILLA",
+      "artifactName": "VOID_LOOM-SEMILLA-${version}-windows-instalador.${ext}"
+    },
+    "portable": {
+      "artifactName": "VOID_LOOM-SEMILLA-${version}-windows-portable.${ext}"
+    },
+    "mac": {
+      "icon": "build/icon.png",
+      "category": "public.app-category.entertainment",
+      "identity": "-",
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "SEMILLA escucha la palabra que dice el visitante para que la obra nazca de ella. La voz se reconoce en este ordenador y no se envía ni se guarda."
+      },
+      "target": [
+        { "target": "dmg", "arch": ["arm64", "x64"] }
+      ]
+    },
+    "dmg": {
+      "artifactName": "VOID_LOOM-SEMILLA-${version}-mac-${arch}.${ext}"
+    }
+  },
+  "repository": "github:greyframelab/labs"
+}

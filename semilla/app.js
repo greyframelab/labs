@@ -153,7 +153,7 @@
   // La sala dice una palabra y la obra nace de ella. La palabra nunca se proyecta ni se guarda.
   const voz = { state: '—', last: '', fam: '', lastAt: -1e9, lastBirth: -1e9, pending: null, listener: null };
   function vozOn() {
-    if (!voz.listener) voz.listener = new window.SemillaVoz.Listener(onWord, (st) => (voz.state = st));
+    if (!voz.listener) voz.listener = window.SemillaVoz.makeListener(onWord, (st) => (voz.state = st));
     voz.listener.start();
   }
   function vozOff() { if (voz.listener) voz.listener.stop(); }
@@ -351,6 +351,7 @@
       eng.warm();
       stingC = $('sting'); stingC.width = VL.W; stingC.height = VL.H; stingX = stingC.getContext('2d');
       $('c').addEventListener('webglcontextlost', (e) => { e.preventDefault(); setTimeout(() => reload('gpu'), 800); });
+      if (window.SemillaVoz.isApp) $('vozNote').textContent = 'En la app la voz se reconoce en este ordenador, sin internet.';
       ui(); setVol(); setMode(cfg.mode);
       size();
       const first = Q.get('semilla') ? SM.cleanCode(Q.get('semilla')) : SM.newCode();
@@ -367,5 +368,6 @@
   }
   $('go').onclick = boot;
   // si se recargó sola (error de GPU, fallo), vuelve a arrancar en cuanto haya un gesto o directamente si el navegador lo permite
-  if (Q.get('reanudar')) { $('bootlog').textContent = 'REANUDANDO…'; setTimeout(() => boot(), 400); }
+  // se recargó sola (fallo de GPU) o es la app de escritorio en modo instalación: arranca sin esperar un clic
+  if (Q.get('reanudar') || (Q.has('museo') && window.SemillaVoz && window.SemillaVoz.isApp)) { $('bootlog').textContent = Q.get('reanudar') ? 'REANUDANDO…' : 'ARRANCANDO…'; setTimeout(() => boot(), 600); }
 })();

@@ -249,7 +249,7 @@ void main(){
   for(int i=0;i<128;i++){ d=map(ro+rd*t); minD=min(minD,d); if(d<0.0004*t+0.0002||t>9.0) break; t+=d*0.9; }
   float bars=uT/uBar;
   vec3 col=vec3(0.0);
-  float lift=0.35+0.95*uEnergy;               // la SEÑAL casi a oscuras, la RUPTURA a plena luz
+  float lift=0.55+0.8*uEnergy;                // la SEÑAL en penumbra (visible en proyección), la RUPTURA a plena luz
   if(t<9.0) col=shade(ro+rd*t,rd,t,bars,lift,true);
   col+=uAcc*exp(-minD*9.0)*(t>=9.0?1.0:0.0)*(uRig==3?0.16+uImpact*0.3:0.02)*(0.5+uEnergy);
   // suelo negro pulido: refleja de verdad la materia, cada vez más difuso con la distancia

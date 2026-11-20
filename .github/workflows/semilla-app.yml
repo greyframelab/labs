@@ -1,0 +1,75 @@
+# VØID_LOOM · SEMILLA · genera la app de escritorio para Windows y Mac
+# Se ejecuta al cambiar semilla/ o semilla-app/ en main, o a mano desde la pestaña Actions.
+# Descarga el modelo de voz español (Vosk) y lo mete dentro: la app oye sin internet.
+# Deja los ejecutables en la release "semilla-app-latest" del repo.
+name: VØID_LOOM · SEMILLA · app
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['semilla/**', 'semilla-app/**', '.github/workflows/semilla-app.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: semilla-app
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: win
+          - os: macos-latest
+            target: mac
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: semilla-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: semilla-app/package-lock.json
+      - uses: actions/cache@v4
+        with:
+          path: semilla-app/models
+          key: vosk-model-small-es-0.42
+      - run: npm ci
+      - run: npm run model
+      - run: npm run dist:${{ matrix.target }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: voidloom-semilla-${{ matrix.target }}
+          path: |
+            semilla-app/dist/*.exe
+            semilla-app/dist/*.dmg
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Release semilla-app-latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          ls -la out
+          gh release delete semilla-app-latest --cleanup-tag -y || true
+          gh release create semilla-app-latest out/* --prerelease --target "$GITHUB_SHA" \
+            --title "VØID_LOOM · SEMILLA · app de escritorio (última)" \
+            --notes "App de escritorio de VØID_LOOM · SEMILLA para Windows y Mac: materia negra que nace de una palabra. Funciona sin internet; el modelo de voz español va dentro. Instrucciones en semilla-app/README.md."
