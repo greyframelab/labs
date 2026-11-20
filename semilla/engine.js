@@ -94,7 +94,7 @@ void main(){ vec2 p=vec2((gl_VertexID<<1)&2, gl_VertexID&2); gl_Position=vec4(p*
   const SP = {};
   SP.objeto = `
 out vec4 o;
-uniform int uForm, uMat, uRig, uStroke; uniform float uBar; uniform vec3 uSC1, uSC2;
+uniform int uForm, uMat, uRig, uStroke, uShot; uniform float uBar, uShotK, uShotT; uniform vec3 uSC1, uSC2;
 vec2 bz(vec2 a,vec2 b,vec2 c,float t){ return mix(mix(a,b,t),mix(b,c,t),t); }
 // TRAZOS: la palabra pinta luz sobre la materia negra; cada familia de sentido tiene su gesto.
 // Unos trazos pasan por delante del objeto y otros por detrás (los tapa).
@@ -185,7 +185,7 @@ float map(vec3 p){
     float cell=0.27, n=floor(2.0+uDen*2.0);
     float id=clamp(floor(p.x/cell+0.5),-n,n); vec3 r=p; r.x-=id*cell;
     float hh=(0.3+0.55*fract(sin(id*12.9+uV0.x*40.0)*43758.5))*(0.8+0.2*sin(ph+id*1.3));
-    d=(sdBox(r-vec3(0.0,hh-0.85,0.0),vec3(0.075,hh,0.075+0.05*uV0.y))-0.008)*0.8;
+    d=(sdBox(r-vec3(0.0,hh-0.85,0.0),vec3(0.075,hh,0.075+0.05*uV0.y))-0.008)*0.5;
   } else if(uForm==5){     // FRACTURA: un bloque en lonchas que se separan en la ruptura
     float gap=0.015+0.16*uImpact+0.03*uKick, sl=0.26;
     float id=clamp(floor(p.y/sl+0.5),-3.0,3.0); vec3 r=p; r.y-=id*sl;
@@ -196,6 +196,25 @@ float map(vec3 p){
     vec3 n=normalize(p);
     float sp=pow(max(0.0,sin(n.x*7.0+ph)*sin(n.y*7.0)*sin(n.z*7.0-ph)),1.6);
     d=(length(p)-0.55-sp*(0.45+0.3*uBass+0.2*uChaos))*0.45;
+  } else if(uForm==8){     // RED: una superficie mínima infinita, vista desde dentro
+    float k=2.2+1.6*uDen;
+    vec3 r=p+vec3(0.0,0.0,uPhase/k*2.0);
+    d=(abs(gyr(r*k))/k-(0.05+0.05*uChaos+0.02*uBass))*0.6;
+    return d;
+  } else if(uForm==9){     // LÁMINAS: estratos de vidrio negro que se desplazan
+    float sp=0.32, id=floor(p.y/sp+0.5); vec3 r=p; r.y-=id*sp;
+    float hw=fract(sin(id*17.3+uV0.x*31.0)*43758.5);
+    r.x+=0.6*sin(id*1.7+uPhase+uV0.y*6.0)+uImpact*0.3*sin(id*3.1);
+    r.xz=rot(id*0.22*tw())*r.xz;
+    d=sdBox(r,vec3(0.4+1.4*hw,0.025+0.02*uDen,4.0))-0.006;
+    return d*0.8;
+  } else if(uForm==10){    // FILOS: un bosque de cuchillas
+    vec2 cell=vec2(0.5); vec2 id=floor(p.xz/cell+0.5); vec3 r=p; r.xz-=id*cell;
+    float hh=fract(sin(dot(id,vec2(12.9,78.2))+uV0.x*40.0)*43758.5);
+    r.xz=rot(hh*6.28+uPhase*(hh-0.5))*r.xz;
+    float ht=0.3+1.2*hh*(0.85+0.15*sin(uPhase+hh*6.0));
+    d=sdBox(r-vec3(0.0,ht-1.0,0.0),vec3(0.14,ht,0.012))-0.003;
+    return d*0.4;
   } else {                 // MONOLITO: una losa y una grieta de luz
     vec3 r=p; r.xz=rot(0.3*sin(ph))*r.xz;
     d=sdBox(r,vec3(0.26,1.02,0.1))-0.015;
@@ -225,14 +244,18 @@ vec3 shade(vec3 p, vec3 rd, float t, float bars, float lift, bool full){
   vec3 Ld=normalize(vec3(0.6,0.7,0.4));
   float sh=full&&uMat!=3?mix(0.35,1.0,shadow(p+n*0.01,Ld)):1.0;
   float key, acc; rigLight(p,r,n,fr,bars,key,acc);
+  key+=pow(fr,2.2)*0.35+exp(-pow((dot(r,normalize(vec3(-0.7,0.2,0.3)))-0.9)*9.0,2.0))*0.35;   // luz de filo que acompaña a la cámara
+  if(uForm>=8) key+=0.55*exp(-t*0.55)*pow(max(dot(n,v),0.0),3.0)+0.3*pow(fr,1.5);           // en los campos, la cámara lleva su propia luz
   float spec=pow(max(dot(r,Ld),0.0),uMat==0?140.0:uMat==1?90.0:60.0)*sh;
   vec3 base;
   if(uMat==0)      base=INK*(key*(0.12+F*1.4)*1.15+spec*1.1+fr*0.03);
   else if(uMat==1) base=INK*(key*(0.18+F*1.1)+spec*0.8+fr*0.025);
   else if(uMat==2) base=mix(INK,uAcc,0.12)*(key*(0.35+0.7*F)*1.3+spec*1.3)+fr*0.02;
   else             base=INK*(pow(fr,1.3)*1.1*(0.5+key)+key*0.12);
-  vec3 col=base*lift*ao;
-  col+=INK*key*uKick*0.55*lift*ao;
+  // en la RUPTURA la luz principal se vuelve masa de acento en los planos impares
+  float hot=(bars>=8.0&&bars<12.0&&fract(uShotK*13.0)>0.45)?1.0:0.0;
+  vec3 col=mix(base,base*uAcc*1.6,hot*0.85)*lift*ao;
+  col+=mix(INK,uAcc,hot)*key*uKick*0.55*lift*ao;
   col+=uAcc*acc*(0.1+uMetal*2.2+uImpact*1.8)*(0.3+fr)*ao;
   float vein=exp(-abs(gyr(p*7.0+vec3(uPhase)))*16.0);
   col+=uAcc*vein*(uImpact*1.6+(bars>=8.0&&bars<12.0?0.08:0.0));
@@ -241,10 +264,34 @@ vec3 shade(vec3 p, vec3 rd, float t, float bars, float lift, bool full){
 }
 void main(){
   vec2 q=screenP(); vec2 sp=rot(uRot*0.3)*q;
-  float ca=uPhase+uV0.w*6.0, dist=(4.1+1.5*uV1.y)/(0.75+0.35*uZoom);
-  vec3 ro=vec3(sin(ca)*0.55,0.18+0.14*cos(ca)+0.3*(uV1.z-0.5),dist);
-  vec3 ta=vec3(uOff*0.55,0.0), fw=normalize(ta-ro), rt=normalize(cross(fw,vec3(0,1,0))), up=cross(rt,fw);
-  vec3 rd=normalize(fw*(1.5+0.6*uV1.w)+rt*sp.x+up*sp.y);
+  // PLANOS: la cámara corta en seco con el ritmo; casi nunca se ve el cuerpo entero
+  float K=uShotK, push=uShotT*0.06;
+  vec3 dir=normalize(vec3(cos(K*31.0),0.35*sin(K*17.0),sin(K*31.0)));
+  vec3 ro, ta; float lens;
+  bool field=uForm>=8;
+  if(uShot==1){            // MACRO: la materia tan cerca que deja de ser un objeto
+    // apunta a un punto real de la superficie: se busca desde fuera hacia el centro
+    vec3 so=dir*2.6+vec3(0.0,(K-0.5)*0.6,0.0), sd=normalize(-so); float st=0.0;
+    for(int j=0;j<48;j++){ float dd=map(so+sd*st); if(dd<0.002||st>4.0) break; st+=dd; }
+    ta=field?dir:so+sd*min(st,3.0); ro=ta+normalize(dir+vec3(0.3*sin(K*9.0),0.25,0.0))*(field?0.8:0.95-push*2.0); lens=2.4+1.4*fract(K*7.0);
+  } else if(uShot==2){     // RASANTE: desde el suelo, a contraluz
+    ro=vec3(sin(K*12.0)*2.6,-0.86,cos(K*12.0)*2.6)*(1.0-push); ta=vec3(0.0,-0.25+0.3*fract(K*5.0),0.0); lens=2.2;
+  } else if(uShot==3){     // CENITAL: desde arriba, la forma como signo
+    ro=vec3(0.3*sin(K*7.0),3.2-push*3.0,0.25); ta=vec3(0.0); lens=1.9+0.8*fract(K*3.0);
+  } else {                 // GENERAL
+    float ca=uPhase+uV0.w*6.0, dist=(4.1+1.5*uV1.y)/(0.75+0.35*uZoom)-push*2.0;
+    ro=vec3(sin(ca)*0.55,0.18+0.14*cos(ca)+0.3*(uV1.z-0.5),dist); ta=vec3(uOff*0.55,0.0); lens=1.5+0.6*uV1.w;
+  }
+  if(field&&uShot!=3){
+    // dentro del campo: busca un hueco abierto y mira a lo largo de él
+    ro=vec3(0.15*sin(K*5.0),0.1*cos(K*3.0),0.0);
+    for(int j=0;j<10;j++){ if(map(ro)>0.16) break; ro+=vec3(0.13,0.07,0.11)*(1.0+float(j)*0.3); }
+    ta=ro+dir; lens=1.05+0.6*fract(K*11.0);
+  }
+  if(uForm==9&&uShot!=3){ ro.y=(floor(ro.y/0.32)+0.5)*0.32; ta.y=ro.y+(K-0.5)*0.3; }
+  for(int j=0;j<6;j++){ float dc=map(ro); if(dc>0.06) break; ro+=normalize(ro-ta+vec3(0.0,0.001,0.0))*0.12; }
+  vec3 fw=normalize(ta-ro), rt=normalize(cross(fw,abs(fw.y)>0.95?vec3(0,0,1):vec3(0,1,0))), up=cross(rt,fw);
+  vec3 rd=normalize(fw*lens+rt*sp.x+up*sp.y);
   float t=0.0, d=1.0, minD=9.0;
   for(int i=0;i<128;i++){ d=map(ro+rd*t); minD=min(minD,d); if(d<0.0004*t+0.0002||t>9.0) break; t+=d*0.9; }
   float bars=uT/uBar;
@@ -252,8 +299,9 @@ void main(){
   float lift=0.55+0.8*uEnergy;                // la SEÑAL en penumbra (visible en proyección), la RUPTURA a plena luz
   if(t<9.0) col=shade(ro+rd*t,rd,t,bars,lift,true);
   col+=uAcc*exp(-minD*9.0)*(t>=9.0?1.0:0.0)*(uRig==3?0.16+uImpact*0.3:0.02)*(0.5+uEnergy);
+  if(uForm>=8) col=mix(col,uAcc*(0.004+0.045*uEnergy*uEnergy+0.1*uImpact),1.0-exp(-min(t,9.0)*0.22));   // bruma de profundidad: se lee el túnel
   // suelo negro pulido: refleja de verdad la materia, cada vez más difuso con la distancia
-  if(rd.y<0.0){ float tp=(-1.0-ro.y)/rd.y; if(tp>0.0&&(tp<t||t>=9.0)){
+  if(rd.y<0.0&&uForm<8){ float tp=(-1.0-ro.y)/rd.y; if(tp>0.0&&(tp<t||t>=9.0)){
     vec3 pp=ro+rd*tp, rr=reflect(rd,vec3(0.0,1.0,0.0));
     float tr=0.02, dr=1.0; for(int i=0;i<56;i++){ dr=map(pp+rr*tr); if(dr<0.002||tr>5.0) break; tr+=dr; }
     float fade=exp(-length(pp.xz)*0.7);
@@ -423,6 +471,16 @@ void main(){
     const n = parseInt(h.slice(1), 16);
     return (hexCache[h] = [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]);
   }
+  // planos: cortes secos en los golpes; un plano largo en la SEÑAL y el ECO, cortes cada 2 compases en la TENSIÓN y cada compás en la RUPTURA
+  const CUTS = [0, 4, 6, 8, 9, 10, 11, 12];
+  function shotOf(P, e) {
+    const bars = e.u / P.bar; let i = 0;
+    for (let k = 0; k < CUTS.length; k++) if (bars >= CUTS[k]) i = k;
+    const K = window.SEMILLA.h4(P.seed, 77, i, 3);
+    const r = window.SEMILLA.h4(P.seed, 78, i, 5);
+    const type = P.sp.form >= 8 ? (r < 0.25 ? 3 : 1) : r < 0.45 ? 1 : r < 0.7 ? 2 : r < 0.85 ? 3 : 0;
+    return [type, K, bars - CUTS[i]];
+  }
   // dónde y cuánto existe el contrapunto en este instante (sale de la partitura)
   function contraOf(P, e) {
     const v = P.vis.v, golden = v[5] < 0.5 ? 0.382 : 0.618, horiz = v[6] < 0.3 ? 1 : 0;
@@ -430,7 +488,7 @@ void main(){
     let grow = Math.min(1, Math.max(0, (bars - 2.5) / 5.5));           // nace en la SEÑAL, crece en la TENSIÓN
     if (bars >= 12) grow *= Math.max(0, 1 - (bars - 12) / 3.6);        // se retira en el ECO
     const cut = bars >= 8 && bars < 12 ? Math.min(1, e.impact * 1.4 + 0.35) : 0;
-    const on = v[4] < 0.6 ? 1 : 0;   // no todas las piezas lo llevan
+    const on = v[4] < 0.35 ? 1 : 0;   // solo algunas piezas lo llevan
     return [golden + (v[7] - 0.5) * 0.03, horiz, on * grow * grow * (0.55 + 0.45 * e.energy), cut];
   }
   // slots: [{ P, e, w }]  ·  o: { bloom, flash, flashColor, fade, grain, scan, sting (canvas), stingA }
@@ -447,6 +505,7 @@ void main(){
       gl.uniform2f(pr.u.uRes, S.w, S.h);
       setU(gl, pr.u, s.P, s.e, s.w, { uDrift: o.drift || 0, uBar: s.P.bar });
       gl.uniform1i(pr.u.uForm, s.P.sp.form); gl.uniform1i(pr.u.uMat, s.P.vis.mat); gl.uniform1i(pr.u.uRig, s.P.vis.rig);
+      const sh = shotOf(s.P, s.e); gl.uniform1i(pr.u.uShot, sh[0]); gl.uniform1f(pr.u.uShotK, sh[1]); gl.uniform1f(pr.u.uShotT, sh[2]);
       const st = s.P.stroke, c1 = hex(st.c1), c2 = hex(st.c2);
       gl.uniform1i(pr.u.uStroke, st.style); gl.uniform3f(pr.u.uSC1, c1[0], c1[1], c1[2]); gl.uniform3f(pr.u.uSC2, c2[0], c2[1], c2[2]);
       gl.drawArrays(gl.TRIANGLES, 0, 3);

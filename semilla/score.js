@@ -20,10 +20,13 @@
     { id: 'torsion', form: 1, name: 'TORSIÓN', idea: 'un monolito que se retuerce sobre sí mismo', acc: ['rojo', 'cian', 'blanco'], w: 3 },
     { id: 'concha', form: 2, name: 'CONCHA', idea: 'una cáscara calada por una superficie mínima', acc: ['ambar', 'cian', 'violeta'], w: 3 },
     { id: 'pliegue', form: 3, name: 'PLIEGUE', idea: 'una lámina de materia que se dobla como un pensamiento', acc: ['blanco', 'cian', 'magenta'], w: 2 },
-    { id: 'columnas', form: 4, name: 'COLUMNAS', idea: 'una arquitectura que respira con el pulso', acc: ['ambar', 'verde', 'rojo'], w: 2 },
+    { id: 'columnas', form: 4, name: 'COLUMNAS', idea: 'una arquitectura que respira con el pulso', acc: ['ambar', 'verde', 'rojo'], w: 0 },
     { id: 'fractura', form: 5, name: 'FRACTURA', idea: 'un bloque que se abre en lonchas en la ruptura', acc: ['rojo', 'magenta', 'ambar'], w: 3 },
     { id: 'espina', form: 6, name: 'ESPINA', idea: 'un cuerpo erizado que se defiende de la luz', acc: ['rojo', 'verde', 'violeta'], w: 2 },
-    { id: 'monolito', form: 7, name: 'MONOLITO', idea: 'una losa en el vacío y una luz que la recorre', acc: ['blanco', 'rojo', 'cian'], w: 2 },
+    { id: 'monolito', form: 7, name: 'MONOLITO', idea: 'una losa en el vacío y una luz que la recorre', acc: ['blanco', 'rojo', 'cian'], w: 1 },
+    { id: 'red', form: 8, name: 'RED', idea: 'una superficie mínima infinita, vista desde dentro', acc: ['cian', 'rojo', 'violeta', 'ambar'], w: 5 },
+    { id: 'laminas', form: 9, name: 'LÁMINAS', idea: 'estratos de vidrio negro que se desplazan', acc: ['rojo', 'blanco', 'cian'], w: 4 },
+    { id: 'filos', form: 10, name: 'FILOS', idea: 'un bosque de cuchillas que corta la luz', acc: ['ambar', 'rojo', 'verde'], w: 0 },
   ];
   SPECIES.forEach((s) => { s.bloom = 0.26; s.pals = ['vacio', 'carbon']; });
   const SP_W = SPECIES.reduce((a, s) => a + s.w, 0);
