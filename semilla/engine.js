@@ -292,6 +292,9 @@ void main(){
   for(int j=0;j<6;j++){ float dc=map(ro); if(dc>0.06) break; ro+=normalize(ro-ta+vec3(0.0,0.001,0.0))*0.12; }
   vec3 fw=normalize(ta-ro), rt=normalize(cross(fw,abs(fw.y)>0.95?vec3(0,0,1):vec3(0,1,0))), up=cross(rt,fw);
   vec3 rd=normalize(fw*lens+rt*sp.x+up*sp.y);
+  // foco: el macro enfoca el filo que mira y desenfoca todo lo demás (lente larga = poca profundidad)
+  float fd=uShot==1?length(ta-ro):uShot==3?length(ro)-0.6:field?1.1+0.8*fract(K*5.0):length(ro-ta)-0.4;
+  float dofK=uShot==1?2.2:field?0.9:uShot==2?0.7:0.3;
   float t=0.0, d=1.0, minD=9.0;
   for(int i=0;i<128;i++){ d=map(ro+rd*t); minD=min(minD,d); if(d<0.0004*t+0.0002||t>9.0) break; t+=d*0.9; }
   float bars=uT/uBar;
@@ -310,7 +313,8 @@ void main(){
     col+=INK*0.02*fade*(0.4+uEnergy)+uAcc*0.03*uMetal*fade; } }
   col*=compMask(q*0.8);
   col+=trazos(q,bars,t<9.0?1.0:0.0);
-  o=vec4(col*uW,1.0);
+  float tt=min(t,9.0), coc=clamp(abs(tt-fd)/max(tt,0.35)*dofK,0.0,1.0);
+  o=vec4(col*uW,coc*uW);
 }`;
 
   // CONTRAPUNTO: una sola línea de luz del acento, en sección áurea. Crece con la tensión, se parte en la ruptura.
@@ -352,7 +356,7 @@ void main(){ vec2 uv=gl_FragCoord.xy/uOut; vec2 h=uTexel*0.5;
   o=vec4(s/12.0*uMix,1.0); }`;
   const FINAL = `#version 300 es
 precision highp float;
-uniform sampler2D uScene, uBloom, uSting; uniform vec2 uOut; uniform float uBloomAmt, uFlash, uStingA, uFade, uGrain, uScan, uCA, uFrame, uTone, uVig; uniform vec3 uFlashC;
+uniform sampler2D uScene, uBloom, uSting; uniform vec2 uOut; uniform float uBloomAmt, uFlash, uStingA, uFade, uGrain, uScan, uCA, uFrame, uTone, uVig, uDof; uniform vec3 uFlashC;
 out vec4 o;
 float hh(vec2 p){ vec3 p3=fract(vec3(p.xyx)*0.1031); p3+=dot(p3,p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
 void main(){
@@ -361,6 +365,17 @@ void main(){
   vec2 px=1.0/vec2(textureSize(uScene,0));
   vec3 nb=(texture(uScene,uv+vec2(px.x,0)).rgb+texture(uScene,uv-vec2(px.x,0)).rgb+texture(uScene,uv+vec2(0,px.y)).rgb+texture(uScene,uv-vec2(0,px.y)).rgb)*0.25;
   c=max(c+(c-nb)*0.35,0.0);   // enfoque fino: define bordes y reflejos sin halos
+  // profundidad de campo: disco de bokeh (espiral áurea); lo desenfocado no invade lo enfocado
+  float coc=texture(uScene,uv).a;
+  if(uDof>0.0&&coc>0.03){
+    vec3 acc=vec3(0.0); float ws=0.0; float R=coc*uDof;
+    for(int i=0;i<28;i++){ float fi=float(i); float a=fi*2.39996; float r=sqrt((fi+0.5)/28.0)*R;
+      vec2 o=vec2(cos(a),sin(a))*r*vec2(uOut.y/uOut.x,1.0);
+      vec4 sm=texture(uScene,uv+o); float w=smoothstep(r/max(uDof,1e-4)*0.8,r/max(uDof,1e-4)*0.8+0.15,sm.a)+0.04;
+      w*=1.0+2.0*smoothstep(0.6,1.6,dot(sm.rgb,vec3(0.3,0.59,0.11)));   // los brillos pesan más: bokeh
+      acc+=sm.rgb*w; ws+=w; }
+    c=mix(c,acc/max(ws,1e-4),smoothstep(0.05,0.3,coc));
+  }
   c+=texture(uBloom,uv).rgb*uBloomAmt;
   c+=uFlashC*uFlash*0.22;
   c*=uFade;
@@ -496,7 +511,7 @@ void main(){
     const gl = this.gl, S = this.scene;
     gl.bindVertexArray(this.vao);
     gl.bindFramebuffer(gl.FRAMEBUFFER, S.fb); gl.viewport(0, 0, S.w, S.h);
-    gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);   // alfa = desenfoque (0 = foco)
     gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
     for (const s of slots) {
       if (!s || s.w < 0.002) continue;
@@ -558,7 +573,7 @@ void main(){
     gl.uniform1f(F.u.uGrain, o.grain ?? 1);
     gl.uniform1f(F.u.uScan, o.scan ?? 0.025);
     gl.uniform1f(F.u.uCA, o.ca ?? 0.012);
-    gl.uniform1f(F.u.uTone, o.tone ?? 0); gl.uniform1f(F.u.uVig, o.vig ?? 0.6);
+    gl.uniform1f(F.u.uTone, o.tone ?? 0); gl.uniform1f(F.u.uVig, o.vig ?? 0.6); gl.uniform1f(F.u.uDof, o.dof ?? 0.02);
     gl.uniform1f(F.u.uFrame, this.frame++);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.activeTexture(gl.TEXTURE0);

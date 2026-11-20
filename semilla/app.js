@@ -349,7 +349,7 @@
       logEl.textContent = 'PREPARANDO LAS ESPECIES…';
       await new Promise((r) => setTimeout(r, 30));
       eng.warm();
-      stingC = $('sting'); stingC.width = VL.W; stingC.height = VL.H; stingX = stingC.getContext('2d');
+      stingC = $('sting'); if (window.VL) { stingC.width = VL.W; stingC.height = VL.H; } stingX = stingC.getContext('2d');
       $('c').addEventListener('webglcontextlost', (e) => { e.preventDefault(); setTimeout(() => reload('gpu'), 800); });
       if (window.SemillaVoz.isApp) $('vozNote').textContent = 'En la app la voz se reconoce en este ordenador, sin internet.';
       ui(); setVol(); setMode(cfg.mode);
