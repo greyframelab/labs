@@ -1,5 +1,6 @@
 # VØID_LOOM · SEMILLA · genera la app de escritorio para Windows y Mac
 # Se ejecuta al cambiar semilla/ o semilla-app/ en main, o a mano desde la pestaña Actions.
+# En una PR también genera la app (artefactos descargables desde la ejecución) para probarla antes del merge.
 # Descarga el modelo de voz español (Vosk) y lo mete dentro: la app oye sin internet.
 # Deja los ejecutables en la release "semilla-app-latest" del repo.
 name: VØID_LOOM · SEMILLA · app
@@ -9,12 +10,14 @@ on:
   push:
     branches: [main]
     paths: ['semilla/**', 'semilla-app/**', '.github/workflows/semilla-app.yml']
+  pull_request:
+    paths: ['semilla/**', 'semilla-app/**', '.github/workflows/semilla-app.yml']
 
 permissions:
   contents: write
 
 concurrency:
-  group: semilla-app
+  group: semilla-app-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -57,6 +60,7 @@ jobs:
 
   publish:
     needs: build
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
