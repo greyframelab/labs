@@ -46,7 +46,7 @@
     const t0 = now() + 0.1 - atT;
     const v = snd.piece(P, t0, 1);
     if (cur) { prev = cur; prev.fadeAt = now(); prev.fadeDur = xf; prev.voice.fadeOut(now() + 0.05, xf); }
-    cur = { P, t0, voice: v, born: now(), loopsDone: 0, how, force: o.force };
+    cur = { P, t0, voice: v, born: now(), loopsDone: 0, how, force: o.force, opts: o };
     if (how !== 'historial') { history = history.slice(0, hIdx + 1); history.push(code); if (history.length > 200) history.shift(); hIdx = history.length - 1; }
     if (how !== 'ruptura') logBirth(P, how);
     paintPiece();
@@ -56,7 +56,26 @@
   function regen(o) {
     if (!cur) return;
     const P = SM.generate(cur.P.code, Object.assign({}, o, cur.force ? { force: cur.force } : {}));
-    cur.P = P; cur.voice.P = P; paintPiece();
+    cur.P = P; cur.voice.P = P; cur.opts = Object.assign({}, o, cur.force ? { force: cur.force } : {}); paintPiece();
+  }
+
+  // ---------- SALIDA: la obra en su propia ventana (proyector); la consola sigue con todos los controles ----------
+  // La salida dibuja la misma pieza en el mismo instante: recibe semilla, mandos y tiempo de cada pieza en cada frame.
+  const salCh = new BroadcastChannel('semilla-salida');
+  let salWin = null, salSeen = 0;
+  salCh.onmessage = (e) => { if (e.data && e.data.type === 'vivo') salSeen = Date.now(); };
+  const salidaOn = () => Date.now() - salSeen < 2500;
+  function salidaSend(slots, t, look) {
+    if (!salidaOn()) return;
+    salCh.postMessage({
+      type: 'frame', at: performance.timeOrigin + performance.now(), safe: cfg.safe,
+      slots: slots.map((x) => ({ code: x.s.P.code, o: x.s.opts, t: Math.max(0, pieceT(x.s, t)), w: x.w })),
+      look, word: wordFx ? { w: wordFx.w, t: now() - wordFx.at, acc: cur.P.accent } : null,
+    });
+  }
+  function salida() {
+    if (salWin && !salWin.closed) { salWin.close(); salWin = null; salSeen = 0; return; }
+    salWin = window.open('salida.html', 'semilla-salida', 'popup,width=1280,height=720');
   }
 
   // ---------- frame ----------
@@ -87,10 +106,10 @@
       if (prev) {
         const x = Math.min(1, (now() - prev.fadeAt) / prev.fadeDur);
         const k = x * x * (3 - 2 * x);
-        slots.push({ P: prev.P, e: envOf(prev, t), w: 1 - k }); wCur = k;
+        slots.push({ P: prev.P, e: envOf(prev, t), w: 1 - k, s: prev }); wCur = k;
         if (x >= 1) prev = null;
       }
-      slots.push({ P: cur.P, e: envOf(cur, t), w: wCur });
+      slots.push({ P: cur.P, e: envOf(cur, t), w: wCur, s: cur });
       // firma: la pieza se apaga y entra el sting
       let fade = cfg.bri / 100, stingA = 0;
       if (firma) {
@@ -109,7 +128,9 @@
       fade *= black;
       const live = cfg.mode !== 'manual';
       const lk = cur.P.look;
-      eng.draw(slots, { bloomBase: lk.bloom, tone: lk.tone, vig: lk.vig, grain: lk.grain, fade, sting: stingC, stingA, drift: live ? now() * 0.02 : 0, scan: 0, ca: lk.tone ? 0.004 : 0.01 });
+      const look = { bloomBase: lk.bloom, tone: lk.tone, vig: lk.vig, grain: lk.grain, fade, drift: live ? now() * 0.02 : 0, scan: 0, ca: lk.tone ? 0.004 : 0.01 };
+      eng.draw(slots, Object.assign({ sting: stingC, stingA }, look));
+      salidaSend(slots, t, look);
       if (shotReq) { shotReq = false; shot(); }
       errors = 0;
       hud(t);
@@ -120,41 +141,14 @@
   }
   // resolución de la escena según lo que aguante el ordenador
   function adapt() {
+    if (salidaOn() && eng.scale > 0.6) { eng.resize(eng.size[0], eng.size[1], 0.6); return; }   // con la salida abierta, la vista previa va ligera
     if (fps < 48) { slowT++; fastT = 0; } else if (fps > 58) { fastT++; slowT = 0; } else { slowT = fastT = 0; }
     if (slowT >= 2 && eng.scale > 0.55) { eng.resize(eng.size[0], eng.size[1], +(eng.scale - 0.1).toFixed(2)); slowT = 0; }
-    if (fastT >= 8 && eng.scale < 1) { eng.resize(eng.size[0], eng.size[1], +(eng.scale + 0.05).toFixed(2)); fastT = 0; }
+    if (fastT >= 8 && eng.scale < 1.5) { eng.resize(eng.size[0], eng.size[1], +(eng.scale + 0.1).toFixed(2)); fastT = 0; }   // va sobrado: supermuestreo
   }
 
-  // ---------- la palabra, un instante ----------
-  // El visitante ve su palabra: se descifra desde glifos, se sostiene y se deshace en la pieza que nace.
-  // No se guarda en ningún sitio.
-  const GLYPHS = '░▒▓/\\|<>_-=+*#ØΣΔ01';
-  const WORD_DUR = 3.4;
-  function drawWord(t) {
-    if (t >= WORD_DUR) return 0;
-    const W = stingC.width, H = stingC.height, x = stingX, w = wordFx.w.toUpperCase();
-    x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, W, H); x.globalCompositeOperation = 'source-over';
-    const size = Math.round(Math.min(W, H) * 0.075), track = size * 0.55;
-    x.font = `300 ${size}px 'JetBrains Mono', ui-monospace, monospace`; x.textBaseline = 'middle';
-    const cw = x.measureText('M').width + track, total = cw * w.length - track, x0 = (W - total) / 2, y = H * 0.5;
-    const fadeIn = Math.min(1, t / 0.25), fadeOut = 1 - Math.max(0, (t - 2.7) / 0.7);
-    const acc = cur ? cur.P.accent : '#F2F0EA';
-    for (let i = 0; i < w.length; i++) {
-      const on = 0.08 + i * 0.07, off = 2.5 + (w.length - i) * 0.04;   // se fija letra a letra y se deshace al revés
-      const fixed = t > on + 0.35 && t < off;
-      const ch = fixed ? w[i] : GLYPHS[Math.floor((t * 24 + i * 7) % GLYPHS.length)];
-      if (t < on) continue;
-      x.shadowColor = acc; x.shadowBlur = size * (fixed ? 0.35 : 0.6);
-      x.fillStyle = fixed ? 'rgba(242,240,234,0.95)' : acc;
-      x.globalAlpha = Math.max(0, Math.min(1, fadeIn * fadeOut * (fixed ? 1 : 0.7)));
-      x.fillText(ch, x0 + i * cw, y);
-    }
-    x.globalAlpha = 1; x.shadowBlur = 0;
-    // una línea fina del acento que se abre bajo la palabra
-    const lw = total * Math.min(1, Math.max(0, (t - 0.3) / 0.8)) * fadeOut;
-    x.fillStyle = acc; x.globalAlpha = 0.85 * fadeOut; x.fillRect(W / 2 - lw / 2, y + size * 0.85, lw, Math.max(1, size * 0.02)); x.globalAlpha = 1;
-    return Math.max(0, fadeOut);
-  }
+  // ---------- la palabra, un instante (palabra.js, la comparten consola y salida) ----------
+  function drawWord(t) { return window.SemillaPalabra.draw(stingX, stingC.width, stingC.height, wordFx.w, t, cur ? cur.P.accent : '#F2F0EA'); }
 
   // ---------- lógica de los modos ----------
   let lastLoopIdx = -1;
@@ -164,22 +158,25 @@
       if (lastLoopIdx >= 0 && li > lastLoopIdx) s.loopsDone++;
       lastLoopIdx = li;
       // en sala, cada vuelta muta un poco: nunca la misma pieza dos veces
-      if (cfg.mode === 'auto' && s.loopsDone > 0) {
+      if (autoplay() && s.how !== 'voz' && s.loopsDone > 0) {
         cfg.den = clamp(cfg.den + (Math.random() - 0.5) * 0.3, 0.2, 0.9); cfg.cha = clamp(cfg.cha + (Math.random() - 0.5) * 0.3, 0.15, 0.9);
         regen(opts()); syncSliders();
       }
     }
     if (firma) return;
-    if (cfg.mode === 'auto') {
-      const end = cfg.loops * P.L, left = end - pt;
+    if (cfg.mode === 'publico') publico();
+    if (autoplay()) {
+      const loops = s.how === 'voz' ? 2 : cfg.loops, end = loops * P.L, left = end - pt;
       $('autoBar').style.width = (100 * Math.min(1, pt / end)) + '%';
       if (left < 4) {
         if (FIRMA && cfg.sig && now() - lastSig > cfg.sig * 60) { firmaStart(true); return; }
-        start(nextCode(P), 'automático', 8);
+        start(nextCode(P), cfg.mode === 'auto' ? 'automático' : 'autoplay', 8);
         lastLoopIdx = -1;
       }
-    } else if (cfg.mode === 'publico') publico();
+    }
   }
+  // AUTOPLAY: en AUTOMÁTICO siempre; en PÚBLICO, mientras la sala calla (la pieza de una palabra dura 2 vueltas y vuelve el autoplay)
+  function autoplay() { return cfg.mode === 'auto' || (cfg.mode === 'publico' && !voz.pending && now() - voz.lastAt > 15); }
 
   // ---------- PÚBLICO: la palabra ----------
   // La sala dice una palabra y la obra nace de ella. La palabra nunca se proyecta ni se guarda.
@@ -205,12 +202,6 @@
   }
   function publico() {
     if (voz.pending && now() - voz.lastBirth > 12) birth(voz.pending);
-    // la sala en silencio: la obra sigue sola, latente, sin apagarse nunca
-    if (now() - voz.lastAt > 240 && now() - voz.lastBirth > 240 && cur.loopsDone >= 3) {
-      voz.lastBirth = now();
-      start(nextCode(cur.P), 'latente', 8, { density: 0.3, chaos: 0.3, accent: 'auto' });
-      lastLoopIdx = -1;
-    }
   }
 
   // ---------- firma ----------
@@ -252,14 +243,14 @@
   const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
   const MODE_NOTE = {
     auto: 'Las piezas nacen solas y se suceden sin repetirse. Cada vuelta muta un poco: el mismo frame no vuelve a salir.',
-    publico: 'La sala dice una palabra: se proyecta un instante y la obra nace de ella. Su significado elige la forma, la luz, los trazos y el sonido, y el dron canta sus vocales. En silencio, la obra sigue sola.',
+    publico: 'Mientras la sala calla, autoplay: las piezas cambian al azar. Cuando alguien dice una palabra, se proyecta un instante y la obra nace de ella (forma, luz, trazos y sonido; el dron canta sus vocales). Tras dos vueltas sin palabras, vuelve el autoplay.',
     manual: 'Semilla, acento, densidad y caos a mano, para estudio y montaje. La pieza repite su vuelta perfecta.',
   };
   function setMode(m) {
     cfg.mode = m; saveCfg();
     document.querySelectorAll('#segMode button').forEach((b) => b.classList.toggle('on', b.dataset.m === m));
     $('modeNote').textContent = MODE_NOTE[m];
-    $('boxAuto').classList.toggle('hide', m !== 'auto'); $('boxPub').classList.toggle('hide', m !== 'publico');
+    $('boxAuto').classList.toggle('hide', m === 'manual'); $('boxPub').classList.toggle('hide', m !== 'publico');
     $('chipSala').classList.toggle('hide', m !== 'publico');
     $('chMode').textContent = { auto: 'AUTOMÁTICO', publico: 'PÚBLICO', manual: 'MANUAL' }[m];
     const man = m === 'manual';
@@ -288,10 +279,12 @@
     if (performance.now() - hudT < 200) return; hudT = performance.now();
     $('chAct').textContent = P.acts.reduce((a, x) => (lt >= x[0] ? x[1] : a), 'SEÑAL');
     $('chFps').textContent = Math.round(fps) + ' · ' + Math.round(eng.scale * 100) + '%';
+    const so = salidaOn(); $('bProj').classList.toggle('on', so); $('bProj').textContent = so ? 'SALIDA ABIERTA' : 'PROYECTAR';
+    $('tagTxt').dataset.salida = so ? '1' : '';
     if (cfg.mode === 'publico') {
       $('pMic').textContent = voz.state; $('pWord').textContent = voz.last ? voz.last.toUpperCase() : '—';
       $('pFam').textContent = voz.fam ? voz.fam.toUpperCase() : '—';
-      $('pNext').textContent = voz.pending ? 'EN ESPERA: ' + voz.pending.toUpperCase() : now() - voz.lastAt > 240 ? 'LATENTE' : '—';
+      $('pNext').textContent = voz.pending ? 'EN ESPERA: ' + voz.pending.toUpperCase() : autoplay() ? 'AUTOPLAY' : 'PIEZA DE LA PALABRA';
       $('chSala').textContent = voz.state;
       $('ledCam').className = 'led ' + (voz.state === 'ESCUCHANDO' ? 'on' : voz.state.startsWith('SIN') || voz.state.startsWith('ERROR') ? 'err' : 'warn');
     }
@@ -337,7 +330,7 @@
     $('bSafe').onclick = () => { cfg.safe = !cfg.safe; saveCfg(); $('bSafe').classList.toggle('on', cfg.safe); };
     $('bBlack').onclick = toggleBlack;
     $('bSound').onclick = () => { cfg.sound = !cfg.sound; saveCfg(); setVol(); };
-    $('bProj').onclick = () => proj();
+    $('bProj').onclick = salida;
     $('bHelp').onclick = () => $('help').classList.toggle('on');
     $('help').onclick = () => $('help').classList.remove('on');
     $('bNew').onclick = () => { start(nextCode(cur.P), cfg.mode === 'manual' ? 'manual' : 'automático', 1.5); lastLoopIdx = -1; };
@@ -354,7 +347,7 @@
       if (k === '1') setMode('auto'); else if (k === '2') setMode('publico'); else if (k === '3') setMode('manual');
       else if (k === ' ') { e.preventDefault(); if (cfg.mode !== 'publico') $('bNew').click(); }
       else if (k === 'arrowleft') hist(-1); else if (k === 'arrowright') hist(1);
-      else if (k === 'h') proj(); else if (k === 'f' && FIRMA) firmaStart(false); else if (k === 'b') toggleBlack();
+      else if (k === 'h') proj(); else if (k === 'p') salida(); else if (k === 'f' && FIRMA) firmaStart(false); else if (k === 'b') toggleBlack();
       else if (k === 's') $('bSound').click(); else if (k === 'r') rec(); else if (k === 'c') shotReq = true; else if (k === 'g') save();
       else if (k === 'arrowup' || k === 'arrowdown') { e.preventDefault(); cfg.vol = clamp(cfg.vol + (k === 'arrowup' ? 5 : -5), 0, 100); $('rVol').value = cfg.vol; $('oVol').textContent = cfg.vol; syncSliders(); saveCfg(); setVol(); }
       else if (k === '?' || k === '/') $('help').classList.toggle('on');
@@ -393,7 +386,8 @@
       setInterval(() => { if (snd) snd.tick(); if (ctx.state === 'suspended') ctx.resume(); }, 50);
       requestAnimationFrame(frame);
       $('boot').classList.add('off');
-      if (Q.has('museo') || Q.has('instalacion') || Q.get('reanudar')) proj(true);
+      if (Q.has('salida')) setTimeout(salida, 800);
+      else if (Q.has('museo') || Q.has('instalacion') || Q.get('reanudar')) proj(true);
     } catch (err) {
       console.error(err);
       logEl.classList.add('err'); logEl.textContent = 'NO SE PUDO ARRANCAR: ' + (err && err.message || err);

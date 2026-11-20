@@ -8,7 +8,7 @@ Materia negra que nace de una palabra. Un generador infinito de piezas abstracta
 | | Modo | Qué hace |
 |---|---|---|
 | 1 | AUTOMÁTICO | Las piezas nacen solas y se suceden con un fundido largo, sin repetir forma ni estilo de sonido seguidos. Cada vuelta muta un poco: el mismo frame no vuelve a salir. |
-| 2 | PÚBLICO | La sala dice una palabra y la obra nace de ella. En silencio, la obra sigue sola y nunca se apaga. |
+| 2 | PÚBLICO | Mientras la sala calla, autoplay: las piezas cambian al azar. Cuando alguien dice una palabra, se proyecta un instante y la obra nace de ella; tras dos vueltas sin palabras, vuelve el autoplay. |
 | 3 | MANUAL | Semilla, acento, densidad y caos a mano, para estudio y montaje. La pieza repite su vuelta perfecta. |
 
 ## La obra
@@ -33,7 +33,7 @@ Sintetizado en el navegador desde la partitura: industrial, abstracto y ambient.
 
 ## Montaje en sala
 1. Proyector como pantalla extendida, altavoces y micrófono en sala. Abre la app en Chrome y pulsa **ARRANCAR** (autoriza el micrófono la primera vez).
-2. Elige el modo, ajusta **VOLUMEN** y **BRILLO** y pulsa **PROYECTAR** (`H`): solo la pieza, a pantalla completa y sin cursor.
+2. Elige el modo, ajusta **VOLUMEN** y **BRILLO** y pulsa **PROYECTAR** (`P`). Se abre la **ventana de SALIDA**: solo la obra, a la resolución del proyector y en sincronía con la consola. Llévala al proyector y haz doble clic para ponerla a pantalla completa. La consola sigue con todos los controles; el sonido sale de ella. `H` deja la vista limpia en la propia consola.
 3. `?museo&modo=publico` en la URL arranca directamente en proyección y en ese modo.
 4. **APAGAR** (`B`) funde a negro y silencio al cerrar la sala.
 
@@ -49,7 +49,7 @@ Por defecto:
 - **REGISTRO:** anota cada pieza que nace (semilla, forma y hora, nunca la palabra) y se exporta a CSV.
 
 ## Atajos
-`1 2 3` modo · `espacio` nueva · `← →` historial · `H` proyectar · `B` apagar · `S` sonido · `↑ ↓` volumen · `R` grabar · `C` captura · `G` guardar · `?` ayuda.
+`1 2 3` modo · `espacio` nueva · `← →` historial · `P` proyectar (salida) · `H` vista limpia · `B` apagar · `S` sonido · `↑ ↓` volumen · `R` grabar · `C` captura · `G` guardar · `?` ayuda.
 
 ## Archivos
 - `score.js`: partitura (semilla → pieza).
@@ -57,5 +57,7 @@ Por defecto:
 - `sound.js`: síntesis.
 - `voz.js`: escucha y léxico de sentido.
 - `app.js` + `index.html`: consola y modos.
+- `salida.html` + `salida.js`: ventana de salida.
+- `palabra.js`: la palabra proyectada.
 - `void-loom-sting.js`: la firma, desactivada de momento.
 - `fonts/`: JetBrains Mono (OFL).

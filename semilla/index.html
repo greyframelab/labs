@@ -146,7 +146,7 @@ body.solo{cursor:none}
     </div>
     <div class="tools">
       <button class="tbtn" id="bSound" title="S">SONIDO</button>
-      <button class="tbtn" id="bProj" title="H">PROYECTAR</button>
+      <button class="tbtn" id="bProj" title="P">PROYECTAR</button>
       <button class="tbtn" id="bHelp" title="?">?</button>
     </div>
   </header>
@@ -212,7 +212,7 @@ body.solo{cursor:none}
     </div>
   </main>
   <footer>
-    <span><b>1 2 3</b> MODO</span><span><b>ESPACIO</b> NUEVA</span><span><b>← →</b> HISTORIAL</span><span><b>H</b> PROYECTAR</span>
+    <span><b>1 2 3</b> MODO</span><span><b>ESPACIO</b> NUEVA</span><span><b>← →</b> HISTORIAL</span><span><b>P</b> PROYECTAR</span><span><b>H</b> VISTA LIMPIA</span>
     <span><b>B</b> APAGAR</span><span><b>S</b> SONIDO</span><span><b>↑ ↓</b> VOLUMEN</span><span><b>R</b> GRABAR</span><span><b>C</b> CAPTURA</span><span><b>G</b> GUARDAR</span><span><b>?</b> AYUDA</span>
   </footer>
 </div>
@@ -224,7 +224,8 @@ body.solo{cursor:none}
   <b>3</b><span>MANUAL: semilla, acento, densidad y caos a mano</span>
   <b>ESPACIO</b><span>pieza nueva</span>
   <b>← →</b><span>pieza anterior / siguiente del historial</span>
-  <b>H</b><span>proyectar: solo la pieza, a pantalla completa</span>
+  <b>P</b><span>proyectar: abre la ventana de salida (llévala al proyector y doble clic)</span>
+  <b>H</b><span>vista limpia en esta ventana, a pantalla completa</span>
   <b>B</b><span>apagar / encender con fundido</span>
   <b>S · ↑ ↓</b><span>sonido · volumen de sala</span>
   <b>R · C · G</b><span>grabar una vuelta · captura · guardar semilla</span>
@@ -236,6 +237,7 @@ body.solo{cursor:none}
 <script src="engine.js"></script>
 <script src="sound.js"></script>
 <script src="voz.js"></script>
+<script src="palabra.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
