@@ -37,7 +37,7 @@
     const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 24; hp.Q.value = 0.6;
     const glue = ctx.createDynamicsCompressor();
     glue.threshold.value = -20; glue.ratio.value = 2.5; glue.knee.value = 6; glue.attack.value = 0.012; glue.release.value = 0.2;
-    const make = ctx.createGain(); make.gain.value = 1.0; this.make = make;
+    const make = ctx.createGain(); make.gain.value = 0.85; this.make = make;
     this.lv = { drone: 0.12, kick: 0.46, tick: 1.25, metal: 0.66, bass: 0.48, impact: 0.6 };
     const lim = ctx.createDynamicsCompressor();
     lim.threshold.value = -3.6; lim.ratio.value = 20; lim.knee.value = 0; lim.attack.value = 0.001; lim.release.value = 0.08;
@@ -105,8 +105,8 @@
     const g = ctx.createGain(); g.gain.value = 0.0001; this.droneGain = g; this.droneF = f;
     const fg = ctx.createGain(); fg.gain.value = 0.9;
     const fm2 = ctx.createBiquadFilter(); fm2.type = 'bandpass'; fm2.Q.value = 9; fm2.frequency.value = 1200;
-    const fg2 = ctx.createGain(); fg2.gain.value = P.vowels ? 0.55 : 0;
-    if (P.vowels) { fm.Q.value = 9; fg.gain.value = 1.4; }
+    const fg2 = ctx.createGain(); fg2.gain.value = P.vowels ? 0.3 : 0;
+    if (P.vowels) { fm.Q.value = 9; fg.gain.value = 0.75; }
     this.fm = fm; this.fm2 = fm2;
     f.connect(g); fm.connect(fg); fg.connect(g); fm2.connect(fg2); fg2.connect(g); g.connect(this.out); g.connect(this.send);
     const mk = (freq, det, type, gain, dest) => {
@@ -118,7 +118,7 @@
     const a = mk(hz(r), -7, 'saw', 0.32, f), b = mk(hz(r), 6, 'saw', 0.32, f);
     mk(hz(r + 7), -3 + sh * 4, 'saw', 0.14, f);
     mk(hz(r + 12 + (sh > 0.5 ? 3 : 0)), 2, 'saw', P.vowels ? 0.16 : 0.07, fm);
-    if (P.vowels) { mk(hz(r + 12), -4, 'saw', 0.16, fm2); mk(hz(r + 7), 5, 'saw', 0.12, fm); }
+    if (P.vowels) { mk(hz(r + 12), -4, 'saw', 0.12, fm2); mk(hz(r + 7), 5, 'saw', 0.08, fm); }
     const sub = ctx.createOscillator(); sub.frequency.value = hz(P.root); const sg = ctx.createGain(); sg.gain.value = 0.13;
     sub.connect(sg); sg.connect(g); sub.start(now); oscs.push(sub);
     // respiración ligada al bucle (2 ciclos por vuelta) y barrido del formante
@@ -146,7 +146,7 @@
     }
     if (bi === 7) this.riser(T, P.bar);
   };
-  V.droneLevel = function (bi) { return this.S.lv.drone * (0.45 + 0.75 * this.P.energy[bi]); };
+  V.droneLevel = function (bi) { const e = this.P.energy[bi]; return this.S.lv.drone * (this.P.vowels ? 0.3 + 0.75 * e : 0.45 + 0.75 * e); };   // con voz, la SEÑAL más baja: el arco se oye
   // subida continua hacia el impacto (no silencio en seco)
   V.riser = function (T, d) {
     const ctx = this.ctx, o = ctx.createOscillator(); o.setPeriodicWave(this.S.saw2); o.frequency.value = hz(this.P.root + 24);
@@ -160,7 +160,8 @@
     const tail = r === 'lanark' ? 0.42 : r === 'orphx' ? 0.26 : r === 'squarepusher' ? 0.16 : 0.22;
     const fEnd = r === 'lanark' ? 40 : 46, fStart = r === 'squarepusher' ? 170 : 150;
     const o = ctx.createOscillator(); o.frequency.setValueAtTime(fStart, T); o.frequency.setTargetAtTime(fEnd, T, 0.03);
-    const g = ctx.createGain(); g.gain.setValueAtTime(0, T); g.gain.linearRampToValueAtTime(v * 0.95, T + 0.0015); g.gain.setTargetAtTime(0, T + 0.004, tail * 0.55);
+    const g = ctx.createGain(), kv = v * 0.95 * Math.min(1, Math.sqrt(0.24 / tail));
+    g.gain.setValueAtTime(0, T); g.gain.linearRampToValueAtTime(kv, T + 0.0015); g.gain.setTargetAtTime(0, T + 0.004, tail * 0.55);
     o.connect(g); g.connect(this.drum); o.start(T); o.stop(T + tail * 5);
     const c = ctx.createOscillator(); c.frequency.value = 1150; const cg = ctx.createGain();
     cg.gain.setValueAtTime(0, T); cg.gain.linearRampToValueAtTime(v * 0.1, T + 0.0008); cg.gain.setTargetAtTime(0, T + 0.001, 0.0035);
@@ -182,7 +183,7 @@
     const d = (opt.decay || P.ref.metalDecay) * (0.7 + 0.6 * v);
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1450; lp.Q.value = 0.7;
     const pan = ctx.createStereoPanner(); pan.pan.value = opt.pan ?? (H(P.seed, 40, Math.round(T * 100), p) - 0.5) * 1.2;
-    const g = ctx.createGain(); g.gain.value = v * 0.34 * (opt.gain || 1);
+    const g = ctx.createGain(); g.gain.value = v * 0.34 * (opt.gain || 1) * Math.min(1, Math.sqrt(0.35 / d));   // cola larga = más energía: se compensa
     lp.connect(pan); pan.connect(g); g.connect(this.out); g.connect(this.send);
     if (opt.sweep) { pan.pan.setValueAtTime(-0.9, T); pan.pan.linearRampToValueAtTime(0.9, T + opt.sweep); }
     for (let i = 0; i < 4; i++) {

@@ -177,7 +177,7 @@
       // --- metal: otra rejilla en otro ciclo (se desfasa y se reencuentra)
       if (b >= 1) for (let s = 0; s < 16; s++) {
         const g = b * 16 + s;
-        if (euclid(metalK, metalN, g) && h4(S, 11, b, s) < clamp(0.25 + e * 0.8)) add('metal', b, s, 0.45 + h4(S, 12, b, s) * 0.45, Math.floor(h4(S, 13, b, s) * 4));
+        if (euclid(metalK, metalN, g) && h4(S, 11, b, s) < clamp((sec === 0 ? 0.08 : 0.25) + e * 0.8)) add('metal', b, s, 0.45 + h4(S, 12, b, s) * 0.45, Math.floor(h4(S, 13, b, s) * 4));
       }
       // --- bajo: entra con la TENSIÓN, se va antes de cerrar el bucle
       if (b >= 4 && b <= 13) {
