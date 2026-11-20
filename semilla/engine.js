@@ -95,17 +95,38 @@ void main(){ vec2 p=vec2((gl_VertexID<<1)&2, gl_VertexID&2); gl_Position=vec4(p*
   SP.objeto = `
 out vec4 o;
 // uQ: calidad (1 alta, 0 ligera para ordenadores modestos)
-uniform int uMat, uRig, uStroke, uShot, uFam; uniform float uQ; uniform float uBar, uShotK, uShotT; uniform vec3 uSC1, uSC2;
-uniform sampler2D uWord; uniform vec4 uWH, uCG; uniform vec2 uWL; uniform vec2 uAim[8];   // uAim: celdas encendidas de la palabra   // uWL: número de letras y paso entre ellas   // la palabra como campo de distancias: semiancho, semialto, rango, fondo
-// distancia 2D a las letras de la palabra (positiva fuera)
-float wordD(vec2 xy){
-  vec2 uv=vec2(xy.x/(2.0*uWH.x)+0.5, 0.5-xy.y/(2.0*uWH.y));
-  float inner=(texture(uWord,uv).r-0.5)*2.0*uWH.z;
-  vec2 b=abs(xy)-uWH.xy; float box=length(max(b,0.0));
-  return box>0.0?box+inner:inner;
+// uComp: composición (solo, espejo, anillo, constelación) · uSurf: superficie
+uniform int uMat, uRig, uStroke, uShot, uFam, uComp, uSurf; uniform float uQ; uniform float uBar, uShotK, uShotT; uniform vec3 uSC1, uSC2;
+// LA PALABRA COMPILÁNDOSE: un atlas con las letras de la palabra (fila de arriba) y glifos de código (fila de abajo),
+// como campo de distancias. Cada hueco de letra muestra glifos que cambian con el pulso y se fija en su letra en el ECO.
+uniform sampler2D uWord; uniform vec4 uWH;   // semiancho, semialto, rango, fondo (mundo)
+uniform vec4 uAt;                             // columnas del atlas, nº de glifos, ancho de celda (mundo), alto de celda (mundo)
+uniform vec2 uWL; uniform vec2 uAim[8];       // nº de letras · paso; puntos de letra a los que apuntan los macros
+float hh2(vec2 p){ return fract(sin(dot(p,vec2(12.9898,78.233))+uV0.z*17.0)*43758.5453); }
+// qué muestra el hueco i ahora: su letra (fijada) o un glifo de código
+float slotGlyph(float i, float bars){
+  float lock=11.3+i*0.16;                                     // en el ECO se fija letra a letra, de izquierda a derecha
+  if(bars>=lock&&bars<15.7) return -1.0;
+  if(bars<0.6+i*0.05) return -2.0;                             // al principio el hueco está vacío: la palabra aún no existe
+  float rate=(bars>=8.0&&bars<12.0)?8.0:bars>=4.0?4.0:2.0;     // compila más deprisa con la tensión y en la ruptura
+  float k=floor(uT/uBar*rate+hh2(vec2(i,3.1))*3.0);
+  if(hh2(vec2(i,k))<0.18) return -2.0;                        // a veces el hueco parpadea vacío (dato que aún no llega)
+  return floor(hh2(vec2(i*7.1,k))*uAt.y);
 }
-// celda de la matriz bajo un punto (para desplazar cada píxel de la palabra por separado)
-vec2 wordCell(vec2 xy){ vec2 uv=vec2(xy.x/(2.0*uWH.x)+0.5, 0.5-xy.y/(2.0*uWH.y)); return floor((uv-uCG.xy)/uCG.zw); }
+// distancia 2D a lo que muestra la palabra (positiva fuera)
+float wordD(vec2 xy, float bars){
+  float cw=uAt.z, n=uWL.x, W=n*cw*0.5;
+  vec2 b=abs(xy)-vec2(W,uAt.w*0.5); float box=length(max(b,0.0));
+  float i=clamp(floor((xy.x+W)/cw),0.0,n-1.0);
+  vec2 lc=vec2((xy.x+W)/cw-i, 0.5-xy.y/uAt.w);              // coordenadas dentro de la celda (0–1)
+  lc=clamp(lc,0.0,1.0);
+  float g=slotGlyph(i,bars);
+  if(g<-1.5) return max(box,0.0)+uWH.z;                      // hueco vacío
+  vec2 cell=g<-0.5?vec2(i,0.0):vec2(g,1.0);
+  vec2 uv=vec2((cell.x+lc.x)/uAt.x,(cell.y+lc.y)*0.5);
+  float inner=(texture(uWord,uv).r-0.5)*2.0*uWH.z;
+  return box>0.0?box+max(inner,0.0):inner;
+}
 vec2 bz(vec2 a,vec2 b,vec2 c,float t){ return mix(mix(a,b,t),mix(b,c,t),t); }
 // TRAZOS: la palabra pinta luz sobre la materia negra; cada familia de sentido tiene su gesto.
 // Unos trazos pasan por delante del objeto y otros por detrás (los tapa).
@@ -186,6 +207,21 @@ float map(vec3 p){
   if(uFam==9){ cid=floor(p*cz); vec3 hh=fract(sin(cid*vec3(12.9898,78.233,37.719)+uV0.x*9.0)*43758.5453);
     float ex=0.02+0.14*uChaos*smoothstep(4.0,8.0,bars)*(1.0-smoothstep(12.0,15.5,bars))+0.35*uImpact;
     p-=(hh-0.5)*ex; lip=0.5; }
+  // COMPOSICIÓN: la misma forma, multiplicada de cuatro maneras (la variedad y la complejidad salen de aquí)
+  float cs=1.0;
+  if(uForm<8&&uComp==1){        // ESPEJO: plegada sobre sí misma, simetría de caleidoscopio
+    for(int k=0;k<3;k++){ p=abs(p); p.xz=rot(0.55+uV1.y*0.9+0.08*sin(ph))*p.xz; p.xy=rot(0.35+uV1.z*0.7)*p.xy; p-=vec3(0.18,0.1,0.12)*(0.6+uChaos); }
+    cs=0.72; p/=cs;
+  } else if(uForm<8&&uComp==2){ // ANILLO: copias en corona, la cámara las ve girar
+    float N=5.0+floor(uV1.x*5.0), sec=6.2832/N, a=atan(p.z,p.x)+ph*0.2;
+    a=mod(a+sec*0.5,sec)-sec*0.5; float rr=length(p.xz); p.xz=rr*vec2(cos(a),sin(a)); p.x-=1.15;
+    cs=0.42; p/=cs; p.xz=rot(ph*0.7)*p.xz;
+  } else if(uForm<8&&uComp==3){ // CONSTELACIÓN: varias piezas a distinta escala y giro, suspendidas
+    vec2 c=vec2(1.25,1.0); vec2 id=clamp(floor(p.xy/c+0.5),vec2(-1.0,-1.0),vec2(1.0,1.0)); p.xy-=id*c;
+    float hc=fract(sin(dot(id,vec2(41.3,17.7))+uV0.y*9.0)*43758.5);
+    p.z+=(hc-0.5)*1.4; p.xz=rot(hc*6.28+ph*(hc-0.5))*p.xz; p.yz=rot(hc*3.1)*p.yz;
+    cs=0.3+0.18*hc; p/=cs;
+  }
   float d;
   if(uForm==0){            // MASA: cuerpos que se funden
     d=1e9; int NB=3+int(uDen*2.0+0.5);
@@ -237,19 +273,32 @@ float map(vec3 p){
     float ht=0.3+1.2*hh*(0.85+0.15*sin(uPhase+hh*6.0));
     d=sdBox(r-vec3(0.0,ht-1.0,0.0),vec3(0.14,ht,0.012))-0.003;
     return d*0.4;
-  } else if(uForm==11){    // PALABRA: las letras dichas, extruidas en materia negra, retorcidas como una cinta
-    vec3 r=p; r.yz=rot((r.x*0.16*tw()+0.08*sin(ph))*(1.0-0.85*smoothstep(11.0,12.5,bars)))*r.yz;
-    // la palabra se escribe como una máquina: cada celda flota a su profundidad y se ordena en el ECO
-    vec2 ce=wordCell(r.xy); float hc=fract(sin(dot(ce,vec2(12.9898,78.233))+uV0.z*17.0)*43758.5453);
-    float scat=(0.08+0.55*smoothstep(1.0,7.0,bars)+0.4*uImpact)*(1.0-smoothstep(11.0,12.8,bars));
-    r.z-=(hc-0.5)*scat+0.03*sin(uPhase*3.0+hc*30.0)*scat;
-    float d2=wordD(r.xy); vec2 w=vec2(d2,abs(r.z)-uWH.w);
-    d=(min(max(w.x,w.y),0.0)+length(max(w,0.0))-0.002)*0.6;
+  } else if(uForm==11){    // PALABRA: la palabra compilándose en materia, en láminas de escaneo
+    float eco=smoothstep(11.0,12.6,bars)*(1.0-smoothstep(15.2,15.9,bars));
+    vec3 r=p; r.yz=rot((r.x*0.12*tw()+0.06*sin(ph))*(1.0-0.9*eco))*r.yz;
+    // láminas: la letra se construye en cortes horizontales, como una impresora 3D o un escáner; cada lámina
+    // va desplazada en profundidad (datos que aún no encajan) y todas se alinean en el ECO
+    float sh=uAt.w/15.0, sid=floor(r.y/sh), li=floor((r.x+uWL.x*uAt.z*0.5)/uAt.z);
+    float hs=hh2(vec2(sid,li+0.5));
+    // DISPERSIÓN: en la tensión y la ruptura las láminas se separan (abstracción); en el ECO se recogen y la palabra se lee
+    float scat=(0.04+0.24*smoothstep(1.0,7.5,bars)+0.3*uImpact+0.04*uKick)*(1.0-eco);
+    r.z-=(hs-0.5)*scat; r.x+=(hh2(vec2(sid*1.7,li))-0.5)*scat*0.7*step(0.62,hs);   // algunas láminas se corren de lado (glitch)
+    // ESTELA DE DATOS: en la tensión cada lámina se alarga hacia atrás como un flujo; en el ECO se recoge en una placa
+    float trail=(0.15*smoothstep(1.5,4.0,bars)+0.9*smoothstep(4.0,7.5,bars)+0.4*uImpact)*(1.0-eco)*(0.25+hs);
+    float d2=wordD(r.xy,bars); vec2 w=vec2(d2,abs(r.z+trail*0.5)-(uWH.w+trail*0.5));
+    d=min(max(w.x,w.y),0.0)+length(max(w,0.0))-0.002;
+    float g=(0.5-abs(fract(r.y/sh)-0.5))*sh-0.0035*(1.0-0.6*eco);   // ranura fina entre láminas
+    d=max(d,-g)*0.6;
   } else {                 // MONOLITO: una losa y una grieta de luz
     vec3 r=p; r.xz=rot(0.3*sin(ph))*r.xz;
     d=sdBox(r,vec3(0.26,1.02,0.1))-0.015;
   }
   if(uFam!=8&&uForm!=11) d+=0.018*(0.3+uBass+uChaos)*sin(p.x*9.0+ph*2.0)*sin(p.y*8.0-ph)*sin(p.z*10.0+ph*3.0);
+  // SUPERFICIE: talla fina sobre la piel (solo cerca de la superficie): ranuras, paneles o perforaciones
+  if(uSurf==1&&uForm!=11){ float k=14.0+10.0*uV1.w; vec3 q=p*k; float g=min(0.5-abs(fract(q.y)-0.5),0.5-abs(fract(q.x+q.z*0.5)-0.5))/k-0.0025; d=max(d,min(-g,d+0.012)); }
+  else if(uSurf==2&&uForm!=11){ float k=6.0+5.0*uV1.w; vec3 f=abs(fract(p*k)-0.5); float g=(0.5-max(f.x,max(f.y,f.z)))/k-0.003; d=max(d,min(-g,d+0.02)); }
+  else if(uSurf==3&&uForm!=11){ float k=9.0+6.0*uV1.w; vec3 f=fract(p*k)-0.5; float hl=(length(f)-0.28)/k; d=max(d,min(-hl,d+0.03)); }
+  d*=cs; if(uComp==3&&uForm<8) d*=0.7;
   if(uFam==1) d+=(0.008+0.006*uBass)*sin(length(p.xz)*17.0-uT*2.6)+0.022*sin(p.x*2.7+uT*0.9)*sin(p.z*2.1-uT*0.6);   // AGUA: la superficie es líquida
   if(uFam==10) d-=0.03*(0.5+0.5*sin(p.x*5.0+ph*2.0)*sin(p.y*6.0-ph)*sin(p.z*5.0+ph))*(0.4+uBass*0.8+uEnergy*0.5);   // VIDA: brota
   if(uFam==3){ // AMOR: un segundo cuerpo se acerca y se funde con el primero
@@ -287,7 +336,9 @@ vec3 shade(vec3 p, vec3 rd, float t, float bars, float lift, bool full){
   float sh=hq&&uMat!=3?mix(0.35,1.0,shadow(p+n*0.01,Ld)):1.0;
   float key, acc; rigLight(p,r,n,fr,bars,key,acc);
   key+=pow(fr,2.2)*0.35+exp(-pow((dot(r,normalize(vec3(-0.7,0.2,0.3)))-0.9)*9.0,2.0))*0.35;   // luz de filo que acompaña a la cámara
-  if(uForm==11) key+=0.4*pow(fr,1.4)+0.12;   // la palabra siempre tiene un filo de luz que la dibuja
+  if(uForm==11){ float eco=smoothstep(11.5,12.8,bars)*(1.0-smoothstep(15.0,15.8,bars)); key+=0.4*pow(fr,1.4)+0.12+0.9*eco*(0.4+pow(fr,0.8));   // la palabra siempre tiene un filo de luz que la dibuja
+    float sx=(bars-11.3)/0.16*uAt.z-uWL.x*uAt.z*0.5;   // la letra que se acaba de fijar se enciende un instante
+    key+=0.55*exp(-pow((p.x-sx)/(uAt.z*0.7),2.0))*step(11.2,bars)*(1.0-step(13.2,bars)); }
   if(uForm>=8&&uForm<=10) key+=0.55*exp(-t*0.55)*pow(max(dot(n,v),0.0),3.0)+0.3*pow(fr,1.5);           // en los campos, la cámara lleva su propia luz
   float spec=pow(max(dot(r,Ld),0.0),uMat==0?140.0:uMat==1?90.0:60.0)*sh;
   vec3 base;
@@ -308,6 +359,10 @@ vec3 shade(vec3 p, vec3 rd, float t, float bars, float lift, bool full){
   if(uFam==6){ float s=fract(p.y/0.11+0.5); col*=0.7+0.3*step(0.5,fract((p.y/0.11+0.5)*0.5)); col+=uAcc*exp(-min(s,1.0-s)*70.0)*(0.04+0.25*uEnergy*uEnergy)*lift; }
   if(uFam==7){ float sy=mod(bars*0.5,1.0)*2.4-1.2; col+=uAcc*exp(-abs(p.y-sy)*38.0)*(0.25+0.8*uEnergy)*(0.4+fr); }   // MÁQUINA: una lectura que barre
   if(uFam==1) col+=INK*pow(fr,3.0)*0.1*lift;
+  // PALABRA: juntas de luz entre láminas, como un circuito encendido por dentro (laten con el bombo)
+  if(uForm==11){ float sh=uAt.w/15.0, sy=fract(p.y/sh); float seam=exp(-min(sy,1.0-sy)*sh/0.0012);
+    float on=0.25+1.4*uKick+1.6*uImpact+0.6*uEnergy;
+    col+=mix(uAcc,vec3(1.0,0.97,0.92),0.2)*seam*on*0.22; }
   return col+INK*0.003;
 }
 void main(){
@@ -315,6 +370,7 @@ void main(){
   // PLANOS: la cámara corta en seco con el ritmo; casi nunca se ve el cuerpo entero
   float K=uShotK, push=uShotT*0.06;
   vec3 dir=normalize(vec3(cos(K*31.0),0.35*sin(K*17.0),sin(K*31.0)));
+  if(uForm==11) dir=normalize(vec3(dir.x*0.8,dir.y,abs(dir.z)+0.45));   // la palabra se mira de frente: detrás solo hay su estela
   vec3 ro, ta; float lens;
   bool field=uForm>=8&&uForm<=10;
   if(uFam==2) sp+=vec2(0.0025*sin(q.y*55.0+uT*8.0)*(0.3+uEnergy),0.0);   // FUEGO: el aire tiembla de calor
@@ -325,7 +381,7 @@ void main(){
     vec3 aim=uForm==11?vec3(ap,0.0):vec3(0.0);
     vec3 so=aim+dir*2.6+vec3(0.0,(K-0.5)*0.6,0.0), sd=normalize(aim-so); float st=0.0;
     for(int j=0;j<48;j++){ float dd=map(so+sd*st); if(dd<0.002||st>4.0) break; st+=dd; }
-    ta=field?dir:so+sd*min(st,3.0); ro=ta+normalize(dir+vec3(0.3*sin(K*9.0),0.25,0.0))*(field?0.8:uForm==11?1.35-push*1.5:0.95-push*2.0); lens=2.4+1.4*fract(K*7.0);
+    ta=field?dir:uForm==11?aim:so+sd*min(st,3.0); ro=ta+normalize(dir+vec3(0.3*sin(K*9.0),0.25,0.0))*(field?0.8:uForm==11?1.35-push*1.5:(uComp>0?1.7:1.05)-push*2.0); lens=2.4+1.4*fract(K*7.0);   // las composiciones se ven mejor con algo de aire
   } else if(uShot==2){     // RASANTE: desde el suelo, a contraluz
     ro=vec3(sin(K*12.0)*2.6,-0.86,cos(K*12.0)*2.6)*(1.0-push); ta=vec3(0.0,-0.25+0.3*fract(K*5.0),0.0); lens=2.2;
   } else if(uShot==3){     // CENITAL: desde arriba, la forma como signo
@@ -347,7 +403,7 @@ void main(){
   vec3 rd=normalize(fw*lens+rt*sp.x+up*sp.y);
   // foco: el macro enfoca el filo que mira y desenfoca todo lo demás (lente larga = poca profundidad)
   float fd=uShot==1?length(ta-ro):uShot==3?length(ro)-0.6:field?1.1+0.8*fract(K*5.0):length(ro-ta)-0.4;
-  float dofK=uShot==1?2.2:field?0.9:uShot==2?0.7:0.3;
+  float dofK=uShot==1?1.4:field?0.8:uShot==2?0.6:0.3;   // desenfoque contenido: que se lea la materia
   float t=0.0, d=1.0, minD=9.0;
   int maxI=uQ>0.5?128:72;
   for(int i=0;i<128;i++){ if(i>=maxI) break; d=map(ro+rd*t); minD=min(minD,d); if(d<0.0004*t+0.0002||t>9.0) break; t+=d*(uQ>0.5?0.9:1.0); }
@@ -423,11 +479,19 @@ void main(){ vec2 uv=gl_FragCoord.xy/uOut; vec2 h=uTexel*0.5;
   o=vec4(s/12.0*uMix,1.0); }`;
   const FINAL = `#version 300 es
 precision highp float;
-uniform sampler2D uScene, uBloom, uSting; uniform vec2 uOut; uniform float uBloomAmt, uFlash, uStingA, uFade, uGrain, uScan, uCA, uFrame, uTone, uVig, uDof; uniform vec3 uFlashC;
+uniform sampler2D uScene, uBloom, uSting, uBloom2, uGhostT; uniform vec2 uOut; uniform vec3 uAccP; uniform float uStreak, uGlitch, uGSeed, uGhost; uniform float uBloomAmt, uFlash, uStingA, uFade, uGrain, uScan, uCA, uFrame, uTone, uVig, uDof; uniform vec3 uFlashC;
 out vec4 o;
 float hh(vec2 p){ vec3 p3=fract(vec3(p.xyx)*0.1031); p3+=dot(p3,p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
 void main(){
-  vec2 uv=gl_FragCoord.xy/uOut, dc=uv-0.5; float ca=uCA*dot(dc,dc);
+  vec2 uv=gl_FragCoord.xy/uOut, dc=uv-0.5;
+  // GLITCH DE CORTE: unas bandas horizontales se desplazan 2–4 frames en cada corte y en el impacto
+  float gsplit=0.0;
+  if(uGlitch>0.001){
+    float bands=mix(10.0,46.0,hh(vec2(uGSeed,1.0))), b=floor(uv.y*bands);
+    float hb=hh(vec2(b,uGSeed*7.0));
+    if(hb<0.3*uGlitch){ uv.x+=(hh(vec2(b,uGSeed))-0.5)*0.045*uGlitch; gsplit=uGlitch; }
+  }
+  float ca=uCA*dot(dc,dc)+gsplit*0.004;
   vec2 px=1.0/vec2(textureSize(uScene,0));
   vec2 op=1.0/uOut;
   // supermuestreo: si la escena es mayor que la pantalla, se reduce con 4 muestras
@@ -464,6 +528,15 @@ void main(){
     c=mix(c,acc/max(ws,1e-4),smoothstep(0.05,0.3,coc));
   }
   c+=texture(uBloom,uv).rgb*uBloomAmt;
+  if(gsplit>0.0){ vec3 c0=texture(uScene,uv).rgb; c.r+=texture(uScene,uv+vec2(0.005*gsplit,0.0)).r-c0.r; c.b+=texture(uScene,uv-vec2(0.005*gsplit,0.0)).b-c0.b; c=max(c,0.0); }
+  // DESTELLO ANAMÓRFICO: los brillos fuertes sueltan una línea horizontal finísima del acento
+  if(uStreak>0.0){
+    vec3 st=vec3(0.0);
+    for(int i=-12;i<=12;i++){ float fi=float(i); vec3 sm=texture(uBloom2,uv+vec2(fi*0.016,0.0)).rgb; st+=max(sm-0.35,0.0)*exp(-abs(fi)*0.22); }
+    c+=mix(uAccP,vec3(1.0),0.25)*dot(st,vec3(0.3,0.59,0.11))*uStreak*0.09;
+  }
+  // ECO DE PLANO: el plano anterior se queda un instante como un fantasma sobre el nuevo
+  if(uGhost>0.001){ vec3 gh=texture(uGhostT,(uv-0.5)/(1.0+0.03*(1.0-uGhost))+0.5).rgb; c=max(c,gh*uGhost)+gh*uGhost*0.12; }
   c+=uFlashC*uFlash*0.22;
   c*=uFade;
   if(uTone<0.5) c=1.0-exp(-c*1.18);
@@ -584,26 +657,39 @@ void main(){
       postMessage({ key, px }, [px.buffer]); };`;
   let edtWorker = null;
   try { edtWorker = new Worker(URL.createObjectURL(new Blob([EDT_SRC], { type: 'text/javascript' }))); } catch (e) { edtWorker = null; }
-  const WCELL = 26, WPAD = 64, WRANGE = 44;
+  // ATLAS de la palabra: fila 0 = sus letras, fila 1 = glifos de código. Tipografía de la consola (JetBrains Mono).
+  const GLYPHS = '/\\<>=+*#{}[]01;%$&@~|';
+  const WFS = 150, WRANGE = 30;
+  let fontReady = null;
+  const fontLoad = () => fontReady || (fontReady = (document.fonts && document.fonts.load ? document.fonts.load(`600 ${WFS}px "JetBrains Mono"`).catch(() => {}) : Promise.resolve()));
   // prepara una palabra (devuelve su ficha si ya está lista; si no, la encarga y devuelve null)
   E.word = function (word) {
     const gl = this.gl, key = String(word || '').toUpperCase().replace(/[^A-ZÑ0-9ÁÉÍÓÚÜ]/g, '') || '·';
     this.words = this.words || new Map();
     const got = this.words.get(key);
     if (got) return got.ready ? got : null;
-    const CELL = WCELL, n = Math.max(1, key.length);
-    const Wt = CELL * 7 * n - CELL * 2, w = Math.min(4096, Wt + WPAD * 2), h = CELL * 7 + WPAD * 2;
-    const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d');
-    x.fillStyle = '#fff'; window.SEMILLA.matrix(x, key, w / 2, h / 2, CELL, { gap: 0.16 });
-    const rgba = x.getImageData(0, 0, w, h).data, a = new Uint8Array(w * h);
-    for (let i = 0; i < a.length; i++) a[i] = rgba[i * 4 + 3];
-    const wpp = Math.min(0.8 / (CELL * 7), 3.8 / w);   // altura de letra fija; las palabras largas se encogen
-    const lit = []; window.SEMILLA.matrix({ fillRect() {} }, key, w / 2, h / 2, CELL, { cellFn: (i, r, cc, px, py) => lit.push([px + CELL / 2, py + CELL / 2]) });
-    const aim = new Float32Array(16);   // 8 celdas encendidas: los planos macro apuntan a materia, nunca a un hueco
-    for (let k = 0; k < 8; k++) { const p = lit[Math.floor(((k + 0.5) / 8) * lit.length) % Math.max(1, lit.length)] || [w / 2, h / 2]; aim[k * 2] = (p[0] / w - 0.5) * w * wpp; aim[k * 2 + 1] = (0.5 - p[1] / h) * h * wpp; }
-    const rec = { ready: false, w, h, info: [w * wpp / 2, h * wpp / 2, WRANGE * wpp, CELL * wpp], cg: [(w / 2 - Wt / 2) / w, (h / 2 - CELL * 3.5) / h, CELL / w, CELL / h], aim, L: [n, CELL * 7 * wpp], tex: null };
+    const rec = { ready: false, tex: null };
     this.words.set(key, rec);
     if (this.words.size > 4) { const old = this.words.keys().next().value; const o = this.words.get(old); if (o && o.tex) gl.deleteTexture(o.tex); this.words.delete(old); }
+    fontLoad().then(() => this.wordBuild(key, rec));
+    return null;
+  };
+  E.wordBuild = function (key, rec) {
+    const gl = this.gl, n = Math.max(1, key.length), G = GLYPHS.length;
+    const font = `600 ${WFS}px "JetBrains Mono", ui-monospace, monospace`;
+    const m = document.createElement('canvas').getContext('2d'); m.font = font;
+    const adv = m.measureText('M').width, cw = Math.ceil(adv * 1.55), ch = Math.ceil(WFS * 1.3), cols = Math.max(n, G);
+    const w = cols * cw, h = ch * 2;
+    const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d');
+    x.font = font; x.fillStyle = '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    for (let i = 0; i < n; i++) x.fillText(key[i], (i + 0.5) * cw, ch * 0.5 + WFS * 0.04);
+    for (let g = 0; g < G; g++) x.fillText(GLYPHS[g], (g + 0.5) * cw, ch * 1.5 + WFS * 0.04);
+    const rgba = x.getImageData(0, 0, w, h).data, a = new Uint8Array(w * h);
+    for (let i = 0; i < a.length; i++) a[i] = rgba[i * 4 + 3];
+    const wpp = Math.min(0.62 / ch, 3.6 / (n * cw));   // altura fija; las palabras largas se encogen para caber
+    const aim = new Float32Array(16);   // los macros apuntan al centro de una letra, nunca a un hueco
+    for (let k = 0; k < 8; k++) { const i = Math.floor(((k + 0.5) / 8) * n); aim[k * 2] = ((i + 0.5) - n / 2) * cw * wpp; aim[k * 2 + 1] = ((k % 3) - 1) * WFS * 0.18 * wpp; }
+    Object.assign(rec, { w, h, info: [n * cw * wpp / 2, ch * wpp / 2, WRANGE * wpp, ch * wpp], at: [cols, G, cw * wpp, ch * wpp], aim, L: [n, cw * wpp] });
     const upload = (px) => {
       rec.tex = gl.createTexture(); gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, rec.tex);
       gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1); gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, w, h, 0, gl.RED, gl.UNSIGNED_BYTE, px); gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
@@ -639,7 +725,7 @@ void main(){
     this.canvas.width = w; this.canvas.height = h; this.size = [w, h]; this.scale = scale;
     this.free(this.scene); (this.chain || []).forEach((f) => this.free(f));
     const sw = Math.round(w * scale), sh = Math.round(h * scale);
-    this.scene = this.fbo(sw, sh);
+    this.scene = this.fbo(sw, sh); this.free(this.ghostF); this.ghostF = this.fbo(sw, sh);
     this.chain = []; let cw = sw, ch = sh;
     for (let i = 0; i < 6; i++) { cw = Math.max(1, cw >> 1); ch = Math.max(1, ch >> 1); this.chain.push(this.fbo(cw, ch)); }
   };
@@ -685,6 +771,22 @@ void main(){
   // slots: [{ P, e, w }]  ·  o: { bloom, flash, flashColor, fade, grain, scan, sting (canvas), stingA }
   E.draw = function (slots, o = {}) {
     const gl = this.gl, S = this.scene;
+    // CORTES: al cambiar de plano se guarda el último frame (para el eco) y se dispara el glitch; en el impacto, también
+    { const top = slots.filter((x) => x && x.w > 0.5).pop(), nowT = o.now ?? performance.now() / 1000, fx = (this.fx = this.fx || { at: -9, gat: -9 });
+      if (top) {
+        const sh = window.SEMILLA.shotAt(top.P, top.e.u / top.P.bar), key = top.P.code + ':' + sh.i;
+        if (fx.key && key !== fx.key && o.fx !== false) {
+          gl.bindFramebuffer(gl.READ_FRAMEBUFFER, S.fb); gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.ghostF.fb);
+          gl.blitFramebuffer(0, 0, S.w, S.h, 0, 0, S.w, S.h, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+          fx.at = nowT; fx.gat = nowT; fx.seed = Math.random() * 100;
+        }
+        fx.key = key; fx.acc = top.P.accent;
+        if (top.e.impactDt < 0.05 && top.e.impact > 0.5 && nowT - fx.gat > 0.3) { fx.gat = nowT; fx.seed = Math.random() * 100; }
+      }
+      const ga = nowT - fx.gat, ea = nowT - fx.at;
+      fx.glitch = o.fx === false ? 0 : ga < 0.085 ? 1 - ga / 0.085 : 0;
+      fx.ghost = o.fx === false ? 0 : ea < 0.7 ? 0.55 * Math.pow(1 - ea / 0.7, 2) : 0;
+    }
     gl.bindVertexArray(this.vao);
     gl.bindFramebuffer(gl.FRAMEBUFFER, S.fb); gl.viewport(0, 0, S.w, S.h);
     gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);   // alfa = desenfoque (0 = foco)
@@ -697,15 +799,15 @@ void main(){
       gl.uniform2f(pr.u.uRes, S.w, S.h);
       setU(gl, pr.u, s.P, s.e, s.w, { uDrift: o.drift || 0, uBar: s.P.bar });
       gl.uniform1i(pr.u.uMat, s.P.vis.mat); gl.uniform1i(pr.u.uRig, s.P.vis.rig);
-      u1i(gl, pr.u.uFam, s.P.vis.fam || 0); pr.u.uQ && gl.uniform1f(pr.u.uQ, this.quality ?? 1);
+      u1i(gl, pr.u.uFam, s.P.vis.fam || 0); u1i(gl, pr.u.uComp, s.P.vis.comp || 0); u1i(gl, pr.u.uSurf, s.P.vis.surf || 0); pr.u.uQ && gl.uniform1f(pr.u.uQ, this.quality ?? 1);
       if (!this.blankTex) { this.blankTex = gl.createTexture(); gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, this.blankTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 1, 1, 0, gl.RED, gl.UNSIGNED_BYTE, new Uint8Array([255])); this.texParams(gl.LINEAR); gl.activeTexture(gl.TEXTURE0); }
       let wtex = this.blankTex;
       if (s.P.sp.form === 11) {
         const wr = this.word(s.P.word || s.P.code);
         if (wr) { // la mayoría, teselas finas casi planas; algunas piezas, vóxeles en 3D
           const wi = wr.info, deep = s.P.vis.v[2] < 0.35; wtex = wr.tex;
-          pr.u.uWH && gl.uniform4f(pr.u.uWH, wi[0], wi[1], wi[2], deep ? wi[3] * 0.42 : 0.01);
-          pr.u.uCG && gl.uniform4f(pr.u.uCG, wr.cg[0], wr.cg[1], wr.cg[2], wr.cg[3]);
+          pr.u.uWH && gl.uniform4f(pr.u.uWH, wi[0], wi[1], wi[2], deep ? wi[3] * 0.16 : wi[3] * 0.035);   // bloque 3D o lámina
+          pr.u.uAt && gl.uniform4f(pr.u.uAt, wr.at[0], wr.at[1], wr.at[2], wr.at[3]);
           const ua = pr.u['uAim[0]'] || pr.u.uAim; ua && gl.uniform2fv(ua, wr.aim); pr.u.uWL && gl.uniform2f(pr.u.uWL, wr.L[0], wr.L[1]);
         } else pr.u.uWH && gl.uniform4f(pr.u.uWH, 0.01, 0.01, 0.001, 0.001);   // aún calculándose (unos ms): no hay letra todavía
       }
@@ -751,6 +853,11 @@ void main(){
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, S.tex); gl.uniform1i(F.u.uScene, 0);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.chain[0].tex); gl.uniform1i(F.u.uBloom, 1);
     gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.sting); gl.uniform1i(F.u.uSting, 2);
+    gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, this.chain[Math.min(2, this.chain.length - 1)].tex); gl.uniform1i(F.u.uBloom2, 4);
+    gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D, this.ghostF.tex); gl.uniform1i(F.u.uGhostT, 5);
+    { const fx = this.fx || {}, a = hex(fx.acc || '#F2F0EA');
+      gl.uniform3f(F.u.uAccP, a[0], a[1], a[2]); gl.uniform1f(F.u.uStreak, (o.streak ?? 1) * ((this.quality ?? 1) > 0.5 ? 1 : 0));
+      gl.uniform1f(F.u.uGlitch, fx.glitch || 0); gl.uniform1f(F.u.uGSeed, fx.seed || 0); gl.uniform1f(F.u.uGhost, fx.ghost || 0); }
     if (o.sting && o.stingA > 0) {
       gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, o.sting);
