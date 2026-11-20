@@ -30,9 +30,25 @@ button:focus-visible,[tabindex]:focus-visible{outline:1px solid var(--acc);outli
 #go{border:1px solid var(--line2);padding:16px 34px;letter-spacing:.36em;font-size:11px;transition:border-color .2s,color .2s,background .2s}
 #go:hover{border-color:var(--red);color:#fff;background:rgba(255,26,26,.06)}
 #go[disabled]{pointer-events:none;color:var(--dim)}
-#bootlog{height:14px;color:var(--dim);font-size:9.5px;letter-spacing:.2em}
-.bar{width:260px;height:1px;background:var(--line2);position:relative;overflow:hidden}
+#bootlog{height:14px;color:var(--dim);font-size:9.5px;letter-spacing:.2em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px;text-align:left}
+.bar{width:380px;height:2px;background:var(--line2);position:relative;overflow:hidden}
 .bar i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--red);box-shadow:0 0 10px var(--red);transition:width .25s}
+/* estado de carga: fases, porcentaje y barra que respira mientras no hay progreso medible */
+.bootst{display:flex;flex-direction:column;align-items:center;gap:14px;width:380px}
+.bootrow{display:flex;justify-content:space-between;align-items:baseline;width:100%;gap:16px}
+#bootpct{color:var(--mute);font-size:9.5px;letter-spacing:.2em;font-variant-numeric:tabular-nums;min-width:4ch;text-align:right}
+#bootph{display:flex;justify-content:space-between;width:100%;list-style:none;margin:0;padding:0;font-size:9px;letter-spacing:.24em;color:var(--dim)}
+#bootph li{display:flex;align-items:center;gap:7px;transition:color .3s}
+#bootph li::before{content:'';width:5px;height:5px;border:1px solid currentColor;border-radius:50%;transition:background .3s,box-shadow .3s}
+#bootph li.on{color:#fff}#bootph li.on::before{background:var(--red);border-color:var(--red);box-shadow:0 0 8px var(--red);animation:bootpulse 1s ease-in-out infinite}
+#bootph li.ok{color:var(--mute)}#bootph li.ok::before{background:var(--mute);border-color:var(--mute)}
+#bootph li.err{color:var(--red)}#bootph li.err::before{background:transparent;border-color:var(--red)}
+.bar.wait::after{content:'';position:absolute;top:0;bottom:0;width:30%;background:linear-gradient(90deg,transparent,rgba(255,26,26,.55),transparent);animation:bootscan 1.1s linear infinite}
+#go.loading{border-color:var(--red);color:#fff;animation:bootglow 1.4s ease-in-out infinite}
+@keyframes bootpulse{50%{opacity:.35}}
+@keyframes bootscan{from{left:-30%}to{left:100%}}
+@keyframes bootglow{50%{box-shadow:0 0 18px rgba(255,26,26,.28)}}
+@media (prefers-reduced-motion:reduce){#bootph li.on::before,#go.loading,.bar.wait::after{animation:none}}
 
 /* ---------- estructura ---------- */
 .app{display:grid;grid-template-rows:46px 1fr auto;grid-template-columns:minmax(0,1fr);height:100vh}   /* nunca más ancha que la pantalla */
@@ -291,8 +307,11 @@ body.learn [data-ctl].mapped::after{content:"";position:absolute;width:4px;heigh
     <div class="mark">VØID<i>_</i>LOOM</div>
     <div class="sub">LIVE RIG · GREYFRAME LABS</div>
     <button id="go">ARRANCAR</button>
-    <div class="bar"><i id="bootbar"></i></div>
-    <div id="bootlog">AUDIO + SALIDA AL PROYECTOR</div>
+    <div class="bootst">
+      <ol id="bootph"><li data-k="aud">AUDIO</li><li data-k="lib">BIBLIOTECA</li><li data-k="pz">PIEZAS</li><li data-k="dk">DECKS</li></ol>
+      <div class="bar"><i id="bootbar"></i></div>
+      <div class="bootrow"><span id="bootlog">AUDIO + SALIDA AL PROYECTOR</span><span id="bootpct"></span></div>
+    </div>
   </div>
 </div>
 

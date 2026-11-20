@@ -25,11 +25,14 @@
   // ================================================================== biblioteca
   // piezas que no entran en el live (siguen en la web de Labs)
   const FUERA = ['lab-35-descarga'];
-  async function discover(log) {
+  async function discover(log, onStep) {
     const md = await fetch('../README.md', { cache: 'no-cache' }).then((r) => r.text());
     const rows = [...md.matchAll(/\|\s*(\d+)\s*\|\s*\[([^\]]+)\]\(([^)]+)\)\s*\|\s*Motion/gi)];
-    const out = [];
+    const out = []; let seen = 0;
     await Promise.all(rows.map(async ([, n, title, dir]) => {
+      try { await discoverOne(n, title, dir); } finally { seen++; if (onStep) onStep(seen / rows.length, title); }
+    }));
+    async function discoverOne(n, title, dir) {
       dir = dir.replace(/\/?$/, '/');
       if (FUERA.includes(dir.replace(/\/$/, ''))) return;
       try {
@@ -43,7 +46,7 @@
         out.push({ id: dir.replace(/\/$/, ''), n: +n, title: title.toUpperCase(), dir: '../' + dir, src: '../' + dir + 'index.html', bpm,
           audio: '../' + dir + audio, thumb: '../' + dir + 'thumb.jpg', accent: (html.match(/accent:\s*'(#[0-9a-f]{3,8})'/i) || [])[1] || '#f2f0ea' });
       } catch (e) {}
-    }));
+    }
     out.sort((a, b) => a.n - b.n);
     log('BIBLIOTECA · ' + out.length + ' PIEZAS');
     return out;
@@ -1361,25 +1364,48 @@
 
   $('#go').addEventListener('click', async () => {
     const go = $('#go'); go.disabled = true;
+    // estado de carga visible: fase actual, qué se está leyendo, porcentaje real y barra que respira si no hay progreso medible
     const log = (t) => ($('#bootlog').textContent = t);
-    const bar = (k) => ($('#bootbar').style.width = (k * 100).toFixed(0) + '%');
+    const W8 = { aud: [0, 0.05], lib: [0.05, 0.2], pz: [0.2, 0.9], dk: [0.9, 1] };
+    let pct = 0;
+    const prog = (k, u) => { const [a, b] = W8[k]; pct = Math.max(pct, a + (b - a) * Math.min(1, Math.max(0, u)));
+      $('#bootbar').style.width = (pct * 100).toFixed(1) + '%'; $('#bootpct').textContent = Math.round(pct * 100) + '%'; go.textContent = 'CARGANDO · ' + Math.round(pct * 100) + '%'; };
+    const wait = (on) => document.querySelector('#boot .bar').classList.toggle('wait', on);
+    const phase = (k, st) => { const li = document.querySelector('#bootph li[data-k="' + k + '"]'); li.className = st; if (st === 'ok') prog(k, 1); };
+    const fail = (k, msg) => { phase(k, 'err'); wait(false); log(msg); go.classList.remove('loading'); go.textContent = 'REINTENTAR'; go.disabled = false; };
+    go.classList.add('loading'); prog('aud', 0);
+
+    phase('aud', 'on'); log('AUDIO · SALIDA AL PROYECTOR…');
     if (!outOK) openOutput();
-    ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
-    M = buildMaster(); applyAFX();
-    for (const k in DECK) { buildDeckAudio(DECK[k]); applyDeckAudio(DECK[k]); }
-    applyXfAudio();
+    if (!ctx) {                                                          // al reintentar no se rehace el audio
+      ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+      M = buildMaster(); applyAFX();
+      for (const k in DECK) { buildDeckAudio(DECK[k]); applyDeckAudio(DECK[k]); }
+      applyXfAudio();
+    }
     $('#stAud').textContent = (ctx.sampleRate / 1000).toFixed(1) + ' kHz'; $('#ledAud').className = 'led on';
-    setInterval(schedTick, 40);
-    // con audio sonando, Chrome no frena los temporizadores de la pestaña aunque quede detrás de la salida
-    setInterval(() => { autoStep(); apTick(); presTick(); extFollow(); extLabel(); flush(); ddjLeds(); }, 30);
-    initMidi();
-    log('BUSCANDO PIEZAS VØID_LOOM…');
+    if (!go.dataset.boot) {
+      go.dataset.boot = 1;
+      setInterval(schedTick, 40);
+      // con audio sonando, Chrome no frena los temporizadores de la pestaña aunque quede detrás de la salida
+      setInterval(() => { autoStep(); apTick(); presTick(); extFollow(); extLabel(); flush(); ddjLeds(); }, 30);
+      initMidi();
+    }
+    phase('aud', 'ok');
+
+    phase('lib', 'on'); wait(true); log('BUSCANDO PIEZAS VØID_LOOM…');
     let items = [];
-    try { items = await discover(log); } catch (e) { log('NO SE PUDO LEER LA BIBLIOTECA · ¿SERVIDOR LOCAL?'); go.disabled = false; return; }
-    LIB.push(...items); renderLib();
-    let done = 0;
-    const total = items.length * 2;
-    const step = () => { done++; bar(done / total); };
+    try { items = await discover(log, (u, title) => { wait(false); prog('lib', u); log('BIBLIOTECA · ' + String(title).toUpperCase()); }); }
+    catch (e) { return fail('lib', 'NO SE PUDO LEER LA BIBLIOTECA · ¿SIN CONEXIÓN O SIN SERVIDOR LOCAL?'); }
+    if (!items.length) return fail('lib', 'BIBLIOTECA VACÍA · REVISA LA CONEXIÓN');
+    phase('lib', 'ok');
+
+    LIB.length = 0; LIB.push(...items); renderLib();
+    phase('pz', 'on');
+    let done = 0, nAud = 0, nMeta = 0;
+    const total = items.length * 2, N = items.length, pad = (x) => String(x).padStart(2, '0');
+    const step = () => { done++; prog('pz', done / total); };
+    const status = (t) => log(t + ' · AUDIO ' + pad(nAud) + '/' + pad(N) + ' · ACTOS ' + pad(nMeta) + '/' + pad(N));
     // audio en paralelo, metadatos de dos en dos
     const audioJobs = items.map(async (it) => {
       try {
@@ -1387,18 +1413,18 @@
         const buf = await ctx.decodeAudioData(ab);
         it.buf = buf; it.rev = reverse(buf); it.hits = onsets(buf);
       } catch (e) { libStatus(it, 'SIN AUDIO'); }
-      step();
+      nAud++; step();
     });
     const queue = items.slice();
     const metaJobs = [0, 1].map(async () => {
       while (queue.length) {
-        const it = queue.shift(); log('LEYENDO ' + it.title + '…');
+        const it = queue.shift(); status(it.title);
         const cached = store.get('meta:' + it.id, null);
         const m = await probe(it);
         if (m) { it.score = m.score; delete m.score; }
         it.meta = m || cached;
         if (m) store.set('meta:' + it.id, m);
-        step();
+        nMeta++; step(); status(it.title);
         libStatus(it, it.meta ? it.meta.acts.length + ' ACTOS' : 'ERROR');
       }
     });
@@ -1408,11 +1434,28 @@
       if (it.meta && it.meta.live && Array.isArray(it.meta.live.hits)) it.hits = it.meta.live.hits;   // golpes exactos de la partitura
     });
     const ok = LIB.filter((it) => it.meta && it.buf);
-    log('LISTO · ' + ok.length + ' PIEZAS');
+    if (!ok.length) return fail('pz', 'NINGUNA PIEZA CARGÓ · REVISA LA CONEXIÓN');
+    phase('pz', 'ok');
+
+    phase('dk', 'on'); log('PREPARANDO DECKS…');
     for (const it of LIB) if (it.hits) ch.postMessage({ type: 'hits', piece: it.id, hits: it.hits });
     if (ok[0]) load('A', ok[ok.length - 1]);
     if (ok[1]) load('B', ok[ok.length - 2]);
-    setTimeout(() => $('#boot').classList.add('off'), 400);
+    // en SÍNTESIS / NADIR el audio de los decks se genera ahora: se espera a que esté listo (máx. 30 s) para no entrar en silencio
+    if (MIX.aud !== 'grabado') {
+      wait(true); log(MIX.aud === 'nadir' ? 'GENERANDO AMBIENT · NADIR EN LOS DECKS…' : 'GENERANDO SÍNTESIS EN LOS DECKS…');
+      const t0 = performance.now();
+      await new Promise((r) => setTimeout(r, 150));
+      while (performance.now() - t0 < 30000 && ['A', 'B'].some((k) => DECK[k].item && DECK[k].audioOK === false)) {
+        const n = ['A', 'B'].filter((k) => DECK[k].audioOK !== false).length; prog('dk', 0.15 + 0.35 * n);
+        await new Promise((r) => setTimeout(r, 120));
+      }
+      wait(false);
+    }
+    phase('dk', 'ok');
+    const sin = LIB.length - ok.length;
+    log('LISTO · ' + ok.length + ' PIEZAS' + (sin ? ' · ' + sin + ' CON AVISOS' : '')); go.textContent = 'LISTO'; go.classList.remove('loading');
+    setTimeout(() => $('#boot').classList.add('off'), 500);
     requestAnimationFrame(tick);
     if (INSTALL) setTimeout(() => apToggle(true), 1500);
   });
