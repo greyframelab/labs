@@ -603,7 +603,24 @@ canvas{width:100vw;height:100vh;display:block}
     for (let i = 0; i < n; i++) { const nm = gl.getActiveUniform(p, i).name.replace('[0]', ''); U[nm] = gl.getUniformLocation(p, nm); }
     return { p, U };
   }
+  // antialiasing: el 3D se dibuja en una textura y un pase FXAA suaviza los escalones de las púas y los destellos de un píxel
+  const FS_FXAA = `#version 300 es
+  precision highp float; in vec2 vUv; out vec4 o; uniform sampler2D uC; uniform vec2 uPx;
+  float L(vec3 c){ return dot(c, vec3(.299, .587, .114)); }
+  void main(){
+    vec3 nw = texture(uC, vUv + vec2(-1., -1.) * uPx).rgb, ne = texture(uC, vUv + vec2(1., -1.) * uPx).rgb;
+    vec3 sw = texture(uC, vUv + vec2(-1., 1.) * uPx).rgb, se = texture(uC, vUv + vec2(1., 1.) * uPx).rgb, m = texture(uC, vUv).rgb;
+    float lNW = L(nw), lNE = L(ne), lSW = L(sw), lSE = L(se), lM = L(m);
+    float lMin = min(lM, min(min(lNW, lNE), min(lSW, lSE))), lMax = max(lM, max(max(lNW, lNE), max(lSW, lSE)));
+    vec2 dir = vec2(-((lNW + lNE) - (lSW + lSE)), (lNW + lSW) - (lNE + lSE));
+    float red = max((lNW + lNE + lSW + lSE) * (.25 / 8.), 1. / 128.);
+    dir = clamp(dir / (min(abs(dir.x), abs(dir.y)) + red), vec2(-8.), vec2(8.)) * uPx;
+    vec3 A = .5 * (texture(uC, vUv + dir * (1. / 3. - .5)).rgb + texture(uC, vUv + dir * (2. / 3. - .5)).rgb);
+    vec3 B = A * .5 + .25 * (texture(uC, vUv - dir * .5).rgb + texture(uC, vUv + dir * .5).rgb);
+    float lB = L(B); o = vec4((lB < lMin || lB > lMax) ? A : B, 1.);
+  }`;
   const PF = prog(FS_FIELD), PM = prog(FS_MAIN);
+  const PA = prog(FS_FXAA);
   const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
   gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
@@ -613,6 +630,12 @@ canvas{width:100vw;height:100vh;display:block}
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   const ffb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, ffb);
   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, ftex, 0);
+  const ctex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, ctex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, RW, RH, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const cfb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, cfb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, ctex, 0);
 
   const DEC = [3.0, 2.2, 7.0, 1.5, 7.5, 5.0];
   function field(t) {
@@ -657,7 +680,7 @@ canvas{width:100vw;height:100vh;display:block}
       let shk = a > 0 && a < 0.8 ? 0.05 * Math.exp(-a * 5) : 0;
       const ty = kf([[0, 0.3], [8, 0.42], [T.cut, 0.32], [T.rupt, 0.8], [T.rupt + 1.0, 1.7], [T.sting, 1.6]], t);
       const tg = [ctr[0] + (VL.hash(frame, 1) - 0.5) * shk, ty + (VL.hash(frame, 2) - 0.5) * shk, ctr[1]];
-      gl.useProgram(PM.p); gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, RW, RH);
+      gl.useProgram(PM.p); gl.bindFramebuffer(gl.FRAMEBUFFER, cfb); gl.viewport(0, 0, RW, RH);
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, ftex); gl.uniform1i(PM.U.uF, 0);
       gl.uniform2f(PM.U.uRes, RW, RH); gl.uniform2f(PM.U.uShift, 0, (H / 2 - VL.fy(g.cy)) / H);
       gl.uniform3f(PM.U.uCam, ...cam); gl.uniform3f(PM.U.uTgt, ...tg);
@@ -676,6 +699,9 @@ canvas{width:100vw;height:100vh;display:block}
       const tk = a >= 0 ? 1 - 0.25 * e.inOut(sg(a, 3, 7)) : 0;
       gl.uniform3f(PM.U.uTint, lerp(1.0, 0.0, tk), lerp(0.97, 0.9, tk), lerp(0.92, 1.0, tk));
       gl.uniform3f(PM.U.uTw, F.TW[0], F.TW[1], 0); gl.uniform1f(PM.U.uEnvA, -(az - 0.55) * 0.7 + 0.035 * t); gl.uniform1f(PM.U.uSeed, (frame % 64) * 0.137); gl.uniform1f(PM.U.uTime, t);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      gl.useProgram(PA.p); gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, RW, RH);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, ctex); gl.uniform1i(PA.U.uC, 0); gl.uniform2f(PA.U.uPx, 1 / RW, 1 / RH);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
       c.drawImage(cv, 0, 0, W, H);
