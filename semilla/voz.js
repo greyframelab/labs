@@ -119,19 +119,30 @@
     return ws.sort((a, b) => b.c - a.c)[0].n;
   }
 
+  // PALABRA TEMPRANA: no se espera a que el visitante acabe la frase. Si la misma palabra aparece en dos lecturas
+  // parciales seguidas, ya vale; la lectura final solo la confirma (y no se repite si ya salió).
+  function early(onWord) {
+    let cand = null, n = 0, fired = null, firedAt = 0;
+    const fire = (w, txt) => { if (w === fired && Date.now() - firedAt < 5000) return; fired = w; firedAt = Date.now(); onWord(w, txt); };
+    return {
+      partial(txt) { const w = pickWord(txt); if (!w) return; if (w === cand) n++; else { cand = w; n = 1; } if (n >= 2) fire(w, txt); },
+      final(txt) { const w = pickWord(txt); cand = null; n = 0; if (w) fire(w, txt); },
+    };
+  }
+
   // ---------- escucha ----------
   function Listener(onWord, onState) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     this.ok = !!SR; this.on = false; this.onWord = onWord; this.onState = onState || (() => {});
     if (!SR) { this.onState('SIN VOZ EN ESTE NAVEGADOR'); return; }
     const r = (this.r = new SR());
-    r.lang = 'es-ES'; r.continuous = true; r.interimResults = false; r.maxAlternatives = 1;
+    r.lang = 'es-ES'; r.continuous = true; r.interimResults = true; r.maxAlternatives = 1;
+    const ear = early((w, txt) => this.onWord(w, txt));
     r.onstart = () => this.onState('ESCUCHANDO');
     r.onresult = (e) => {
       for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (!e.results[i].isFinal) continue;
-        const txt = e.results[i][0].transcript, w = pickWord(txt); this.heard = txt;
-        if (w) this.onWord(w, txt);
+        const txt = e.results[i][0].transcript; this.heard = txt;
+        if (e.results[i].isFinal) ear.final(txt); else ear.partial(txt);
       }
     };
     r.onerror = (e) => {
@@ -180,8 +191,9 @@
     const stream = (this.stream = await navigator.mediaDevices.getUserMedia({ audio, video: false }));
     const ac = (this.ac = new AudioContext());
     const rec = new this.model.KaldiRecognizer(ac.sampleRate);
-    rec.on('result', (m) => { const txt = m && m.result && m.result.text; if (txt) this.heard = txt; const w = this.on && pickWord(txt); if (w) this.onWord(w, txt); });
-    rec.on('partialresult', (m) => { const p = m && m.result && m.result.partial; if (p) this.heard = p + '…'; });
+    const ear = early((w, txt) => this.on && this.onWord(w, txt));
+    rec.on('result', (m) => { const txt = m && m.result && m.result.text; if (txt) { this.heard = txt; ear.final(txt); } });
+    rec.on('partialresult', (m) => { const p = m && m.result && m.result.partial; if (p) { this.heard = p + '…'; ear.partial(p); } });
     const src = ac.createMediaStreamSource(stream), node = ac.createScriptProcessor(4096, 1, 1), mute = ac.createGain(); mute.gain.value = 0;
     node.onaudioprocess = (e) => {
       const d = e.inputBuffer.getChannelData(0); let s2 = 0; for (let i = 0; i < d.length; i += 4) s2 += d[i] * d[i];
