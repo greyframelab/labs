@@ -25,7 +25,8 @@ const CFG_FILE = path.join(app.getPath('userData'), 'ajustes.json');
 const cfg = Object.assign({ instalacion: false, modo: 'publico' }, (() => { try { return JSON.parse(fs.readFileSync(CFG_FILE, 'utf8')); } catch (e) { return {}; } })());
 const saveCfg = () => { try { fs.writeFileSync(CFG_FILE, JSON.stringify(cfg, null, 2)); } catch (e) {} };
 const INSTALL = cfg.instalacion || process.argv.includes('--instalacion');
-const pageURL = () => 'semilla://app/index.html' + (INSTALL ? '?museo&modo=' + (cfg.modo === 'auto' ? 'automatico' : 'publico') : '');
+// en instalación con proyector: consola en la pantalla principal y la SALIDA sola en el proyector
+const pageURL = () => 'semilla://app/index.html' + (INSTALL ? '?museo&modo=' + (cfg.modo === 'auto' ? 'automatico' : 'publico') + (external() ? '&salida' : '') : '');
 const OUT_DIR = (kind) => path.join(app.getPath(kind === 'video' ? 'videos' : 'pictures'), 'VØID_LOOM SEMILLA');
 
 let win = null, quitting = false;
@@ -61,16 +62,30 @@ function moveNext() {
   setTimeout(() => fullOn(next), 150);
 }
 // en instalación, la obra va al proyector (o a la única pantalla) a pantalla completa
-function placeInstall() { if (win && INSTALL) fullOn(external() || screen.getPrimaryDisplay()); }
+function placeInstall() { if (win && INSTALL && !external()) fullOn(screen.getPrimaryDisplay()); }
 
 function createWindow() {
   win = new BrowserWindow({
     width: 1600, height: 960, minWidth: 1100, minHeight: 640, show: false,
     backgroundColor: '#000000', title: 'VØID_LOOM · SEMILLA', autoHideMenuBar: true,
-    frame: !INSTALL, webPreferences: { backgroundThrottling: false },
+    frame: !(INSTALL && !external()), webPreferences: { backgroundThrottling: false },
   });
-  win.once('ready-to-show', () => { if (INSTALL) placeInstall(); else win.maximize(); win.show(); });
-  win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/.test(url)) shell.openExternal(url); return { action: 'deny' }; });
+  win.once('ready-to-show', () => { if (INSTALL && !external()) placeInstall(); else win.maximize(); win.show(); });
+  // PROYECTAR abre la ventana de salida: va sola al proyector (o a la pantalla actual) a pantalla completa
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/salida\.html/.test(url)) {
+      const d = external() || displayOf(win);
+      return { action: 'allow', overrideBrowserWindowOptions: { x: d.bounds.x, y: d.bounds.y, width: d.bounds.width, height: d.bounds.height, frame: false, backgroundColor: '#000000', title: 'VØID_LOOM · SEMILLA · SALIDA', autoHideMenuBar: true, webPreferences: { backgroundThrottling: false } } };
+    }
+    if (/^https?:/.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  win.webContents.on('did-create-window', (w) => {
+    const d = external() || displayOf(win);
+    w.setBounds(d.bounds);
+    if (process.platform === 'darwin') w.setSimpleFullScreen(true); else w.setFullScreen(true);
+    w.webContents.on('before-input-event', (e, i) => { if (i.key === 'Escape') e.preventDefault(); });
+  });
   win.webContents.on('render-process-gone', () => { if (!win.isDestroyed()) win.loadURL(pageURL()); });
   if (INSTALL) win.webContents.on('before-input-event', (e, i) => { if (i.key === 'Escape') e.preventDefault(); });
   win.on('close', (e) => {

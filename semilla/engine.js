@@ -361,10 +361,30 @@ out vec4 o;
 float hh(vec2 p){ vec3 p3=fract(vec3(p.xyx)*0.1031); p3+=dot(p3,p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
 void main(){
   vec2 uv=gl_FragCoord.xy/uOut, dc=uv-0.5; float ca=uCA*dot(dc,dc);
-  vec3 c=vec3(texture(uScene,uv-dc*ca).r, texture(uScene,uv).g, texture(uScene,uv+dc*ca).b);
   vec2 px=1.0/vec2(textureSize(uScene,0));
-  vec3 nb=(texture(uScene,uv+vec2(px.x,0)).rgb+texture(uScene,uv-vec2(px.x,0)).rgb+texture(uScene,uv+vec2(0,px.y)).rgb+texture(uScene,uv-vec2(0,px.y)).rgb)*0.25;
-  c=max(c+(c-nb)*0.35,0.0);   // enfoque fino: define bordes y reflejos sin halos
+  vec2 op=1.0/uOut;
+  // supermuestreo: si la escena es mayor que la pantalla, se reduce con 4 muestras
+  vec3 c=texture(uScene,uv).rgb;
+  if(px.x<op.x*0.9) c=0.25*(texture(uScene,uv+op*vec2(-0.25,-0.25)).rgb+texture(uScene,uv+op*vec2(0.25,-0.25)).rgb+texture(uScene,uv+op*vec2(-0.25,0.25)).rgb+texture(uScene,uv+op*vec2(0.25,0.25)).rgb);
+  // FXAA: suaviza los bordes en diagonal sin perder definición
+  vec2 sp2=max(px,op);
+  vec3 rNW=texture(uScene,uv+vec2(-1.0,-1.0)*sp2).rgb, rNE=texture(uScene,uv+vec2(1.0,-1.0)*sp2).rgb, rSW=texture(uScene,uv+vec2(-1.0,1.0)*sp2).rgb, rSE=texture(uScene,uv+vec2(1.0,1.0)*sp2).rgb;
+  vec3 LW=vec3(0.299,0.587,0.114);
+  float lNW=dot(1.0-exp(-rNW),LW), lNE=dot(1.0-exp(-rNE),LW), lSW=dot(1.0-exp(-rSW),LW), lSE=dot(1.0-exp(-rSE),LW), lM=dot(1.0-exp(-c),LW);
+  float lMin=min(lM,min(min(lNW,lNE),min(lSW,lSE))), lMax=max(lM,max(max(lNW,lNE),max(lSW,lSE)));
+  if(lMax-lMin>max(0.02,lMax*0.1)){
+    vec2 dr=vec2(-((lNW+lNE)-(lSW+lSE)),((lNW+lSW)-(lNE+lSE)));
+    float red=max((lNW+lNE+lSW+lSE)*0.03125,1.0/128.0), rcp=1.0/(min(abs(dr.x),abs(dr.y))+red);
+    dr=clamp(dr*rcp,-8.0,8.0)*sp2;
+    vec3 rA=0.5*(texture(uScene,uv+dr*(1.0/3.0-0.5)).rgb+texture(uScene,uv+dr*(2.0/3.0-0.5)).rgb);
+    vec3 rB=rA*0.5+0.25*(texture(uScene,uv-dr*0.5).rgb+texture(uScene,uv+dr*0.5).rgb);
+    float lB=dot(1.0-exp(-rB),LW);
+    c=(lB<lMin||lB>lMax)?rA:rB;
+  }
+  // aberración cromática muy leve en los bordes del cuadro
+  c.r=mix(c.r,texture(uScene,uv-dc*ca).r,0.5); c.b=mix(c.b,texture(uScene,uv+dc*ca).b,0.5);
+  vec3 nb=(texture(uScene,uv+vec2(sp2.x,0)).rgb+texture(uScene,uv-vec2(sp2.x,0)).rgb+texture(uScene,uv+vec2(0,sp2.y)).rgb+texture(uScene,uv-vec2(0,sp2.y)).rgb)*0.25;
+  c=max(c+(c-nb)*0.22,0.0);   // enfoque fino: define bordes y reflejos sin halos
   // profundidad de campo: disco de bokeh (espiral áurea); lo desenfocado no invade lo enfocado
   float coc=texture(uScene,uv).a;
   if(uDof>0.0&&coc>0.03){
@@ -450,7 +470,7 @@ void main(){
   E.free = function (f) { if (!f) return; this.gl.deleteFramebuffer(f.fb); this.gl.deleteTexture(f.tex); };
   E.resize = function (w, h, scale) {
     w = Math.max(2, Math.round(w)); h = Math.max(2, Math.round(h));
-    scale = Math.max(0.5, Math.min(1, scale || this.scale));
+    scale = Math.max(0.5, Math.min(1.5, scale || this.scale));
     if (w === this.size[0] && h === this.size[1] && scale === this.scale && this.scene) return;
     this.canvas.width = w; this.canvas.height = h; this.size = [w, h]; this.scale = scale;
     this.free(this.scene); (this.chain || []).forEach((f) => this.free(f));

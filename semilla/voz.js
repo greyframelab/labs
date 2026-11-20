@@ -8,16 +8,16 @@
 
   // familias de sentido: lo que la palabra pinta y cómo suena
   const FAM = {
-    agua: { w: 'agua mar lluvia llover rio ola oceano lago llorar lagrima nieve hielo niebla marea ola playa azul frio rocio nube tormenta? sudor', forms: ['pliegue', 'masa'], mats: [2, 0], rigs: [0, 1], acc: ['cian', 'blanco'], stroke: 2, den: 0.45, cha: 0.3, refs: ['boc', 'lanark'] },
-    fuego: { w: 'fuego llama sol calor rabia ira furia sangre guerra quemar volcan rojo pasion infierno arder brasa incendio odio lucha', forms: ['espina', 'fractura'], mats: [1, 2], rigs: [3, 2], acc: ['rojo', 'ambar'], stroke: 1, den: 0.8, cha: 0.75, refs: ['squarepusher', 'orphx'] },
-    amor: { w: 'amor beso corazon abrazo deseo carino ternura piel madre padre hijo hija querer amar amiga amigo familia dulce caricia', forms: ['masa', 'concha'], mats: [0, 3], rigs: [1, 0], acc: ['magenta', 'rojo'], stroke: 3, den: 0.5, cha: 0.35, refs: ['phoenicia', 'boc'] },
-    miedo: { w: 'miedo sombra noche oscuridad oscuro muerte morir terror soledad vacio angustia pesadilla fantasma frio perdido dolor ausencia herida', forms: ['monolito', 'concha'], mats: [3, 1], rigs: [3, 2], acc: ['violeta', 'blanco'], stroke: 4, den: 0.3, cha: 0.55, refs: ['lanark', 'autechre'] },
-    luz: { w: 'luz dia oro alba amanecer estrella brillo esperanza cielo luna blanco despertar mirar ojo ver claro', forms: ['concha', 'torsion'], mats: [2, 0], rigs: [1, 0], acc: ['ambar', 'blanco'], stroke: 6, den: 0.5, cha: 0.3, refs: ['boc', 'lanark'] },
-    tiempo: { w: 'tiempo memoria recuerdo reloj pasado futuro olvido historia ayer manana siempre nunca viejo infancia espera', forms: ['columnas', 'monolito'], mats: [0, 1], rigs: [2, 0], acc: ['ambar', 'cian'], stroke: 7, den: 0.45, cha: 0.4, refs: ['autechre', 'boc'] },
-    maquina: { w: 'maquina codigo robot datos red ciudad metal ordenador inteligencia algoritmo pantalla tecnologia sistema motor cable digital', forms: ['torsion', 'columnas'], mats: [2, 0], rigs: [2, 1], acc: ['verde', 'cian'], stroke: 5, den: 0.65, cha: 0.5, refs: ['autechre', 'orphx'] },
-    calma: { w: 'calma paz silencio respirar sueno dormir quietud nada descanso suave lento blanco meditar flotar', forms: ['monolito', 'pliegue'], mats: [0, 3], rigs: [0, 1], acc: ['blanco', 'cian'], stroke: 2, den: 0.2, cha: 0.15, refs: ['boc', 'lanark'] },
-    caos: { w: 'caos ruido grito explosion locura fiesta baile tormenta rompe romper choque velocidad prisa nervios estres', forms: ['fractura', 'espina'], mats: [1, 2], rigs: [2, 3], acc: ['magenta', 'ambar'], stroke: 5, den: 0.9, cha: 0.95, refs: ['squarepusher', 'phoenicia'] },
-    vida: { w: 'vida semilla nacer flor arbol tierra verde bosque cuerpo crecer raiz hoja jardin animal planta respirar', forms: ['masa', 'concha'], mats: [1, 0], rigs: [1, 3], acc: ['verde', 'ambar'], stroke: 3, den: 0.55, cha: 0.45, refs: ['phoenicia', 'boc'] },
+    agua: { w: 'agua mar lluvia llover rio ola oceano lago llorar lagrima nieve hielo niebla marea ola playa azul frio rocio nube tormenta? sudor', forms: ['pliegue', 'masa'], mats: [2, 0], rigs: [0, 1], acc: ['cian', 'blanco'], stroke: 2, den: 0.45, cha: 0.3, refs: ['cinta', 'abismo'] },
+    fuego: { w: 'fuego llama sol calor rabia ira furia sangre guerra quemar volcan rojo pasion infierno arder brasa incendio odio lucha', forms: ['espina', 'fractura'], mats: [1, 2], rigs: [3, 2], acc: ['rojo', 'ambar'], stroke: 1, den: 0.8, cha: 0.75, refs: ['quiebre', 'pulso'] },
+    amor: { w: 'amor beso corazon abrazo deseo carino ternura piel madre padre hijo hija querer amar amiga amigo familia dulce caricia', forms: ['masa', 'concha'], mats: [0, 3], rigs: [1, 0], acc: ['magenta', 'rojo'], stroke: 3, den: 0.5, cha: 0.35, refs: ['vaiven', 'cinta'] },
+    miedo: { w: 'miedo sombra noche oscuridad oscuro muerte morir terror soledad vacio angustia pesadilla fantasma frio perdido dolor ausencia herida', forms: ['monolito', 'concha'], mats: [3, 1], rigs: [3, 2], acc: ['violeta', 'blanco'], stroke: 4, den: 0.3, cha: 0.55, refs: ['abismo', 'rejilla'] },
+    luz: { w: 'luz dia oro alba amanecer estrella brillo esperanza cielo luna blanco despertar mirar ojo ver claro', forms: ['concha', 'torsion'], mats: [2, 0], rigs: [1, 0], acc: ['ambar', 'blanco'], stroke: 6, den: 0.5, cha: 0.3, refs: ['cinta', 'abismo'] },
+    tiempo: { w: 'tiempo memoria recuerdo reloj pasado futuro olvido historia ayer manana siempre nunca viejo infancia espera', forms: ['columnas', 'monolito'], mats: [0, 1], rigs: [2, 0], acc: ['ambar', 'cian'], stroke: 7, den: 0.45, cha: 0.4, refs: ['rejilla', 'cinta'] },
+    maquina: { w: 'maquina codigo robot datos red ciudad metal ordenador inteligencia algoritmo pantalla tecnologia sistema motor cable digital', forms: ['torsion', 'columnas'], mats: [2, 0], rigs: [2, 1], acc: ['verde', 'cian'], stroke: 5, den: 0.65, cha: 0.5, refs: ['rejilla', 'pulso'] },
+    calma: { w: 'calma paz silencio respirar sueno dormir quietud nada descanso suave lento blanco meditar flotar', forms: ['monolito', 'pliegue'], mats: [0, 3], rigs: [0, 1], acc: ['blanco', 'cian'], stroke: 2, den: 0.2, cha: 0.15, refs: ['cinta', 'abismo'] },
+    caos: { w: 'caos ruido grito explosion locura fiesta baile tormenta rompe romper choque velocidad prisa nervios estres', forms: ['fractura', 'espina'], mats: [1, 2], rigs: [2, 3], acc: ['magenta', 'ambar'], stroke: 5, den: 0.9, cha: 0.95, refs: ['quiebre', 'vaiven'] },
+    vida: { w: 'vida semilla nacer flor arbol tierra verde bosque cuerpo crecer raiz hoja jardin animal planta respirar', forms: ['masa', 'concha'], mats: [1, 0], rigs: [1, 3], acc: ['verde', 'ambar'], stroke: 3, den: 0.55, cha: 0.45, refs: ['vaiven', 'cinta'] },
   };
   const LEX = [];
   for (const [k, f] of Object.entries(FAM)) for (const w of f.w.split(/\s+/)) if (w && !w.includes('?')) LEX.push([norm(w), k]);
@@ -45,9 +45,9 @@
       // sin significado conocido: manda su sonido
       const n = w.length || 1, sharp = (w.match(/[ptkcqbdg]/g) || []).length / n, open = (w.match(/[aou]/g) || []).length / n, rr = (w.match(/r/g) || []).length / n;
       const acc = Object.keys(S.ACCENTS)[Math.floor(R() * 7)];
-      f = sharp > 0.28 ? { forms: ['fractura', 'espina', 'torsion'], mats: [1, 2], rigs: [2, 3], acc: [acc, 'blanco'], stroke: 5, den: 0.6 + sharp * 0.5, cha: 0.5 + rr * 2, refs: ['autechre', 'squarepusher'] }
-        : open > 0.42 ? { forms: ['masa', 'pliegue', 'concha'], mats: [0, 3], rigs: [0, 1], acc: [acc, 'blanco'], stroke: 3, den: 0.4 + n * 0.03, cha: 0.3 + rr * 2, refs: ['boc', 'lanark', 'phoenicia'] }
-          : { forms: ['monolito', 'columnas', 'concha'], mats: [0, 1, 2], rigs: [0, 1, 2], acc: [acc, 'blanco'], stroke: 7, den: 0.45, cha: 0.4 + rr * 2, refs: ['autechre', 'orphx', 'lanark'] };
+      f = sharp > 0.28 ? { forms: ['fractura', 'espina', 'torsion'], mats: [1, 2], rigs: [2, 3], acc: [acc, 'blanco'], stroke: 5, den: 0.6 + sharp * 0.5, cha: 0.5 + rr * 2, refs: ['rejilla', 'quiebre'] }
+        : open > 0.42 ? { forms: ['masa', 'pliegue', 'concha'], mats: [0, 3], rigs: [0, 1], acc: [acc, 'blanco'], stroke: 3, den: 0.4 + n * 0.03, cha: 0.3 + rr * 2, refs: ['cinta', 'abismo', 'vaiven'] }
+          : { forms: ['monolito', 'columnas', 'concha'], mats: [0, 1, 2], rigs: [0, 1, 2], acc: [acc, 'blanco'], stroke: 7, den: 0.45, cha: 0.4 + rr * 2, refs: ['rejilla', 'pulso', 'abismo'] };
       k = 'sonido';
     }
     const c1 = pick(f.acc), c2 = f.acc.find((a) => a !== c1) || 'blanco';

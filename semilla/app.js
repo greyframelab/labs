@@ -17,7 +17,7 @@
 
   let ctx, snd, eng, stingC, stingX;
   let cur = null, prev = null, history = [], hIdx = -1;
-  let firma = null, black = 0, blackT = 0, lastSig = 0, recording = null, shotReq = false;
+  let firma = null, black = 0, blackT = 0, lastSig = 0, recording = null, shotReq = false, wordFx = null;
 
   // ---------- tiempo ----------
   const now = () => ctx.currentTime;
@@ -27,7 +27,7 @@
   // ---------- registro ----------
   const log = store.get('registro', []);
   function logBirth(P, how) {
-    log.unshift({ c: P.code, sp: P.sp.name, ref: P.ref.name, acc: P.accentKey, modo: how, t: new Date().toISOString() });
+    log.unshift({ c: P.code, sp: P.sp.name, acc: P.accentKey, modo: how, t: new Date().toISOString() });
     if (log.length > 5000) log.length = 5000;
     store.set('registro', log); renderLog();
   }
@@ -46,7 +46,7 @@
     const t0 = now() + 0.1 - atT;
     const v = snd.piece(P, t0, 1);
     if (cur) { prev = cur; prev.fadeAt = now(); prev.fadeDur = xf; prev.voice.fadeOut(now() + 0.05, xf); }
-    cur = { P, t0, voice: v, born: now(), loopsDone: 0, how, force: o.force };
+    cur = { P, t0, voice: v, born: now(), loopsDone: 0, how, force: o.force, opts: o };
     if (how !== 'historial') { history = history.slice(0, hIdx + 1); history.push(code); if (history.length > 200) history.shift(); hIdx = history.length - 1; }
     if (how !== 'ruptura') logBirth(P, how);
     paintPiece();
@@ -56,7 +56,26 @@
   function regen(o) {
     if (!cur) return;
     const P = SM.generate(cur.P.code, Object.assign({}, o, cur.force ? { force: cur.force } : {}));
-    cur.P = P; cur.voice.P = P; paintPiece();
+    cur.P = P; cur.voice.P = P; cur.opts = Object.assign({}, o, cur.force ? { force: cur.force } : {}); paintPiece();
+  }
+
+  // ---------- SALIDA: la obra en su propia ventana (proyector); la consola sigue con todos los controles ----------
+  // La salida dibuja la misma pieza en el mismo instante: recibe semilla, mandos y tiempo de cada pieza en cada frame.
+  const salCh = new BroadcastChannel('semilla-salida');
+  let salWin = null, salSeen = 0;
+  salCh.onmessage = (e) => { if (e.data && e.data.type === 'vivo') salSeen = Date.now(); };
+  const salidaOn = () => Date.now() - salSeen < 2500;
+  function salidaSend(slots, t, look) {
+    if (!salidaOn()) return;
+    salCh.postMessage({
+      type: 'frame', at: performance.timeOrigin + performance.now(), safe: cfg.safe,
+      slots: slots.map((x) => ({ code: x.s.P.code, o: x.s.opts, t: Math.max(0, pieceT(x.s, t)), w: x.w })),
+      look, word: wordFx ? { w: wordFx.w, t: now() - wordFx.at, acc: cur.P.accent } : null,
+    });
+  }
+  function salida() {
+    if (salWin && !salWin.closed) { salWin.close(); salWin = null; salSeen = 0; return; }
+    salWin = window.open('salida.html', 'semilla-salida', 'popup,width=1280,height=720');
   }
 
   // ---------- frame ----------
@@ -87,10 +106,10 @@
       if (prev) {
         const x = Math.min(1, (now() - prev.fadeAt) / prev.fadeDur);
         const k = x * x * (3 - 2 * x);
-        slots.push({ P: prev.P, e: envOf(prev, t), w: 1 - k }); wCur = k;
+        slots.push({ P: prev.P, e: envOf(prev, t), w: 1 - k, s: prev }); wCur = k;
         if (x >= 1) prev = null;
       }
-      slots.push({ P: cur.P, e: envOf(cur, t), w: wCur });
+      slots.push({ P: cur.P, e: envOf(cur, t), w: wCur, s: cur });
       // firma: la pieza se apaga y entra el sting
       let fade = cfg.bri / 100, stingA = 0;
       if (firma) {
@@ -104,11 +123,14 @@
         } else if (st >= VL.STING_DUR) { firmaEnd(); }
         if (firma && st > VL.STING_DUR - 0.8) fade = cfg.bri / 100 * Math.min(1, (st - (VL.STING_DUR - 0.8)) / 0.8);
       }
+      if (wordFx && !firma) { const wa = drawWord(now() - wordFx.at); if (wa > 0) stingA = wa; else wordFx = null; }
       black += ((blackT ? 0 : 1) - black) * Math.min(1, dt / 2.5);
       fade *= black;
       const live = cfg.mode !== 'manual';
       const lk = cur.P.look;
-      eng.draw(slots, { bloomBase: lk.bloom, tone: lk.tone, vig: lk.vig, grain: lk.grain, fade, sting: stingC, stingA, drift: live ? now() * 0.02 : 0, scan: 0, ca: lk.tone ? 0.004 : 0.01 });
+      const look = { bloomBase: lk.bloom, tone: lk.tone, vig: lk.vig, grain: lk.grain, fade, drift: live ? now() * 0.02 : 0, scan: 0, ca: lk.tone ? 0.004 : 0.01 };
+      eng.draw(slots, Object.assign({ sting: stingC, stingA }, look));
+      salidaSend(slots, t, look);
       if (shotReq) { shotReq = false; shot(); }
       errors = 0;
       hud(t);
@@ -119,10 +141,14 @@
   }
   // resolución de la escena según lo que aguante el ordenador
   function adapt() {
+    if (salidaOn() && eng.scale > 0.6) { eng.resize(eng.size[0], eng.size[1], 0.6); return; }   // con la salida abierta, la vista previa va ligera
     if (fps < 48) { slowT++; fastT = 0; } else if (fps > 58) { fastT++; slowT = 0; } else { slowT = fastT = 0; }
     if (slowT >= 2 && eng.scale > 0.55) { eng.resize(eng.size[0], eng.size[1], +(eng.scale - 0.1).toFixed(2)); slowT = 0; }
-    if (fastT >= 8 && eng.scale < 1) { eng.resize(eng.size[0], eng.size[1], +(eng.scale + 0.05).toFixed(2)); fastT = 0; }
+    if (fastT >= 8 && eng.scale < 1.5) { eng.resize(eng.size[0], eng.size[1], +(eng.scale + 0.1).toFixed(2)); fastT = 0; }   // va sobrado: supermuestreo
   }
+
+  // ---------- la palabra, un instante (palabra.js, la comparten consola y salida) ----------
+  function drawWord(t) { return window.SemillaPalabra.draw(stingX, stingC.width, stingC.height, wordFx.w, t, cur ? cur.P.accent : '#F2F0EA'); }
 
   // ---------- lógica de los modos ----------
   let lastLoopIdx = -1;
@@ -132,22 +158,25 @@
       if (lastLoopIdx >= 0 && li > lastLoopIdx) s.loopsDone++;
       lastLoopIdx = li;
       // en sala, cada vuelta muta un poco: nunca la misma pieza dos veces
-      if (cfg.mode === 'auto' && s.loopsDone > 0) {
+      if (autoplay() && s.how !== 'voz' && s.loopsDone > 0) {
         cfg.den = clamp(cfg.den + (Math.random() - 0.5) * 0.3, 0.2, 0.9); cfg.cha = clamp(cfg.cha + (Math.random() - 0.5) * 0.3, 0.15, 0.9);
         regen(opts()); syncSliders();
       }
     }
     if (firma) return;
-    if (cfg.mode === 'auto') {
-      const end = cfg.loops * P.L, left = end - pt;
+    if (cfg.mode === 'publico') publico();
+    if (autoplay()) {
+      const loops = s.how === 'voz' ? 2 : cfg.loops, end = loops * P.L, left = end - pt;
       $('autoBar').style.width = (100 * Math.min(1, pt / end)) + '%';
       if (left < 4) {
         if (FIRMA && cfg.sig && now() - lastSig > cfg.sig * 60) { firmaStart(true); return; }
-        start(nextCode(P), 'automático', 8);
+        start(nextCode(P), cfg.mode === 'auto' ? 'automático' : 'autoplay', 8);
         lastLoopIdx = -1;
       }
-    } else if (cfg.mode === 'publico') publico();
+    }
   }
+  // AUTOPLAY: en AUTOMÁTICO siempre; en PÚBLICO, mientras la sala calla (la pieza de una palabra dura 2 vueltas y vuelve el autoplay)
+  function autoplay() { return cfg.mode === 'auto' || (cfg.mode === 'publico' && !voz.pending && now() - voz.lastAt > 15); }
 
   // ---------- PÚBLICO: la palabra ----------
   // La sala dice una palabra y la obra nace de ella. La palabra nunca se proyecta ni se guarda.
@@ -164,6 +193,7 @@
   }
   function birth(w) {
     const c = window.SemillaVoz.character(w);
+    wordFx = { w, at: now() + 0.1 };   // la sala ve su palabra un instante
     voz.lastBirth = now(); voz.pending = null; voz.fam = c.fam;
     // mismo carácter, nunca la misma pieza: la semilla es la palabra y el instante
     const code = SM.cleanCode(SM.hashStr(w + ':' + Date.now()).toString(36).toUpperCase()).slice(0, 6).padEnd(6, '0');
@@ -172,12 +202,6 @@
   }
   function publico() {
     if (voz.pending && now() - voz.lastBirth > 12) birth(voz.pending);
-    // la sala en silencio: la obra sigue sola, latente, sin apagarse nunca
-    if (now() - voz.lastAt > 240 && now() - voz.lastBirth > 240 && cur.loopsDone >= 3) {
-      voz.lastBirth = now();
-      start(nextCode(cur.P), 'latente', 8, { density: 0.3, chaos: 0.3, accent: 'auto' });
-      lastLoopIdx = -1;
-    }
   }
 
   // ---------- firma ----------
@@ -211,7 +235,7 @@
     setTimeout(() => { if (recording && recording.r === r) { r.start(250); setTimeout(() => r.state !== 'inactive' && r.stop(), P.L * 1000); } }, Math.max(0, (startAt - now()) * 1000));
   }
   function csv() {
-    const rows = [['semilla', 'especie', 'referencia', 'acento', 'modo', 'hora']].concat(log.map((x) => [x.c, x.sp, x.ref, x.acc, x.modo, x.t]));
+    const rows = [['semilla', 'forma', 'acento', 'modo', 'hora']].concat(log.map((x) => [x.c, x.sp, x.acc, x.modo, x.t]));
     download(new Blob([rows.map((r) => r.join(';')).join('\n')], { type: 'text/csv' }), 'voidloom-semilla-registro.csv');
   }
 
@@ -219,14 +243,14 @@
   const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
   const MODE_NOTE = {
     auto: 'Las piezas nacen solas y se suceden sin repetirse. Cada vuelta muta un poco: el mismo frame no vuelve a salir.',
-    publico: 'La sala dice una palabra y la obra nace de ella: su significado elige la forma, la luz, los trazos y el sonido, y el dron canta sus vocales. En silencio, la obra sigue sola.',
+    publico: 'Mientras la sala calla, autoplay: las piezas cambian al azar. Cuando alguien dice una palabra, se proyecta un instante y la obra nace de ella (forma, luz, trazos y sonido; el dron canta sus vocales). Tras dos vueltas sin palabras, vuelve el autoplay.',
     manual: 'Semilla, acento, densidad y caos a mano, para estudio y montaje. La pieza repite su vuelta perfecta.',
   };
   function setMode(m) {
     cfg.mode = m; saveCfg();
     document.querySelectorAll('#segMode button').forEach((b) => b.classList.toggle('on', b.dataset.m === m));
     $('modeNote').textContent = MODE_NOTE[m];
-    $('boxAuto').classList.toggle('hide', m !== 'auto'); $('boxPub').classList.toggle('hide', m !== 'publico');
+    $('boxAuto').classList.toggle('hide', m === 'manual'); $('boxPub').classList.toggle('hide', m !== 'publico');
     $('chipSala').classList.toggle('hide', m !== 'publico');
     $('chMode').textContent = { auto: 'AUTOMÁTICO', publico: 'PÚBLICO', manual: 'MANUAL' }[m];
     const man = m === 'manual';
@@ -239,8 +263,8 @@
   function paintPiece() {
     const P = cur.P;
     document.documentElement.style.setProperty('--acc', P.accent);
-    $('chCode').textContent = P.code; $('chSp').textContent = P.sp.name; $('chRef').textContent = P.ref.name; $('chBpm').textContent = P.bpm;
-    $('pieceRef').textContent = P.sp.name + ' · ' + P.ref.name + ' · ' + P.rootName;
+    $('chCode').textContent = P.code; $('chSp').textContent = P.sp.name; $('chBpm').textContent = P.bpm;
+    $('pieceRef').textContent = P.sp.name + ' · ' + SM.MATS[P.vis.mat] + ' · ' + P.rootName;
     if (document.activeElement !== $('inCode')) $('inCode').value = P.code;
     $('bigName').textContent = P.sp.name; $('bigIdea').textContent = P.sp.idea;
     $('tagTxt').textContent = P.code + ' · ' + SM.MATS[P.vis.mat] + ' · ' + SM.RIGS[P.vis.rig] + ' · ' + SM.ACCENT_NAMES[P.accentKey] + ' · ' + P.bpm + ' BPM';
@@ -255,10 +279,12 @@
     if (performance.now() - hudT < 200) return; hudT = performance.now();
     $('chAct').textContent = P.acts.reduce((a, x) => (lt >= x[0] ? x[1] : a), 'SEÑAL');
     $('chFps').textContent = Math.round(fps) + ' · ' + Math.round(eng.scale * 100) + '%';
+    const so = salidaOn(); $('bProj').classList.toggle('on', so); $('bProj').textContent = so ? 'SALIDA ABIERTA' : 'PROYECTAR';
+    $('tagTxt').dataset.salida = so ? '1' : '';
     if (cfg.mode === 'publico') {
       $('pMic').textContent = voz.state; $('pWord').textContent = voz.last ? voz.last.toUpperCase() : '—';
       $('pFam').textContent = voz.fam ? voz.fam.toUpperCase() : '—';
-      $('pNext').textContent = voz.pending ? 'EN ESPERA: ' + voz.pending.toUpperCase() : now() - voz.lastAt > 240 ? 'LATENTE' : '—';
+      $('pNext').textContent = voz.pending ? 'EN ESPERA: ' + voz.pending.toUpperCase() : autoplay() ? 'AUTOPLAY' : 'PIEZA DE LA PALABRA';
       $('chSala').textContent = voz.state;
       $('ledCam').className = 'led ' + (voz.state === 'ESCUCHANDO' ? 'on' : voz.state.startsWith('SIN') || voz.state.startsWith('ERROR') ? 'err' : 'warn');
     }
@@ -304,7 +330,7 @@
     $('bSafe').onclick = () => { cfg.safe = !cfg.safe; saveCfg(); $('bSafe').classList.toggle('on', cfg.safe); };
     $('bBlack').onclick = toggleBlack;
     $('bSound').onclick = () => { cfg.sound = !cfg.sound; saveCfg(); setVol(); };
-    $('bProj').onclick = () => proj();
+    $('bProj').onclick = salida;
     $('bHelp').onclick = () => $('help').classList.toggle('on');
     $('help').onclick = () => $('help').classList.remove('on');
     $('bNew').onclick = () => { start(nextCode(cur.P), cfg.mode === 'manual' ? 'manual' : 'automático', 1.5); lastLoopIdx = -1; };
@@ -321,7 +347,7 @@
       if (k === '1') setMode('auto'); else if (k === '2') setMode('publico'); else if (k === '3') setMode('manual');
       else if (k === ' ') { e.preventDefault(); if (cfg.mode !== 'publico') $('bNew').click(); }
       else if (k === 'arrowleft') hist(-1); else if (k === 'arrowright') hist(1);
-      else if (k === 'h') proj(); else if (k === 'f' && FIRMA) firmaStart(false); else if (k === 'b') toggleBlack();
+      else if (k === 'h') proj(); else if (k === 'p') salida(); else if (k === 'f' && FIRMA) firmaStart(false); else if (k === 'b') toggleBlack();
       else if (k === 's') $('bSound').click(); else if (k === 'r') rec(); else if (k === 'c') shotReq = true; else if (k === 'g') save();
       else if (k === 'arrowup' || k === 'arrowdown') { e.preventDefault(); cfg.vol = clamp(cfg.vol + (k === 'arrowup' ? 5 : -5), 0, 100); $('rVol').value = cfg.vol; $('oVol').textContent = cfg.vol; syncSliders(); saveCfg(); setVol(); }
       else if (k === '?' || k === '/') $('help').classList.toggle('on');
@@ -349,7 +375,7 @@
       logEl.textContent = 'PREPARANDO LAS ESPECIES…';
       await new Promise((r) => setTimeout(r, 30));
       eng.warm();
-      stingC = $('sting'); if (window.VL) { stingC.width = VL.W; stingC.height = VL.H; } stingX = stingC.getContext('2d');
+      stingC = $('sting'); const vs = window.VL ? [VL.W, VL.H] : innerWidth >= innerHeight ? [1920, 1080] : [1080, 1920]; stingC.width = vs[0]; stingC.height = vs[1]; stingX = stingC.getContext('2d');
       $('c').addEventListener('webglcontextlost', (e) => { e.preventDefault(); setTimeout(() => reload('gpu'), 800); });
       if (window.SemillaVoz.isApp) $('vozNote').textContent = 'En la app la voz se reconoce en este ordenador, sin internet.';
       ui(); setVol(); setMode(cfg.mode);
@@ -360,7 +386,8 @@
       setInterval(() => { if (snd) snd.tick(); if (ctx.state === 'suspended') ctx.resume(); }, 50);
       requestAnimationFrame(frame);
       $('boot').classList.add('off');
-      if (Q.has('museo') || Q.has('instalacion') || Q.get('reanudar')) proj(true);
+      if (Q.has('salida')) setTimeout(salida, 800);
+      else if (Q.has('museo') || Q.has('instalacion') || Q.get('reanudar')) proj(true);
     } catch (err) {
       console.error(err);
       logEl.classList.add('err'); logEl.textContent = 'NO SE PUDO ARRANCAR: ' + (err && err.message || err);

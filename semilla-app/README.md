@@ -23,7 +23,8 @@ En el navegador se usa el reconocimiento de Chrome, que necesita internet. Si la
 
 ## Menú
 
-- **Semilla › Modo instalación:** al abrir, arranca sola (sin clic), a pantalla completa en el proyector (o en la única pantalla) y en el modo elegido en *La instalación arranca en*: PÚBLICO o AUTOMÁTICO. Escape no saca de pantalla completa en este modo.
+- **Semilla › Modo instalación:** al abrir, arranca sola (sin clic) en el modo elegido en *La instalación arranca en*: PÚBLICO o AUTOMÁTICO. Con proyector, la consola queda en la pantalla principal y la SALIDA va sola al proyector, a pantalla completa. Con una sola pantalla, la obra ocupa la pantalla completa. Escape no saca de pantalla completa en este modo.
+- **PROYECTAR** (en la consola, `P`) abre la SALIDA en el proyector, o en la pantalla actual si no hay otro, a pantalla completa.
 - **Semilla › Abrir al encender el ordenador:** junto con el modo instalación, el ordenador arranca directamente en la obra.
 - **Semilla › Abrir carpeta de grabaciones / capturas:** GRABAR VUELTA y CAPTURA guardan sin preguntar en *Vídeos › VØID_LOOM SEMILLA* e *Imágenes › VØID_LOOM SEMILLA*.
 - **Pantalla › Pantalla completa** (Ctrl/⌘+⇧+F) y **Mover a la siguiente pantalla** (Ctrl/⌘+⇧+M).
