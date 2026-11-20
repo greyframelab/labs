@@ -510,8 +510,8 @@ canvas{width:100vw;height:100vh;display:block}
     float d = smoothstep(70., 74., r) * smoothstep(165., 158., r);
     d *= 0.78 + 0.22 * sin(r * 41.) * sin(r * 7.3 + 1.) + 0.12 * sin(r * 173.);
     d *= 0.55 + 0.45 * vn3(vec3(r * 0.35, 0., 0.)) ; d *= 0.7 + 0.3 * vn3(vec3(r * 2.7, 1., 0.));
-    d *= 1. - 0.92 * smoothstep(2.2, 0.6, abs(r - 118.));            // la gran división
-    d *= 1. - 0.6 * smoothstep(0.8, 0.2, abs(r - 97.)) - 0.5 * smoothstep(0.5, 0.1, abs(r - 140.));
+    d *= 1. - 0.92 * (1.-smoothstep(0.6,2.2, abs(r - 118.)));            // la gran división
+    d *= 1. - 0.6 * (1.-smoothstep(0.2,0.8, abs(r - 97.))) - 0.5 * (1.-smoothstep(0.1,0.5, abs(r - 140.)));
     return clamp(d, 0., 1.); }
   void main(){
     vec2 sc = (vUv * 2. - 1.) * vec2(uAsp, 1.) * uFy; vec3 rd = normalize(uF + uR * sc.x + uU * sc.y);

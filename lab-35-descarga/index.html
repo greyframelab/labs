@@ -601,7 +601,7 @@ canvas{width:100vw;height:100vh;display:block}
   precision highp float; in vec4 aP; uniform mat4 uVP; uniform vec4 uL[6]; uniform float uGain, uAmb, uFoc, uAp; uniform vec3 uCam; uniform vec2 uRes; out vec3 vC;
   void main(){
     vec4 cp = uVP * vec4(aP.xyz, 1.); gl_Position = cp;
-    float I = uAmb * (0.25 + 0.75 * smoothstep(2.1, 0.2, aP.y - ${YC.toFixed(2)}));   // el destello enciende toda la base de la nube
+    float I = uAmb * (0.25 + 0.75 * (1.-smoothstep(0.2,2.1, aP.y - ${YC.toFixed(2)})));   // el destello enciende toda la base de la nube
     for (int i = 0; i < 6; i++) { vec3 d = aP.xyz - uL[i].xyz; I += uL[i].w * exp(-dot(d, d) * 0.9) * 1.4; }
     float coc = abs(length(aP.xyz - uCam) - uFoc) * uAp * uRes.y;
     float ps = clamp(260. / cp.w + coc, 1.5, 60.);
@@ -654,7 +654,7 @@ canvas{width:100vw;height:100vh;display:block}
   float dens(vec3 p){
     float h = (p.y - uYC) / 2.1;
     if (h < 0. || h > 1.) return 0.;
-    float sh = smoothstep(0., 0.08, h) * smoothstep(1., 0.45, h) * smoothstep(7.5, 4.5, abs(p.x)) * smoothstep(6., 3.5, abs(p.z + 0.5));
+    float sh = smoothstep(0., 0.08, h) * smoothstep(1., 0.45, h) * (1.-smoothstep(4.5,7.5, abs(p.x))) * smoothstep(6., 3.5, abs(p.z + 0.5));
     float n = texture(uN, p * vec3(0.12, 0.17, 0.12)).r * 0.7 + texture(uN, p * vec3(0.05, 0.07, 0.05) + 0.71).r * 0.3;
     float e = texture(uN, p * vec3(0.26, 0.3, 0.26) + 0.37).r;
     return max(0., smoothstep(0.42, 0.62, n) * sh - e * 0.3) * 7.;

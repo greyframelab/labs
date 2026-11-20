@@ -460,7 +460,7 @@ canvas{width:100vw;height:100vh;display:block}
     return mix(mix(h1(i), h1(i + vec2(1, 0)), f.x), mix(h1(i + vec2(0, 1)), h1(i + vec2(1, 1)), f.x), f.y); }
   float spr(float u, float tau, float w){ return u <= 0. ? 0. : 1. - exp(-u / tau) * cos(min(u * w, 18.85)); }
   // la Ø: anillo + diagonal a 45°
-  float glyph(vec2 q){ float r = length(q); float ring = smoothstep(3.4, 2.6, abs(r - 25.)); float sl = smoothstep(2.9, 2.1, abs(q.x - q.y) * 0.7071) * step(r, 30.); return max(ring, sl); }
+  float glyph(vec2 q){ float r = length(q); float ring = (1.-smoothstep(2.6,3.4, abs(r - 25.))); float sl = (1.-smoothstep(2.1,2.9, abs(q.x - q.y) * 0.7071)) * step(r, 30.); return max(ring, sl); }
   void main(){
     vec2 c = vec2(aI.x - uNG * 0.5 + 0.5, aI.y - uNG * 0.5 + 0.5);
     float r1 = aI.z, r2 = aI.w;

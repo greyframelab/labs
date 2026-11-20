@@ -523,13 +523,13 @@ canvas{width:100vw;height:100vh;display:block}
     c += vec3(1.) * smoothstep(0.80, 0.86, r.y) * 1.6;
     float ang = atan(r.x, r.z);
     float da = abs(mod(ang - 2.3 + 3.14159, 6.28318) - 3.14159);
-    c += vec3(1.) * smoothstep(0.05, 0.02, da) * smoothstep(-0.6, -0.3, r.y) * smoothstep(0.7, 0.5, r.y) * 7.;
+    c += vec3(1.) * (1.-smoothstep(0.02,0.05, da)) * smoothstep(-0.6, -0.3, r.y) * (1.-smoothstep(0.5,0.7, r.y)) * 7.;
     float db = abs(mod(ang + 2.0 + 3.14159, 6.28318) - 3.14159);
-    c += vec3(1.) * smoothstep(0.025, 0.01, db) * smoothstep(-0.4, 0., r.y) * smoothstep(0.6, 0.4, r.y) * 5.;
+    c += vec3(1.) * (1.-smoothstep(0.01,0.025, db)) * smoothstep(-0.4, 0., r.y) * (1.-smoothstep(0.4,0.6, r.y)) * 5.;
     // panel suave detrás de la cámara (la cara frontal se lee como obsidiana pulida) y tiras frontales para los biseles
     c += vec3(0.9, 0.92, 1.) * smoothstep(0.2, 0.75, r.z) * smoothstep(-0.2, 0.3, r.y) * 0.07;
     float dc = abs(mod(ang - 0.75 + 3.14159, 6.28318) - 3.14159);
-    c += vec3(1.) * smoothstep(0.03, 0.012, dc) * smoothstep(-0.5, -0.2, r.y) * smoothstep(0.8, 0.6, r.y) * 6.;
+    c += vec3(1.) * (1.-smoothstep(0.012,0.03, dc)) * smoothstep(-0.5, -0.2, r.y) * (1.-smoothstep(0.6,0.8, r.y)) * 6.;
     return c * uKey;
   }
   void main(){
@@ -600,7 +600,7 @@ canvas{width:100vw;height:100vh;display:block}
         vec3 pz = ro2 + rd2 * tz; float dx = pz.x - jag(pz.y);
         if (abs(dx) < uSep * 0.95 && abs(pz.y) < uB.y) {
           float ci = floor(dx / 0.055); float cx = fract(dx / 0.055);
-          float ln = smoothstep(0.32, 0.12, abs(cx - 0.5));
+          float ln = (1.-smoothstep(0.12,0.32, abs(cx - 0.5)));
           float sp = 1.5 + 4. * fract(sin(ci * 7.13) * 99.1);
           float sg2 = step(0.42, fract(sin(floor(pz.y / 0.09 - uTime * sp) * 17.3 + ci * 91.7) * 4375.5));
           float edgeF = smoothstep(uSep * 0.95, uSep * 0.6, abs(dx)) * smoothstep(uB.y, uB.y - 0.12, abs(pz.y));
@@ -641,7 +641,7 @@ canvas{width:100vw;height:100vh;display:block}
       }
       col += c;
     }
-    if (!hit) col += vec3(0.9, 0.85, 0.8) * 0.018 * uKey * smoothstep(-0.3, 0.4, rd.y) * smoothstep(0.9, 0.2, rd.y);
+    if (!hit) col += vec3(0.9, 0.85, 0.8) * 0.018 * uKey * smoothstep(-0.3, 0.4, rd.y) * (1.-smoothstep(0.2,0.9, rd.y));
     col += (ign(gl_FragCoord.xy + 17.) - 0.5) / 255.;
     o = vec4(col, 1.);
   }`;
@@ -693,7 +693,7 @@ canvas{width:100vw;height:100vh;display:block}
       hot = max(hot, c.w * smoothstep(c.z * 0.9, 0., r) * (line + core + pix));
     }
     float dm = abs(q.x - jag(q.y));
-    L += smoothstep(0.004, 0.0012, dm) * step(q.y, uMainY) * uMainI;
+    L += (1.-smoothstep(0.0012,0.004, dm)) * step(q.y, uMainY) * uMainI;
     hot = max(hot, smoothstep(0.004, 0., dm) * step(q.y, uMainY) * step(uMainY - 0.25, q.y) * uMainI * 0.5);
     o = vec4(min(L, 3.), hot, 0., 1.);
   }`;

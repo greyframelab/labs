@@ -577,11 +577,11 @@ canvas{width:100vw;height:100vh;display:block}
     float st=sin(tq*6.2832*4200.)*.5+.5; st=st*st*st*st;
     return v + D*.005*uStri*st*smoothstep(.15,.9,a/hw)*(1.-smoothstep(.92,1.,a/hw)); }
   float hOnly(vec2 xz){ float a,b,c; return hField(xz,a,b,c); }
-  float studio(vec3 r){ float a=smoothstep(.16,.0,abs(r.y-.55))*smoothstep(.75,.15,abs(r.x*.9+r.z*.4))*smoothstep(-.1,.4,r.z);
-    float b=smoothstep(.12,.0,abs(r.y-.18))*smoothstep(.5,.95,-r.x)*.6; float c=smoothstep(.08,.0,abs(r.y-.32))*smoothstep(.4,.9,r.x*.7-r.z*.7)*.35; return (a+b+c)*uEnv; }
+  float studio(vec3 r){ float a=(1.-smoothstep(.0,.16,abs(r.y-.55)))*(1.-smoothstep(.15,.75,abs(r.x*.9+r.z*.4)))*smoothstep(-.1,.4,r.z);
+    float b=(1.-smoothstep(.0,.12,abs(r.y-.18)))*smoothstep(.5,.95,-r.x)*.6; float c=(1.-smoothstep(.0,.08,abs(r.y-.32)))*smoothstep(.4,.9,r.x*.7-r.z*.7)*.35; return (a+b+c)*uEnv; }
   // softbox de contraluz pegado al horizonte, siempre delante de la cámara (como en un estudio de producto)
   float backStrip(vec3 r){ vec2 h=normalize(r.xz+1e-6); float c=dot(h,uBk); float el=r.y;
-    return smoothstep(.6,.95,c)*smoothstep(.012,.03,el)*smoothstep(.09,.045,el)*1.0 + smoothstep(.3,.95,c)*smoothstep(.2,.0,abs(el-.06))*.06; }
+    return smoothstep(.6,.95,c)*smoothstep(.012,.03,el)*(1.-smoothstep(.045,.09,el))*1.0 + smoothstep(.3,.95,c)*(1.-smoothstep(.0,.2,abs(el-.06)))*.06; }
   float kk(vec3 Tg, vec3 V, vec3 L, float n){ vec3 Hh=normalize(L+V); float th=dot(Tg,Hh); return pow(max(0.,sqrt(max(0.,1.-th*th))),n); }
   vec3 TIPP;
 ${STYLUS}

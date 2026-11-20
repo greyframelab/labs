@@ -500,18 +500,18 @@ canvas{width:100vw;height:100vh;display:block}
   // estudio: softbox grande arriba-atrás, dos tiras laterales y (en la ruptura) un anillo cian en el horizonte
   vec3 env(vec3 r){
     vec3 c = vec3(0.);
-    float key = smoothstep(0.5, 0.46, abs(r.x)) * smoothstep(0.1, 0.14, r.y) * smoothstep(0.62, 0.58, r.y) * smoothstep(0.2, 0.4, r.z);
+    float key = (1.-smoothstep(0.46,0.5, abs(r.x))) * smoothstep(0.1, 0.14, r.y) * (1.-smoothstep(0.58,0.62, r.y)) * smoothstep(0.2, 0.4, r.z);
     c += uTint * key * 6.5 * uKey;
     c += vec3(0.07) * smoothstep(-0.05, 0.9, r.y) * uKey;
     float ang = atan(r.x, r.z);
     for (int k = 0; k < 3; k++) {
       float a0 = k == 0 ? 1.95 : k == 1 ? -2.25 : 0.7;
       float da = abs(mod(ang - a0 + 3.14159, 6.28318) - 3.14159);
-      c += uTint * (smoothstep(0.09, 0.035, da) + 0.05 * smoothstep(0.3, 0.0, da)) * smoothstep(-0.08, 0.05, r.y) * smoothstep(0.75, 0.6, r.y) * (k == 2 ? 3.5 : 9.0) * uKey;
+      c += uTint * ((1.-smoothstep(0.035,0.09, da)) + 0.05 * (1.-smoothstep(0.0,0.3, da))) * smoothstep(-0.08, 0.05, r.y) * (1.-smoothstep(0.6,0.75, r.y)) * (k == 2 ? 3.5 : 9.0) * uKey;
     }
-    float top = smoothstep(0.02, 0.0, abs(r.y - 0.97)); c += vec3(0.6) * top * uKey;
-    c += CY * smoothstep(0.035, 0.0, abs(r.y - 0.03)) * 5.0 * uCy;
-    c += CY * smoothstep(0.4, 0.0, abs(r.y - 0.12)) * 0.08 * uCy;
+    float top = (1.-smoothstep(0.0,0.02, abs(r.y - 0.97))); c += vec3(0.6) * top * uKey;
+    c += CY * (1.-smoothstep(0.0,0.035, abs(r.y - 0.03))) * 5.0 * uCy;
+    c += CY * (1.-smoothstep(0.0,0.4, abs(r.y - 0.12))) * 0.08 * uCy;
     return c;
   }
   bool march(vec3 ro, vec3 rd, int N, float tf, out float t){

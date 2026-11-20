@@ -565,7 +565,7 @@ canvas{width:100vw;height:100vh;display:block}
   }`;
   const FS = `#version 300 es
   precision highp float; in vec3 vCol; in float vA; out vec4 o;
-  void main(){ vec2 q = gl_PointCoord - .5; float r = length(q); float k = vA > .5 ? smoothstep(.5, .38, r) * (0.7 + 0.3 * smoothstep(.3, .46, r)) : smoothstep(.5, .1, r); o = vec4(vCol * k, 1.); }`;
+  void main(){ vec2 q = gl_PointCoord - .5; float r = length(q); float k = vA > .5 ? (1.-smoothstep(.38,.5, r)) * (0.7 + 0.3 * smoothstep(.3, .46, r)) : (1.-smoothstep(.1,.5, r)); o = vec4(vCol * k, 1.); }`;
   const sh = (t, s) => { const x = gl.createShader(t); gl.shaderSource(x, s); gl.compileShader(x); if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(x)); return x; };
   const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FS));
   gl.bindAttribLocation(pr, 0, 'aPos'); gl.bindAttribLocation(pr, 1, 'aKind'); gl.bindAttribLocation(pr, 2, 'aR');
