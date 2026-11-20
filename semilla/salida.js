@@ -9,7 +9,7 @@
   const wc = document.getElementById('w'), wx = wc.getContext('2d');
   const sizeW = () => { const v = innerWidth >= innerHeight ? [1920, 1080] : [1080, 1920]; if (wc.width !== v[0]) { wc.width = v[0]; wc.height = v[1]; } };
   const ch = new BroadcastChannel('semilla-salida');
-  let last = null, fps = 60, acc = 0, n = 0, lastTs = 0, slow = 0, fast = 0;
+  let last = null, lastTs = 0;
   const cache = new Map();
   const piece = (code, o) => {
     const k = code + JSON.stringify(o || {});
@@ -24,16 +24,12 @@
   addEventListener('dblclick', () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {}));
   document.addEventListener('fullscreenchange', () => hint.classList.toggle('off', !!document.fullscreenElement));
   setTimeout(() => hint.classList.add('off'), 9000);
+  const pacer = new window.SemillaEngine.Pacer(eng);
+  let lastShot = '';
   function frame(ts) {
     requestAnimationFrame(frame);
     const dt = Math.min(0.1, (ts - lastTs) / 1000 || 0.016); lastTs = ts;
-    acc += dt; n++;
-    if (acc > 0.5) {
-      fps = n / acc; acc = 0; n = 0;
-      if (fps < 48) { slow++; fast = 0; } else if (fps > 58) { fast++; slow = 0; }
-      if (slow >= 2 && eng.scale > 0.55) { eng.resize(eng.size[0], eng.size[1], +(eng.scale - 0.1).toFixed(2)); slow = 0; }
-      if (fast >= 8 && eng.scale < 1.5) { eng.resize(eng.size[0], eng.size[1], +(eng.scale + 0.1).toFixed(2)); fast = 0; }
-    }
+    if (!pacer.tick()) return;   // a 30 fps fijos si el ordenador no llega a 60: sin tirones
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     eng.resize(innerWidth * dpr, innerHeight * dpr, eng.scale);
     if (!last) return;
@@ -45,7 +41,10 @@
     });
     let stingA = 0;
     if (last.word) { sizeW(); stingA = window.SemillaPalabra.draw(wx, wc.width, wc.height, last.word.w, last.word.t + late, last.word.acc); }
+    const top = slots[slots.length - 1], sh = top ? last.slots[last.slots.length - 1].code + ':' + SM.shotAt(top.P, top.e.u / top.P.bar).i : '';
+    pacer.cut(sh !== lastShot, dt); lastShot = sh;   // la resolución solo cambia en un corte de plano
     eng.draw(slots, Object.assign({}, last.look, { sting: wc, stingA }));
+    pacer.done(ts);
   }
   requestAnimationFrame(frame);
 })();

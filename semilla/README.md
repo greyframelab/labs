@@ -31,6 +31,11 @@ Cada vuelta tiene cuatro actos: SEÑAL (casi a oscuras), TENSIÓN, RUPTURA (las 
 ## Sonido
 Sintetizado en el navegador desde la partitura: industrial, abstracto y ambient. Cada corte de plano es un golpe de chapa y cambia el intervalo del dron; cada forma suena con sus resonadores metálicos y un pulso de máquina; el plano decide el espacio (el macro, cercano y seco; el general, con mucha sala). Dron vivo como columna y una gran ruptura metálica. El master tiene limitador y techo de seguridad; el nivel de la sala se ajusta con VOLUMEN.
 
+## La palabra
+- Cualquier palabra dicha tiene carácter: si se parece a un arquetipo (fuego, agua, amor, miedo, luz, tiempo, máquina, calma, caos, vida) lo hereda; si no, mandan sus ejes de significado. Las desconocidas (nombres, inventadas) se leen por su sonido.
+- El 70 % de las veces la palabra se vuelve materia: escrita con la MATRIZ de la máquina (5×7 celdas), dispersa en el espacio durante la pieza y ordenada en el ECO, donde se lee. Un tercio en vóxeles 3D, el resto en teselas finas.
+- El sentido decide imagen (acento, forma, material, luz, trazos, tratamiento de la materia) y sonido (tempo, dron entre 8 motores, bajo entre 5, golpes, textura, armonía, peso del grave).
+
 ## Montaje en sala
 1. Proyector como pantalla extendida, altavoces y micrófono en sala. Abre la app en Chrome y pulsa **ARRANCAR** (autoriza el micrófono la primera vez).
 2. Elige el modo, ajusta **VOLUMEN** y **BRILLO** y pulsa **PROYECTAR** (`P`). Se abre la **ventana de SALIDA**: solo la obra, a la resolución del proyector y en sincronía con la consola. Llévala al proyector y haz doble clic para ponerla a pantalla completa. La consola sigue con todos los controles; el sonido sale de ella. `H` deja la vista limpia en la propia consola.
@@ -39,7 +44,7 @@ Sintetizado en el navegador desde la partitura: industrial, abstracto y ambient.
 
 Por defecto:
 - **DESTELLOS SEGUROS** limita los pulsos de luz para público general.
-- La resolución se adapta sola a los FPS del ordenador.
+- Sin saltos en ordenadores modestos: si no llega a 60 fps baja la resolución (hasta el 80 %), fija 30 fps exactos, aligera la calidad y, solo al final, baja más la resolución. Los cambios de resolución esperan a un corte de plano.
 - Si falla la GPU, la app se recarga y sigue en el mismo modo.
 
 ## Salidas
@@ -55,7 +60,8 @@ Por defecto:
 - `score.js`: partitura (semilla → pieza).
 - `engine.js`: motor WebGL2.
 - `sound.js`: síntesis.
-- `voz.js`: escucha y léxico de sentido.
+- `voz.js`: escucha, elección de la palabra y su carácter.
+- `sentido.txt`: sentido de ~40.000 palabras del español (8 ejes: valencia, activación, calor, luz, máquina, dureza, peso, abstracción, y su arquetipo más cercano). Se genera con `tools/sentido.py` (vectores `es_core_news_lg` de spaCy + frecuencias de `wordfreq`); la app solo lo lee, sin internet.
 - `app.js` + `index.html`: consola y modos.
 - `salida.html` + `salida.js`: ventana de salida.
 - `palabra.js`: la palabra proyectada.

@@ -27,7 +27,14 @@
     { id: 'red', form: 8, name: 'RED', idea: 'una superficie mínima infinita, vista desde dentro', acc: ['cian', 'rojo', 'violeta', 'ambar'], w: 5 },
     { id: 'laminas', form: 9, name: 'LÁMINAS', idea: 'estratos de vidrio negro que se desplazan', acc: ['rojo', 'blanco', 'cian'], w: 4 },
     { id: 'filos', form: 10, name: 'FILOS', idea: 'un bosque de cuchillas que corta la luz', acc: ['ambar', 'rojo', 'verde'], w: 0 },
+    { id: 'palabra', form: 11, name: 'PALABRA', idea: 'la palabra dicha convertida en materia negra', acc: ['blanco', 'rojo', 'cian'], w: 0 },
   ];
+  // TRATAMIENTOS: el sentido de la palabra cambia cómo se comporta la materia (también salen solos en AUTOMÁTICO)
+  const FAMS = ['', 'agua', 'fuego', 'amor', 'miedo', 'luz', 'tiempo', 'maquina', 'calma', 'caos', 'vida'];
+  // KITS de sonido: cada pieza suena con su propia materia (nada de campanas)
+  const KITS = ['chapa', 'datos', 'piston', 'cadena'];
+  const TEXS = ['motor', 'aliento', 'rejilla', 'grave'];
+  const FAM_KIT = { agua: [1, 1], fuego: [0, 0], amor: [3, 1], miedo: [2, 3], luz: [1, 1], tiempo: [3, 2], maquina: [1, 2], calma: [3, 1], caos: [0, 2], vida: [2, 1] };
   SPECIES.forEach((s) => { s.bloom = 0.26; s.pals = ['vacio', 'carbon']; });
   const SP_W = SPECIES.reduce((a, s) => a + s.w, 0);
   const pickSpecies = (r) => { let x = r * SP_W; for (const s of SPECIES) { x -= s.w; if (x < 0) return s; } return SPECIES[0]; };
@@ -100,7 +107,8 @@
     const F = opts.force || {};
     let sp = pickSpecies(R()); if (F.form) sp = SPECIES.find((s) => s.id === F.form) || sp;
     const refIds = Object.keys(REFS); let refId = refIds[Math.floor(R() * refIds.length)]; if (F.ref && REFS[F.ref]) refId = F.ref; const ref = REFS[refId];
-    const bpm = Math.round(ref.bpm[0] + R() * (ref.bpm[1] - ref.bpm[0]));
+    const rb = R(), AX = F.axes || null;   // ejes de significado de la palabra: [valencia, activación, calor, luz, máquina, dureza, peso, abstracción]
+    const bpm = Math.round(ref.bpm[0] + (AX ? 0.7 * AX[1] + 0.3 * rb : rb) * (ref.bpm[1] - ref.bpm[0]));   // más agitada, más rápida
     const roots = [28, 29, 30, 31, 33, 34, 35];
     const root = roots[Math.floor(R() * roots.length)];
     let accAuto = sp.acc[Math.floor(R() * sp.acc.length)]; if (F.accent && ACCENTS[F.accent]) accAuto = F.accent;
@@ -118,6 +126,29 @@
       mat: Math.floor(R() * 4), rig: Math.floor(R() * 4),
     };
     if (F.mat != null) vis.mat = F.mat; if (F.rig != null) vis.rig = F.rig;
+    // tratamiento por sentido: la palabra lo decide; sin palabra, casi la mitad de las piezas llevan uno al azar
+    let fam = F.fam && FAMS.indexOf(F.fam) > 0 ? FAMS.indexOf(F.fam) : 0;
+    if (!F.fam && h4(S, 300, 1, 2) < 0.45) fam = 1 + Math.floor(h4(S, 301, 3, 4) * 10);
+    vis.fam = fam;
+    const fk = FAM_KIT[FAMS[fam]];
+    let kit = KITS[fk && h4(S, 302, 0, 0) < 0.7 ? fk[0] : Math.floor(h4(S, 303, 0, 0) * KITS.length)];
+    let tex = TEXS[fk && h4(S, 304, 0, 0) < 0.6 ? fk[1] : Math.floor(h4(S, 305, 0, 0) * TEXS.length)];
+    // sin arquetipo, el sonido sale de los ejes: dura → chapa, pesada → pistón, blanda → cadena, máquina → micro-cortes…
+    if (AX && !fk) {
+      kit = AX[5] > 0.65 ? (AX[4] > 0.6 ? 'datos' : 'chapa') : AX[6] > 0.65 ? 'piston' : AX[5] < 0.38 ? 'cadena' : AX[4] > 0.6 ? 'datos' : kit;
+      tex = AX[4] > 0.6 ? 'rejilla' : AX[6] > 0.65 ? 'grave' : AX[2] > 0.62 ? 'motor' : AX[5] < 0.4 || AX[2] < 0.38 ? 'aliento' : tex;
+    }
+    // armonía del dron: positiva → quinta abierta; negativa → tritono (oscura) o segunda menor (tensa)
+    const ivl = !AX ? 7 : AX[0] > 0.6 ? 7 : AX[0] < 0.38 ? (AX[3] < 0.4 ? 6 : 1) : 5;
+    const bright = AX ? AX[3] : 0.5, weight = AX ? AX[6] : 0.5;
+    // VOCES: el dron y el bajo cambian de motor en cada pieza (oscuros y enigmáticos); el sentido inclina la elección
+    const DRONES = ['sierra', 'fm', 'pulso', 'organo', 'coro', 'sub', 'anillo', 'fantasma'], BASSES = ['sierra', 'fm', 'cuadrada', 'reese', 'seno'];
+    const FAM_DRONE = { agua: ['coro', 'fantasma'], fuego: ['sierra', 'sub'], amor: ['organo', 'coro'], miedo: ['fantasma', 'sub', 'anillo'], luz: ['organo', 'coro'],
+      tiempo: ['organo', 'anillo'], maquina: ['fm', 'pulso'], calma: ['coro', 'fantasma'], caos: ['fm', 'pulso', 'anillo'], vida: ['coro', 'sierra'] };
+    let dOpts = FAM_DRONE[FAMS[fam]];
+    if (!dOpts && AX) dOpts = AX[4] > 0.6 ? ['fm', 'pulso'] : AX[6] > 0.65 ? ['sub', 'anillo'] : AX[3] < 0.35 ? ['fantasma', 'anillo', 'sub'] : AX[5] < 0.38 ? ['coro', 'organo'] : null;
+    const drone = dOpts && h4(S, 310, 0, 0) < 0.75 ? dOpts[Math.floor(h4(S, 311, 0, 0) * dOpts.length)] : DRONES[Math.floor(h4(S, 312, 0, 0) * DRONES.length)];
+    const bassEng = BASSES[Math.floor(h4(S, 313, 0, 0) * BASSES.length)];
     const kickK = 3 + Math.floor(R() * 3), tickK = 7 + Math.floor(R() * 6);
     const tickN = [16, 12, 14, 18, 10][Math.floor(R() * 5)];
     const metalN = [5, 7, 9, 11, 13, 20][Math.floor(R() * 6)], metalK = 2 + Math.floor(R() * 2);
@@ -217,7 +248,7 @@
     return {
       code, seed: S, sp, refId, ref, bpm, beat, bar, step, bars: BARS, L,
       root, rootName: NOTE[root % 12], accentKey, accentAuto: accAuto, accent, palId, pal, light: lum > 0.45 ? 1 : 0, look,
-      vis, energy: E, ev, warps, hits, density, chaos, droneShape, roomSeed, metalBase,
+      vis, energy: E, ev, warps, hits, density, chaos, droneShape, roomSeed, metalBase, kit, tex, drone, bassEng, ivl, bright, weight, axes: AX,
       acts: ACTS.map(([b, n]) => [b * bar, n]), word: F.word || null, fam: F.fam || null,
       stroke: F.stroke || { style: 0, c1: '#000000', c2: '#000000' }, vowels: F.vowels || null,
     };
@@ -261,14 +292,35 @@
     };
   }
 
+
+  // MATRIZ: la tipografía de la máquina. Cada letra es una rejilla de 5×7 celdas; así escribe SEMILLA
+  // (la consola la proyecta un instante y la imagen la convierte en materia). Sin fuentes: solo código.
+  const MATRIX = {'A':0x3a31fc631,'B':0x7a31f463e,'C':0x3e108420f,'D':0x7a318c63e,'E':0x7e10f421f,'F':0x7e10f4210,'G':0x3e109c62f,'H':0x4631fc631,'I':0x7c842109f,'J':0x1c210862e,'K':0x4654c5251,'L':0x42108421f,'M':0x4775ac631,'N':0x47359c631,'Ñ':0x3811cd671,'O':0x3a318c62e,'P':0x7a31f4210,'Q':0x3a318d64d,'R':0x7a31f5251,'S':0x3e107043e,'T':0x7c8421084,'U':0x46318c62e,'V':0x46318c544,'W':0x4631ad6aa,'X':0x462a22a31,'Y':0x462a21084,'Z':0x7c222221f,'0':0x3a75ae62e,'1':0x11842108e,'2':0x3a213221f,'3':0x78217043e,'4':0x4a52f8842,'5':0x7e1e0862e,'6':0x3a10f462e,'7':0x7c2222108,'8':0x3a317462e,'9':0x3a317842e};
+  const glyph = (ch) => MATRIX[ch] ?? MATRIX[String(ch).normalize('NFD').replace(/[\u0300-\u036f]/g, '')] ?? 0;
+  // dibuja `text` con celdas de `cell` px; adv = 7 celdas por letra (5 + 2 de aire). Devuelve el ancho.
+  function matrix(x, text, cx, cy, cell, opt = {}) {
+    const t = String(text).toUpperCase(), n = t.length, adv = cell * (opt.track ?? 7), gap = opt.gap ?? 0.18;
+    const W = adv * n - (adv - cell * 5), x0 = cx - W / 2, y0 = cy - cell * 3.5;
+    for (let i = 0; i < n; i++) {
+      const g = glyph(t[i]);
+      for (let r = 0; r < 7; r++) for (let c = 0; c < 5; c++) {
+        if (!((g >> (34 - (r * 5 + c))) & 1)) continue;
+        const px = x0 + i * adv + c * cell, py = y0 + r * cell, s = cell * (1 - gap);
+        if (opt.cellFn) opt.cellFn(i, r, c, px, py, s); else x.fillRect(px + (cell - s) / 2, py + (cell - s) / 2, s, s);
+      }
+    }
+    return W;
+  }
   // PLANOS: los cortes de cámara salen de la partitura; imagen y sonido los leen igual
   const CUTS = [0, 4, 6, 8, 9, 10, 11, 12];
   function shotAt(P, bars) {
     bars = ((bars % P.bars) + P.bars) % P.bars; let i = 0;
     for (let k = 0; k < CUTS.length; k++) if (bars >= CUTS[k]) i = k;
     const K = h4(P.seed, 77, i, 3), r = h4(P.seed, 78, i, 5);
-    const type = P.sp.form >= 8 ? (r < 0.25 ? 3 : 1) : r < 0.45 ? 1 : r < 0.7 ? 2 : r < 0.85 ? 3 : 0;
+    let type = P.sp.form >= 8 && P.sp.form <= 10 ? (r < 0.25 ? 3 : 1) : r < 0.45 ? 1 : r < 0.7 ? 2 : r < 0.85 ? 3 : 0;
+    // PALABRA: fragmentos de letra en macro; solo en el ECO la cámara se aleja y se lee entera
+    if (P.sp.form === 11) type = i === CUTS.length - 1 ? 0 : r < 0.6 ? 1 : r < 0.85 ? 2 : 3;
     return { i, type, K, since: bars - CUTS[i] };
   }
-  window.SEMILLA = { CUTS, shotAt, MATS, RIGS, PALETTES, ACCENTS, ACCENT_NAMES, SPECIES, REFS, ACTS, NOTE, BARS, newCode, cleanCode, generate, env, warp, energyAt, hashStr, mulberry, h4 };
+  window.SEMILLA = { MATRIX, matrix, FAMS, KITS, TEXS, CUTS, shotAt, MATS, RIGS, PALETTES, ACCENTS, ACCENT_NAMES, SPECIES, REFS, ACTS, NOTE, BARS, newCode, cleanCode, generate, env, warp, energyAt, hashStr, mulberry, h4 };
 })();

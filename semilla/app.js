@@ -79,7 +79,7 @@
   }
 
   // ---------- frame ----------
-  let lastFrame = 0, fpsAcc = 0, fpsN = 0, fps = 60, errors = 0, slowT = 0, fastT = 0;
+  let lastFrame = 0, errors = 0, pacer = null, previewN = 0, lastShot = '';
   function size() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2), r = eng.canvas.getBoundingClientRect();
     eng.resize(r.width * dpr, r.height * dpr, eng.scale);
@@ -95,12 +95,12 @@
     requestAnimationFrame(frame);
     try {
       const dt = Math.min(0.1, (ts - lastFrame) / 1000 || 0.016); lastFrame = ts;
-      fpsAcc += dt; fpsN++; if (fpsAcc > 0.5) { fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0; adapt(); }
       snd.tick();
       if (!cur) return;
       const t = heard();
       logic(t, dt);
       size();
+      if (salidaOn() && eng.scale > 0.5) eng.resize(eng.size[0], eng.size[1], 0.5);   // vista previa ligera mientras proyecta la salida
       const slots = [];
       let wCur = 1;
       if (prev) {
@@ -110,6 +110,9 @@
         if (x >= 1) prev = null;
       }
       slots.push({ P: cur.P, e: envOf(cur, t), w: wCur, s: cur });
+      // corte de plano o pieza nueva: el único momento en que puede cambiar la resolución sin que se note
+      const sh = cur.code + ':' + SM.shotAt(cur.P, slots[slots.length - 1].e.u / cur.P.bar).i;
+      pacer.cut(sh !== lastShot, dt); lastShot = sh;
       // firma: la pieza se apaga y entra el sting
       let fade = cfg.bri / 100, stingA = 0;
       if (firma) {
@@ -129,7 +132,9 @@
       const live = cfg.mode !== 'manual';
       const lk = cur.P.look;
       const look = { bloomBase: lk.bloom, tone: lk.tone, vig: lk.vig, grain: lk.grain, fade, drift: live ? now() * 0.02 : 0, scan: 0, ca: lk.tone ? 0.004 : 0.01 };
-      eng.draw(slots, Object.assign({ sting: stingC, stingA }, look));
+      // con la ventana de salida abierta, la vista previa de la consola se dibuja a 15 fps y pequeña: la GPU es para el proyector
+      const draw = salidaOn() ? (++previewN % 4 === 0) : pacer.tick();
+      if (draw) { eng.draw(slots, Object.assign({ sting: stingC, stingA }, look)); if (!salidaOn()) pacer.done(ts); }
       salidaSend(slots, t, look);
       if (shotReq) { shotReq = false; shot(); }
       errors = 0;
@@ -138,13 +143,6 @@
       console.error(err);
       if (++errors > 40) reload('error');
     }
-  }
-  // resolución de la escena según lo que aguante el ordenador
-  function adapt() {
-    if (salidaOn() && eng.scale > 0.6) { eng.resize(eng.size[0], eng.size[1], 0.6); return; }   // con la salida abierta, la vista previa va ligera
-    if (fps < 48) { slowT++; fastT = 0; } else if (fps > 58) { fastT++; slowT = 0; } else { slowT = fastT = 0; }
-    if (slowT >= 2 && eng.scale > 0.55) { eng.resize(eng.size[0], eng.size[1], +(eng.scale - 0.1).toFixed(2)); slowT = 0; }
-    if (fastT >= 8 && eng.scale < 1.5) { eng.resize(eng.size[0], eng.size[1], +(eng.scale + 0.1).toFixed(2)); fastT = 0; }   // va sobrado: supermuestreo
   }
 
   // ---------- la palabra, un instante (palabra.js, la comparten consola y salida) ----------
@@ -285,7 +283,7 @@
     const bar = $('tlBar'); if (bar) bar.style.width = (100 * lt) / P.L + '%';
     if (performance.now() - hudT < 200) return; hudT = performance.now();
     $('chAct').textContent = P.acts.reduce((a, x) => (lt >= x[0] ? x[1] : a), 'SEÑAL');
-    $('chFps').textContent = Math.round(fps) + ' · ' + Math.round(eng.scale * 100) + '%';
+    $('chFps').textContent = (salidaOn() ? 'SALIDA' : Math.round(pacer.fps) + (pacer.half ? ' (30)' : '')) + ' · ' + Math.round(eng.scale * 100) + '%' + ((eng.quality ?? 1) < 0.5 ? ' · LIGERA' : '');
     const so = salidaOn(); $('bProj').classList.toggle('on', so); $('bProj').textContent = so ? 'SALIDA ABIERTA' : 'PROYECTAR';
     $('tagTxt').dataset.salida = so ? '1' : '';
     if (cfg.mode === 'publico') {
@@ -380,7 +378,7 @@
       ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'playback', sampleRate: 48000 });
       await ctx.resume();
       snd = new window.SemillaSound(ctx);
-      eng = new window.SemillaEngine($('c'));
+      eng = new window.SemillaEngine($('c')); pacer = new window.SemillaEngine.Pacer(eng);
       logEl.textContent = 'PREPARANDO LAS ESPECIES…';
       await new Promise((r) => setTimeout(r, 30));
       eng.warm();
