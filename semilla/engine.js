@@ -199,6 +199,7 @@ float holeF(vec3 p){ float k=7.0+5.0*uV1.w; vec3 q=p*k; q+=0.9*sin(q.yzx*0.37+uV
 vec3 twistY(vec3 p,float k){ float c=cos(k*p.y), s=sin(k*p.y); return vec3(c*p.x-s*p.z,p.y,s*p.x+c*p.z); }
 float tw(){ return (uV1.x-0.5)*2.0*(0.5+uChaos); }
 float bars0(){ return uT/uBar; }
+vec4 gEnj=vec4(1.0);
 float map(vec3 p){
   float ph=uPhase;
   if(uFam==7){ float k=uPhase*4.0; ph=(floor(k)+smoothstep(0.82,1.0,fract(k)))/4.0; }   // MÁQUINA: gira a pasos exactos
@@ -260,11 +261,21 @@ float map(vec3 p){
     vec3 n=normalize(p);
     float sp=pow(max(0.0,sin(n.x*7.0+ph)*sin(n.y*7.0)*sin(n.z*7.0-ph)),1.6);
     d=(length(p)-0.55-sp*(0.45+0.3*uBass+0.2*uChaos))*0.45;
-  } else if(uForm==8){     // RED: una superficie mínima infinita, vista desde dentro
-    float k=3.2+2.0*uDen;   // más estructura a la vista: paredes más finas y más cercanas entre sí
-    vec3 r=p+vec3(0.0,0.0,uPhase/k*2.0);
-    d=(abs(gyr(r*k))/k-(0.05+0.05*uChaos+0.02*uBass))*0.6;
-    return d;
+  } else if(uForm==8){     // ENJAMBRE: un campo infinito de esquirlas de obsidiana suspendidas; la cámara viaja entre ellas
+    float c=1.25; vec3 r=p+vec3(0.0,0.0,uPhase*0.35);
+    vec3 id=floor(r/c+0.5); r-=id*c;
+    float h=fract(sin(dot(id,vec3(12.9,78.2,37.7))+uV0.x*40.0)*43758.5), h2=fract(h*91.7+uV0.y), h3=fract(h*13.1+uV0.z);
+    // ORDEN: cada pocos compases el enjambre se alinea en un mismo plano (un muro de placas) y la ruptura lo rompe
+    float al=smoothstep(0.62,0.95,0.5+0.5*sin(bars*0.4+uV0.x*6.28))*(1.0-uImpact);
+    r-=(vec3(h,h2,h3)-0.5)*0.4*(1.0-0.75*al);
+    r.xy=rot(mix(h*6.28+ph*(h2-0.5)*0.7,0.0,al)+uImpact*1.4*(h-0.5))*r.xy;
+    r.yz=rot(mix(h2*6.28,0.0,al)+0.35*uKick*(h3-0.5))*r.yz;
+    float sc=1.0-0.35*uImpact*h3;
+    vec3 sz=vec3(0.05+0.2*h2,0.14+0.14*h,0.012+0.02*h3)*sc;
+    d=sdBox(r,sz)-0.003;
+    gEnj=vec4(min(sz.x-abs(r.x),sz.y-abs(r.y)),h,h2,h3);
+    if(h<0.58) d=0.14;
+    return d*0.6;
   } else if(uForm==9){     // LÁMINAS: estratos de vidrio negro que se desplazan
     float sp=0.32, id=floor(p.y/sp+0.5); vec3 r=p; r.y-=id*sp;
     float hw=fract(sin(id*17.3+uV0.x*31.0)*43758.5);
@@ -369,6 +380,12 @@ vec3 shade(vec3 p, vec3 rd, float t, float bars, float lift, bool full){
     col+=mix(uAcc,vec3(1.0,0.82,0.55),cr*cr*0.6)*cr*(0.18+1.1*uEnergy+2.2*uImpact)*(0.85+0.15*sin(uT*19.0+p.y*11.0)); }
   if(uFam==6){ float s=fract(p.y/0.11+0.5); col*=0.7+0.3*step(0.5,fract((p.y/0.11+0.5)*0.5)); col+=uAcc*exp(-min(s,1.0-s)*70.0)*(0.04+0.25*uEnergy*uEnergy)*lift; }
   if(uFam==7){ float sy=mod(bars*0.5,1.0)*2.4-1.2; col+=uAcc*exp(-abs(p.y-sy)*38.0)*(0.25+0.8*uEnergy)*(0.4+fr); }   // MÁQUINA: una lectura que barre
+  if(uForm==8){ map(p); float e=gEnj.x;
+    // filos de luz en algunas esquirlas (a medias) y, muy de vez en cuando, una placa encendida que ilumina el enjambre
+    float edge=exp(-max(e,0.0)/0.0035)*step(0.78,gEnj.w);
+    float core=1.0-step(0.62,gEnj.y);
+    col+=uAcc*edge*(0.12+0.55*uKick+0.8*uImpact+0.2*uEnergy);
+    col+=uAcc*core*(0.08+0.22*uKick+0.4*uImpact)*(0.5+0.5*ao)/(0.6+0.4*dot(uAcc,vec3(0.33))); }
   if(uSurf==4&&uForm<8&&uComp==0){ float hl=holeF(p); float inside=smoothstep(-0.002,-0.03,hl);   // dentro del hueco, el acento: se enciende con el pulso
     col+=uAcc*inside*(0.03+0.35*uKick+0.5*uImpact+0.1*uEnergy)*(0.3+0.7*ao); }
   if(uFam==1){ // AGUA: cáusticas, la luz que atraviesa un agua invisible y se enreda sobre la materia negra
@@ -438,7 +455,8 @@ void main(){
     if(d<0.0004*t+0.0002||t>9.0) break; t+=d*(uQ>0.5?0.9:1.0); }
   float bars=uT/uBar;
   vec3 col=vec3(0.0);
-  float lift=field?0.95+0.45*uEnergy:0.78+0.5*uEnergy;   // la ruptura se nota en el ritmo y el color, no en inundar de luz   // la SEÑAL en penumbra (visible en proyección), la RUPTURA a plena luz
+  float lift=uForm==8?0.62+0.3*uEnergy:field?0.95+0.45*uEnergy:0.78+0.5*uEnergy;   // ENJAMBRE: obsidiana en penumbra, la luz la ponen sus filos
+    // la ruptura se nota en el ritmo y el color, no en inundar de luz   // la SEÑAL en penumbra (visible en proyección), la RUPTURA a plena luz
   if(uFam==4&&h11(floor(uT*13.0)+uV0.x*99.0)<0.07+0.1*uEnergy) lift*=0.2;   // MIEDO: la luz falla
   // la materia que llena el cuadro (muy cerca) se oscurece: el negro domina y nada se quema
   float cov=t>=9.0?clamp(1.0-minR,0.0,1.0):0.0;   // el rayo rozó un borde sin tocarlo: cobertura parcial
