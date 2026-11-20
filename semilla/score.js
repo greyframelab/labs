@@ -261,5 +261,14 @@
     };
   }
 
-  window.SEMILLA = { MATS, RIGS, PALETTES, ACCENTS, ACCENT_NAMES, SPECIES, REFS, ACTS, NOTE, BARS, newCode, cleanCode, generate, env, warp, energyAt, hashStr, mulberry, h4 };
+  // PLANOS: los cortes de cámara salen de la partitura; imagen y sonido los leen igual
+  const CUTS = [0, 4, 6, 8, 9, 10, 11, 12];
+  function shotAt(P, bars) {
+    bars = ((bars % P.bars) + P.bars) % P.bars; let i = 0;
+    for (let k = 0; k < CUTS.length; k++) if (bars >= CUTS[k]) i = k;
+    const K = h4(P.seed, 77, i, 3), r = h4(P.seed, 78, i, 5);
+    const type = P.sp.form >= 8 ? (r < 0.25 ? 3 : 1) : r < 0.45 ? 1 : r < 0.7 ? 2 : r < 0.85 ? 3 : 0;
+    return { i, type, K, since: bars - CUTS[i] };
+  }
+  window.SEMILLA = { CUTS, shotAt, MATS, RIGS, PALETTES, ACCENTS, ACCENT_NAMES, SPECIES, REFS, ACTS, NOTE, BARS, newCode, cleanCode, generate, env, warp, energyAt, hashStr, mulberry, h4 };
 })();

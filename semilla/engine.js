@@ -486,16 +486,7 @@ void main(){
     const n = parseInt(h.slice(1), 16);
     return (hexCache[h] = [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]);
   }
-  // planos: cortes secos en los golpes; un plano largo en la SEÑAL y el ECO, cortes cada 2 compases en la TENSIÓN y cada compás en la RUPTURA
-  const CUTS = [0, 4, 6, 8, 9, 10, 11, 12];
-  function shotOf(P, e) {
-    const bars = e.u / P.bar; let i = 0;
-    for (let k = 0; k < CUTS.length; k++) if (bars >= CUTS[k]) i = k;
-    const K = window.SEMILLA.h4(P.seed, 77, i, 3);
-    const r = window.SEMILLA.h4(P.seed, 78, i, 5);
-    const type = P.sp.form >= 8 ? (r < 0.25 ? 3 : 1) : r < 0.45 ? 1 : r < 0.7 ? 2 : r < 0.85 ? 3 : 0;
-    return [type, K, bars - CUTS[i]];
-  }
+  function shotOf(P, e) { const s = window.SEMILLA.shotAt(P, e.u / P.bar); return [s.type, s.K, s.since]; }
   // dónde y cuánto existe el contrapunto en este instante (sale de la partitura)
   function contraOf(P, e) {
     const v = P.vis.v, golden = v[5] < 0.5 ? 0.382 : 0.618, horiz = v[6] < 0.3 ? 1 : 0;

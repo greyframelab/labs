@@ -38,7 +38,7 @@
     const glue = ctx.createDynamicsCompressor();
     glue.threshold.value = -20; glue.ratio.value = 2.5; glue.knee.value = 6; glue.attack.value = 0.012; glue.release.value = 0.2;
     const make = ctx.createGain(); make.gain.value = 0.85; this.make = make;
-    this.lv = { drone: 0.12, kick: 0.46, tick: 1.25, metal: 0.66, bass: 0.48, impact: 0.6 };
+    this.lv = { drone: 0.14, kick: 0.3, tick: 0.45, metal: 0.55, bass: 0.4, impact: 0.75, tex: 1, corte: 0.8 };
     const lim = ctx.createDynamicsCompressor();
     lim.threshold.value = -3.6; lim.ratio.value = 20; lim.knee.value = 0; lim.attack.value = 0.001; lim.release.value = 0.08;
     // techo de seguridad: recorte suave por encima de -3 dBFS, nunca pasa de -1,2 dBFS
@@ -126,6 +126,8 @@
     lfo.connect(lg); lg.connect(f.frequency); lfo.start(now); oscs.push(lfo);
     const lfo2 = ctx.createOscillator(); lfo2.frequency.value = 1 / P.L; const lg2 = ctx.createGain(); lg2.gain.value = 260;
     if (!P.vowels) lg2.connect(fm.frequency); lfo2.connect(lg2); lfo2.start(now); oscs.push(lfo2);
+    this.fifth = oscs[2];
+    this.textura();
     if (P.ref.wow) {
       const w = ctx.createOscillator(); w.frequency.value = 0.47; const wg = ctx.createGain(); wg.gain.value = 9;
       w.connect(wg); wg.connect(a.detune); wg.connect(b.detune); w.start(now); oscs.push(w);
@@ -145,6 +147,56 @@
         this.fm.frequency.setTargetAtTime(f1, tt, 0.09); this.fm2.frequency.setTargetAtTime(Math.min(f2, 1400), tt, 0.09); }
     }
     if (bi === 7) this.riser(T, P.bar);
+    // la textura de materia crece con la energía
+    if (this.texGain) this.texGain.gain.setTargetAtTime(this.S.lv.tex * 0.05 * (0.25 + 0.75 * e) * (P.vowels ? 0.8 : 1), T, P.bar * 0.25);
+    const sh = window.SEMILLA.shotAt(P, bi);
+    if (window.SEMILLA.CUTS.includes(bi)) this.corte(T, sh);
+  };
+  // TEXTURA: la materia suena. Un banco de resonadores metálicos afinado según la forma,
+  // excitado por un pulso de máquina a tempo (sin ruido: diente de sierra lento que hace sonar las resonancias)
+  const RATIOS = [
+    [1, 2, 3.01, 4.03, 5.1, 6.2],            // MASA: orgánico, casi armónico
+    [1, 1.18, 1.5, 1.78, 2.2, 2.6],           // TORSIÓN
+    [1, 2.76, 3.42, 4.1, 5.4, 6.3],           // CONCHA
+    [1, 1.33, 1.78, 2.37, 3.16, 4.21],        // PLIEGUE
+    [1, 1.5, 2, 2.5, 3, 4],                   // COLUMNAS
+    [1, 1.21, 1.47, 1.79, 2.18, 2.65],        // FRACTURA
+    [1, 1.06, 1.12, 1.19, 1.26, 1.33],        // ESPINA: racimo apretado
+    [1, 1.5, 2, 3, 4, 6],                     // MONOLITO
+    [1, 1.414, 1.732, 2.236, 2.646, 3.162],   // RED: malla densa
+    [1, 1.59, 2.14, 2.3, 2.65, 2.92],         // LÁMINAS: modos de placa
+    [1, 1.12, 1.41, 1.68, 2.0, 2.24],         // FILOS
+  ];
+  V.textura = function () {
+    const ctx = this.ctx, P = this.P, now = this.cursor, rat = RATIOS[P.sp.form] || RATIOS[0];
+    const base = hz(P.root + 24) * (P.sp.form === 0 ? 0.5 : 1);
+    const ex = ctx.createOscillator(); ex.type = 'sawtooth';
+    const rates = [0.5, 1, 2, 0.75, 1.5]; this.texRate = (P.bpm / 60) * rates[Math.floor(P.vis.v[3] * rates.length)];
+    ex.frequency.value = this.texRate;
+    const exg = ctx.createGain(); exg.gain.value = 0.9; ex.connect(exg);
+    const out = ctx.createGain(); out.gain.value = 0.0001; this.texGain = out;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1600; lp.connect(out);
+    out.connect(this.out); out.connect(this.send);
+    this.res = rat.map((r, i) => {
+      const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 38 + i * 6; f.frequency.value = Math.min(1400, base * r);
+      const g = ctx.createGain(); g.gain.value = 1 / (1 + i * 0.6);
+      const pn = ctx.createStereoPanner(); pn.pan.value = ((i % 2 ? 1 : -1) * (0.2 + 0.12 * i));
+      exg.connect(f); f.connect(g); g.connect(pn); pn.connect(lp); return { f, base: base * r };
+    });
+    ex.start(now); this.oscs.push(ex); this.ex = ex;
+  };
+  // CORTE de plano: golpe de chapa con cola, el dron cambia de intervalo y el espacio cambia con el tipo de plano
+  V.corte = function (T, shot) {
+    const P = this.P, lv = this.S.lv, big = shot.i === 3; // el corte del compás 8 es la RUPTURA (lo hace el impacto)
+    const INT = [7, 5, 10, 3, 8, 1, 6, 2];
+    this.fifth.frequency.setTargetAtTime(hz(P.root + 12 + INT[shot.i % INT.length]), T, 0.4);
+    const mul = 0.94 + 0.12 * shot.K;
+    this.res.forEach((r) => r.f.frequency.setTargetAtTime(Math.min(1400, r.base * mul), T, 0.05));
+    this.ex.frequency.setTargetAtTime(this.texRate * (shot.type === 1 ? 2 : shot.type === 0 ? 0.5 : 1), T, 0.02);
+    // macro cercano y seco; general abierto
+    this.send.gain.setTargetAtTime(shot.type === 1 ? 0.5 : shot.type === 0 ? 1.8 : 1.1, T, 0.08);
+    if (shot.i > 0 && !big) this.metal(T, 0.85 * lv.corte, 0, { f0: P.metalBase * (0.45 + 0.2 * shot.K), decay: 1.6, gain: 1.1, pan: (shot.K - 0.5) * 1.4 });
+    if (shot.i > 0 && !big) this.kick(T, 0.55 * lv.kick / 0.3 * 0.3, 0.4);
   };
   V.droneLevel = function (bi) { const e = this.P.energy[bi]; return this.S.lv.drone * (this.P.vowels ? 0.3 + 0.75 * e : 0.45 + 0.75 * e); };   // con voz, la SEÑAL más baja: el arco se oye
   // subida continua hacia el impacto (no silencio en seco)
