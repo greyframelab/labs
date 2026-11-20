@@ -299,7 +299,8 @@ float map(vec3 p){
   // SUPERFICIE: talla fina sobre la piel (solo cerca de la superficie): ranuras, paneles o perforaciones
   if(uSurf==1&&uForm!=11){ float k=14.0+10.0*uV1.w; vec3 q=p*k; float g=min(0.5-abs(fract(q.y)-0.5),0.5-abs(fract(q.x+q.z*0.5)-0.5))/k-0.0025; d=max(d,min(-g,d+0.012)); }
   else if(uSurf==2&&uForm!=11){ float k=6.0+5.0*uV1.w; vec3 f=abs(fract(p*k)-0.5); float g=(0.5-max(f.x,max(f.y,f.z)))/k-0.003; d=max(d,min(-g,d+0.02)); }
-  else if(uSurf==3&&uForm!=11){ float k=9.0+6.0*uV1.w; vec3 f=fract(p*k)-0.5; float hl=(length(f)-0.28)/k; d=max(d,min(-hl,d+0.03)); }
+  // ESTRÍAS: surcos finos en espiral que siguen la forma (antes perforaciones redondas: parecían letras «o» sueltas)
+  else if(uSurf==3&&uForm!=11){ float k=26.0+14.0*uV1.w; float g=(0.5-abs(fract((p.y+atan(p.z,p.x)*0.08)*k)-0.5))/k-0.003; d=max(d,min(-g,d+0.015)); }
   d*=cs; if(uComp==3&&uForm<8) d*=0.7;
   // AGUA: oleaje cruzado que recorre la materia (sin anillos concéntricos: hacían una espiral)
   if(uFam==1) d+=(0.006+0.006*uBass)*sin(dot(p,vec3(0.8,0.3,0.5))*11.0-uT*1.9)*sin(dot(p,vec3(-0.4,0.6,0.7))*8.0+uT*1.3)+0.016*sin(p.x*2.3+uT*0.7)*sin(p.y*1.9-uT*0.5);
@@ -339,7 +340,7 @@ vec3 shade(vec3 p, vec3 rd, float t, float bars, float lift, bool full){
   float sh=vhq&&uMat!=3?mix(0.35,1.0,shadow(p+n*0.01,Ld)):1.0;
   float key, acc; rigLight(p,r,n,fr,bars,key,acc);
   key+=pow(fr,2.2)*0.22+exp(-pow((dot(r,normalize(vec3(-0.7,0.2,0.3)))-0.9)*9.0,2.0))*0.2;   // luz de filo que acompaña a la cámara
-  if(uForm<8) key+=0.16*pow(fr,1.6)+0.03;   // un filo de luz siempre dibuja la forma: en sala nunca se pierde en el negro
+  if(uForm<8) key+=0.22*pow(fr,1.6)+0.06;   // un filo de luz siempre dibuja la forma: en sala nunca se pierde en el negro
   if(uForm==11){ float eco=max(smoothstep(11.5,12.8,bars)*(1.0-smoothstep(15.0,15.8,bars)),1.0-smoothstep(1.4,2.6,bars)); key+=0.4*pow(fr,1.4)+0.12+0.9*eco*(0.4+pow(fr,0.8));   // la palabra siempre tiene un filo de luz que la dibuja
     float sx=(bars-11.3)/0.16*uAt.z-uWL.x*uAt.z*0.5;   // la letra que se acaba de fijar se enciende un instante
     key+=0.55*exp(-pow((p.x-sx)/(uAt.z*0.7),2.0))*step(11.2,bars)*(1.0-step(13.2,bars)); }
@@ -347,9 +348,9 @@ vec3 shade(vec3 p, vec3 rd, float t, float bars, float lift, bool full){
   float spec=pow(max(dot(r,Ld),0.0),uMat==0?140.0:uMat==1?90.0:60.0)*sh;
   vec3 base;
   // materia negra de verdad: casi sin luz difusa; la luz vive en el filo (Fresnel) y en el reflejo
-  if(uMat==0)      base=INK*(key*(0.025+F*1.25)+spec*1.1+fr*0.03);
-  else if(uMat==1) base=INK*(key*(0.04+F*0.95)+spec*0.8+fr*0.025);
-  else if(uMat==2) base=mix(INK,uAcc,0.12)*(key*(0.04+0.7*F)*1.2+spec*1.2)+fr*0.02;
+  if(uMat==0)      base=INK*(key*(0.09+F*1.25)+spec*1.1+fr*0.03);
+  else if(uMat==1) base=INK*(key*(0.11+F*0.95)+spec*0.8+fr*0.025);
+  else if(uMat==2) base=mix(INK,uAcc,0.12)*(key*(0.1+0.7*F)*1.2+spec*1.2)+fr*0.02;
   else             base=INK*(pow(fr,1.3)*1.1*(0.5+key)+key*0.12);
   // en la RUPTURA la luz principal se vuelve masa de acento en los planos impares
   float hot=(bars>=8.0&&bars<12.0&&fract(uShotK*13.0)>0.45)?(uFam==2?0.25:1.0):0.0;   // en FUEGO el color ya está en las venas: no se inunda
@@ -430,7 +431,7 @@ void main(){
     if(d<0.0004*t+0.0002||t>9.0) break; t+=d*(uQ>0.5?0.9:1.0); }
   float bars=uT/uBar;
   vec3 col=vec3(0.0);
-  float lift=field?0.85+0.4*uEnergy:0.58+0.42*uEnergy;   // la ruptura se nota en el ritmo y el color, no en inundar de luz   // la SEÑAL en penumbra (visible en proyección), la RUPTURA a plena luz
+  float lift=field?0.95+0.45*uEnergy:0.78+0.5*uEnergy;   // la ruptura se nota en el ritmo y el color, no en inundar de luz   // la SEÑAL en penumbra (visible en proyección), la RUPTURA a plena luz
   if(uFam==4&&h11(floor(uT*13.0)+uV0.x*99.0)<0.07+0.1*uEnergy) lift*=0.2;   // MIEDO: la luz falla
   // la materia que llena el cuadro (muy cerca) se oscurece: el negro domina y nada se quema
   float cov=t>=9.0?clamp(1.0-minR,0.0,1.0):0.0;   // el rayo rozó un borde sin tocarlo: cobertura parcial
@@ -462,7 +463,7 @@ void main(){
   float tt=min(t,9.0), coc=clamp(abs(tt-fd)/max(tt,0.35)*dofK,0.0,1.0);
   coc*=1.0-clamp(dot(tz,vec3(0.3,0.59,0.11))*4.0,0.0,1.0);   // los trazos de luz siempre nítidos (el desenfoque los convertía en bruma)
   if(any(isnan(col))||any(isinf(col))) col=vec3(0.0);
-  { float L=dot(col,vec3(0.3,0.59,0.11)); col*=min(1.0,1.05/(L+1e-4)); }   // techo de luz: ninguna zona se quema (el blanco nunca satura)
+  { float L=dot(col,vec3(0.3,0.59,0.11)); col*=min(1.0,1.4/(L+1e-4)); }   // techo de luz: ninguna zona se quema (el blanco nunca satura)
   o=vec4(col*uW,coc*uW);
 }`;
 
@@ -566,7 +567,7 @@ void main(){
   if(uGhost>0.001){ vec3 gh=texture(uGhostT,(uv-0.5)/(1.0+0.03*(1.0-uGhost))+0.5).rgb; c=max(c,gh*uGhost)+gh*uGhost*0.12; }
   c+=uFlashC*uFlash*0.22;
   c*=uFade;
-  if(uTone<0.5){ c=0.96*(1.0-exp(-c*1.05)); c=mix(c,c*c*(3.0-2.0*c),0.35); }   // hombro suave y curva en S: negros densos, brillos con detalle
+  if(uTone<0.5){ c=0.96*(1.0-exp(-c*1.5)); c=mix(c,c*c*(3.0-2.0*c),0.12); }   // hombro suave y curva en S: negros densos, brillos con detalle   // exposición: los medios respiran sin quemar los brillos
   else c=mix(c,0.85+0.15*(1.0-exp(-(c-0.85)/0.15)),step(0.85,c));   // color fiel, solo un hombro arriba
   c*=1.0-uVig*pow(clamp(length(dc*vec2(1.0,1.12))*1.3,0.0,1.0),2.4);
   c*=1.0-uScan*(0.5+0.5*sin(gl_FragCoord.y*3.14159));
@@ -864,7 +865,7 @@ void main(){
     let first = true;
     for (const f of this.chain) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, f.fb); gl.viewport(0, 0, f.w, f.h);
-      gl.uniform1f(D.u.uThr, first ? 0.45 : 0.0); first = false;
+      gl.uniform1f(D.u.uThr, first ? 0.18 : 0.0); first = false;
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.tex); gl.uniform1i(D.u.uTex, 0);
       gl.uniform2f(D.u.uTexel, 1 / src.w, 1 / src.h);
       gl.drawArrays(gl.TRIANGLES, 0, 3); src = f;
