@@ -500,10 +500,14 @@ canvas{width:100vw;height:100vh;display:block}
   // si la gráfica pierde el contexto, se deja de dibujar el 3D (en vez de quemar la pantalla); el resto de la pieza sigue
   let glLost = false;
   cv.addEventListener('webglcontextlost', (e) => { e.preventDefault(); glLost = true; });
+  // gráficas con DirectX (ANGLE D3D11, p. ej. AMD Radeon integradas): el shader completo no compila al dibujar y se pierde el contexto;
+  // ahí se usa una versión ligera (sin reflejo interno del haz ni reflejo del cubo en el suelo), con la misma luz en las caras
+  const LITE = (() => { try { const x = gl.getExtension('WEBGL_debug_renderer_info'); const r = x ? gl.getParameter(x.UNMASKED_RENDERER_WEBGL) : ''; return /Direct3D|D3D11|D3D9/i.test(r) || /[?&]lite\b/.test(location.search); } catch (e) { return false; } })();
   const NSEG = 48, NIMP = 8;
   const VS = `#version 300 es
   in vec2 p; out vec2 uv; void main(){ uv=p*.5+.5; gl_Position=vec4(p,0,1); }`;
   const FS = `#version 300 es
+  ${LITE ? '#define LITE' : ''}
   precision highp float; in vec2 uv; out vec4 o;
   uniform vec3 uCam,uF,uR,uU; uniform vec2 uHalf; uniform float uFoc;
   uniform vec4 uSA[${NSEG}], uSB[${NSEG}]; uniform int uNs;
@@ -514,15 +518,27 @@ canvas{width:100vw;height:100vh;display:block}
   vec3 boxN(vec3 p){ vec3 a=abs(p); return a.x>a.y&&a.x>a.z?vec3(sign(p.x),0,0):a.y>a.z?vec3(0,sign(p.y),0):vec3(0,0,sign(p.z)); }
   float studio(vec3 r){ float top=smoothstep(.7,.98,r.y)*(1.-smoothstep(.0,.4,abs(r.x+.25*r.z)))*.45;
     float side=(1.-smoothstep(.0,.25,abs(r.y-.08)))*smoothstep(.35,.9,-r.x*.8+r.z*.6)*.55; float rim=(1.-smoothstep(.0,.2,abs(r.y+.02)))*smoothstep(.6,1.,r.x)*.35; return (top+side+rim)*uEnv; }
-  vec3 beams(vec3 ro, vec3 rd, float tm){ vec3 g=vec3(0);
-    for(int i=0;i<uNs;i++){ vec3 a=uSA[i].xyz, b=uSB[i].xyz; float I=uSA[i].w, w=uSB[i].w;
-      vec3 v=b-a, w0=ro-a; float bb=dot(rd,v), cc=max(dot(v,v),1e-7), dd=dot(rd,w0), ee=dot(v,w0), D=cc-bb*bb;
-      float s=clamp(D>1e-6?(ee-bb*dd)/D:0.,0.,1.); vec3 q=a+v*s; float t=clamp(dot(q-ro,rd),0.,tm); vec3 pr=ro+rd*t;
-      s=clamp(dot(pr-a,v)/cc,0.,1.); q=a+v*s; float d2=dot(pr-q,pr-q);
-      float hh=w*w/max(d2+w*w,1e-8); g+=I*(mix(uAcc,vec3(1),hh*hh*.8)*hh*.7 + uAcc*.028*.035/(d2+.035)); }
+  // un solo bucle para el haz directo y su reflejo interno (en DirectX cada bucle extra multiplica el shader y dejaba de compilar)
+  float bm(vec3 a, vec3 v, float cc, vec3 ro, vec3 rd, float tm){
+    vec3 w0=ro-a; float bb=dot(rd,v), dd=dot(rd,w0), ee=dot(v,w0), D=cc-bb*bb;
+    float s=clamp(D>1e-6?(ee-bb*dd)/D:0.,0.,1.); float t=clamp(dot(a+v*s-ro,rd),0.,tm); vec3 pr=ro+rd*t;
+    s=clamp(dot(pr-a,v)/cc,0.,1.); vec3 q=a+v*s; return dot(pr-q,pr-q); }
+  vec3 beams(vec3 ro, vec3 rd, float tm, vec3 ro2, vec3 rd2, float k2){ vec3 g=vec3(0);
+    for(int i=0;i<uNs;i++){ vec3 a=uSA[i].xyz, v=uSB[i].xyz-a; float I=uSA[i].w, w=uSB[i].w, ww=w*w, cc=max(dot(v,v),1e-7);
+      float d2=bm(a,v,cc,ro,rd,tm), hh=ww/max(d2+ww,1e-8);
+      vec3 c1=mix(uAcc,vec3(1),hh*hh*.8)*hh*.7 + uAcc*.028*.035/(d2+.035);
+  #ifdef LITE
+      g+=I*c1; }
+  #else
+      float e2=bm(a,v,cc,ro2,rd2,2.4), h2=ww/max(e2+ww,1e-8);
+      vec3 c2=mix(uAcc,vec3(1),h2*h2*.8)*h2*.7 + uAcc*.028*.035/(e2+.035);
+      g+=I*(c1+c2*k2); }
+  #endif
     return g; }
-  vec3 imps(vec3 p){ vec3 g=vec3(0); for(int i=0;i<uNi;i++){ vec3 d=p-uImp[i].xyz; float d2=dot(d,d); float a=.0016/(d2+.0016); g+=uImp[i].w*(mix(uAcc,vec3(1),a)*a+uAcc*.07*exp(-d2*9.)); } return g; }
-  vec3 scene(vec3 ro, vec3 rd, bool refl){
+  vec3 imps(vec3 p, vec3 p2, float k2){ vec3 g=vec3(0); for(int i=0;i<uNi;i++){ vec3 c=uImp[i].xyz; float W=uImp[i].w;
+    vec3 d=p-c; float d2=dot(d,d); float a=.0016/(d2+.0016); vec3 e=p2-c; float e2=dot(e,e); float b=.0016/(e2+.0016);
+    g+=W*((mix(uAcc,vec3(1),a)*a+uAcc*.07*exp(-d2*9.)) + k2*(mix(uAcc,vec3(1),b)*b+uAcc*.07*exp(-e2*9.))); } return g; }
+  vec3 scene(vec3 ro, vec3 rd, float refl){
     vec3 col=vec3(0); vec2 bx=box(ro,rd);
     if(bx.x>0.){
       vec3 p=ro+rd*bx.x, n=boxN(p); float ct=clamp(dot(-rd,n),0.,1.), fr=.04+.96*pow(max(1.-ct,0.),5.);
@@ -535,11 +551,10 @@ canvas{width:100vw;height:100vh;display:block}
       float veil=uEnv*(n.y>.5?.05:.085)*up*(.55+.45*fr);
       float spec=studio(rr)*fr*3.6*(n.y>.5?.18:1.) + .22*studio(rr)*(n.y>.5?.3:1.) + veil + bev*(.3*studio(rb)+.06) + bev2*.07*uEnv;
       float th=bx.y-bx.x; float tr=exp(-th*.28);
-      vec3 g=beams(p,rd,th)+imps(p)*1.2+imps(ro+rd*bx.y)*.8;
       vec3 pe=ro+rd*bx.y, ne=boxN(pe), r2=reflect(rd,-ne);
-      vec3 g2=refl?vec3(0):beams(pe,r2,2.4)*.32;
+      vec3 g=beams(p,rd,th,pe,r2,.32*(1.-refl))+imps(p,pe,.8/1.2)*1.2;
       float fill=uFill*(.55+.45*(1.-length(p.xz)*.5))*th*.5;
-      col+=(g+g2+vec3(.93,.96,1.)*fill)*tr*(1.-fr);
+      col+=(g+vec3(.93,.96,1.)*fill)*tr*(1.-fr);
       col+=vec3(.9,.95,1.)*spec;
       col+=bev*g*.08;
     }
@@ -547,17 +562,22 @@ canvas{width:100vw;height:100vh;display:block}
   }
   void main(){
     vec2 q=(uv-.5)*2.*uHalf; vec3 rd=normalize(uF*uFoc+uR*q.x+uU*q.y); vec3 ro=uCam;
-    vec3 col=scene(ro,rd,false);
-    vec2 bx=box(ro,rd);
-    if(rd.y<0.){ float tf=(FL-ro.y)/rd.y; if(bx.x<0.||tf<bx.x){
-      vec3 p=ro+rd*tf; vec3 rr=reflect(rd,vec3(0,1,0)); float ct=clamp(-rd.y,0.,1.), fr=.03+.97*pow(max(1.-ct,0.),5.);
-      float fade=exp(-max(0.,length(p.xz)-1.5)*.55);
-      // una sola muestra de reflejo (con tres, el shader no compilaba en DirectX/ANGLE en algunas gráficas de Windows)
-      vec3 rf=scene(p,normalize(rr+.006*vec3(sin(p.x*40.),0.,cos(p.z*40.))),true);
-      vec3 pool=vec3(.9,.95,1.)*uFill*.25*exp(-dot(p.xz,p.xz)*.8)+imps(vec3(p.x,-1.,p.z))*.07;
-      col=rf*(.14+.45*fr)*fade*uFloor + pool*fade*.7;
-      col+=studio(rr)*fr*.18*fade;
-    } }
+    // una sola llamada a la escena: o el rayo directo, o su reflejo en el suelo (si el suelo queda delante del cubo)
+    vec2 bx=box(ro,rd); float tf=rd.y<0.?(FL-ro.y)/rd.y:-1.; bool fl=tf>0.&&(bx.x<0.||tf<bx.x);
+    vec3 pf=ro+rd*max(tf,0.), rrf=reflect(rd,vec3(0,1,0));
+    vec3 sro=fl?pf:ro, srd=fl?normalize(rrf+.006*vec3(sin(pf.x*40.),0.,cos(pf.z*40.))):rd;
+  #ifdef LITE
+    vec3 col=fl?vec3(0):scene(ro,rd,0.);
+  #else
+    vec3 col=scene(sro,srd,fl?1.:0.);
+  #endif
+    if(fl){
+      float ct=clamp(-rd.y,0.,1.), fr=.03+.97*pow(max(1.-ct,0.),5.);
+      float fade=exp(-max(0.,length(pf.xz)-1.5)*.55);
+      vec3 pool=vec3(.9,.95,1.)*uFill*.25*exp(-dot(pf.xz,pf.xz)*.8)+imps(vec3(pf.x,-1.,pf.z),pf,0.)*.07;
+      col=col*(.14+.45*fr)*fade*uFloor + pool*fade*.7;
+      col+=studio(rrf)*fr*.18*fade;
+    }
     // seguro: un valor no válido (NaN/infinito) en una sola gráfica quemaba toda la pantalla a través del halo
     if(any(isnan(col))||any(isinf(col))) col=vec3(0);
     o=vec4(clamp(col,0.,64.),1);
