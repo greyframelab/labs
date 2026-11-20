@@ -196,7 +196,7 @@ float bars0(){ return uT/uBar; }
 float map(vec3 p){
   float ph=uPhase;
   if(uFam==7){ float k=uPhase*4.0; ph=(floor(k)+smoothstep(0.82,1.0,fract(k)))/4.0; }   // MÁQUINA: gira a pasos exactos
-  if(uForm==11){ float straight=1.0-0.85*smoothstep(11.0,12.5,uT/uBar);   // en el ECO la palabra se endereza para leerse entera
+  if(uForm==11){ float bb=uT/uBar, straight=1.0-0.9*max(smoothstep(11.0,12.5,bb),1.0-smoothstep(1.4,2.6,bb));   // al nacer y en el ECO la palabra se endereza para leerse entera   // en el ECO la palabra se endereza para leerse entera
     p.xz=rot((0.45*sin(ph*0.7)+(uV0.w-0.5)*0.7)*straight)*p.xz; p.xy=rot((0.08*sin(ph)+uRot*0.12)*straight)*p.xy; }
   else { p.xz=rot(ph+uV0.w*6.28)*p.xz; p.xy=rot(0.22*sin(ph)+uRot*0.25)*p.xy; }
   float sc=1.0+uKick*0.025+(uFam==10?0.05*uBass:0.0); p/=sc;
@@ -336,6 +336,7 @@ vec3 shade(vec3 p, vec3 rd, float t, float bars, float lift, bool full){
   float sh=hq&&uMat!=3?mix(0.35,1.0,shadow(p+n*0.01,Ld)):1.0;
   float key, acc; rigLight(p,r,n,fr,bars,key,acc);
   key+=pow(fr,2.2)*0.35+exp(-pow((dot(r,normalize(vec3(-0.7,0.2,0.3)))-0.9)*9.0,2.0))*0.35;   // luz de filo que acompaña a la cámara
+  if(uForm<8) key+=0.16*pow(fr,1.6)+0.03;   // un filo de luz siempre dibuja la forma: en sala nunca se pierde en el negro
   if(uForm==11){ float eco=max(smoothstep(11.5,12.8,bars)*(1.0-smoothstep(15.0,15.8,bars)),1.0-smoothstep(1.4,2.6,bars)); key+=0.4*pow(fr,1.4)+0.12+0.9*eco*(0.4+pow(fr,0.8));   // la palabra siempre tiene un filo de luz que la dibuja
     float sx=(bars-11.3)/0.16*uAt.z-uWL.x*uAt.z*0.5;   // la letra que se acaba de fijar se enciende un instante
     key+=0.55*exp(-pow((p.x-sx)/(uAt.z*0.7),2.0))*step(11.2,bars)*(1.0-step(13.2,bars)); }
@@ -366,7 +367,7 @@ vec3 shade(vec3 p, vec3 rd, float t, float bars, float lift, bool full){
   return col+INK*0.003;
 }
 void main(){
-  vec2 q=screenP(); vec2 sp=rot(uRot*0.3*(uForm==11?1.0-smoothstep(11.0,12.5,uT/uBar):1.0))*q;   // la palabra del ECO, a nivel
+  vec2 q=screenP(); vec2 sp=rot(uRot*0.3*(uForm==11?1.0-max(smoothstep(11.0,12.5,uT/uBar),1.0-smoothstep(1.4,2.6,uT/uBar)):1.0))*q;   // la palabra del ECO, a nivel
   // PLANOS: la cámara corta en seco con el ritmo; casi nunca se ve el cuerpo entero
   float K=uShotK, push=uShotT*0.06;
   vec3 dir=normalize(vec3(cos(K*31.0),0.35*sin(K*17.0),sin(K*31.0)));
@@ -389,7 +390,7 @@ void main(){
   } else {                 // GENERAL
     float ca=uPhase+uV0.w*6.0, dist=(4.1+1.5*uV1.y)/(0.75+0.35*uZoom)-push*2.0;
     ro=vec3(sin(ca)*0.55,0.18+0.14*cos(ca)+0.3*(uV1.z-0.5),dist); ta=vec3(uOff*0.55,0.0); lens=1.5+0.6*uV1.w;
-    if(uForm==11){ ro=vec3(sin(ca)*0.4,0.1+0.1*cos(ca),max(dist,uWH.x*2.6/min(uRes.x/uRes.y,1.8))+0.6-push*1.5); ta=vec3(0.0); lens=1.7; }
+    if(uForm==11){ ro=vec3(sin(ca)*0.4,0.1+0.1*cos(ca),max(dist,uWH.x*1.7*1.3/(0.5*min(uRes.x/uRes.y,1.8))+uWH.w)+0.4-push*1.0); ta=vec3(0.0); lens=1.7; }
   }
   if(field&&uShot!=3){
     // dentro del campo: busca un hueco abierto y mira a lo largo de él
@@ -403,7 +404,7 @@ void main(){
   vec3 rd=normalize(fw*lens+rt*sp.x+up*sp.y);
   // foco: el macro enfoca el filo que mira y desenfoca todo lo demás (lente larga = poca profundidad)
   float fd=uShot==1?length(ta-ro):uShot==3?length(ro)-0.6:field?1.1+0.8*fract(K*5.0):length(ro-ta)-0.4;
-  float dofK=uShot==1?1.4:field?0.8:uShot==2?0.6:0.3;   // desenfoque contenido: que se lea la materia
+  float dofK=uShot==1?1.2:field?0.7:uShot==2?0.4:0.2;   // desenfoque contenido: que se lea la materia
   float t=0.0, d=1.0, minD=9.0;
   int maxI=uQ>0.5?100:64;
   // ANTIALIAS DE SILUETA: se guarda dónde el rayo pasó más cerca de la materia, en tamaño de píxel
@@ -437,7 +438,7 @@ void main(){
       float sl=smoothstep(0.55,1.0,sin(dot(pp,a1)*5.0+uV0.y*6.0)*sin(dot(pp,a2)*3.0+uPhase*0.5));
       if(sl>0.0) bm+=sl*step(0.0,map(pp+L*0.35))*step(0.0,map(pp+L*0.8)); }
     col+=mix(uAcc,vec3(1.0,0.97,0.92),0.35)*bm/float(nb)*tm*0.32*(0.35+uEnergy+uImpact); }
-  col*=compMask(q*0.8);
+  if(uForm!=11) col*=mix(0.22,1.0,compMask(q*0.8));   // la composición guía la mirada sin apagar la forma; la palabra no se recorta
   // MIEDO: la oscuridad se cierra sobre la forma y solo se abre en el ECO
   if(uFam==4){ float cl=mix(1.5,0.5,smoothstep(0.0,11.0,bars)); cl=mix(cl,1.3,smoothstep(12.0,15.0,bars)); col*=1.0-smoothstep(cl-0.55,cl,length(q)); }
   col+=trazos(q,bars,t<9.0?1.0:0.0);
