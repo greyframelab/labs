@@ -530,7 +530,10 @@ canvas{width:100vw;height:100vh;display:block}
       vec3 ap=abs(p); float e=n.x!=0.?min(1.-ap.y,1.-ap.z):n.y!=0.?min(1.-ap.x,1.-ap.z):min(1.-ap.x,1.-ap.y);
       float bev=(1.-smoothstep(.0,.022,e))*(n.y>.5?.35:1.), bev2=(1.-smoothstep(.0,.006,e));
       vec3 rb=normalize(rr+vec3(0,.6,0)*bev);
-      float spec=studio(rr)*fr*2.4*(n.y>.5?.1:1.) + bev*(.25*studio(rb)+.05) + bev2*.06*uEnv;
+      // luz de las caras: velo de vidrio (degradado suave desde arriba) + reflejo de estudio más presente
+      float up=n.y>.5?(.55+.45*smoothstep(-1.,1.,p.x-p.z)):smoothstep(-1.1,1.,p.y);
+      float veil=uEnv*(n.y>.5?.05:.085)*up*(.55+.45*fr);
+      float spec=studio(rr)*fr*3.6*(n.y>.5?.18:1.) + .22*studio(rr)*(n.y>.5?.3:1.) + veil + bev*(.3*studio(rb)+.06) + bev2*.07*uEnv;
       float th=bx.y-bx.x; float tr=exp(-th*.28);
       vec3 g=beams(p,rd,th)+imps(p)*1.2+imps(ro+rd*bx.y)*.8;
       vec3 pe=ro+rd*bx.y, ne=boxN(pe), r2=reflect(rd,-ne);
