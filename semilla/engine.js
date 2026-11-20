@@ -94,13 +94,24 @@ void main(){ vec2 p=vec2((gl_VertexID<<1)&2, gl_VertexID&2); gl_Position=vec4(p*
   const SP = {};
   SP.objeto = `
 out vec4 o;
-uniform int uForm, uMat, uRig, uStroke, uShot; uniform float uBar, uShotK, uShotT; uniform vec3 uSC1, uSC2;
+// uQ: calidad (1 alta, 0 ligera para ordenadores modestos)
+uniform int uForm, uMat, uRig, uStroke, uShot, uFam; uniform float uQ; uniform float uBar, uShotK, uShotT; uniform vec3 uSC1, uSC2;
+uniform sampler2D uWord; uniform vec4 uWH, uCG; uniform vec2 uWL; uniform vec2 uAim[8];   // uAim: celdas encendidas de la palabra   // uWL: número de letras y paso entre ellas   // la palabra como campo de distancias: semiancho, semialto, rango, fondo
+// distancia 2D a las letras de la palabra (positiva fuera)
+float wordD(vec2 xy){
+  vec2 uv=vec2(xy.x/(2.0*uWH.x)+0.5, 0.5-xy.y/(2.0*uWH.y));
+  float inner=(texture(uWord,uv).r-0.5)*2.0*uWH.z;
+  vec2 b=abs(xy)-uWH.xy; float box=length(max(b,0.0));
+  return box>0.0?box+inner:inner;
+}
+// celda de la matriz bajo un punto (para desplazar cada píxel de la palabra por separado)
+vec2 wordCell(vec2 xy){ vec2 uv=vec2(xy.x/(2.0*uWH.x)+0.5, 0.5-xy.y/(2.0*uWH.y)); return floor((uv-uCG.xy)/uCG.zw); }
 vec2 bz(vec2 a,vec2 b,vec2 c,float t){ return mix(mix(a,b,t),mix(b,c,t),t); }
 // TRAZOS: la palabra pinta luz sobre la materia negra; cada familia de sentido tiene su gesto.
 // Unos trazos pasan por delante del objeto y otros por detrás (los tapa).
 vec3 trazos(vec2 q, float bars, float hit){
   if(uStroke==0) return vec3(0.0);
-  int N=uStroke==5?9:uStroke==4?7:uStroke==2?4:uStroke==1?6:uStroke==6?8:5;
+  int N=uStroke==5?7:uStroke==4?6:uStroke==2?4:uStroke==1?5:uStroke==6?7:4;   // a medias: acompañan a la materia sin competir
   float wash=bars>=12.0?smoothstep(12.0,15.6,bars):0.0;
   vec3 acc=vec3(0.0);
   for(int i=0;i<9;i++){ if(i>=N) break;
@@ -126,7 +137,7 @@ vec3 trazos(vec2 q, float bars, float hit){
     } else {               // tiempo y sin familia: gesto amplio
       float an=(hA-0.5)*2.4; vec2 dv=vec2(cos(an),sin(an)); a=vec2((hB-0.5)*0.8,(hD-0.5)*0.4)-dv*0.35; c=a+dv*(0.5+0.4*hC); b=(a+c)*0.5+vec2(-dv.y,dv.x)*(hD-0.5)*0.3; w=0.008+0.016*hD;
     }
-    float best=9.0, bs=0.0; vec2 pr=a;
+    w*=0.8; float best=9.0, bs=0.0; vec2 pr=a;
     for(int k=1;k<=18;k++){
       float tk=float(k)/18.0; if(tk>prog+0.06) break;
       float tt=min(tk,prog); vec2 pk=bz(a,b,c,tt);
@@ -140,16 +151,16 @@ vec3 trazos(vec2 q, float bars, float hit){
     float taper=(0.55+0.45*smoothstep(0.0,0.06,bs))*(1.0-0.65*smoothstep(0.55,1.0,bs/max(prog,0.01)));
     float bristle=fbmL(vec2(bs*7.0+fi*3.0,best/max(w,1e-4)*1.5),0.25,2);
     float body=1.0-smoothstep(w*0.55*taper,w*taper+1.0/uRes.y,best);
-    float dry=smoothstep(-0.3+0.7*bs,0.25+0.7*bs,bristle+0.3);
+    float dry=smoothstep(-0.15+0.7*bs,0.3+0.7*bs,bristle+0.2);   // pincel seco: el trazo se abre en cerdas
     float press=0.45+0.55*fbmL(vec2(bs*5.0+fi*7.0,fi),0.3,2)+0.15*sin(bs*70.0+fi);  // la mano no aprieta igual
     float paint=body*(0.35+0.65*dry)*clamp(press,0.15,1.2);
     float core=1.0-smoothstep(0.0,w*0.32*taper+0.6/uRes.y,best);
-    float halo=exp(-best/(w*2.2+0.0015))*0.06;
-    float behind=step(0.55,h11(fi*11.3+uV1.w*7.0));
+    float halo=exp(-best/(w*2.2+0.0015))*0.035;
+    float behind=step(0.45,h11(fi*11.3+uV1.w*7.0));   // algo más de la mitad pasan por detrás de la materia
     float occl=behind>0.5?1.0-hit:1.0;
     vec3 sc=mix(uSC1,uSC2,step(0.68,hA));
-    float br=(0.4+0.5*uEnergy)*(1.0+uImpact*0.6+uKick*0.12)*(bars>=8.0&&bars<12.0?1.15:1.0);
-    vec3 lightc=mix(sc,vec3(1.0,0.97,0.92),core*0.55*press);               // núcleo caliente de luz, borde de color
+    float br=0.7*(0.4+0.5*uEnergy)*(1.0+uImpact*0.6+uKick*0.12)*(bars>=8.0&&bars<12.0?1.15:1.0);
+    vec3 lightc=mix(sc,vec3(1.0,0.97,0.92),core*0.35*press);   // menos núcleo blanco: más pigmento que neón               // núcleo caliente de luz, borde de color
     acc+=(lightc*paint+sc*halo)*br*occl;
   }
   return acc*(1.0-wash);
@@ -159,11 +170,21 @@ float sdBox(vec3 p, vec3 b){ vec3 q=abs(p)-b; return length(max(q,0.0))+min(max(
 float gyr(vec3 p){ return dot(sin(p),cos(p.yzx)); }
 vec3 twistY(vec3 p,float k){ float c=cos(k*p.y), s=sin(k*p.y); return vec3(c*p.x-s*p.z,p.y,s*p.x+c*p.z); }
 float tw(){ return (uV1.x-0.5)*2.0*(0.5+uChaos); }
+float bars0(){ return uT/uBar; }
 float map(vec3 p){
   float ph=uPhase;
-  p.xz=rot(ph+uV0.w*6.28)*p.xz;
-  p.xy=rot(0.22*sin(ph)+uRot*0.25)*p.xy;
-  float sc=1.0+uKick*0.025; p/=sc;
+  if(uFam==7){ float k=uPhase*4.0; ph=(floor(k)+smoothstep(0.82,1.0,fract(k)))/4.0; }   // MÁQUINA: gira a pasos exactos
+  if(uForm==11){ float straight=1.0-0.85*smoothstep(11.0,12.5,uT/uBar);   // en el ECO la palabra se endereza para leerse entera
+    p.xz=rot((0.45*sin(ph*0.7)+(uV0.w-0.5)*0.7)*straight)*p.xz; p.xy=rot((0.08*sin(ph)+uRot*0.12)*straight)*p.xy; }
+  else { p.xz=rot(ph+uV0.w*6.28)*p.xz; p.xy=rot(0.22*sin(ph)+uRot*0.25)*p.xy; }
+  float sc=1.0+uKick*0.025+(uFam==10?0.05*uBass:0.0); p/=sc;
+  float bars=uT/uBar, lip=1.0;
+  if(uFam==6){ float id=floor(p.y/0.11+0.5); p.x+=0.09*sin(id*2.1+ph*(1.0+fract(id*0.37)))*(0.4+uEnergy); lip=0.55; }   // TIEMPO: estratos que se deslizan
+  // CAOS: la materia se parte en bloques que se separan con la ruptura
+  vec3 cid=vec3(0.0), cpo=p; float cz=2.4;
+  if(uFam==9){ cid=floor(p*cz); vec3 hh=fract(sin(cid*vec3(12.9898,78.233,37.719)+uV0.x*9.0)*43758.5453);
+    float ex=0.02+0.14*uChaos*smoothstep(4.0,8.0,bars)*(1.0-smoothstep(12.0,15.5,bars))+0.35*uImpact;
+    p-=(hh-0.5)*ex; lip=0.5; }
   float d;
   if(uForm==0){            // MASA: cuerpos que se funden
     d=1e9; int NB=3+int(uDen*2.0+0.5);
@@ -215,15 +236,34 @@ float map(vec3 p){
     float ht=0.3+1.2*hh*(0.85+0.15*sin(uPhase+hh*6.0));
     d=sdBox(r-vec3(0.0,ht-1.0,0.0),vec3(0.14,ht,0.012))-0.003;
     return d*0.4;
+  } else if(uForm==11){    // PALABRA: las letras dichas, extruidas en materia negra, retorcidas como una cinta
+    vec3 r=p; r.yz=rot((r.x*0.16*tw()+0.08*sin(ph))*(1.0-0.85*smoothstep(11.0,12.5,bars)))*r.yz;
+    // la palabra se escribe como una máquina: cada celda flota a su profundidad y se ordena en el ECO
+    vec2 ce=wordCell(r.xy); float hc=fract(sin(dot(ce,vec2(12.9898,78.233))+uV0.z*17.0)*43758.5453);
+    float scat=(0.08+0.55*smoothstep(1.0,7.0,bars)+0.4*uImpact)*(1.0-smoothstep(11.0,12.8,bars));
+    r.z-=(hc-0.5)*scat+0.03*sin(uPhase*3.0+hc*30.0)*scat;
+    float d2=wordD(r.xy); vec2 w=vec2(d2,abs(r.z)-uWH.w);
+    d=(min(max(w.x,w.y),0.0)+length(max(w,0.0))-0.002)*0.6;
   } else {                 // MONOLITO: una losa y una grieta de luz
     vec3 r=p; r.xz=rot(0.3*sin(ph))*r.xz;
     d=sdBox(r,vec3(0.26,1.02,0.1))-0.015;
   }
-  d+=0.018*(0.3+uBass+uChaos)*sin(p.x*9.0+ph*2.0)*sin(p.y*8.0-ph)*sin(p.z*10.0+ph*3.0);
-  return d*sc;
+  if(uFam!=8&&uForm!=11) d+=0.018*(0.3+uBass+uChaos)*sin(p.x*9.0+ph*2.0)*sin(p.y*8.0-ph)*sin(p.z*10.0+ph*3.0);
+  if(uFam==1) d+=(0.008+0.006*uBass)*sin(length(p.xz)*17.0-uT*2.6)+0.022*sin(p.x*2.7+uT*0.9)*sin(p.z*2.1-uT*0.6);   // AGUA: la superficie es líquida
+  if(uFam==10) d-=0.03*(0.5+0.5*sin(p.x*5.0+ph*2.0)*sin(p.y*6.0-ph)*sin(p.z*5.0+ph))*(0.4+uBass*0.8+uEnergy*0.5);   // VIDA: brota
+  if(uFam==3){ // AMOR: un segundo cuerpo se acerca y se funde con el primero
+    float k=smoothstep(0.5,9.0,bars)*(1.0-0.35*smoothstep(12.0,15.6,bars));
+    vec3 c=vec3(cos(ph*0.8)*(2.1-1.6*k),0.25*sin(ph*1.3),sin(ph*0.8)*(1.2-0.9*k));
+    d=smin(d,length(p-c)-(0.34+0.06*uBass),0.18+0.4*k);
+  }
+  if(uFam==2){ float cr=abs(gyr(p*5.5+vec3(0.0,uT*0.2,0.0)))/5.5-0.005; d=max(d,min(-cr,d+0.05)); }   // FUEGO: grietas
+  if(uFam==7){ float g=(0.5-abs(fract(p.y*9.0)-0.5))/9.0-0.004; d=max(d,min(-g,d+0.035)); }        // MÁQUINA: ranuras exactas
+  if(uFam==9){ vec3 f=abs(fract(cpo*cz)-0.5); float gap=0.012+0.05*uImpact+0.03*uChaos*smoothstep(4.0,8.0,bars)*(1.0-smoothstep(12.0,15.5,bars));
+    float bd=(0.5-max(f.x,max(f.y,f.z)))/cz; d=max(d,gap-bd); }
+  return d*sc*lip;
 }
 vec3 nrm(vec3 p, float t){ vec2 e=vec2(max(0.00035,0.00018*t),-max(0.00035,0.00018*t));
-  return normalize(e.xyy*map(p+e.xyy)+e.yyx*map(p+e.yyx)+e.yxy*map(p+e.yxy)+e.xxx*map(p+e.xxx)); }
+  return normalize(e.xyy*map(p+e.xyy)+e.yyx*map(p+e.yyx)+e.yxy*map(p+e.yxy)+e.xxx*map(p+e.xxx)+vec3(0.0,1e-6,0.0)); }
 // oclusión ambiental: cuánto se esconde la materia en sus propios pliegues
 float occ(vec3 p, vec3 n){ float o=0.0, w=1.0; for(int i=1;i<=5;i++){ float h=0.02+0.06*float(i); o+=(h-map(p+n*h))*w; w*=0.7; } return clamp(1.0-1.6*o,0.0,1.0); }
 // sombra suave de la luz principal
@@ -240,12 +280,14 @@ vec3 shade(vec3 p, vec3 rd, float t, float bars, float lift, bool full){
   vec3 n=nrm(p,t), v=-rd, r=reflect(rd,n);
   float cosv=max(dot(n,v),0.0), fr=pow(1.0-cosv,4.0);
   float F0=uMat==2?0.45:0.04, F=F0+(1.0-F0)*pow(1.0-cosv,5.0);
-  float ao=full?occ(p,n):0.8;
+  bool hq=full&&uQ>0.5;
+  float ao=hq?occ(p,n):0.8;
   vec3 Ld=normalize(vec3(0.6,0.7,0.4));
-  float sh=full&&uMat!=3?mix(0.35,1.0,shadow(p+n*0.01,Ld)):1.0;
+  float sh=hq&&uMat!=3?mix(0.35,1.0,shadow(p+n*0.01,Ld)):1.0;
   float key, acc; rigLight(p,r,n,fr,bars,key,acc);
   key+=pow(fr,2.2)*0.35+exp(-pow((dot(r,normalize(vec3(-0.7,0.2,0.3)))-0.9)*9.0,2.0))*0.35;   // luz de filo que acompaña a la cámara
-  if(uForm>=8) key+=0.55*exp(-t*0.55)*pow(max(dot(n,v),0.0),3.0)+0.3*pow(fr,1.5);           // en los campos, la cámara lleva su propia luz
+  if(uForm==11) key+=0.4*pow(fr,1.4)+0.12;   // la palabra siempre tiene un filo de luz que la dibuja
+  if(uForm>=8&&uForm<=10) key+=0.55*exp(-t*0.55)*pow(max(dot(n,v),0.0),3.0)+0.3*pow(fr,1.5);           // en los campos, la cámara lleva su propia luz
   float spec=pow(max(dot(r,Ld),0.0),uMat==0?140.0:uMat==1?90.0:60.0)*sh;
   vec3 base;
   if(uMat==0)      base=INK*(key*(0.12+F*1.4)*1.15+spec*1.1+fr*0.03);
@@ -253,27 +295,36 @@ vec3 shade(vec3 p, vec3 rd, float t, float bars, float lift, bool full){
   else if(uMat==2) base=mix(INK,uAcc,0.12)*(key*(0.35+0.7*F)*1.3+spec*1.3)+fr*0.02;
   else             base=INK*(pow(fr,1.3)*1.1*(0.5+key)+key*0.12);
   // en la RUPTURA la luz principal se vuelve masa de acento en los planos impares
-  float hot=(bars>=8.0&&bars<12.0&&fract(uShotK*13.0)>0.45)?1.0:0.0;
-  vec3 col=mix(base,base*uAcc*1.6,hot*0.85)*lift*ao;
+  float hot=(bars>=8.0&&bars<12.0&&fract(uShotK*13.0)>0.45)?(uFam==2?0.25:1.0):0.0;   // en FUEGO el color ya está en las venas: no se inunda
+  vec3 col=mix(base,base*uAcc*1.6,hot*0.6)*lift*ao;
   col+=mix(INK,uAcc,hot)*key*uKick*0.55*lift*ao;
   col+=uAcc*acc*(0.1+uMetal*2.2+uImpact*1.8)*(0.3+fr)*ao;
   float vein=exp(-abs(gyr(p*7.0+vec3(uPhase)))*16.0);
   col+=uAcc*vein*(uImpact*1.6+(bars>=8.0&&bars<12.0?0.08:0.0));
   if(uMat==1&&full){ float inside=clamp(-map(p-n*0.07)/0.07,0.0,1.0); col+=uAcc*(1.0-inside)*0.06*uEnergy*uEnergy*(1.0-fr); }
+  if(uFam==2){ float cr=exp(-abs(gyr(p*5.5+vec3(0.0,uT*0.2,0.0)))*26.0);   // FUEGO: venas incandescentes dentro de las grietas
+    col+=mix(uAcc,vec3(1.0,0.82,0.55),cr*cr*0.6)*cr*(0.18+1.1*uEnergy+2.2*uImpact)*(0.85+0.15*sin(uT*19.0+p.y*11.0)); }
+  if(uFam==6){ float s=fract(p.y/0.11+0.5); col*=0.7+0.3*step(0.5,fract((p.y/0.11+0.5)*0.5)); col+=uAcc*exp(-min(s,1.0-s)*70.0)*(0.04+0.25*uEnergy*uEnergy)*lift; }
+  if(uFam==7){ float sy=mod(bars*0.5,1.0)*2.4-1.2; col+=uAcc*exp(-abs(p.y-sy)*38.0)*(0.25+0.8*uEnergy)*(0.4+fr); }   // MÁQUINA: una lectura que barre
+  if(uFam==1) col+=INK*pow(fr,3.0)*0.1*lift;
   return col+INK*0.003;
 }
 void main(){
-  vec2 q=screenP(); vec2 sp=rot(uRot*0.3)*q;
+  vec2 q=screenP(); vec2 sp=rot(uRot*0.3*(uForm==11?1.0-smoothstep(11.0,12.5,uT/uBar):1.0))*q;   // la palabra del ECO, a nivel
   // PLANOS: la cámara corta en seco con el ritmo; casi nunca se ve el cuerpo entero
   float K=uShotK, push=uShotT*0.06;
   vec3 dir=normalize(vec3(cos(K*31.0),0.35*sin(K*17.0),sin(K*31.0)));
   vec3 ro, ta; float lens;
-  bool field=uForm>=8;
+  bool field=uForm>=8&&uForm<=10;
+  if(uFam==2) sp+=vec2(0.0025*sin(q.y*55.0+uT*8.0)*(0.3+uEnergy),0.0);   // FUEGO: el aire tiembla de calor
+  if(uFam==9&&bars0()>=8.0&&bars0()<12.0) sp+=(vec2(h11(floor(uT*24.0)),h11(floor(uT*24.0)+7.0))-0.5)*0.012*uImpact;
   if(uShot==1){            // MACRO: la materia tan cerca que deja de ser un objeto
     // apunta a un punto real de la superficie: se busca desde fuera hacia el centro
-    vec3 so=dir*2.6+vec3(0.0,(K-0.5)*0.6,0.0), sd=normalize(-so); float st=0.0;
+    int ai=int(fract(K*7.3)*8.0); vec2 ap=uAim[0]; for(int j=1;j<8;j++) if(j==ai) ap=uAim[j];
+    vec3 aim=uForm==11?vec3(ap,0.0):vec3(0.0);
+    vec3 so=aim+dir*2.6+vec3(0.0,(K-0.5)*0.6,0.0), sd=normalize(aim-so); float st=0.0;
     for(int j=0;j<48;j++){ float dd=map(so+sd*st); if(dd<0.002||st>4.0) break; st+=dd; }
-    ta=field?dir:so+sd*min(st,3.0); ro=ta+normalize(dir+vec3(0.3*sin(K*9.0),0.25,0.0))*(field?0.8:0.95-push*2.0); lens=2.4+1.4*fract(K*7.0);
+    ta=field?dir:so+sd*min(st,3.0); ro=ta+normalize(dir+vec3(0.3*sin(K*9.0),0.25,0.0))*(field?0.8:uForm==11?1.35-push*1.5:0.95-push*2.0); lens=2.4+1.4*fract(K*7.0);
   } else if(uShot==2){     // RASANTE: desde el suelo, a contraluz
     ro=vec3(sin(K*12.0)*2.6,-0.86,cos(K*12.0)*2.6)*(1.0-push); ta=vec3(0.0,-0.25+0.3*fract(K*5.0),0.0); lens=2.2;
   } else if(uShot==3){     // CENITAL: desde arriba, la forma como signo
@@ -281,6 +332,7 @@ void main(){
   } else {                 // GENERAL
     float ca=uPhase+uV0.w*6.0, dist=(4.1+1.5*uV1.y)/(0.75+0.35*uZoom)-push*2.0;
     ro=vec3(sin(ca)*0.55,0.18+0.14*cos(ca)+0.3*(uV1.z-0.5),dist); ta=vec3(uOff*0.55,0.0); lens=1.5+0.6*uV1.w;
+    if(uForm==11){ ro=vec3(sin(ca)*0.4,0.1+0.1*cos(ca),max(dist,uWH.x*2.6/min(uRes.x/uRes.y,1.8))+0.6-push*1.5); ta=vec3(0.0); lens=1.7; }
   }
   if(field&&uShot!=3){
     // dentro del campo: busca un hueco abierto y mira a lo largo de él
@@ -296,24 +348,37 @@ void main(){
   float fd=uShot==1?length(ta-ro):uShot==3?length(ro)-0.6:field?1.1+0.8*fract(K*5.0):length(ro-ta)-0.4;
   float dofK=uShot==1?2.2:field?0.9:uShot==2?0.7:0.3;
   float t=0.0, d=1.0, minD=9.0;
-  for(int i=0;i<128;i++){ d=map(ro+rd*t); minD=min(minD,d); if(d<0.0004*t+0.0002||t>9.0) break; t+=d*0.9; }
+  int maxI=uQ>0.5?128:72;
+  for(int i=0;i<128;i++){ if(i>=maxI) break; d=map(ro+rd*t); minD=min(minD,d); if(d<0.0004*t+0.0002||t>9.0) break; t+=d*(uQ>0.5?0.9:1.0); }
   float bars=uT/uBar;
   vec3 col=vec3(0.0);
-  float lift=0.55+0.8*uEnergy;                // la SEÑAL en penumbra (visible en proyección), la RUPTURA a plena luz
-  if(t<9.0) col=shade(ro+rd*t,rd,t,bars,lift,true);
+  float lift=field?0.95+0.6*uEnergy:0.8+0.65*uEnergy;   // la SEÑAL en penumbra (visible en proyección), la RUPTURA a plena luz
+  if(uFam==4&&h11(floor(uT*13.0)+uV0.x*99.0)<0.07+0.1*uEnergy) lift*=0.2;   // MIEDO: la luz falla
+  if(t<9.0) col=shade(ro+rd*t,rd,t,bars,lift,true)*(field?1.0:0.15+0.85*smoothstep(0.1,0.6,t));   // la materia pegada a la lente se hunde en negro, no en gris
   col+=uAcc*exp(-minD*9.0)*(t>=9.0?1.0:0.0)*(uRig==3?0.16+uImpact*0.3:0.02)*(0.5+uEnergy);
-  if(uForm>=8) col=mix(col,uAcc*(0.004+0.045*uEnergy*uEnergy+0.1*uImpact),1.0-exp(-min(t,9.0)*0.22));   // bruma de profundidad: se lee el túnel
+  if(field) col=mix(col,uAcc*(0.004+0.045*uEnergy*uEnergy+0.1*uImpact),1.0-exp(-min(t,9.0)*0.22));   // bruma de profundidad: se lee el túnel
   // suelo negro pulido: refleja de verdad la materia, cada vez más difuso con la distancia
-  if(rd.y<0.0&&uForm<8){ float tp=(-1.0-ro.y)/rd.y; if(tp>0.0&&(tp<t||t>=9.0)){
+  if(rd.y<0.0&&!field&&uQ>0.5){ float tp=(-1.0-ro.y)/rd.y; if(tp>0.0&&(tp<t||t>=9.0)){
     vec3 pp=ro+rd*tp, rr=reflect(rd,vec3(0.0,1.0,0.0));
     float tr=0.02, dr=1.0; for(int i=0;i<56;i++){ dr=map(pp+rr*tr); if(dr<0.002||tr>5.0) break; tr+=dr; }
     float fade=exp(-length(pp.xz)*0.7);
     float Fr=0.03+0.5*pow(1.0-max(dot(-rd,vec3(0.0,1.0,0.0)),0.0),5.0);
     if(tr<5.0) col+=shade(pp+rr*tr,rr,tr,bars,lift,false)*Fr*fade*exp(-tr*0.9)*0.9;
     col+=INK*0.02*fade*(0.4+uEnergy)+uAcc*0.03*uMetal*fade; } }
+  // LUZ: haces volumétricos que atraviesan los huecos de la materia
+  if(uFam==5){ vec3 L=normalize(vec3(0.45,0.85,0.25)), a1=normalize(cross(L,vec3(0.0,0.0,1.0))), a2=cross(L,a1);
+    float bm=0.0, tm=min(t,7.0), jt=h11(dot(q,vec2(91.7,47.3))+uT);
+    int nb=uQ>0.5?22:10;
+    for(int i=0;i<22;i++){ if(i>=nb) break; float tt=(float(i)+jt)*tm/float(nb); vec3 pp=ro+rd*tt;
+      float sl=smoothstep(0.55,1.0,sin(dot(pp,a1)*5.0+uV0.y*6.0)*sin(dot(pp,a2)*3.0+uPhase*0.5));
+      if(sl>0.0) bm+=sl*step(0.0,map(pp+L*0.35))*step(0.0,map(pp+L*0.8)); }
+    col+=mix(uAcc,vec3(1.0,0.97,0.92),0.35)*bm/float(nb)*tm*0.32*(0.35+uEnergy+uImpact); }
   col*=compMask(q*0.8);
+  // MIEDO: la oscuridad se cierra sobre la forma y solo se abre en el ECO
+  if(uFam==4){ float cl=mix(1.5,0.5,smoothstep(0.0,11.0,bars)); cl=mix(cl,1.3,smoothstep(12.0,15.0,bars)); col*=1.0-smoothstep(cl-0.55,cl,length(q)); }
   col+=trazos(q,bars,t<9.0?1.0:0.0);
   float tt=min(t,9.0), coc=clamp(abs(tt-fd)/max(tt,0.35)*dofK,0.0,1.0);
+  if(any(isnan(col))||any(isinf(col))) col=vec3(0.0);
   o=vec4(col*uW,coc*uW);
 }`;
 
@@ -455,6 +520,69 @@ void main(){
     this.progs[id] = this.prog(FS_VERT, HEAD + FRAG + SP[id]);
     return this.progs[id];
   };
+  // LA PALABRA COMO MATERIA: las letras se dibujan en un lienzo y se convierten en un campo de distancias
+  // (transformada de distancia exacta, Felzenszwalb) que el shader extruye en 3D.
+  function edt1(f, n, d, v, z) {
+    let k = 0; v[0] = 0; z[0] = -1e20; z[1] = 1e20;
+    for (let q = 1; q < n; q++) {
+      let s; do { const r = v[k]; s = (f[q] + q * q - (f[r] + r * r)) / (2 * q - 2 * r); } while (s <= z[k] && --k >= 0);
+      k++; v[k] = q; z[k] = s; z[k + 1] = 1e20;
+    }
+    k = 0; for (let q = 0; q < n; q++) { while (z[k + 1] < q) k++; const r = v[k]; d[q] = (q - r) * (q - r) + f[r]; }
+  }
+  function edt(grid, w, h) {
+    const n = Math.max(w, h), f = new Float64Array(n), d = new Float64Array(n), v = new Int32Array(n), z = new Float64Array(n + 1);
+    for (let x = 0; x < w; x++) { for (let y = 0; y < h; y++) f[y] = grid[y * w + x]; edt1(f, h, d, v, z); for (let y = 0; y < h; y++) grid[y * w + x] = d[y]; }
+    for (let y = 0; y < h; y++) { for (let x = 0; x < w; x++) f[x] = grid[y * w + x]; edt1(f, w, d, v, z); for (let x = 0; x < w; x++) grid[y * w + x] = Math.sqrt(d[x]); }
+    return grid;
+  }
+  // tipografía de la palabra: la MATRIZ de la máquina (5×7 celdas, ver score.js). Cada celda es un píxel de materia.
+  // la transformada de distancia corre en un Worker: al nacer una palabra la imagen no se para ni un frame
+  const EDT_SRC = edt1.toString() + '\n' + edt.toString() + `
+    onmessage = (m) => { const { key, a, w, h, RANGE } = m.data, N = w * h, out = new Float64Array(N), inn = new Float64Array(N);
+      for (let i = 0; i < N; i++) { const on = a[i] > 127; out[i] = on ? 0 : 1e20; inn[i] = on ? 1e20 : 0; }
+      edt(out, w, h); edt(inn, w, h); const px = new Uint8Array(N);
+      for (let i = 0; i < N; i++) { const sd = out[i] > 0 ? out[i] - 0.5 : -(inn[i] - 0.5); px[i] = Math.max(0, Math.min(255, Math.round((0.5 + sd / (2 * RANGE)) * 255))); }
+      postMessage({ key, px }, [px.buffer]); };`;
+  let edtWorker = null;
+  try { edtWorker = new Worker(URL.createObjectURL(new Blob([EDT_SRC], { type: 'text/javascript' }))); } catch (e) { edtWorker = null; }
+  const WCELL = 26, WPAD = 64, WRANGE = 44;
+  // prepara una palabra (devuelve su ficha si ya está lista; si no, la encarga y devuelve null)
+  E.word = function (word) {
+    const gl = this.gl, key = String(word || '').toUpperCase().replace(/[^A-ZÑ0-9ÁÉÍÓÚÜ]/g, '') || '·';
+    this.words = this.words || new Map();
+    const got = this.words.get(key);
+    if (got) return got.ready ? got : null;
+    const CELL = WCELL, n = Math.max(1, key.length);
+    const Wt = CELL * 7 * n - CELL * 2, w = Math.min(4096, Wt + WPAD * 2), h = CELL * 7 + WPAD * 2;
+    const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d');
+    x.fillStyle = '#fff'; window.SEMILLA.matrix(x, key, w / 2, h / 2, CELL, { gap: 0.16 });
+    const rgba = x.getImageData(0, 0, w, h).data, a = new Uint8Array(w * h);
+    for (let i = 0; i < a.length; i++) a[i] = rgba[i * 4 + 3];
+    const wpp = Math.min(0.8 / (CELL * 7), 3.8 / w);   // altura de letra fija; las palabras largas se encogen
+    const lit = []; window.SEMILLA.matrix({ fillRect() {} }, key, w / 2, h / 2, CELL, { cellFn: (i, r, cc, px, py) => lit.push([px + CELL / 2, py + CELL / 2]) });
+    const aim = new Float32Array(16);   // 8 celdas encendidas: los planos macro apuntan a materia, nunca a un hueco
+    for (let k = 0; k < 8; k++) { const p = lit[Math.floor(((k + 0.5) / 8) * lit.length) % Math.max(1, lit.length)] || [w / 2, h / 2]; aim[k * 2] = (p[0] / w - 0.5) * w * wpp; aim[k * 2 + 1] = (0.5 - p[1] / h) * h * wpp; }
+    const rec = { ready: false, w, h, info: [w * wpp / 2, h * wpp / 2, WRANGE * wpp, CELL * wpp], cg: [(w / 2 - Wt / 2) / w, (h / 2 - CELL * 3.5) / h, CELL / w, CELL / h], aim, L: [n, CELL * 7 * wpp], tex: null };
+    this.words.set(key, rec);
+    if (this.words.size > 4) { const old = this.words.keys().next().value; const o = this.words.get(old); if (o && o.tex) gl.deleteTexture(o.tex); this.words.delete(old); }
+    const upload = (px) => {
+      rec.tex = gl.createTexture(); gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, rec.tex);
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1); gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, w, h, 0, gl.RED, gl.UNSIGNED_BYTE, px); gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+      this.texParams(gl.LINEAR); gl.activeTexture(gl.TEXTURE0); rec.ready = true;
+    };
+    if (edtWorker) {
+      const onm = (m) => { if (m.data.key !== key) return; edtWorker.removeEventListener('message', onm); upload(m.data.px); };
+      edtWorker.addEventListener('message', onm); edtWorker.postMessage({ key, a, w, h, RANGE: WRANGE }, [a.buffer]);
+    } else {
+      const N = w * h, out = new Float64Array(N), inn = new Float64Array(N);
+      for (let i = 0; i < N; i++) { const on = a[i] > 127; out[i] = on ? 0 : 1e20; inn[i] = on ? 1e20 : 0; }
+      edt(out, w, h); edt(inn, w, h); const px = new Uint8Array(N);
+      for (let i = 0; i < N; i++) { const sd = out[i] > 0 ? out[i] - 0.5 : -(inn[i] - 0.5); px[i] = Math.max(0, Math.min(255, Math.round((0.5 + sd / (2 * WRANGE)) * 255))); }
+      upload(px); return rec;
+    }
+    return null;
+  };
   // compila todo de antemano (evita el tirón la primera vez que sale una especie)
   E.warm = function () { this.species('objeto'); this.species('contra'); };
   E.fbo = function (w, h) {
@@ -500,6 +628,7 @@ void main(){
     u.uVar && gl.uniform1i(u.uVar, P.vis.variant);
     for (const k in extra) if (k !== 'uDrift') f1(k, extra[k]);
   }
+  const u1i = (gl, l, v) => l && gl.uniform1i(l, v);
   const hexCache = {};
   function hex(h) {
     if (hexCache[h]) return hexCache[h];
@@ -531,6 +660,19 @@ void main(){
       gl.uniform2f(pr.u.uRes, S.w, S.h);
       setU(gl, pr.u, s.P, s.e, s.w, { uDrift: o.drift || 0, uBar: s.P.bar });
       gl.uniform1i(pr.u.uForm, s.P.sp.form); gl.uniform1i(pr.u.uMat, s.P.vis.mat); gl.uniform1i(pr.u.uRig, s.P.vis.rig);
+      u1i(gl, pr.u.uFam, s.P.vis.fam || 0); pr.u.uQ && gl.uniform1f(pr.u.uQ, this.quality ?? 1);
+      if (!this.blankTex) { this.blankTex = gl.createTexture(); gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, this.blankTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 1, 1, 0, gl.RED, gl.UNSIGNED_BYTE, new Uint8Array([255])); this.texParams(gl.LINEAR); gl.activeTexture(gl.TEXTURE0); }
+      let wtex = this.blankTex;
+      if (s.P.sp.form === 11) {
+        const wr = this.word(s.P.word || s.P.code);
+        if (wr) { // la mayoría, teselas finas casi planas; algunas piezas, vóxeles en 3D
+          const wi = wr.info, deep = s.P.vis.v[2] < 0.35; wtex = wr.tex;
+          pr.u.uWH && gl.uniform4f(pr.u.uWH, wi[0], wi[1], wi[2], deep ? wi[3] * 0.42 : 0.01);
+          pr.u.uCG && gl.uniform4f(pr.u.uCG, wr.cg[0], wr.cg[1], wr.cg[2], wr.cg[3]);
+          const ua = pr.u['uAim[0]'] || pr.u.uAim; ua && gl.uniform2fv(ua, wr.aim); pr.u.uWL && gl.uniform2f(pr.u.uWL, wr.L[0], wr.L[1]);
+        } else pr.u.uWH && gl.uniform4f(pr.u.uWH, 0.01, 0.01, 0.001, 0.001);   // aún calculándose (unos ms): no hay letra todavía
+      }
+      gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, wtex); pr.u.uWord && gl.uniform1i(pr.u.uWord, 3); gl.activeTexture(gl.TEXTURE0);
       const sh = shotOf(s.P, s.e); gl.uniform1i(pr.u.uShot, sh[0]); gl.uniform1f(pr.u.uShotK, sh[1]); gl.uniform1f(pr.u.uShotT, sh[2]);
       const st = s.P.stroke, c1 = hex(st.c1), c2 = hex(st.c2);
       gl.uniform1i(pr.u.uStroke, st.style); gl.uniform3f(pr.u.uSC1, c1[0], c1[1], c1[2]); gl.uniform3f(pr.u.uSC2, c2[0], c2[1], c2[2]);
@@ -584,11 +726,48 @@ void main(){
     gl.uniform1f(F.u.uGrain, o.grain ?? 1);
     gl.uniform1f(F.u.uScan, o.scan ?? 0.025);
     gl.uniform1f(F.u.uCA, o.ca ?? 0.012);
-    gl.uniform1f(F.u.uTone, o.tone ?? 0); gl.uniform1f(F.u.uVig, o.vig ?? 0.6); gl.uniform1f(F.u.uDof, o.dof ?? 0.02);
+    gl.uniform1f(F.u.uTone, o.tone ?? 0); gl.uniform1f(F.u.uVig, o.vig ?? 0.6); gl.uniform1f(F.u.uDof, (this.quality ?? 1) > 0.5 ? (o.dof ?? 0.02) : 0);
     gl.uniform1f(F.u.uFrame, this.frame++);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.activeTexture(gl.TEXTURE0);
   };
 
+  // RITMO: en un ordenador modesto la imagen nunca va a saltos. Si no llega a 60 fps se baja, por este orden,
+  // la resolución (hasta el 80 %), luego se fija a 30 fps exactos (cada dos refrescos, sin tirones), luego la calidad
+  // (menos pasos, sin sombras ni desenfoque) y por último la resolución hasta el 60 %. Los cambios de resolución
+  // esperan a un corte de plano o a una pieza nueva: nunca se ven a mitad de un plano.
+  function Pacer(eng, o = {}) {
+    this.eng = eng; this.half = false; this.flip = false; this.t0 = 0; this.n = 0; this.fps = 60; this.slow = 0; this.fast = 0;
+    this.pending = null; this.max = o.max ?? 1.5; this.waited = 0;
+  }
+  // ¿se dibuja en este refresco?
+  Pacer.prototype.tick = function () { if (!this.half) return true; this.flip = !this.flip; return this.flip; };
+  // tras dibujar: mide y decide
+  Pacer.prototype.done = function (ts) {
+    if (!this.t0) this.t0 = ts; this.n++;
+    const span = (ts - this.t0) / 1000; if (span < 2) return;
+    this.fps = this.n / span; this.t0 = ts; this.n = 0;
+    const target = this.half ? 30 : 60, e = this.eng, q = e.quality ?? 1;
+    if (this.fps < target * 0.9) { this.slow++; this.fast = 0; } else if (this.fps > target * 0.97) { this.fast++; this.slow = 0; } else { this.slow = this.fast = 0; }
+    if (this.slow >= 1) {
+      this.slow = 0;
+      if (e.scale > 0.85) this.pending = +(e.scale - 0.1).toFixed(2);
+      else if (!this.half) this.half = true;
+      else if (q > 0.5) e.quality = 0;
+      else if (e.scale > 0.65) this.pending = +(e.scale - 0.1).toFixed(2);
+    }
+    if (this.fast >= 4) {   // va sobrado: recupera calidad y definición poco a poco
+      this.fast = 0;
+      if (q < 0.5) e.quality = 1;
+      else if (e.scale < (this.half ? 1.0 : this.max)) this.pending = +Math.min(this.max, e.scale + 0.1).toFixed(2);
+    }
+  };
+  // aplica un cambio de resolución pendiente cuando hay un corte (o si lleva demasiado esperando)
+  Pacer.prototype.cut = function (boundary, dt = 0.016) {
+    if (this.pending == null) { this.waited = 0; return; }
+    this.waited += dt;
+    if (boundary || this.waited > 12) { this.eng.resize(this.eng.size[0], this.eng.size[1], this.pending); this.pending = null; this.waited = 0; }
+  };
+  Engine.Pacer = Pacer;
   window.SemillaEngine = Engine;
 })();

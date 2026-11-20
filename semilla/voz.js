@@ -35,14 +35,65 @@
   function vowels(w) { return (w.match(/[aeiou]/g) || ['a']).slice(0, 6); }
   function syllables(w) { const g = w.match(/[aeiou]+/g); return Math.max(1, g ? g.length : 1); }
 
+  // ---------- SENTIDO: todo el idioma ----------
+  // sentido.txt: ~40.000 palabras del español con 8 ejes de significado (0–f) y su arquetipo más cercano.
+  // Se calculó una vez con vectores de palabras (ver semilla/README); aquí solo se lee. Sin internet.
+  const AXES = ['valencia', 'activacion', 'calor', 'luz', 'maquina', 'dureza', 'peso', 'abstraccion'];
+  const ARQ = ['agua', 'fuego', 'amor', 'miedo', 'luz', 'tiempo', 'maquina', 'calma', 'caos', 'vida'];
+  const SENT = new Map(); let KEYS = [];
+  const sentidoReady = fetch((window.SEMILLA_BASE || '') + 'sentido.txt').then((r) => r.ok ? r.text() : '').then((t) => {
+    for (const line of t.split('\n')) { if (!line || line[0] === '#') continue; const i = line.indexOf(' '); SENT.set(line.slice(0, i), line.slice(i + 1)); }
+    KEYS = [...SENT.keys()].sort();
+  }).catch(() => {});
+  // lee una palabra; si no está, busca su raíz (incendiaron → incendi…) entre las conocidas
+  function sentido(w) {
+    let code = SENT.get(w), via = w;
+    if (!code && KEYS.length && w.length >= 5) {
+      for (let cut = w.length - 1; cut >= Math.max(4, w.length - 4) && !code; cut--) {
+        const pre = w.slice(0, cut); let lo = 0, hi = KEYS.length;
+        while (lo < hi) { const m = (lo + hi) >> 1; if (KEYS[m] < pre) lo = m + 1; else hi = m; }
+        let bestK = null;
+        for (let j = lo; j < KEYS.length && KEYS[j].startsWith(pre) && j < lo + 40; j++) if (!bestK || Math.abs(KEYS[j].length - w.length) < Math.abs(bestK.length - w.length)) bestK = KEYS[j];
+        if (bestK) { code = SENT.get(bestK); via = bestK; }
+      }
+    }
+    if (!code) return null;
+    const ax = {}; AXES.forEach((k, i) => (ax[k] = parseInt(code[i], 16) / 15));
+    return { ax, arq: ARQ[parseInt(code[8], 16)], fuerza: parseInt(code[9], 16) / 15, via };
+  }
+  // cuánta carga tiene una palabra (para elegir la más significativa de una frase)
+  function carga(w) {
+    if (family(w)) return 9;
+    const s = sentido(w); if (!s) return 0;
+    return s.fuerza * 5 + AXES.reduce((a, k) => a + Math.abs(s.ax[k] - 0.53), 0);
+  }
+
   // carácter que sale de una palabra (siempre el mismo para la misma palabra; la pieza cambia con el instante)
   function character(word) {
     const w = norm(word), S = window.SEMILLA, R = S.mulberry(S.hashStr('carácter:' + w));
     const pick = (a) => a[Math.floor(R() * a.length)];
+    const sn = sentido(w), ax = sn ? sn.ax : null;
     let k = family(w), f;
+    if (!k && sn && sn.fuerza >= 0.5) k = sn.arq;          // cerca de un arquetipo: lo hereda (hoguera → fuego)
     if (k) f = FAM[k];
-    else {
-      // sin significado conocido: manda su sonido
+    else if (ax) {
+      // cualquier otra palabra: su carácter sale de sus ejes de significado
+      const { valencia: v, activacion: a, calor: c, luz: l, maquina: m, dureza: d, peso: p, abstraccion: b } = ax;
+      const acc = m > 0.75 ? pick(['verde', 'cian']) : c > 0.68 ? (v < 0.45 ? 'rojo' : 'ambar') : c < 0.32 ? (v < 0.45 ? 'violeta' : 'cian')
+        : l < 0.3 ? (v < 0.45 ? 'violeta' : 'rojo') : a > 0.7 && v > 0.55 ? 'magenta' : l > 0.7 ? 'blanco' : pick(['blanco', 'cian', 'ambar', 'violeta']);
+      const forms = b > 0.72 ? ['red', 'laminas', 'concha'] : d > 0.65 && p > 0.6 ? ['monolito', 'fractura', 'torsion'] : d > 0.65 && a > 0.6 ? ['espina', 'fractura']
+        : d < 0.35 ? ['masa', 'pliegue', 'concha'] : m > 0.65 ? ['torsion', 'laminas', 'fractura'] : ['concha', 'torsion', 'masa', 'pliegue'];
+      f = {
+        forms, acc: [acc, l < 0.4 ? 'blanco' : pick(['blanco', 'cian', 'ambar'])],
+        mats: [d > 0.62 ? (m > 0.6 ? 2 : 1) : d < 0.38 ? 3 : 0], rigs: [l < 0.35 ? 3 : a > 0.65 ? 2 : l > 0.62 ? 1 : 0],
+        stroke: c > 0.7 ? 1 : l < 0.3 ? 4 : m > 0.65 ? 5 : l > 0.7 ? 6 : d < 0.35 || c < 0.3 ? 2 : v > 0.65 ? 3 : 7,
+        den: 0.2 + 0.65 * a, cha: 0.15 + 0.6 * a + 0.25 * (1 - v) * a,
+        refs: [a > 0.66 ? (m > 0.55 || v < 0.45 ? 'quiebre' : 'pulso') : a < 0.35 ? (l < 0.45 || v < 0.45 ? 'abismo' : 'cinta') : m > 0.6 ? 'rejilla' : v > 0.55 ? 'vaiven' : 'rejilla'],
+      };
+      k = sn.fuerza >= 0.45 ? sn.arq                           // tratamiento: el arquetipo cercano, o el eje que más destaca
+        : c > 0.85 ? 'fuego' : l < 0.15 ? 'miedo' : l > 0.85 ? 'luz' : m > 0.85 ? 'maquina' : a > 0.85 ? 'caos' : a < 0.15 ? 'calma' : 'sentido';
+    } else {
+      // palabra desconocida (un nombre, una palabra inventada): manda su sonido
       const n = w.length || 1, sharp = (w.match(/[ptkcqbdg]/g) || []).length / n, open = (w.match(/[aou]/g) || []).length / n, rr = (w.match(/r/g) || []).length / n;
       const acc = Object.keys(S.ACCENTS)[Math.floor(R() * 7)];
       f = sharp > 0.28 ? { forms: ['fractura', 'espina', 'torsion'], mats: [1, 2], rigs: [2, 3], acc: [acc, 'blanco'], stroke: 5, den: 0.6 + sharp * 0.5, cha: 0.5 + rr * 2, refs: ['rejilla', 'quiebre'] }
@@ -50,20 +101,22 @@
           : { forms: ['monolito', 'columnas', 'concha'], mats: [0, 1, 2], rigs: [0, 1, 2], acc: [acc, 'blanco'], stroke: 7, den: 0.45, cha: 0.4 + rr * 2, refs: ['rejilla', 'pulso', 'abismo'] };
       k = 'sonido';
     }
-    const c1 = pick(f.acc), c2 = f.acc.find((a) => a !== c1) || 'blanco';
+    const c1 = pick(f.acc), c2 = f.acc.find((x) => x !== c1) || 'blanco';
+    let den = f.den, cha = f.cha;
+    if (ax && FAM[k]) { den = 0.6 * den + 0.4 * (0.2 + 0.65 * ax.activacion); cha = 0.6 * cha + 0.4 * (0.15 + 0.7 * ax.activacion); }
     return {
-      fam: k, form: pick(f.forms), mat: pick(f.mats), rig: pick(f.rigs), accent: c1,
+      fam: k, form: w.length >= 3 && R() < 0.7 ? 'palabra' : pick(f.forms), mat: pick(f.mats), rig: pick(f.rigs), accent: c1,
       stroke: { style: f.stroke, c1: S.ACCENTS[c1], c2: S.ACCENTS[c2] },
-      density: Math.min(0.95, f.den + (R() - 0.5) * 0.1), chaos: Math.min(0.95, f.cha + (R() - 0.5) * 0.1),
-      ref: pick(f.refs), vowels: vowels(w), syll: syllables(w),
+      density: Math.min(0.95, den + (R() - 0.5) * 0.1), chaos: Math.min(0.95, cha + (R() - 0.5) * 0.1),
+      ref: pick(f.refs), vowels: vowels(w), syll: syllables(w), axes: ax ? AXES.map((x) => +ax[x].toFixed(3)) : null,
     };
   }
-  // de una frase oída, la palabra con más carga
+  // de una frase oída, la palabra con más carga de significado
   function pickWord(text) {
     const ws = String(text || '').split(/\s+/).map((x) => ({ raw: x, n: norm(x) })).filter((x) => x.n.length >= 3 && !STOP.has(x.n));
     if (!ws.length) return null;
-    const known = ws.find((x) => family(x.n));
-    return (known || ws.sort((a, b) => b.n.length - a.n.length)[0]).n;
+    ws.forEach((x) => (x.c = carga(x.n) + x.n.length * 0.01));
+    return ws.sort((a, b) => b.c - a.c)[0].n;
   }
 
   // ---------- escucha ----------
@@ -77,7 +130,7 @@
     r.onresult = (e) => {
       for (let i = e.resultIndex; i < e.results.length; i++) {
         if (!e.results[i].isFinal) continue;
-        const txt = e.results[i][0].transcript, w = pickWord(txt);
+        const txt = e.results[i][0].transcript, w = pickWord(txt); this.heard = txt;
         if (w) this.onWord(w, txt);
       }
     };
@@ -97,6 +150,7 @@
   // El reconocimiento de Chrome no existe dentro de una app de escritorio; aquí todo ocurre en el ordenador, sin internet.
   function OfflineListener(onWord, onState) {
     this.onWord = onWord; this.onState = onState || (() => {}); this.on = false; this.ok = true; this.ready = null;
+    this.level = 0; this.heard = ''; this.deviceId = null;
   }
   OfflineListener.prototype.load = function () {
     if (this.ready) return this.ready;
@@ -105,19 +159,39 @@
       st('CARGANDO MODELO DE VOZ');
       if (!window.Vosk) await new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'vosk/vosk.js'; s.onload = res; s.onerror = () => rej(new Error('sin vosk.js')); document.head.appendChild(s); });
       const r = await fetch('vosk/model.tar.gz'); if (!r.ok) throw new Error('sin modelo de voz');
-      const model = await window.Vosk.createModel(URL.createObjectURL(await r.blob()));
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 }, video: false });
-      const ac = new AudioContext();
-      const rec = new model.KaldiRecognizer(ac.sampleRate);
-      rec.on('result', (m) => { const txt = m && m.result && m.result.text; const w = this.on && pickWord(txt); if (w) this.onWord(w, txt); });
-      const src = ac.createMediaStreamSource(stream), node = ac.createScriptProcessor(4096, 1, 1), mute = ac.createGain(); mute.gain.value = 0;
-      node.onaudioprocess = (e) => { if (this.on) try { rec.acceptWaveform(e.inputBuffer); } catch (err) {} };
-      src.connect(node); node.connect(mute); mute.connect(ac.destination);
-      this.ac = ac;
+      const model = await window.Vosk.createModel(URL.createObjectURL(await r.blob())).catch((e) => { throw new Error('modelo: ' + (e && e.message || e || 'no carga')); });
+      this.model = model;
+      await this.openMic();
     })();
-    this.ready.then(() => this.on && st('ESCUCHANDO'), (e) => { this.ok = false; st(/modelo|vosk/i.test(e.message) ? 'SIN MODELO DE VOZ' : /Permission|NotAllowed/i.test(e.name + e.message) ? 'SIN PERMISO DE MICRÓFONO' : 'SIN MICRÓFONO'); this.ready = null; });
+    this.ready.then(() => this.on && st('ESCUCHANDO'), (e) => {
+      const m = String((e && (e.name + ' ' + e.message)) || e || '');
+      console.error('[voz offline]', m);
+      st(/modelo|vosk/i.test(m) ? 'SIN MODELO DE VOZ' : /Permission|NotAllowed|Security/i.test(m) ? 'SIN PERMISO DE MICRÓFONO' : /NotFound|Device/i.test(m) ? 'SIN MICRÓFONO' : 'ERROR DE VOZ');
+      this.ready = null;
+    });
     return this.ready;
   };
+  // abre el micrófono elegido (o el de por defecto) y lo conecta al reconocedor; mide el nivel para la consola
+  OfflineListener.prototype.openMic = async function () {
+    if (this.stream) this.stream.getTracks().forEach((t) => t.stop());
+    if (this.ac) try { await this.ac.close(); } catch (e) {}
+    const audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 };
+    if (this.deviceId) audio.deviceId = { exact: this.deviceId };
+    const stream = (this.stream = await navigator.mediaDevices.getUserMedia({ audio, video: false }));
+    const ac = (this.ac = new AudioContext());
+    const rec = new this.model.KaldiRecognizer(ac.sampleRate);
+    rec.on('result', (m) => { const txt = m && m.result && m.result.text; if (txt) this.heard = txt; const w = this.on && pickWord(txt); if (w) this.onWord(w, txt); });
+    rec.on('partialresult', (m) => { const p = m && m.result && m.result.partial; if (p) this.heard = p + '…'; });
+    const src = ac.createMediaStreamSource(stream), node = ac.createScriptProcessor(4096, 1, 1), mute = ac.createGain(); mute.gain.value = 0;
+    node.onaudioprocess = (e) => {
+      const d = e.inputBuffer.getChannelData(0); let s2 = 0; for (let i = 0; i < d.length; i += 4) s2 += d[i] * d[i];
+      this.level = Math.min(1, Math.sqrt(s2 / (d.length / 4)) * 8);
+      if (this.on) try { rec.acceptWaveform(e.inputBuffer); } catch (err) {}
+    };
+    src.connect(node); node.connect(mute); mute.connect(ac.destination);
+    this.micName = (stream.getAudioTracks()[0] || {}).label || 'MICRÓFONO';
+  };
+  OfflineListener.prototype.setDevice = function (id) { this.deviceId = id || null; if (this.model) this.openMic().then(() => this.onState('ESCUCHANDO'), (e) => this.onState('SIN MICRÓFONO')); };
   OfflineListener.prototype.start = function () { this.on = true; this.load().then(() => { if (this.ac) this.ac.resume(); }, () => {}); };
   OfflineListener.prototype.stop = function () { this.on = false; this.onState('APAGADA'); };
 
@@ -125,5 +199,5 @@
   const isApp = /Electron/i.test(navigator.userAgent);
   function makeListener(onWord, onState) { return isApp ? new OfflineListener(onWord, onState) : new Listener(onWord, onState); }
 
-  window.SemillaVoz = { character, pickWord, family, Listener, OfflineListener, makeListener, isApp, FAMILIES: Object.keys(FAM) };
+  window.SemillaVoz = { character, pickWord, family, sentido, sentidoReady, AXES, Listener, OfflineListener, makeListener, isApp, FAMILIES: Object.keys(FAM) };
 })();
