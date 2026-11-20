@@ -195,7 +195,7 @@ float gyr(vec3 p){ return dot(sin(p),cos(p.yzx)); }
 // PERFORACIÓN irregular: un giroide deformado da celdas orgánicas de tamaños distintos (no círculos en rejilla)
 float holeF(vec3 p){ float k=7.0+5.0*uV1.w; vec3 q=p*k; q+=0.9*sin(q.yzx*0.37+uV0.x*6.0);
   float thr=1.28+0.3*gyr(p*1.7+uV0.y*5.0);              // umbral que varía: agujeros grandes y pequeños
-  return (thr-gyr(q))/(k*1.6); }
+  return (thr-gyr(q))/(k*2.8); }
 vec3 twistY(vec3 p,float k){ float c=cos(k*p.y), s=sin(k*p.y); return vec3(c*p.x-s*p.z,p.y,s*p.x+c*p.z); }
 float tw(){ return (uV1.x-0.5)*2.0*(0.5+uChaos); }
 float bars0(){ return uT/uBar; }
@@ -305,7 +305,7 @@ float map(vec3 p){
   else if(uSurf==2&&uForm!=11){ float k=6.0+5.0*uV1.w; vec3 f=abs(fract(p*k)-0.5); float g=(0.5-max(f.x,max(f.y,f.z)))/k-0.003; d=max(d,min(-g,d+0.02)); }
   // ESTRÍAS: surcos finos en espiral que siguen la forma (antes perforaciones redondas: parecían letras «o» sueltas)
   else if(uSurf==3&&uForm!=11){ float k=26.0+14.0*uV1.w; float g=(0.5-abs(fract((p.y+atan(p.z,p.x)*0.08)*k)-0.5))/k-0.003; d=max(d,min(-g,d+0.015)); }
-  else if(uSurf==4&&uForm!=11){ float hl=holeF(p); d=max(d,min(hl,d+0.05)); }   // PERFORADA: huecos profundos e irregulares
+  else if(uSurf==4&&uForm!=11){ float hl=holeF(p); d=-smin(-d,-min(hl,d+0.05),0.014); }   // PERFORADA: huecos profundos e irregulares
   d*=cs; if(uComp==3&&uForm<8) d*=0.7;
   // AGUA: oleaje cruzado que recorre la materia (sin anillos concéntricos: hacían una espiral)
   if(uFam==1) d+=(0.006+0.006*uBass)*sin(dot(p,vec3(0.8,0.3,0.5))*11.0-uT*1.9)*sin(dot(p,vec3(-0.4,0.6,0.7))*8.0+uT*1.3)+0.016*sin(p.x*2.3+uT*0.7)*sin(p.y*1.9-uT*0.5);
