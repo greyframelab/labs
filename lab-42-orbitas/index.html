@@ -441,9 +441,9 @@ canvas{width:100vw;height:100vh;display:block}
     for (int k = 0; k < 3; k++) { vec3 ax = sb[k]; vec3 tng = normalize(cross(ax, vec3(0.2, 1., 0.1))); float along = dot(rd, tng); float sk = dot(rd, ax);
       float wv = dot(rd, normalize(cross(ax, tng)));
       // tiras de luz finas y largas de borde nítido: dibujan el contorno del cromo como en fotografía de producto
-      float box = step(0.7, sk) * smoothstep(0.03, 0.022, abs(wv)) * smoothstep(0.62, 0.5, abs(along));
+      float box = step(0.7, sk) * (1.-smoothstep(0.022,0.03, abs(wv))) * (1.-smoothstep(0.5,0.62, abs(along)));
       c += vec3(0.9, 0.93, 1.) * uStripI * sbi[k] * 2.2 * box; }
-    { vec3 bk = normalize(vec3(-0.15, 0.25, -1.)); float sk = dot(rd, bk); c += vec3(0.85, 0.9, 1.) * uStripI * 0.9 * smoothstep(0.93, 0.97, sk) * smoothstep(0.995, 0.975, sk); }
+    { vec3 bk = normalize(vec3(-0.15, 0.25, -1.)); float sk = dot(rd, bk); c += vec3(0.85, 0.9, 1.) * uStripI * 0.9 * smoothstep(0.93, 0.97, sk) * (1.-smoothstep(0.975,0.995, sk)); }
     c += vec3(0.85, 0.9, 1.) * 0.05 * smoothstep(0.55, 0.95, rd.y) * uStripI;                 // cenital suave
     c += vec3(0.6, 0.7, 0.8) * 0.02 * exp(-abs(rd.y) * 25.);                                 // horizonte
     c += vec3(0.5, 0.55, 0.6) * 0.004 * (0.5 + 0.5 * rd.y);
@@ -487,7 +487,7 @@ canvas{width:100vw;height:100vh;display:block}
         float ch = 0.; float cl[3]; cl[0] = 0.; cl[1] = 0.42; cl[2] = -0.63; float cw[3]; cw[0] = 0.022; cw[1] = 0.009; cw[2] = 0.006;
         for (int j = 0; j < 3; j++) ch = max(ch, smoothstep(cw[j], cw[j] * 0.6, abs(la - cl[j])));
         F0 = mix(F0, vec3(0.03), ch);
-        glow = smoothstep(0.008, 0.002, abs(la)) * (0.35 + uPulse * 2.); cosi = max(dot(-rd, n), 0.); }
+        glow = (1.-smoothstep(0.002,0.008, abs(la))) * (0.35 + uPulse * 2.); cosi = max(dot(-rd, n), 0.); }
       vec3 F = F0 + (1. - F0) * pow(1. - cosi, 5.);
       // micro-textura: un rayado finísimo de pulido en el cromo (anillos concéntricos) — rompe la perfección de CG
       if (m.x > 0.5) { float g = sin(dot(n, normalize(vec3(0.3, 1., 0.2))) * 900. + m.y * 40.) * 0.5 + 0.5; F *= 0.97 + 0.03 * g; }

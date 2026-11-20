@@ -582,7 +582,7 @@ canvas{width:100vw;height:100vh;display:block}
       vec2 bandR = ri == 0 ? vec2(0.6, 0.66) : ri == 1 ? vec2(1.1, 1.17) : ri == 2 ? vec2(1.71, 1.79) : ri == 3 ? vec2(2.44, 2.56) : vec2(2.92, 3.02 + 0.06 * major);
       float inB = step(bandR.x, rr) * step(rr, bandR.y + (major > 0.5 ? 0.04 : 0.));
       float line = smoothstep(0.93, 0.985, fu) * inB;
-      float ring = smoothstep(0.004, 0.0, abs(rr - bandR.x + 0.012)) + smoothstep(0.003, 0.0, abs(rr - (bandR.y + 0.05)));
+      float ring = (1.-smoothstep(0.0,0.004, abs(rr - bandR.x + 0.012))) + (1.-smoothstep(0.0,0.003, abs(rr - (bandR.y + 0.05))));
       eng = clamp(line + ring * 0.8, 0., 1.);
       sp = 0.82 + 0.18 * h1(floor(rr * 900.));           // cepillado concéntrico
     }

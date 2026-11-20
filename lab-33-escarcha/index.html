@@ -581,7 +581,7 @@ canvas{width:100vw;height:100vh;display:block}
     if (uHh.x >= 0. && uHh.x < 0.1) {
       vec2 cell = floor(p * 260.);
       float pick = step(0.93, h21(cell + uHh.z));
-      L += pick * step(age, 220.) * uHh.y * 5. * (1. - uHh.x / 0.1) * smoothstep(0.35, 0.0, length(fract(p * 260.) - 0.5));
+      L += pick * step(age, 220.) * uHh.y * 5. * (1. - uHh.x / 0.1) * (1.-smoothstep(0.0,0.35, length(fract(p * 260.) - 0.5)));
     }
     // contraluz: la luz de detrás atraviesa el hielo (más por los bordes finos)
     float bl = uBack * (0.25 * hc + 0.9 * rim) * (0.8 + 0.2 * str);
@@ -647,7 +647,7 @@ canvas{width:100vw;height:100vh;display:block}
     float src = 0.;
     if (rd.z < -0.0001) { float t = -uCam.z / rd.z; vec2 p = (uCam + rd * t).xy; float bd = length(p - uBl.xy);
       vec4 b = textureLod(uL, p * 0.5 + 0.5, 3.);
-      float sm = smoothstep(0.37, 0.0, length(p));
+      float sm = (1.-smoothstep(0.0,0.37, length(p)));
       src = (max(b.r * 2. - 0.25, 0.) * uBack * 0.6 * sm * smoothstep(0.015, 0.06, length(p)) + uBack * 0.35 * exp(-bd * bd * 3.) * (1. - b.a) * smoothstep(0.33, 0.45, length(p))) * step(max(abs(p.x), abs(p.y)), 1.); }
     o = vec4(col, src);
   }`;

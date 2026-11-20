@@ -232,7 +232,7 @@ void main(){
   const FS_POINTS = `#version 300 es
 precision highp float;
 in vec3 vCol; out vec4 o;
-void main(){ float r = length(gl_PointCoord - .5); float a = smoothstep(.5, .15, r); o = vec4(vCol * a, 1.); }`;
+void main(){ float r = length(gl_PointCoord - .5); float a = (1.-smoothstep(.15,.5, r)); o = vec4(vCol * a, 1.); }`;
 
   const FS_BORDES = HEAD + `
 float Lc(vec2 c){ return dot(cam(c), vec3(.299, .587, .114)); }
