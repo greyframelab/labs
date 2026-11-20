@@ -330,10 +330,10 @@ vec3 shade(vec3 p, vec3 rd, float t, float bars, float lift, bool full){
   vec3 n=nrm(p,t), v=-rd, r=reflect(rd,n);
   float cosv=max(dot(n,v),0.0), fr=pow(1.0-cosv,4.0);
   float F0=uMat==2?0.45:0.04, F=F0+(1.0-F0)*pow(1.0-cosv,5.0);
-  bool hq=full&&uQ>0.5;
+  bool hq=full&&uQ>0.5, vhq=full&&uQ>1.5;
   float ao=hq?occ(p,n):0.8;
   vec3 Ld=normalize(vec3(0.6,0.7,0.4));
-  float sh=hq&&uMat!=3?mix(0.35,1.0,shadow(p+n*0.01,Ld)):1.0;
+  float sh=vhq&&uMat!=3?mix(0.35,1.0,shadow(p+n*0.01,Ld)):1.0;
   float key, acc; rigLight(p,r,n,fr,bars,key,acc);
   key+=pow(fr,2.2)*0.35+exp(-pow((dot(r,normalize(vec3(-0.7,0.2,0.3)))-0.9)*9.0,2.0))*0.35;   // luz de filo que acompaña a la cámara
   if(uForm<8) key+=0.16*pow(fr,1.6)+0.03;   // un filo de luz siempre dibuja la forma: en sala nunca se pierde en el negro
@@ -343,9 +343,10 @@ vec3 shade(vec3 p, vec3 rd, float t, float bars, float lift, bool full){
   if(uForm>=8&&uForm<=10) key+=0.55*exp(-t*0.55)*pow(max(dot(n,v),0.0),3.0)+0.3*pow(fr,1.5);           // en los campos, la cámara lleva su propia luz
   float spec=pow(max(dot(r,Ld),0.0),uMat==0?140.0:uMat==1?90.0:60.0)*sh;
   vec3 base;
-  if(uMat==0)      base=INK*(key*(0.12+F*1.4)*1.15+spec*1.1+fr*0.03);
-  else if(uMat==1) base=INK*(key*(0.18+F*1.1)+spec*0.8+fr*0.025);
-  else if(uMat==2) base=mix(INK,uAcc,0.12)*(key*(0.14+0.7*F)*1.2+spec*1.2)+fr*0.02;
+  // materia negra de verdad: casi sin luz difusa; la luz vive en el filo (Fresnel) y en el reflejo
+  if(uMat==0)      base=INK*(key*(0.025+F*1.25)+spec*1.1+fr*0.03);
+  else if(uMat==1) base=INK*(key*(0.04+F*0.95)+spec*0.8+fr*0.025);
+  else if(uMat==2) base=mix(INK,uAcc,0.12)*(key*(0.04+0.7*F)*1.2+spec*1.2)+fr*0.02;
   else             base=INK*(pow(fr,1.3)*1.1*(0.5+key)+key*0.12);
   // en la RUPTURA la luz principal se vuelve masa de acento en los planos impares
   float hot=(bars>=8.0&&bars<12.0&&fract(uShotK*13.0)>0.45)?(uFam==2?0.25:1.0):0.0;   // en FUEGO el color ya está en las venas: no se inunda
@@ -411,7 +412,7 @@ void main(){
   float fd=uShot==1?length(ta-ro):uShot==3?length(ro)-0.6:field?1.1+0.8*fract(K*5.0):length(ro-ta)-0.4;
   float dofK=uShot==1?0.8:field?0.18:uShot==2?0.35:0.2;   // desenfoque contenido: que se lea la materia
   float t=0.0, d=1.0, minD=9.0;
-  int maxI=uQ>0.5?100:64;
+  int maxI=uQ>1.5?110:uQ>0.5?84:60;
   // ANTIALIAS DE SILUETA: se guarda dónde el rayo pasó más cerca de la materia, en tamaño de píxel
   float pxA=1.0/(uRes.y*lens), minR=9.0, tMin=0.0;
   for(int i=0;i<128;i++){ if(i>=maxI) break; d=map(ro+rd*t); minD=min(minD,d);
@@ -424,11 +425,12 @@ void main(){
   // la materia que llena el cuadro (muy cerca) se oscurece: el negro domina y nada se quema
   float cov=t>=9.0?clamp(1.0-minR,0.0,1.0):0.0;   // el rayo rozó un borde sin tocarlo: cobertura parcial
   if(t<9.0) col=shade(ro+rd*t,rd,t,bars,lift,true)*(field?mix(0.45,1.0,smoothstep(0.15,1.3,t)):mix(0.5,1.0,smoothstep(0.25,2.6,t)));
-  if(cov>0.0&&!field) col=mix(col,shade(ro+rd*tMin,rd,tMin,bars,lift,false)*mix(0.5,1.0,smoothstep(0.25,2.6,tMin)),cov);   // bordes suaves, sin dientes de sierra   // la materia pegada a la lente se hunde en negro, no en gris
+  // borde: en calidad alta se sombrea de verdad; si no, un filo barato (el borde de la materia negra es su luz de contorno)
+  if(cov>0.0&&!field) col=mix(col,uQ>1.5?shade(ro+rd*tMin,rd,tMin,bars,lift,false)*mix(0.5,1.0,smoothstep(0.25,2.6,tMin)):INK*0.22*lift,cov);   // bordes suaves, sin dientes de sierra   // la materia pegada a la lente se hunde en negro, no en gris
   col+=uAcc*exp(-minD*9.0)*(t>=9.0?1.0:0.0)*(uRig==3?0.16+uImpact*0.3:0.02)*(0.5+uEnergy);
   if(field) col=mix(col,uAcc*(0.003+0.018*uEnergy*uEnergy+0.06*uImpact),1.0-exp(-min(t,9.0)*0.13));   // bruma de profundidad: se lee el túnel
   // suelo negro pulido: refleja de verdad la materia, cada vez más difuso con la distancia
-  if(rd.y<0.0&&!field&&uQ>0.5){ float tp=(-1.0-ro.y)/rd.y; if(tp>0.0&&(tp<t||t>=9.0)){
+  if(rd.y<0.0&&!field&&uQ>1.5){ float tp=(-1.0-ro.y)/rd.y; if(tp>0.0&&(tp<t||t>=9.0)){
     vec3 pp=ro+rd*tp, rr=reflect(rd,vec3(0.0,1.0,0.0));
     float tr=0.02, dr=1.0; for(int i=0;i<32;i++){ dr=map(pp+rr*tr); if(dr<0.002||tr>5.0) break; tr+=dr; }
     float fade=exp(-length(pp.xz)*0.7);
@@ -450,7 +452,7 @@ void main(){
   float tt=min(t,9.0), coc=clamp(abs(tt-fd)/max(tt,0.35)*dofK,0.0,1.0);
   coc*=1.0-clamp(dot(tz,vec3(0.3,0.59,0.11))*4.0,0.0,1.0);   // los trazos de luz siempre nítidos (el desenfoque los convertía en bruma)
   if(any(isnan(col))||any(isinf(col))) col=vec3(0.0);
-  { float L=dot(col,vec3(0.3,0.59,0.11)); col*=min(1.0,1.9/(L+1e-4)); }   // techo de luz: ninguna zona se quema (el blanco nunca satura)
+  { float L=dot(col,vec3(0.3,0.59,0.11)); col*=min(1.0,1.05/(L+1e-4)); }   // techo de luz: ninguna zona se quema (el blanco nunca satura)
   o=vec4(col*uW,coc*uW);
 }`;
 
@@ -553,7 +555,7 @@ void main(){
   if(uGhost>0.001){ vec3 gh=texture(uGhostT,(uv-0.5)/(1.0+0.03*(1.0-uGhost))+0.5).rgb; c=max(c,gh*uGhost)+gh*uGhost*0.12; }
   c+=uFlashC*uFlash*0.22;
   c*=uFade;
-  if(uTone<0.5) c=0.96*(1.0-exp(-c*1.05));   // hombro suave: los brillos conservan detalle
+  if(uTone<0.5){ c=0.96*(1.0-exp(-c*1.05)); c=mix(c,c*c*(3.0-2.0*c),0.35); }   // hombro suave y curva en S: negros densos, brillos con detalle
   else c=mix(c,0.85+0.15*(1.0-exp(-(c-0.85)/0.15)),step(0.85,c));   // color fiel, solo un hombro arriba
   c*=1.0-uVig*pow(clamp(length(dc*vec2(1.0,1.12))*1.3,0.0,1.0),2.4);
   c*=1.0-uScan*(0.5+0.5*sin(gl_FragCoord.y*3.14159));
@@ -573,7 +575,7 @@ void main(){
     this.vao = gl.createVertexArray();
     this.par = gl.getExtension('KHR_parallel_shader_compile');
     this.progs = {};
-    this.scale = 1.0; this.frame = 0;
+    this.scale = 1.0; this.frame = 0; this.quality = 2;   // el PC del museo es potente: arranca en calidad alta (antialias completo, sombras, reflejo); si no llegara, baja sola
     this.post = { down: this.prog(FS_VERT, DOWN, 'down'), up: this.prog(FS_VERT, UP, 'up'), fin: this.prog(FS_VERT, FINAL, 'final') };
     for (const k in this.post) this.finish(this.post[k]);
     this.sting = gl.createTexture();
@@ -913,13 +915,15 @@ void main(){
     if (this.slow >= 1) {
       this.slow = 0;
       if (e.scale > 1.0) this.pending = 1;                     // primero se quita el supermuestreo
-      else if (q > 0.5) e.quality = 0;                          // luego la calidad ligera (sin sombras ni desenfoque: más nítido)
+      else if (q > 1.5) e.quality = 1;                          // luego sin sombras ni reflejo
+      else if (q > 0.5) e.quality = 0;                          // luego la calidad ligera (sin desenfoque: más nítido)
       else if (!this.half) this.half = true;                    // luego 30 fps exactos
       else if (e.scale > 0.75) this.pending = +(e.scale - 0.1).toFixed(2);   // la resolución, lo último
     }
     if (this.fast >= 4) {   // va sobrado: recupera calidad y definición poco a poco
       this.fast = 0;
       if (q < 0.5) e.quality = 1;
+      else if (q < 1.5 && !this.half && e.scale >= 1) e.quality = 2;   // va sobrado: sombras y reflejo
       else if (e.scale < (this.half ? 1.0 : this.max)) this.pending = +Math.min(this.max, e.scale + 0.1).toFixed(2);
     }
   };
