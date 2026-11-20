@@ -77,7 +77,7 @@
     r.onresult = (e) => {
       for (let i = e.resultIndex; i < e.results.length; i++) {
         if (!e.results[i].isFinal) continue;
-        const txt = e.results[i][0].transcript, w = pickWord(txt);
+        const txt = e.results[i][0].transcript, w = pickWord(txt); this.heard = txt;
         if (w) this.onWord(w, txt);
       }
     };
@@ -97,6 +97,7 @@
   // El reconocimiento de Chrome no existe dentro de una app de escritorio; aquí todo ocurre en el ordenador, sin internet.
   function OfflineListener(onWord, onState) {
     this.onWord = onWord; this.onState = onState || (() => {}); this.on = false; this.ok = true; this.ready = null;
+    this.level = 0; this.heard = ''; this.deviceId = null;
   }
   OfflineListener.prototype.load = function () {
     if (this.ready) return this.ready;
@@ -105,19 +106,39 @@
       st('CARGANDO MODELO DE VOZ');
       if (!window.Vosk) await new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'vosk/vosk.js'; s.onload = res; s.onerror = () => rej(new Error('sin vosk.js')); document.head.appendChild(s); });
       const r = await fetch('vosk/model.tar.gz'); if (!r.ok) throw new Error('sin modelo de voz');
-      const model = await window.Vosk.createModel(URL.createObjectURL(await r.blob()));
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 }, video: false });
-      const ac = new AudioContext();
-      const rec = new model.KaldiRecognizer(ac.sampleRate);
-      rec.on('result', (m) => { const txt = m && m.result && m.result.text; const w = this.on && pickWord(txt); if (w) this.onWord(w, txt); });
-      const src = ac.createMediaStreamSource(stream), node = ac.createScriptProcessor(4096, 1, 1), mute = ac.createGain(); mute.gain.value = 0;
-      node.onaudioprocess = (e) => { if (this.on) try { rec.acceptWaveform(e.inputBuffer); } catch (err) {} };
-      src.connect(node); node.connect(mute); mute.connect(ac.destination);
-      this.ac = ac;
+      const model = await window.Vosk.createModel(URL.createObjectURL(await r.blob())).catch((e) => { throw new Error('modelo: ' + (e && e.message || e || 'no carga')); });
+      this.model = model;
+      await this.openMic();
     })();
-    this.ready.then(() => this.on && st('ESCUCHANDO'), (e) => { this.ok = false; st(/modelo|vosk/i.test(e.message) ? 'SIN MODELO DE VOZ' : /Permission|NotAllowed/i.test(e.name + e.message) ? 'SIN PERMISO DE MICRÓFONO' : 'SIN MICRÓFONO'); this.ready = null; });
+    this.ready.then(() => this.on && st('ESCUCHANDO'), (e) => {
+      const m = String((e && (e.name + ' ' + e.message)) || e || '');
+      console.error('[voz offline]', m);
+      st(/modelo|vosk/i.test(m) ? 'SIN MODELO DE VOZ' : /Permission|NotAllowed|Security/i.test(m) ? 'SIN PERMISO DE MICRÓFONO' : /NotFound|Device/i.test(m) ? 'SIN MICRÓFONO' : 'ERROR DE VOZ');
+      this.ready = null;
+    });
     return this.ready;
   };
+  // abre el micrófono elegido (o el de por defecto) y lo conecta al reconocedor; mide el nivel para la consola
+  OfflineListener.prototype.openMic = async function () {
+    if (this.stream) this.stream.getTracks().forEach((t) => t.stop());
+    if (this.ac) try { await this.ac.close(); } catch (e) {}
+    const audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 };
+    if (this.deviceId) audio.deviceId = { exact: this.deviceId };
+    const stream = (this.stream = await navigator.mediaDevices.getUserMedia({ audio, video: false }));
+    const ac = (this.ac = new AudioContext());
+    const rec = new this.model.KaldiRecognizer(ac.sampleRate);
+    rec.on('result', (m) => { const txt = m && m.result && m.result.text; if (txt) this.heard = txt; const w = this.on && pickWord(txt); if (w) this.onWord(w, txt); });
+    rec.on('partialresult', (m) => { const p = m && m.result && m.result.partial; if (p) this.heard = p + '…'; });
+    const src = ac.createMediaStreamSource(stream), node = ac.createScriptProcessor(4096, 1, 1), mute = ac.createGain(); mute.gain.value = 0;
+    node.onaudioprocess = (e) => {
+      const d = e.inputBuffer.getChannelData(0); let s2 = 0; for (let i = 0; i < d.length; i += 4) s2 += d[i] * d[i];
+      this.level = Math.min(1, Math.sqrt(s2 / (d.length / 4)) * 8);
+      if (this.on) try { rec.acceptWaveform(e.inputBuffer); } catch (err) {}
+    };
+    src.connect(node); node.connect(mute); mute.connect(ac.destination);
+    this.micName = (stream.getAudioTracks()[0] || {}).label || 'MICRÓFONO';
+  };
+  OfflineListener.prototype.setDevice = function (id) { this.deviceId = id || null; if (this.model) this.openMic().then(() => this.onState('ESCUCHANDO'), (e) => this.onState('SIN MICRÓFONO')); };
   OfflineListener.prototype.start = function () { this.on = true; this.load().then(() => { if (this.ac) this.ac.resume(); }, () => {}); };
   OfflineListener.prototype.stop = function () { this.on = false; this.onState('APAGADA'); };
 

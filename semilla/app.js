@@ -11,7 +11,7 @@
     set(k, v) { try { localStorage.setItem('semilla.' + k, JSON.stringify(v)); } catch (e) {} },
   };
 
-  const cfg = Object.assign({ mode: 'auto', loops: 3, sig: 30, vol: 70, bri: 100, safe: true, sound: true, accent: 'auto', den: 0.5, cha: 0.5 }, store.get('cfg', {}));
+  const cfg = Object.assign({ mode: window.SemillaVoz && window.SemillaVoz.isApp ? 'publico' : 'auto', loops: 3, sig: 30, vol: 70, bri: 100, safe: true, sound: true, accent: 'auto', den: 0.5, cha: 0.5 }, store.get('cfg', {}));
   if (Q.get('modo')) cfg.mode = { automatico: 'auto', auto: 'auto', publico: 'publico', manual: 'manual' }[Q.get('modo')] || cfg.mode;
   const saveCfg = () => store.set('cfg', cfg);
 
@@ -182,8 +182,15 @@
   // La sala dice una palabra y la obra nace de ella. La palabra nunca se proyecta ni se guarda.
   const voz = { state: '—', last: '', fam: '', lastAt: -1e9, lastBirth: -1e9, pending: null, listener: null };
   function vozOn() {
-    if (!voz.listener) voz.listener = window.SemillaVoz.makeListener(onWord, (st) => (voz.state = st));
+    if (!voz.listener) { voz.listener = window.SemillaVoz.makeListener(onWord, (st) => { voz.state = st; if (st === 'ESCUCHANDO') listMics(); }); voz.listener.deviceId = cfg.mic || null; }
     voz.listener.start();
+  }
+  // selector de micrófono (solo en la app; en el navegador elige Chrome)
+  async function listMics() {
+    if (!voz.listener || !voz.listener.setDevice) return;
+    const ds = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput');
+    const sel = $('selMic'); sel.innerHTML = '<option value="">POR DEFECTO</option>' + ds.map((d) => `<option value="${d.deviceId}">${(d.label || 'MICRÓFONO').toUpperCase()}</option>`).join('');
+    sel.value = cfg.mic || ''; $('rowMic').classList.remove('hide');
   }
   function vozOff() { if (voz.listener) voz.listener.stop(); }
   function onWord(w) {
@@ -283,6 +290,7 @@
     $('tagTxt').dataset.salida = so ? '1' : '';
     if (cfg.mode === 'publico') {
       $('pMic').textContent = voz.state; $('pWord').textContent = voz.last ? voz.last.toUpperCase() : '—';
+      const L = voz.listener; $('pLvl').style.width = 100 * ((L && L.level) || 0) + '%'; $('pHeard').textContent = (L && L.heard) ? L.heard.toUpperCase() : '—';
       $('pFam').textContent = voz.fam ? voz.fam.toUpperCase() : '—';
       $('pNext').textContent = voz.pending ? 'EN ESPERA: ' + voz.pending.toUpperCase() : autoplay() ? 'AUTOPLAY' : 'PIEZA DE LA PALABRA';
       $('chSala').textContent = voz.state;
@@ -337,6 +345,7 @@
     $('bPrev').onclick = () => hist(-1); $('bNext').onclick = () => hist(1);
     $('inCode').onkeydown = (e) => { if (e.key === 'Enter') { goCode(e.target.value); e.target.blur(); } e.stopPropagation(); };
     $('inWord').onkeydown = (e) => { if (e.key === 'Enter') { const w = window.SemillaVoz.pickWord(e.target.value) || ''; if (w) { if (cfg.mode !== 'publico') setMode('publico'); voz.last = w; voz.lastAt = now(); birth(w); } e.target.value = ''; } e.stopPropagation(); };
+    $('selMic').onchange = (e) => { cfg.mic = e.target.value; saveCfg(); if (voz.listener && voz.listener.setDevice) voz.listener.setDevice(cfg.mic); };
     $('bRec').onclick = rec; $('bShot').onclick = () => (shotReq = true);  $('bSave').onclick = save; $('bCsv').onclick = csv;
     const listClick = (e) => { const g = e.target.closest('[data-c]'), d = e.target.closest('[data-del]'); if (d) { const s = store.get('guardadas', []); s.splice(+d.dataset.del, 1); store.set('guardadas', s); renderSaved(); } else if (g) goCode(g.dataset.c); };
     $('listSaved').onclick = listClick; $('listLog').onclick = listClick;

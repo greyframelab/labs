@@ -171,10 +171,13 @@ body.solo{cursor:none}
         <div id="boxPub" class="hide" style="display:flex;flex-direction:column;gap:10px">
           <div class="kv">
             <span>MICRÓFONO</span><b id="pMic">—</b>
+            <span>OYENDO</span><b id="pHeard">—</b>
             <span>ÚLTIMA PALABRA</span><b id="pWord">—</b>
             <span>CARÁCTER</span><b id="pFam">—</b>
             <span>SIGUIENTE</span><b id="pNext">—</b>
           </div>
+          <div class="note">NIVEL DEL MICRÓFONO</div><div class="meter"><i id="pLvl"></i></div>
+          <div class="hide" id="rowMic"><select id="selMic" aria-label="Micrófono" style="width:100%;background:#000;color:#bdbab3;border:1px solid #2a2927;padding:7px 8px;font:400 9px 'JetBrains Mono',monospace;letter-spacing:.14em"></select></div>
           <div class="code"><input id="inWord" placeholder="PROBAR UNA PALABRA" spellcheck="false" aria-label="Probar una palabra" style="font-size:11px;letter-spacing:.2em"></div>
           <div class="note">La palabra se proyecta un instante y se deshace en la obra; no se guarda en ningún sitio. <span id="vozNote">El reconocimiento de voz es el de Chrome y necesita internet en sala.</span></div>
         </div>
