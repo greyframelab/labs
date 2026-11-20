@@ -27,7 +27,7 @@
   // ---------- registro ----------
   const log = store.get('registro', []);
   function logBirth(P, how) {
-    log.unshift({ c: P.code, sp: P.sp.name, ref: P.ref.name, acc: P.accentKey, modo: how, t: new Date().toISOString() });
+    log.unshift({ c: P.code, sp: P.sp.name, acc: P.accentKey, modo: how, t: new Date().toISOString() });
     if (log.length > 5000) log.length = 5000;
     store.set('registro', log); renderLog();
   }
@@ -211,7 +211,7 @@
     setTimeout(() => { if (recording && recording.r === r) { r.start(250); setTimeout(() => r.state !== 'inactive' && r.stop(), P.L * 1000); } }, Math.max(0, (startAt - now()) * 1000));
   }
   function csv() {
-    const rows = [['semilla', 'especie', 'referencia', 'acento', 'modo', 'hora']].concat(log.map((x) => [x.c, x.sp, x.ref, x.acc, x.modo, x.t]));
+    const rows = [['semilla', 'forma', 'acento', 'modo', 'hora']].concat(log.map((x) => [x.c, x.sp, x.acc, x.modo, x.t]));
     download(new Blob([rows.map((r) => r.join(';')).join('\n')], { type: 'text/csv' }), 'voidloom-semilla-registro.csv');
   }
 
@@ -239,8 +239,8 @@
   function paintPiece() {
     const P = cur.P;
     document.documentElement.style.setProperty('--acc', P.accent);
-    $('chCode').textContent = P.code; $('chSp').textContent = P.sp.name; $('chRef').textContent = P.ref.name; $('chBpm').textContent = P.bpm;
-    $('pieceRef').textContent = P.sp.name + ' · ' + P.ref.name + ' · ' + P.rootName;
+    $('chCode').textContent = P.code; $('chSp').textContent = P.sp.name; $('chBpm').textContent = P.bpm;
+    $('pieceRef').textContent = P.sp.name + ' · ' + SM.MATS[P.vis.mat] + ' · ' + P.rootName;
     if (document.activeElement !== $('inCode')) $('inCode').value = P.code;
     $('bigName').textContent = P.sp.name; $('bigIdea').textContent = P.sp.idea;
     $('tagTxt').textContent = P.code + ' · ' + SM.MATS[P.vis.mat] + ' · ' + SM.RIGS[P.vis.rig] + ' · ' + SM.ACCENT_NAMES[P.accentKey] + ' · ' + P.bpm + ' BPM';

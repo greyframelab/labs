@@ -7,7 +7,7 @@ Materia negra que nace de una palabra. Un generador infinito de piezas abstracta
 ## Modos (`1` `2` `3`)
 | | Modo | Qué hace |
 |---|---|---|
-| 1 | AUTOMÁTICO | Las piezas nacen solas y se suceden con un fundido largo, sin repetir forma ni referencia seguidas. Cada vuelta muta un poco: el mismo frame no vuelve a salir. |
+| 1 | AUTOMÁTICO | Las piezas nacen solas y se suceden con un fundido largo, sin repetir forma ni estilo de sonido seguidos. Cada vuelta muta un poco: el mismo frame no vuelve a salir. |
 | 2 | PÚBLICO | La sala dice una palabra y la obra nace de ella. En silencio, la obra sigue sola y nunca se apaga. |
 | 3 | MANUAL | Semilla, acento, densidad y caos a mano, para estudio y montaje. La pieza repite su vuelta perfecta. |
 
@@ -22,14 +22,14 @@ Cada vuelta tiene cuatro actos: SEÑAL (casi a oscuras), TENSIÓN, RUPTURA (las 
 
 ## La palabra (modo PÚBLICO)
 - El reconocimiento de voz es el de Chrome, en español: escucha siempre y necesita internet en sala. Se queda con la palabra con más carga de la frase.
-- Su significado (agua, fuego, amor, miedo, luz, tiempo, máquina, calma, caos, vida…) elige la forma, el material, las luces, el acento, la densidad, el caos y la referencia musical. Si la palabra no está en el léxico, manda su sonido.
+- Su significado (agua, fuego, amor, miedo, luz, tiempo, máquina, calma, caos, vida…) elige la forma, el material, las luces, el acento, la densidad, el caos y el estilo de sonido. Si la palabra no está en el léxico, manda su sonido.
 - La palabra **pinta trazos de luz** sobre la materia con el gesto de su sentido: subidas cortantes para el fuego, ondas largas para el agua, arcos para el amor, líneas que tiemblan para el miedo, rayos para la luz, rectas cruzadas para la máquina y el caos. Unos pasan por delante del objeto y otros por detrás.
 - Sus sílabas escriben el ritmo del bombo y **el dron canta sus vocales** con sus formantes.
 - Mismo carácter, nunca la misma pieza: la semilla es la palabra y el instante.
 - La palabra nunca se proyecta ni se guarda: solo aparece en la consola. Para probar sin micrófono, escribe una palabra en PROBAR UNA PALABRA.
 
 ## Sonido
-Sintetizado en el navegador desde la partitura. Cada pieza actúa como una referencia (Autechre, Orphx, Lanark Artefax, Squarepusher, Phoenicia o Boards of Canada), con dron vivo como columna, percusión limpia y subida continua hacia la ruptura. El master tiene limitador y techo de seguridad; el nivel de la sala se ajusta con VOLUMEN.
+Sintetizado en el navegador desde la partitura: industrial, abstracto y ambient. Cada corte de plano es un golpe de chapa y cambia el intervalo del dron; cada forma suena con sus resonadores metálicos y un pulso de máquina; el plano decide el espacio (el macro, cercano y seco; el general, con mucha sala). Dron vivo como columna y una gran ruptura metálica. El master tiene limitador y techo de seguridad; el nivel de la sala se ajusta con VOLUMEN.
 
 ## Montaje en sala
 1. Proyector como pantalla extendida, altavoces y micrófono en sala. Abre la app en Chrome y pulsa **ARRANCAR** (autoriza el micrófono la primera vez).

@@ -1,5 +1,5 @@
 /* VØID_LOOM · SEMILLA — partitura generativa.
-   Una semilla decide la pieza entera: especie visual, referencia IDM, tempo, tono y cada golpe.
+   Una semilla decide la pieza entera: forma, material, luces, estilo de sonido, tempo, tono y cada golpe.
    Imagen y sonido leen esta misma partitura, así que van siempre a tiempo.
    Todo depende solo de (semilla, mandos, t): se puede saltar, repetir e ir hacia atrás. */
 (function () {
@@ -33,14 +33,14 @@
   const pickSpecies = (r) => { let x = r * SP_W; for (const s of SPECIES) { x -= s.w; if (x < 0) return s; } return SPECIES[0]; };
   const MATS = ['LACA', 'OBSIDIANA', 'CROMO', 'TERCIOPELO'], RIGS = ['TIRAS', 'ARO', 'BARRIDO', 'CONTRALUZ'];
 
-  // una referencia manda en cada pieza: decide ritmo, espacio y gesto
+  // un estilo manda en cada pieza: decide ritmo, espacio y gesto
   const REFS = {
-    autechre: { name: 'AUTECHRE', bpm: [86, 102], swing: 0.0, kick: 'euclid', verb: 0.10, room: 1.3, ratchet: 0.35, stutter: 0.35, metalDecay: 0.32, tickRes: 16, bass: 'sparse', wow: 0 },
-    orphx: { name: 'ORPHX', bpm: [122, 130], swing: 0.0, kick: 'four', verb: 0.13, room: 1.8, ratchet: 0.15, stutter: 0.15, metalDecay: 0.5, tickRes: 16, bass: 'offbeat', wow: 0 },
-    lanark: { name: 'LANARK ARTEFAX', bpm: [68, 78], swing: 0.03, kick: 'sparse', verb: 0.24, room: 3.0, ratchet: 0.5, stutter: 0.25, metalDecay: 1.1, tickRes: 32, bass: 'long', wow: 0 },
-    squarepusher: { name: 'SQUAREPUSHER', bpm: [136, 150], swing: 0.0, kick: 'broken', verb: 0.08, room: 1.0, ratchet: 0.6, stutter: 0.4, metalDecay: 0.24, tickRes: 32, bass: 'lead', wow: 0 },
-    phoenicia: { name: 'PHOENICIA', bpm: [96, 108], swing: 0.14, kick: 'groove', verb: 0.10, room: 1.2, ratchet: 0.3, stutter: 0.6, metalDecay: 0.3, tickRes: 16, bass: 'sparse', wow: 0 },
-    boc: { name: 'BOARDS OF CANADA', bpm: [80, 90], swing: 0.09, kick: 'simple', verb: 0.2, room: 2.2, ratchet: 0.1, stutter: 0.1, metalDecay: 0.6, tickRes: 16, bass: 'long', wow: 1 },
+    rejilla: { name: 'REJILLA', bpm: [86, 102], swing: 0.0, kick: 'euclid', verb: 0.10, room: 1.3, ratchet: 0.35, stutter: 0.35, metalDecay: 0.32, tickRes: 16, bass: 'sparse', wow: 0 },
+    pulso: { name: 'PULSO', bpm: [122, 130], swing: 0.0, kick: 'four', verb: 0.13, room: 1.8, ratchet: 0.15, stutter: 0.15, metalDecay: 0.5, tickRes: 16, bass: 'offbeat', wow: 0 },
+    abismo: { name: 'ABISMO', bpm: [68, 78], swing: 0.03, kick: 'sparse', verb: 0.24, room: 3.0, ratchet: 0.5, stutter: 0.25, metalDecay: 1.1, tickRes: 32, bass: 'long', wow: 0 },
+    quiebre: { name: 'QUIEBRE', bpm: [136, 150], swing: 0.0, kick: 'broken', verb: 0.08, room: 1.0, ratchet: 0.6, stutter: 0.4, metalDecay: 0.24, tickRes: 32, bass: 'lead', wow: 0 },
+    vaiven: { name: 'VAIVÉN', bpm: [96, 108], swing: 0.14, kick: 'groove', verb: 0.10, room: 1.2, ratchet: 0.3, stutter: 0.6, metalDecay: 0.3, tickRes: 16, bass: 'sparse', wow: 0 },
+    cinta: { name: 'CINTA', bpm: [80, 90], swing: 0.09, kick: 'simple', verb: 0.2, room: 2.2, ratchet: 0.1, stutter: 0.1, metalDecay: 0.6, tickRes: 16, bass: 'long', wow: 1 },
   };
 
   const ACTS = [[0, 'SEÑAL'], [4, 'TENSIÓN'], [8, 'RUPTURA'], [12, 'ECO']]; // en compases
@@ -137,8 +137,8 @@
 
     for (let b = 0; b < BARS; b++) {
       const e = E[b], sec = b >> 2, phraseEnd = b % 4 === 3;
-      // --- bombo: entra en la TENSIÓN (antes, según la referencia) y se va en el ECO
-      const kickOn = refId === 'orphx' ? b >= 2 && b <= 14 : b >= 3 && b <= 14 && ENERGY[b] > 0.3;
+      // --- bombo: entra en la TENSIÓN (antes, según el estilo) y se va en el ECO
+      const kickOn = refId === 'pulso' ? b >= 2 && b <= 14 : b >= 3 && b <= 14 && ENERGY[b] > 0.3;
       if (kickOn) {
         let steps;
         if (ref.kick === 'euclid') {
@@ -193,7 +193,7 @@
     }
     // --- ruptura: un golpe claro al entrar en el clímax
     ev.impact.push({ t: 8 * bar, v: 1, p: 0, d: 0 });
-    if (refId === 'lanark') ev.impact.push({ t: 12 * bar, v: 0.55, p: 1, d: 0 });
+    if (refId === 'abismo') ev.impact.push({ t: 12 * bar, v: 0.55, p: 1, d: 0 });
 
     // --- stutters compartidos: el audio repite un trozo y la imagen repite esos mismos frames
     const warps = [];

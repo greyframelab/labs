@@ -1,5 +1,5 @@
 /* VØID_LOOM · SEMILLA — sonido sintetizado desde la partitura.
-   Cada semilla suena como su referencia (Autechre, Orphx, Lanark Artefax, Squarepusher, Phoenicia, Boards of Canada).
+   Cada semilla suena con uno de seis estilos propios (REJILLA, PULSO, ABISMO, QUIEBRE, VAIVÉN, CINTA).
    Limpio: senos, FM y resonadores, sin capas de ruido; percusión por debajo de ~1,5 kHz; dron vivo como columna.
    El mismo planificador sirve en tiempo real (AudioContext) y para renderizar offline (OfflineAudioContext). */
 (function () {
@@ -209,8 +209,8 @@
 
   V.kick = function (T, v, vDuck) {
     const ctx = this.ctx, r = this.P.refId;
-    const tail = r === 'lanark' ? 0.42 : r === 'orphx' ? 0.26 : r === 'squarepusher' ? 0.16 : 0.22;
-    const fEnd = r === 'lanark' ? 40 : 46, fStart = r === 'squarepusher' ? 170 : 150;
+    const tail = r === 'abismo' ? 0.42 : r === 'pulso' ? 0.26 : r === 'quiebre' ? 0.16 : 0.22;
+    const fEnd = r === 'abismo' ? 40 : 46, fStart = r === 'quiebre' ? 170 : 150;
     const o = ctx.createOscillator(); o.frequency.setValueAtTime(fStart, T); o.frequency.setTargetAtTime(fEnd, T, 0.03);
     const g = ctx.createGain(), kv = v * 0.95 * Math.min(1, Math.sqrt(0.24 / tail));
     g.gain.setValueAtTime(0, T); g.gain.linearRampToValueAtTime(kv, T + 0.0015); g.gain.setTargetAtTime(0, T + 0.004, tail * 0.55);
@@ -253,7 +253,7 @@
     mod.connect(mg); mg.connect(car.frequency);
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1550;
     const pan = ctx.createStereoPanner(); pan.pan.value = (H(P.seed, 42, Math.round(T * 1000), 0) - 0.5) * 1.4;
-    const g = ctx.createGain(), dk = P.refId === 'squarepusher' ? 0.012 : 0.02 + 0.012 * p;
+    const g = ctx.createGain(), dk = P.refId === 'quiebre' ? 0.012 : 0.02 + 0.012 * p;
     g.gain.setValueAtTime(0, T); g.gain.linearRampToValueAtTime(v * 0.2, T + 0.0012); g.gain.setTargetAtTime(0, T + 0.002, dk);
     car.connect(lp); lp.connect(pan); pan.connect(g); g.connect(this.drum);
     car.start(T); mod.start(T); car.stop(T + dk * 7 + 0.02); mod.stop(T + dk * 7 + 0.02);
