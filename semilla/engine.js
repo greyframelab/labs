@@ -137,7 +137,7 @@ vec3 trazos(vec2 q, float bars, float hit){
     } else {               // tiempo y sin familia: gesto amplio
       float an=(hA-0.5)*2.4; vec2 dv=vec2(cos(an),sin(an)); a=vec2((hB-0.5)*0.8,(hD-0.5)*0.4)-dv*0.35; c=a+dv*(0.5+0.4*hC); b=(a+c)*0.5+vec2(-dv.y,dv.x)*(hD-0.5)*0.3; w=0.008+0.016*hD;
     }
-    w*=0.8; float best=9.0, bs=0.0; vec2 pr=a;
+    w=max(w*0.8,1.6/uRes.y); float best=9.0, bs=0.0; vec2 pr=a;
     for(int k=1;k<=18;k++){
       float tk=float(k)/18.0; if(tk>prog+0.06) break;
       float tt=min(tk,prog); vec2 pk=bz(a,b,c,tt);
@@ -149,10 +149,11 @@ vec3 trazos(vec2 q, float bars, float hit){
       pr=pk;
     }
     float taper=(0.55+0.45*smoothstep(0.0,0.06,bs))*(1.0-0.65*smoothstep(0.55,1.0,bs/max(prog,0.01)));
-    float bristle=fbmL(vec2(bs*7.0+fi*3.0,best/max(w,1e-4)*1.5),0.25,2);
+    float bristle=fbmL(vec2(bs*5.0+fi*3.0,best/max(w,1e-4)*1.2),0.25,2);
     float body=1.0-smoothstep(w*0.55*taper,w*taper+1.0/uRes.y,best);
     float dry=smoothstep(-0.15+0.7*bs,0.3+0.7*bs,bristle+0.2);   // pincel seco: el trazo se abre en cerdas
-    float press=0.45+0.55*fbmL(vec2(bs*5.0+fi*7.0,fi),0.3,2)+0.15*sin(bs*70.0+fi);  // la mano no aprieta igual
+    dry=mix(1.0,dry,smoothstep(3.0,8.0,w*uRes.y));                   // en trazos finos, sin cerdas: si no, salen píxeles sueltos
+    float press=0.55+0.45*fbmL(vec2(bs*5.0+fi*7.0,fi),0.3,2);  // la mano no aprieta igual
     float paint=body*(0.35+0.65*dry)*clamp(press,0.15,1.2);
     float core=1.0-smoothstep(0.0,w*0.32*taper+0.6/uRes.y,best);
     float halo=exp(-best/(w*2.2+0.0015))*0.035;
@@ -292,7 +293,7 @@ vec3 shade(vec3 p, vec3 rd, float t, float bars, float lift, bool full){
   vec3 base;
   if(uMat==0)      base=INK*(key*(0.12+F*1.4)*1.15+spec*1.1+fr*0.03);
   else if(uMat==1) base=INK*(key*(0.18+F*1.1)+spec*0.8+fr*0.025);
-  else if(uMat==2) base=mix(INK,uAcc,0.12)*(key*(0.35+0.7*F)*1.3+spec*1.3)+fr*0.02;
+  else if(uMat==2) base=mix(INK,uAcc,0.12)*(key*(0.14+0.7*F)*1.2+spec*1.2)+fr*0.02;
   else             base=INK*(pow(fr,1.3)*1.1*(0.5+key)+key*0.12);
   // en la RUPTURA la luz principal se vuelve masa de acento en los planos impares
   float hot=(bars>=8.0&&bars<12.0&&fract(uShotK*13.0)>0.45)?(uFam==2?0.25:1.0):0.0;   // en FUEGO el color ya está en las venas: no se inunda
@@ -352,9 +353,10 @@ void main(){
   for(int i=0;i<128;i++){ if(i>=maxI) break; d=map(ro+rd*t); minD=min(minD,d); if(d<0.0004*t+0.0002||t>9.0) break; t+=d*(uQ>0.5?0.9:1.0); }
   float bars=uT/uBar;
   vec3 col=vec3(0.0);
-  float lift=field?0.95+0.6*uEnergy:0.8+0.65*uEnergy;   // la SEÑAL en penumbra (visible en proyección), la RUPTURA a plena luz
+  float lift=field?0.9+0.55*uEnergy:0.62+0.7*uEnergy;   // la SEÑAL en penumbra (visible en proyección), la RUPTURA a plena luz
   if(uFam==4&&h11(floor(uT*13.0)+uV0.x*99.0)<0.07+0.1*uEnergy) lift*=0.2;   // MIEDO: la luz falla
-  if(t<9.0) col=shade(ro+rd*t,rd,t,bars,lift,true)*(field?1.0:0.15+0.85*smoothstep(0.1,0.6,t));   // la materia pegada a la lente se hunde en negro, no en gris
+  // la materia que llena el cuadro (muy cerca) se oscurece: el negro domina y nada se quema
+  if(t<9.0) col=shade(ro+rd*t,rd,t,bars,lift,true)*(field?mix(0.45,1.0,smoothstep(0.15,1.3,t)):mix(0.5,1.0,smoothstep(0.25,2.6,t)));   // la materia pegada a la lente se hunde en negro, no en gris
   col+=uAcc*exp(-minD*9.0)*(t>=9.0?1.0:0.0)*(uRig==3?0.16+uImpact*0.3:0.02)*(0.5+uEnergy);
   if(field) col=mix(col,uAcc*(0.004+0.045*uEnergy*uEnergy+0.1*uImpact),1.0-exp(-min(t,9.0)*0.22));   // bruma de profundidad: se lee el túnel
   // suelo negro pulido: refleja de verdad la materia, cada vez más difuso con la distancia

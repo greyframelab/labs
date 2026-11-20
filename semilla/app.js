@@ -21,7 +21,18 @@
 
   // ---------- tiempo ----------
   const now = () => ctx.currentTime;
-  const heard = () => ctx.currentTime - (ctx.outputLatency || ctx.baseLatency || 0);
+  // RELOJ SUAVE: el reloj del audio avanza a saltos (bloques de 10–40 ms); la imagen usa el reloj del sistema,
+  // enganchado al del audio con un seguimiento lento. Así el movimiento es continuo y sigue a tiempo con el sonido.
+  let clkOff = null, clkAt = -1;
+  const heard = () => {
+    const p = performance.now() / 1000;
+    if (p !== clkAt) {
+      clkAt = p;
+      const a = ctx.currentTime - (ctx.outputLatency || ctx.baseLatency || 0), off = a - p;
+      if (clkOff === null || Math.abs(off - clkOff) > 0.25) clkOff = off; else clkOff += (off - clkOff) * 0.015;
+    }
+    return p + clkOff;
+  };
   const pieceT = (s, t = heard()) => t - s.t0;
 
   // ---------- registro ----------
