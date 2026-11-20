@@ -575,7 +575,7 @@ void main(){
     this.vao = gl.createVertexArray();
     this.par = gl.getExtension('KHR_parallel_shader_compile');
     this.progs = {};
-    this.scale = 0.9; this.frame = 0; this.quality = 1;   // arranca en calidad media: sube sola si el ordenador va sobrado
+    this.scale = 1.0; this.frame = 0; this.quality = 2;   // el PC del museo es potente: arranca en calidad alta (antialias completo, sombras, reflejo); si no llegara, baja sola
     this.post = { down: this.prog(FS_VERT, DOWN, 'down'), up: this.prog(FS_VERT, UP, 'up'), fin: this.prog(FS_VERT, FINAL, 'final') };
     for (const k in this.post) this.finish(this.post[k]);
     this.sting = gl.createTexture();
