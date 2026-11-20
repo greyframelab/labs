@@ -192,6 +192,14 @@ vec3 trazos(vec2 q, float bars, float hit){
 float smin(float a,float b,float k){ float h=clamp(0.5+0.5*(b-a)/k,0.0,1.0); return mix(b,a,h)-k*h*(1.0-h); }
 float sdBox(vec3 p, vec3 b){ vec3 q=abs(p)-b; return length(max(q,0.0))+min(max(q.x,max(q.y,q.z)),0.0); }
 float gyr(vec3 p){ return dot(sin(p),cos(p.yzx)); }
+// un poliedro irregular: seis cortes casi opuestos con ruido, más dos cortes que lo astillan
+float poly(vec3 r,float s,float h){ float d=-1e9;
+  for(int i=0;i<3;i++){ vec3 e=vec3(i==0,i==1,i==2);
+    vec3 n1=normalize(e+0.55*(fract(vec3(h*31.7,h*57.3,h*83.1)*float(i+1))-0.5)), n2=normalize(-e+0.55*(fract(vec3(h*19.3,h*43.9,h*71.7)*float(i+2))-0.5));
+    float w=i==2?0.25+0.5*fract(h*29.0):0.6+0.6*fract(h*float(7+i*5));
+    d=max(d,max(dot(r,n1),dot(r,n2))-s*w); }
+  vec3 m=normalize(fract(vec3(h*97.1,h*13.7,h*41.3))-0.5); d=max(d,dot(r,m)-s*0.35);
+  return d; }
 // PERFORACIÓN irregular: un giroide deformado da celdas orgánicas de tamaños distintos (no círculos en rejilla)
 float holeF(vec3 p){ float k=7.0+5.0*uV1.w; vec3 q=p*k; q+=0.9*sin(q.yzx*0.37+uV0.x*6.0);
   float thr=1.28+0.3*gyr(p*1.7+uV0.y*5.0);              // umbral que varía: agujeros grandes y pequeños
@@ -261,21 +269,20 @@ float map(vec3 p){
     vec3 n=normalize(p);
     float sp=pow(max(0.0,sin(n.x*7.0+ph)*sin(n.y*7.0)*sin(n.z*7.0-ph)),1.6);
     d=(length(p)-0.55-sp*(0.45+0.3*uBass+0.2*uChaos))*0.45;
-  } else if(uForm==8){     // ENJAMBRE: un campo infinito de esquirlas de obsidiana suspendidas; la cámara viaja entre ellas
-    float c=1.25; vec3 r=p+vec3(0.0,0.0,uPhase*0.35);
-    vec3 id=floor(r/c+0.5); r-=id*c;
-    float h=fract(sin(dot(id,vec3(12.9,78.2,37.7))+uV0.x*40.0)*43758.5), h2=fract(h*91.7+uV0.y), h3=fract(h*13.1+uV0.z);
-    // ORDEN: cada pocos compases el enjambre se alinea en un mismo plano (un muro de placas) y la ruptura lo rompe
-    float al=smoothstep(0.62,0.95,0.5+0.5*sin(bars*0.4+uV0.x*6.28))*(1.0-uImpact);
-    r-=(vec3(h,h2,h3)-0.5)*0.4*(1.0-0.75*al);
-    r.xy=rot(mix(h*6.28+ph*(h2-0.5)*0.7,0.0,al)+uImpact*1.4*(h-0.5))*r.xy;
-    r.yz=rot(mix(h2*6.28,0.0,al)+0.35*uKick*(h3-0.5))*r.yz;
-    float sc=1.0-0.35*uImpact*h3;
-    vec3 sz=vec3(0.05+0.2*h2,0.14+0.14*h,0.012+0.02*h3)*sc;
-    d=sdBox(r,sz)-0.003;
-    gEnj=vec4(min(sz.x-abs(r.x),sz.y-abs(r.y)),h,h2,h3);
-    if(h<0.58) d=0.14;
-    return d*0.6;
+  } else if(uForm==8){     // MEMBRANA: dos pieles negras infinitas que se pliegan y respiran; la cámara se desliza en la rendija entre ellas
+    vec2 w=p.xz+vec2(0.0,uPhase*0.3);
+    float br=1.0+0.25*sin(ph*1.6)+0.35*uBass+0.5*uImpact;   // respira con el bajo, se contrae en la ruptura
+    vec2 q=w+0.45*sin(w.yx*1.1+vec2(ph*0.7,uV0.x*6.0));
+    float c1=abs(sin(dot(q,vec2(0.8,0.6))*2.3+ph*0.8)), c2=abs(sin(dot(q,vec2(-0.5,0.87))*3.1-ph*0.6+uV0.y*6.0));
+    float rip=0.04*uKick*sin(length(w)*9.0-uT*14.0);
+    float H1=(0.28*sin(q.x*1.3)*cos(q.y*1.1)-0.22*c1-0.08*c2)*br+rip;
+    vec2 u=q.yx*1.2+vec2(3.1,1.7);
+    float d1=abs(sin(dot(u,vec2(0.6,0.8))*2.0-ph*0.9)), d2=abs(sin(dot(u,vec2(0.9,-0.4))*3.4+ph*0.5));
+    float H2=(0.25*sin(u.x*1.2+ph*0.3)*cos(u.y*0.9)-0.2*d1-0.07*d2)*br-rip;
+    float lo=p.y-(-0.55+H1), hi=(0.6-H2)-p.y;
+    d=min(lo,hi);
+    gEnj=vec4(lo<hi?c1:d1,lo<hi?0.0:1.0,lo<hi?dot(q,vec2(-0.6,0.8)):dot(u,vec2(-0.8,0.6)),0.0);   // solo el pliegue mayor guarda luz
+    return d*0.45;
   } else if(uForm==9){     // LÁMINAS: estratos de vidrio negro que se desplazan
     float sp=0.32, id=floor(p.y/sp+0.5); vec3 r=p; r.y-=id*sp;
     float hw=fract(sin(id*17.3+uV0.x*31.0)*43758.5);
@@ -380,12 +387,11 @@ vec3 shade(vec3 p, vec3 rd, float t, float bars, float lift, bool full){
     col+=mix(uAcc,vec3(1.0,0.82,0.55),cr*cr*0.6)*cr*(0.18+1.1*uEnergy+2.2*uImpact)*(0.85+0.15*sin(uT*19.0+p.y*11.0)); }
   if(uFam==6){ float s=fract(p.y/0.11+0.5); col*=0.7+0.3*step(0.5,fract((p.y/0.11+0.5)*0.5)); col+=uAcc*exp(-min(s,1.0-s)*70.0)*(0.04+0.25*uEnergy*uEnergy)*lift; }
   if(uFam==7){ float sy=mod(bars*0.5,1.0)*2.4-1.2; col+=uAcc*exp(-abs(p.y-sy)*38.0)*(0.25+0.8*uEnergy)*(0.4+fr); }   // MÁQUINA: una lectura que barre
-  if(uForm==8){ map(p); float e=gEnj.x;
-    // filos de luz en algunas esquirlas (a medias) y, muy de vez en cuando, una placa encendida que ilumina el enjambre
-    float edge=exp(-max(e,0.0)/0.0035)*step(0.78,gEnj.w);
-    float core=1.0-step(0.62,gEnj.y);
-    col+=uAcc*edge*(0.12+0.55*uKick+0.8*uImpact+0.2*uEnergy);
-    col+=uAcc*core*(0.08+0.22*uKick+0.4*uImpact)*(0.5+0.5*ao)/(0.6+0.4*dot(uAcc,vec3(0.33))); }
+  if(uForm==8){ map(p);
+    // la luz vive atrapada en el fondo de los pliegues: un hilo fino que late con el bombo y se abre en la ruptura
+    float run=pow(0.5+0.5*sin(gEnj.z*1.3-uT*1.7+gEnj.y*3.0),3.0);   // la luz recorre el pliegue a tramos, no lo dibuja entero
+    float fold=exp(-gEnj.x/(0.026+0.05*uImpact))*mix(run,1.0,0.35+0.6*uImpact)*1.8;
+    col+=uAcc*fold*(0.08+0.55*uKick+0.9*uImpact+0.3*uEnergy)*(0.35+0.65*ao); }
   if(uSurf==4&&uForm<8&&uComp==0){ float hl=holeF(p); float inside=smoothstep(-0.002,-0.03,hl);   // dentro del hueco, el acento: se enciende con el pulso
     col+=uAcc*inside*(0.03+0.35*uKick+0.5*uImpact+0.1*uEnergy)*(0.3+0.7*ao); }
   if(uFam==1){ // AGUA: cáusticas, la luz que atraviesa un agua invisible y se enreda sobre la materia negra
@@ -439,6 +445,9 @@ void main(){
       if(tj>bd){ bd=tj; best=dj; } }
     ta=ro+best; lens=1.05+0.6*fract(K*11.0);
   }
+  if(uForm==8){ float by=0.0, bm=-1e9;
+    for(int j=0;j<10;j++){ vec3 c=vec3(ro.x+0.2*float(j/5),-0.36+0.08*float(j%5)*2.0,ro.z); float m=map(c); if(m>bm){ bm=m; by=c.y; ro.x=c.x; } }
+    ro.y=by; ta=vec3(ta.x,ro.y+(K-0.5)*0.22,ta.z); if(length(ta.xz-ro.xz)<0.3) ta.xz=ro.xz+dir.xz; }   // MEMBRANA: siempre dentro de la rendija, mirando a lo largo de ella
   if(uForm==9&&uShot!=3){ ro.y=(floor(ro.y/0.32)+0.5)*0.32; ta.y=ro.y+(K-0.5)*0.3; }
   for(int j=0;j<6;j++){ float dc=map(ro); if(dc>0.06) break; ro+=normalize(ro-ta+vec3(0.0,0.001,0.0))*0.12; }
   vec3 fw=normalize(ta-ro), rt=normalize(cross(fw,abs(fw.y)>0.95?vec3(0,0,1):vec3(0,1,0))), up=cross(rt,fw);
@@ -455,7 +464,7 @@ void main(){
     if(d<0.0004*t+0.0002||t>9.0) break; t+=d*(uQ>0.5?0.9:1.0); }
   float bars=uT/uBar;
   vec3 col=vec3(0.0);
-  float lift=uForm==8?0.62+0.3*uEnergy:field?0.95+0.45*uEnergy:0.78+0.5*uEnergy;   // ENJAMBRE: obsidiana en penumbra, la luz la ponen sus filos
+  float lift=uForm==8?0.82+0.4*uEnergy:field?0.95+0.45*uEnergy:0.78+0.5*uEnergy;   // MEMBRANA: piel negra en penumbra, la luz la ponen los pliegues
     // la ruptura se nota en el ritmo y el color, no en inundar de luz   // la SEÑAL en penumbra (visible en proyección), la RUPTURA a plena luz
   if(uFam==4&&h11(floor(uT*13.0)+uV0.x*99.0)<0.07+0.1*uEnergy) lift*=0.2;   // MIEDO: la luz falla
   // la materia que llena el cuadro (muy cerca) se oscurece: el negro domina y nada se quema
