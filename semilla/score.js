@@ -323,7 +323,7 @@
     const K = h4(P.seed, 77, i, 3), r = h4(P.seed, 78, i, 5);
     let type = P.sp.form >= 8 && P.sp.form <= 10 ? (r < 0.25 ? 3 : 1) : r < 0.45 ? 1 : r < 0.7 ? 2 : r < 0.85 ? 3 : 0;
     // PALABRA: fragmentos de letra en macro; solo en el ECO la cámara se aleja y se lee entera
-    if (P.sp.form === 11) type = i === CUTS.length - 1 ? 0 : r < 0.6 ? 1 : r < 0.85 ? 2 : 3;
+    if (P.sp.form === 11) type = i === 0 || i === CUTS.length - 1 ? 0 : r < 0.6 ? 1 : r < 0.85 ? 2 : 3;   // al nacer y en el ECO, la palabra entera
     return { i, type, K, since: bars - CUTS[i] };
   }
   window.SEMILLA = { MATRIX, matrix, FAMS, KITS, TEXS, CUTS, shotAt, MATS, RIGS, PALETTES, ACCENTS, ACCENT_NAMES, SPECIES, REFS, ACTS, NOTE, BARS, newCode, cleanCode, generate, env, warp, energyAt, hashStr, mulberry, h4 };
