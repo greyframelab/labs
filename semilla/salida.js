@@ -45,6 +45,7 @@
     pacer.cut(sh !== lastShot, dt); lastShot = sh;   // la resolución solo cambia en un corte de plano
     try { eng.draw(slots, Object.assign({}, last.look, { sting: wc, stingA })); } catch (e) { console.error(e); }
     pacer.done(ts);
+    { const ls = last.slots[last.slots.length - 1]; if (top) window.SemillaCodigo.draw(document.getElementById('code'), top.P, ls.t + late, top.P.word, !!(last.look && last.look.code)); }
   }
   requestAnimationFrame(frame);
 })();

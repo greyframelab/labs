@@ -11,15 +11,25 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;cursor:none}
 #c{position:fixed;inset:0;width:100%;height:100%;display:block}
 #hint{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);font:400 10px 'JetBrains Mono',ui-monospace,monospace;letter-spacing:.24em;color:#8f8c86;text-align:center;line-height:1.9;transition:opacity .6s;cursor:default}
 #hint.off{opacity:0}
+.cv{position:absolute;left:2.4%;bottom:3.2%;margin:0;white-space:pre;display:flex;flex-direction:column;font:400 clamp(8px,1.05vh,13px)/1.65 'JetBrains Mono',ui-monospace,monospace;letter-spacing:.04em;color:rgba(242,240,234,.5);pointer-events:none;transition:opacity .5s;z-index:3}
+.cv.off{opacity:0}
+.cv s,.cv u{text-decoration:none;color:rgba(242,240,234,.3)}
+.cv i,.cv b,.cv em{font-style:normal;color:var(--acc,#F2F0EA)}
+.cv b{font-weight:600}
+.cv>*{display:block}
+.cv .now{color:rgba(242,240,234,.88)}
+
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
+<div class="cv" id="code"></div>
 <div id="hint">SALIDA DE VØID_LOOM · SEMILLA<br>LLEVA ESTA VENTANA AL PROYECTOR Y HAZ DOBLE CLIC: PANTALLA COMPLETA</div>
 <canvas id="w" hidden></canvas>
 <script src="score.js"></script>
 <script src="engine.js"></script>
 <script src="palabra.js"></script>
+<script src="codigo.js"></script>
 <script src="salida.js"></script>
 </body>
 </html>
