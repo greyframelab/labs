@@ -134,7 +134,7 @@
     // composición y superficie: la misma forma, multiplicada y tallada de maneras distintas (variedad y complejidad)
     const rc = h4(S, 320, 1, 1), rs = h4(S, 321, 2, 2);
     vis.comp = rc < 0.38 ? 0 : rc < 0.58 ? 1 : rc < 0.79 ? 2 : 3;   // SOLO, ESPEJO, ANILLO, CONSTELACIÓN
-    vis.surf = rs < 0.35 ? 0 : rs < 0.57 ? 1 : rs < 0.79 ? 2 : 3;   // LISA, RANURADA, PANELES, ESTRÍAS
+    vis.surf = rs < 0.3 ? 0 : rs < 0.48 ? 1 : rs < 0.64 ? 2 : rs < 0.82 ? 3 : 4;   // LISA, RANURADA, PANELES, ESTRÍAS, PERFORADA (irregular, con luz dentro)
     const fk = FAM_KIT[FAMS[fam]];
     let kit = KITS[fk && h4(S, 302, 0, 0) < 0.7 ? fk[0] : Math.floor(h4(S, 303, 0, 0) * KITS.length)];
     let tex = TEXS[fk && h4(S, 304, 0, 0) < 0.6 ? fk[1] : Math.floor(h4(S, 305, 0, 0) * TEXS.length)];

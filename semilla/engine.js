@@ -192,6 +192,10 @@ vec3 trazos(vec2 q, float bars, float hit){
 float smin(float a,float b,float k){ float h=clamp(0.5+0.5*(b-a)/k,0.0,1.0); return mix(b,a,h)-k*h*(1.0-h); }
 float sdBox(vec3 p, vec3 b){ vec3 q=abs(p)-b; return length(max(q,0.0))+min(max(q.x,max(q.y,q.z)),0.0); }
 float gyr(vec3 p){ return dot(sin(p),cos(p.yzx)); }
+// PERFORACIÓN irregular: un giroide deformado da celdas orgánicas de tamaños distintos (no círculos en rejilla)
+float holeF(vec3 p){ float k=7.0+5.0*uV1.w; vec3 q=p*k; q+=0.9*sin(q.yzx*0.37+uV0.x*6.0);
+  float thr=1.28+0.3*gyr(p*1.7+uV0.y*5.0);              // umbral que varía: agujeros grandes y pequeños
+  return (thr-gyr(q))/(k*1.6); }
 vec3 twistY(vec3 p,float k){ float c=cos(k*p.y), s=sin(k*p.y); return vec3(c*p.x-s*p.z,p.y,s*p.x+c*p.z); }
 float tw(){ return (uV1.x-0.5)*2.0*(0.5+uChaos); }
 float bars0(){ return uT/uBar; }
@@ -301,6 +305,7 @@ float map(vec3 p){
   else if(uSurf==2&&uForm!=11){ float k=6.0+5.0*uV1.w; vec3 f=abs(fract(p*k)-0.5); float g=(0.5-max(f.x,max(f.y,f.z)))/k-0.003; d=max(d,min(-g,d+0.02)); }
   // ESTRÍAS: surcos finos en espiral que siguen la forma (antes perforaciones redondas: parecían letras «o» sueltas)
   else if(uSurf==3&&uForm!=11){ float k=26.0+14.0*uV1.w; float g=(0.5-abs(fract((p.y+atan(p.z,p.x)*0.08)*k)-0.5))/k-0.003; d=max(d,min(-g,d+0.015)); }
+  else if(uSurf==4&&uForm!=11){ float hl=holeF(p); d=max(d,min(hl,d+0.05)); }   // PERFORADA: huecos profundos e irregulares
   d*=cs; if(uComp==3&&uForm<8) d*=0.7;
   // AGUA: oleaje cruzado que recorre la materia (sin anillos concéntricos: hacían una espiral)
   if(uFam==1) d+=(0.006+0.006*uBass)*sin(dot(p,vec3(0.8,0.3,0.5))*11.0-uT*1.9)*sin(dot(p,vec3(-0.4,0.6,0.7))*8.0+uT*1.3)+0.016*sin(p.x*2.3+uT*0.7)*sin(p.y*1.9-uT*0.5);
@@ -364,6 +369,8 @@ vec3 shade(vec3 p, vec3 rd, float t, float bars, float lift, bool full){
     col+=mix(uAcc,vec3(1.0,0.82,0.55),cr*cr*0.6)*cr*(0.18+1.1*uEnergy+2.2*uImpact)*(0.85+0.15*sin(uT*19.0+p.y*11.0)); }
   if(uFam==6){ float s=fract(p.y/0.11+0.5); col*=0.7+0.3*step(0.5,fract((p.y/0.11+0.5)*0.5)); col+=uAcc*exp(-min(s,1.0-s)*70.0)*(0.04+0.25*uEnergy*uEnergy)*lift; }
   if(uFam==7){ float sy=mod(bars*0.5,1.0)*2.4-1.2; col+=uAcc*exp(-abs(p.y-sy)*38.0)*(0.25+0.8*uEnergy)*(0.4+fr); }   // MÁQUINA: una lectura que barre
+  if(uSurf==4&&uForm<8&&uComp==0){ float hl=holeF(p); float inside=smoothstep(-0.002,-0.03,hl);   // dentro del hueco, el acento: se enciende con el pulso
+    col+=uAcc*inside*(0.03+0.35*uKick+0.5*uImpact+0.1*uEnergy)*(0.3+0.7*ao); }
   if(uFam==1){ // AGUA: cáusticas, la luz que atraviesa un agua invisible y se enreda sobre la materia negra
     vec2 cq=(abs(n.y)>0.6?p.xz:abs(n.x)>0.6?p.yz:p.xy)*3.2; float ct=uT*0.4;
     for(int k=0;k<3;k++){ cq+=0.55*vec2(sin(cq.y*1.7+ct+float(k)),cos(cq.x*1.3-ct*0.8+float(k)*1.7)); }
