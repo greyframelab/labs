@@ -24,7 +24,7 @@
     { id: 'fractura', form: 5, name: 'FRACTURA', idea: 'un bloque que se abre en lonchas en la ruptura', acc: ['rojo', 'magenta', 'ambar'], w: 3 },
     { id: 'espina', form: 6, name: 'ESPINA', idea: 'un cuerpo erizado que se defiende de la luz', acc: ['rojo', 'verde', 'violeta'], w: 2 },
     { id: 'monolito', form: 7, name: 'MONOLITO', idea: 'una losa en el vacío y una luz que la recorre', acc: ['blanco', 'rojo', 'cian'], w: 1 },
-    { id: 'red', form: 8, name: 'RED', idea: 'una superficie mínima infinita, vista desde dentro', acc: ['cian', 'rojo', 'violeta', 'ambar'], w: 5 },
+    { id: 'enjambre', form: 8, name: 'ENJAMBRE', idea: 'un campo infinito de esquirlas negras suspendidas', acc: ['cian', 'rojo', 'violeta', 'ambar'], w: 4 },
     { id: 'laminas', form: 9, name: 'LÁMINAS', idea: 'estratos de vidrio negro que se desplazan', acc: ['rojo', 'blanco', 'cian'], w: 4 },
     { id: 'filos', form: 10, name: 'FILOS', idea: 'un bosque de cuchillas que corta la luz', acc: ['ambar', 'rojo', 'verde'], w: 0 },
     { id: 'palabra', form: 11, name: 'PALABRA', idea: 'la palabra dicha convertida en materia negra', acc: ['blanco', 'rojo', 'cian'], w: 0 },
@@ -126,7 +126,8 @@
       mat: Math.floor(R() * 4), rig: Math.floor(R() * 4),
     };
     if (F.mat != null) vis.mat = F.mat; if (F.rig != null) vis.rig = F.rig;
-    if (sp.form >= 8 && sp.form <= 10 && vis.mat === 3) vis.mat = 1;   // en los campos el terciopelo se pierde en el negro: obsidiana
+    if (sp.form >= 8 && sp.form <= 10 && vis.mat === 3) vis.mat = 1;
+    if (sp.form === 8 && vis.mat === 2) vis.mat = 1;   // ENJAMBRE: nada de cromo, las esquirlas son obsidiana o laca negra   // en los campos el terciopelo se pierde en el negro: obsidiana
     // tratamiento por sentido: la palabra lo decide; sin palabra, casi la mitad de las piezas llevan uno al azar
     let fam = F.fam && FAMS.indexOf(F.fam) > 0 ? FAMS.indexOf(F.fam) : 0;
     if (!F.fam && h4(S, 300, 1, 2) < 0.45) fam = 1 + Math.floor(h4(S, 301, 3, 4) * 10);
