@@ -208,6 +208,26 @@ vec3 twistY(vec3 p,float k){ float c=cos(k*p.y), s=sin(k*p.y); return vec3(c*p.x
 float tw(){ return (uV1.x-0.5)*2.0*(0.5+uChaos); }
 float bars0(){ return uT/uBar; }
 vec4 gEnj=vec4(1.0);
+// NÚCLEO: arquitectura fractal (pliegues caleidoscópicos iterados) que se reordena con el pulso.
+// gEnj.x guarda lo cerca que pasa el punto de las juntas internas: ahí vive la luz.
+float nucleo(vec3 p){
+  float ph=uPhase, s=1.0, trap=1e9;
+  float a1=0.42+0.22*uV0.x+0.12*sin(ph*0.5), a2=0.28+0.25*uV0.y+0.1*cos(ph*0.37);
+  vec3 off=vec3(1.3,0.62+0.25*uV0.z,0.36+0.2*uV0.w)*(1.0+0.08*uBass+0.3*uImpact);   // en la ruptura la estructura se abre
+  mat2 r1=rot(a1), r2=rot(a2);
+  for(int i=0;i<3;i++){
+    p=abs(p);
+    if(p.x<p.y) p.xy=p.yx; if(p.x<p.z) p.xz=p.zx; if(p.y<p.z) p.yz=p.zy;
+    p.xy=r1*p.xy; p.yz=r2*p.yz;
+    p=p*2.0-off;
+    if(p.z<-0.5*off.z) p.z+=off.z;
+    s*=2.0;
+    trap=min(trap,length(p.yz)/s*4.0);
+  }
+  gEnj=vec4(trap,0.0,0.0,0.0);
+  vec3 b=abs(p)-vec3(1.2,0.32+0.12*uV0.z,0.3);   // vigas: la estructura queda abierta, con vacío dentro
+  return (length(max(b,0.0))+min(max(b.x,max(b.y,b.z)),0.0)-0.04)/s;
+}
 float map(vec3 p){
   float ph=uPhase;
   if(uFam==7){ float k=uPhase*4.0; ph=(floor(k)+smoothstep(0.82,1.0,fract(k)))/4.0; }   // MÁQUINA: gira a pasos exactos
@@ -269,20 +289,9 @@ float map(vec3 p){
     vec3 n=normalize(p);
     float sp=pow(max(0.0,sin(n.x*7.0+ph)*sin(n.y*7.0)*sin(n.z*7.0-ph)),1.6);
     d=(length(p)-0.55-sp*(0.45+0.3*uBass+0.2*uChaos))*0.45;
-  } else if(uForm==8){     // MEMBRANA: dos pieles negras infinitas que se pliegan y respiran; la cámara se desliza en la rendija entre ellas
-    vec2 w=p.xz+vec2(0.0,uPhase*0.3);
-    float br=1.0+0.25*sin(ph*1.6)+0.35*uBass+0.5*uImpact;   // respira con el bajo, se contrae en la ruptura
-    vec2 q=w+0.45*sin(w.yx*1.1+vec2(ph*0.7,uV0.x*6.0));
-    float c1=abs(sin(dot(q,vec2(0.8,0.6))*2.3+ph*0.8)), c2=abs(sin(dot(q,vec2(-0.5,0.87))*3.1-ph*0.6+uV0.y*6.0));
-    float rip=0.04*uKick*sin(length(w)*9.0-uT*14.0);
-    float H1=(0.28*sin(q.x*1.3)*cos(q.y*1.1)-0.22*c1-0.08*c2)*br+rip;
-    vec2 u=q.yx*1.2+vec2(3.1,1.7);
-    float d1=abs(sin(dot(u,vec2(0.6,0.8))*2.0-ph*0.9)), d2=abs(sin(dot(u,vec2(0.9,-0.4))*3.4+ph*0.5));
-    float H2=(0.25*sin(u.x*1.2+ph*0.3)*cos(u.y*0.9)-0.2*d1-0.07*d2)*br-rip;
-    float lo=p.y-(-0.55+H1), hi=(0.6-H2)-p.y;
-    d=min(lo,hi);
-    gEnj=vec4(lo<hi?c1:d1,lo<hi?0.0:1.0,lo<hi?dot(q,vec2(-0.6,0.8)):dot(u,vec2(-0.8,0.6)),0.0);   // solo el pliegue mayor guarda luz
-    return d*0.45;
+  } else if(uForm==8){     // NÚCLEO: arquitectura fractal de obsidiana
+    vec3 r=p; r.xz=rot(ph*0.25)*r.xz; r.xy=rot(0.15*sin(ph*0.3))*r.xy;
+    return nucleo(vec3(r.x,r.y/1.75,r.z)/0.8)*0.8;   // alto como un monolito: se impone en el encuadre
   } else if(uForm==9){     // LÁMINAS: estratos de vidrio negro que se desplazan
     float sp=0.32, id=floor(p.y/sp+0.5); vec3 r=p; r.y-=id*sp;
     float hw=fract(sin(id*17.3+uV0.x*31.0)*43758.5);
@@ -363,7 +372,7 @@ vec3 shade(vec3 p, vec3 rd, float t, float bars, float lift, bool full){
   float sh=vhq&&uMat!=3?mix(0.35,1.0,shadow(p+n*0.01,Ld)):1.0;
   float key, acc; rigLight(p,r,n,fr,bars,key,acc);
   key+=pow(fr,2.2)*0.22+exp(-pow((dot(r,normalize(vec3(-0.7,0.2,0.3)))-0.9)*9.0,2.0))*0.2;   // luz de filo que acompaña a la cámara
-  if(uForm<8) key+=0.22*pow(fr,1.6)+0.06;   // un filo de luz siempre dibuja la forma: en sala nunca se pierde en el negro
+  if(uForm<=8) key+=0.22*pow(fr,1.6)+0.06;   // un filo de luz siempre dibuja la forma: en sala nunca se pierde en el negro
   if(uForm==11){ float eco=max(smoothstep(11.5,12.8,bars)*(1.0-smoothstep(15.0,15.8,bars)),1.0-smoothstep(1.4,2.6,bars)); key+=0.4*pow(fr,1.4)+0.12+0.9*eco*(0.4+pow(fr,0.8));   // la palabra siempre tiene un filo de luz que la dibuja
     float sx=(bars-11.3)/0.16*uAt.z-uWL.x*uAt.z*0.5;   // la letra que se acaba de fijar se enciende un instante
     key+=0.55*exp(-pow((p.x-sx)/(uAt.z*0.7),2.0))*step(11.2,bars)*(1.0-step(13.2,bars)); }
@@ -387,11 +396,9 @@ vec3 shade(vec3 p, vec3 rd, float t, float bars, float lift, bool full){
     col+=mix(uAcc,vec3(1.0,0.82,0.55),cr*cr*0.6)*cr*(0.18+1.1*uEnergy+2.2*uImpact)*(0.85+0.15*sin(uT*19.0+p.y*11.0)); }
   if(uFam==6){ float s=fract(p.y/0.11+0.5); col*=0.7+0.3*step(0.5,fract((p.y/0.11+0.5)*0.5)); col+=uAcc*exp(-min(s,1.0-s)*70.0)*(0.04+0.25*uEnergy*uEnergy)*lift; }
   if(uFam==7){ float sy=mod(bars*0.5,1.0)*2.4-1.2; col+=uAcc*exp(-abs(p.y-sy)*38.0)*(0.25+0.8*uEnergy)*(0.4+fr); }   // MÁQUINA: una lectura que barre
-  if(uForm==8){ map(p);
-    // la luz vive atrapada en el fondo de los pliegues: un hilo fino que late con el bombo y se abre en la ruptura
-    float run=pow(0.5+0.5*sin(gEnj.z*1.3-uT*1.7+gEnj.y*3.0),3.0);   // la luz recorre el pliegue a tramos, no lo dibuja entero
-    float fold=exp(-gEnj.x/(0.026+0.05*uImpact))*mix(run,1.0,0.35+0.6*uImpact)*1.8;
-    col+=uAcc*fold*(0.08+0.55*uKick+0.9*uImpact+0.3*uEnergy)*(0.35+0.65*ao); }
+  if(uForm==8){ map(p);   // NÚCLEO: la luz vive en las juntas internas y late con el bombo; en la ruptura la estructura arde por dentro
+    float seam=exp(-gEnj.x/(0.02+0.04*uImpact));
+    col+=uAcc*seam*(0.22+1.1*uKick+1.8*uImpact+0.6*uEnergy)*(0.35+0.65*ao); }
   if(uSurf==4&&uForm<8&&uComp==0){ float hl=holeF(p); float inside=smoothstep(-0.002,-0.03,hl);   // dentro del hueco, el acento: se enciende con el pulso
     col+=uAcc*inside*(0.03+0.35*uKick+0.5*uImpact+0.1*uEnergy)*(0.3+0.7*ao); }
   if(uFam==1){ // AGUA: cáusticas, la luz que atraviesa un agua invisible y se enreda sobre la materia negra
@@ -414,7 +421,7 @@ void main(){
   vec3 dir=normalize(vec3(cos(K*31.0),0.35*sin(K*17.0),sin(K*31.0)));
   if(uForm==11) dir=normalize(vec3(dir.x*0.8,dir.y,abs(dir.z)+0.45));   // la palabra se mira de frente: detrás solo hay su estela
   vec3 ro, ta; float lens;
-  bool field=uForm>=8&&uForm<=10;
+  bool field=uForm>=9&&uForm<=10;   // NÚCLEO (8) es un objeto: se rodea
   if(uFam==2) sp+=vec2(0.0025*sin(q.y*55.0+uT*8.0)*(0.3+uEnergy),0.0);   // FUEGO: el aire tiembla de calor
   if(uFam==9&&bars0()>=8.0&&bars0()<12.0) sp+=(vec2(h11(floor(uT*24.0)),h11(floor(uT*24.0)+7.0))-0.5)*0.012*uImpact;
   if(uShot==1){            // MACRO: la materia tan cerca que deja de ser un objeto
@@ -431,6 +438,7 @@ void main(){
     ro=vec3(0.3*sin(K*7.0),3.2-push*3.0,0.25); ta=vec3(0.0); lens=1.9+0.8*fract(K*3.0);
   } else {                 // GENERAL
     float ca=uPhase+uV0.w*6.0, dist=(4.1+1.5*uV1.y)/(0.75+0.35*uZoom)-push*2.0;
+    if(uForm==8) dist*=1.0+0.55*step(0.5,fract(K*3.0));   // NÚCLEO: a veces se ve entero, imponente
     ro=vec3(sin(ca)*0.55,0.18+0.14*cos(ca)+0.3*(uV1.z-0.5),dist); ta=vec3(uOff*0.55,0.0); lens=1.5+0.6*uV1.w;
     if(uForm==11){ ro=vec3(sin(ca)*0.4,0.1+0.1*cos(ca),max(dist,uWH.x*1.7*1.3/(0.5*min(uRes.x/uRes.y,1.8))+uWH.w)+0.4-push*1.0); ta=vec3(0.0); lens=1.7; }
   }
@@ -445,9 +453,6 @@ void main(){
       if(tj>bd){ bd=tj; best=dj; } }
     ta=ro+best; lens=1.05+0.6*fract(K*11.0);
   }
-  if(uForm==8){ float by=0.0, bm=-1e9;
-    for(int j=0;j<10;j++){ vec3 c=vec3(ro.x+0.2*float(j/5),-0.36+0.08*float(j%5)*2.0,ro.z); float m=map(c); if(m>bm){ bm=m; by=c.y; ro.x=c.x; } }
-    ro.y=by; ta=vec3(ta.x,ro.y+(K-0.5)*0.22,ta.z); if(length(ta.xz-ro.xz)<0.3) ta.xz=ro.xz+dir.xz; }   // MEMBRANA: siempre dentro de la rendija, mirando a lo largo de ella
   if(uForm==9&&uShot!=3){ ro.y=(floor(ro.y/0.32)+0.5)*0.32; ta.y=ro.y+(K-0.5)*0.3; }
   for(int j=0;j<6;j++){ float dc=map(ro); if(dc>0.06) break; ro+=normalize(ro-ta+vec3(0.0,0.001,0.0))*0.12; }
   vec3 fw=normalize(ta-ro), rt=normalize(cross(fw,abs(fw.y)>0.95?vec3(0,0,1):vec3(0,1,0))), up=cross(rt,fw);
@@ -464,7 +469,7 @@ void main(){
     if(d<0.0004*t+0.0002||t>9.0) break; t+=d*(uQ>0.5?0.9:1.0); }
   float bars=uT/uBar;
   vec3 col=vec3(0.0);
-  float lift=uForm==8?0.82+0.4*uEnergy:field?0.95+0.45*uEnergy:0.78+0.5*uEnergy;   // MEMBRANA: piel negra en penumbra, la luz la ponen los pliegues
+  float lift=uForm==8?0.8+0.5*uEnergy:field?0.95+0.45*uEnergy:0.78+0.5*uEnergy;   // NÚCLEO: obsidiana en penumbra, la luz la ponen las juntas
     // la ruptura se nota en el ritmo y el color, no en inundar de luz   // la SEÑAL en penumbra (visible en proyección), la RUPTURA a plena luz
   if(uFam==4&&h11(floor(uT*13.0)+uV0.x*99.0)<0.07+0.1*uEnergy) lift*=0.2;   // MIEDO: la luz falla
   // la materia que llena el cuadro (muy cerca) se oscurece: el negro domina y nada se quema
@@ -475,7 +480,8 @@ void main(){
   col+=uAcc*exp(-minD*9.0)*(t>=9.0?1.0:0.0)*(uRig==3?0.16+uImpact*0.3:0.02)*(0.5+uEnergy);
   if(field) col=mix(col,uAcc*(0.003+0.018*uEnergy*uEnergy+0.06*uImpact),1.0-exp(-min(t,9.0)*0.13));   // bruma de profundidad: se lee el túnel
   // suelo negro pulido: refleja de verdad la materia, cada vez más difuso con la distancia
-  if(rd.y<0.0&&!field&&uQ>1.5){ float tp=(-1.0-ro.y)/rd.y; if(tp>0.0&&(tp<t||t>=9.0)){
+  // la PALABRA no se refleja: su reflejo salía del revés y el desenfoque lo convertía en discos rojos con la palabra dentro
+  if(rd.y<0.0&&!field&&uQ>1.5&&uForm!=11){ float tp=(-1.0-ro.y)/rd.y; if(tp>0.0&&(tp<t||t>=9.0)){
     vec3 pp=ro+rd*tp, rr=reflect(rd,vec3(0.0,1.0,0.0));
     float tr=0.02, dr=1.0; for(int i=0;i<32;i++){ dr=map(pp+rr*tr); if(dr<0.002||tr>5.0) break; tr+=dr; }
     float fade=exp(-length(pp.xz)*0.7);
@@ -687,11 +693,32 @@ void main(){
           else if (i < ids.length) this.species(ids[i++]);             // sin paralelo: una por vuelta, para que la pantalla respire
           const ok = ids.filter((id) => this.progs[id] && this.done(this.progs[id])).length;
           onStep && onStep(ok, ids.length);
-          if (ok === ids.length) res(); else setTimeout(step, 16);
+          if (ok === ids.length) { this.prime(ids); res(); } else setTimeout(step, 16);
         } catch (e) { rej(e); }
       };
       step();
     });
+  };
+  // CEBADO: compilar no basta. La gráfica (sobre todo con DirectX) termina de preparar cada programa en su PRIMER dibujo,
+  // y eso congelaba la imagen 1–3 s al nacer una forma nueva (p. ej. al decir una palabra en PÚBLICO).
+  // En la carga se dibuja cada forma una vez en un lienzo diminuto con el mismo formato que la escena.
+  E.prime = function (ids) {
+    const gl = this.gl; if (!gl || !this.vao) return;
+    try {
+      const f = this.fbo(4, 4);
+      if (!this.blankTex) { this.blankTex = gl.createTexture(); gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, this.blankTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 1, 1, 0, gl.RED, gl.UNSIGNED_BYTE, new Uint8Array([255])); this.texParams(gl.LINEAR); gl.activeTexture(gl.TEXTURE0); }
+      gl.bindVertexArray(this.vao); gl.bindFramebuffer(gl.FRAMEBUFFER, f.fb); gl.viewport(0, 0, 4, 4);
+      gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+      for (const id of ids) {
+        const pr = this.progs[id]; if (!pr || !pr.ready) continue;
+        gl.useProgram(pr.p);
+        gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, this.blankTex); if (pr.u.uWord) gl.uniform1i(pr.u.uWord, 3); gl.activeTexture(gl.TEXTURE0);
+        if (pr.u.uRes) gl.uniform2f(pr.u.uRes, 4, 4);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      }
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, this.half ? gl.UNSIGNED_BYTE : gl.FLOAT, this.half ? new Uint8Array(4) : new Float32Array(4));   // espera a que la gráfica termine aquí, en la carga
+      gl.disable(gl.BLEND); gl.bindFramebuffer(gl.FRAMEBUFFER, null); this.free(f);
+    } catch (e) { console.warn('cebado', e); }
   };
   // LA PALABRA COMO MATERIA: las letras se dibujan en un lienzo y se convierten en un campo de distancias
   // (transformada de distancia exacta, Felzenszwalb) que el shader extruye en 3D.

@@ -16,7 +16,16 @@
     for (let i = 0; i < N; i++) { const x = (i / (N - 1)) * 2 - 1; c[i] = Math.tanh(drive * x) / Math.tanh(drive); }
     ws.curve = c; ws.oversample = '2x'; return ws;
   }
+  // las salas se guardan: generarlas en cada pieza bloqueaba un instante el hilo principal justo al nacer la pieza
+  const IRS = new Map();
   function makeIR(ctx, dur, damp, seed) {
+    const key = ctx.sampleRate + ':' + (Math.round(dur * 10) / 10) + ':' + damp + ':' + (Math.abs(Math.round(seed)) % 4);
+    if (IRS.has(key)) return IRS.get(key);
+    const b = makeIR0(ctx, Math.round(dur * 10) / 10, damp, Math.abs(Math.round(seed)) % 4);
+    if (IRS.size > 24) IRS.delete(IRS.keys().next().value);
+    IRS.set(key, b); return b;
+  }
+  function makeIR0(ctx, dur, damp, seed) {
     const sr = ctx.sampleRate, n = Math.floor(dur * sr), b = ctx.createBuffer(2, n, sr);
     const R = window.SEMILLA.mulberry(seed * 7919 + 17), pre = Math.floor(0.018 * sr);
     const a = Math.exp((-2 * Math.PI * damp) / sr);
