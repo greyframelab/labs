@@ -1,0 +1,27 @@
+<!doctype html><meta charset="utf-8"><title>ROSTRO · render de audio</title>
+<script type="module">
+// Render del audio de una pieza completa sin tiempo real (para medirlo): ?code=XXXXXX
+import { crearPieza } from '../partitura.js';
+import { crearAnimador } from '../anim.js';
+import { crearSonido } from '../sonido.js';
+globalThis.ROSTRO_OFF = (new URLSearchParams(location.search).get('off') || '').split(',');
+const q = new URLSearchParams(location.search), code = q.get('code') || 'ROSTRO';
+const P = crearPieza(code, q.get('estilo') ? { estilo: q.get('estilo') } : {});
+const SR = 48000, ctx = new OfflineAudioContext(2, Math.ceil((P.dur + 3) * SR), SR);
+const snd = crearSonido(ctx); snd.pieza(P, 0); snd.ambiente(q.get('amb') !== '0');
+const an = crearAnimador(P, 3); const T0 = 0.1;
+const imp = P.events.find(e => e.k === 'impact'); if (imp) snd.oleaje(T0 + imp.t - P.BAR, T0 + imp.t);
+for (let t = 0; t <= P.dur + 2.5; t += 1 / 60) {
+  const st = an.avanzar(Math.min(t, P.dur), e => snd.golpe(e, T0 + e.t, P));
+  const fade = Math.max(0, Math.min(1, (P.dur + 2.5 - t) / 2.5));
+  snd.vivo(st, T0 + t, fade);
+}
+const buf = await ctx.startRendering();
+const L = buf.getChannelData(0), R = buf.getChannelData(1), n = L.length, dv = new DataView(new ArrayBuffer(44 + n * 4));
+const w = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+w(0, 'RIFF'); dv.setUint32(4, 36 + n * 4, true); w(8, 'WAVEfmt '); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 2, true);
+dv.setUint32(24, SR, true); dv.setUint32(28, SR * 4, true); dv.setUint16(32, 4, true); dv.setUint16(34, 16, true); w(36, 'data'); dv.setUint32(40, n * 4, true);
+for (let i = 0; i < n; i++) { dv.setInt16(44 + i * 4, Math.max(-1, Math.min(1, L[i])) * 32767, true); dv.setInt16(46 + i * 4, Math.max(-1, Math.min(1, R[i])) * 32767, true); }
+const b64 = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result.split(',')[1]); fr.readAsDataURL(new Blob([dv.buffer])); });
+window.result = { b64, P: { code: P.code, estilo: P.estilo, bpm: P.bpm, dur: P.dur, acts: P.acts, arco: P.arco, root: P.root } };
+</script>
