@@ -18,21 +18,37 @@ Una semilla decide el estilo de sonido, el tempo, el acento, la raíz y el arco 
 - **RUPTURA:** tras el impacto, dos emociones extremas (furia, grito, pánico, risa, dolor o miedo).
 - **ECO:** la cara se derrumba (angustia, tristeza o reposo) y vuelve a negro.
 
-Doce expresiones construidas sobre el escaneo: REPOSO, MIEDO, FURIA, DOLOR, ASCO, GRITO, ANGUSTIA, SORPRESA, TRISTEZA, RISA, DESPRECIO y PÁNICO.
+## La cabeza
+- **ICT Face Model** (ICT-FaceKit, USC Institute for Creative Technologies, MIT): una cara media registrada a partir de escaneos de light stage. No es una persona concreta. Trae globos oculares, dientes, encías y lengua: la boca se abre de verdad.
+- **53 expresiones anatómicas** (nombres de ARKit, separadas en izquierda y derecha) mezcladas en la gráfica como morph targets. Encima, el giro de la cabeza sobre el cuello, el temblor y lo que empuja bajo la piel.
+- **Piel:** laca negra con poros y arrugas procedurales que nacen con cada expresión (frente, entrecejo, patas de gallo, surco nasolabial, nariz, barbilla y tendones del cuello). Ojos de cristal negro.
+- **Doce emociones**, cada una con su pose y **su propia manera de moverse**:
+  - MIEDO tiembla, retrocede y los ojos saltan;
+  - FURIA sacude la cabeza y embiste con el bombo;
+  - GRITO sostiene la boca con vibrato y se va hacia atrás;
+  - RISA rebota y cabecea;
+  - TRISTEZA solloza y mira al suelo;
+  - ANGUSTIA respira hondo y le tiembla la barbilla;
+  - PÁNICO busca sin parar y jadea;
+  - SORPRESA se congela;
+  - DOLOR se encoge en cada golpe;
+  - ASCO se aparta;
+  - DESPRECIO ladea con media sonrisa;
+  - REPOSO respira y parpadea.
 
 ## Cada sonido es un gesto
 | Sonido | Gesto |
 |---|---|
-| Bombo | Espasmo: mandíbula, empuje y cabeceo, con un muelle poco amortiguado que rebota. |
+| Bombo | Espasmo propio de la emoción (embestida, retroceso, mueca), con un muelle poco amortiguado que rebota. |
 | Chapa | Algo empuja bajo la piel. |
-| Crujido de tendón | Tirón seco tipo stop-motion: salta a otra torsión y vuelve. |
-| Bajo | El cráneo se estira con la nota. |
+| Crujido de tendón | Tirón seco tipo stop-motion: la cabeza, la mandíbula o la mirada saltan y vuelven. |
+| Bajo | La boca se entreabre con la nota. |
 | Barrido | Una luz blanca recorre la cara (solo en la ruptura). |
 | Impacto | La ruptura: la emoción salta al extremo. |
 
 ## ESPEJO (`3`)
 Una cámara mira la sala desde cerca del proyector, a la altura de la cara. La cabeza copia al visitante y lo exagera:
-- si abre la boca, grita; si sube las cejas, se sorprende o se asusta; si frunce el ceño, entra en furia; si sonríe, se ríe con toda la cara; si arruga la nariz, asco;
+- lee la cara del visitante y la traduce a las mismas expresiones de la cabeza: si abre la boca, grita; si sube las cejas, se sorprende o se asusta; si frunce el ceño, entra en furia; si sonríe, se ríe con toda la cara; si arruga la nariz, asco;
 - copia también el giro de la cabeza, como un espejo;
 - el ritmo, los golpes y el sonido siguen: los espasmos del bombo caen encima de la cara del visitante, y las voces de las emociones siguen lo que la cámara lee;
 - con alguien delante, solo planos frontales (un espejo se mira de frente);
@@ -54,18 +70,23 @@ Se cambia en directo. Agudos domados (estante −6 dB desde 2,2 kHz) y limitador
 
 Por defecto:
 - **DESTELLOS SEGUROS** limita los pulsos de luz y el barrido.
-- Sin saltos en ordenadores modestos: si no llega a 60 fps baja la resolución al 80 %, fija 30 fps, quita sombras y bloom y, al final, baja al 60 %. Los cambios esperan a un corte de plano. Con la salida abierta, la vista previa de la consola va a 15 fps.
+- Fluidez: la deformación va entera en la gráfica y la SALIDA calcula la pieza por su cuenta, sincronizada por reloj con el audio de la consola (no espera mensajes, así que no da tirones).
+- Sin saltos en ordenadores modestos: si no llega a 60 fps baja la resolución al 85 %, fija 30 fps, quita sombras y bloom y, al final, baja al 65 %. Los cambios esperan a un corte de plano. Con la salida abierta, la vista previa de la consola va a 15 fps.
+- App de escritorio para sala, sin internet: [`rostro-app/`](../rostro-app/README.md).
 
 ## Archivos
 - `partitura.js`: semilla → pieza (eventos, emociones, planos, actos).
-- `rig.js`: el rig procedural de la cabeza y las doce expresiones.
-- `anim.js`: convierte cada evento en gesto (muelles, impulsos, tirones).
-- `escena.js`: la cabeza de laca negra, la luz y los planos (three.js).
+- `cara.js`: carga la cara y sus 53 expresiones (`assets/cara.json` + `assets/cara.bin`, 5 MB).
+- `rig.js`: las doce emociones como mezclas de expresiones, y el resumen de la cara para el sonido.
+- `anim.js`: convierte cada evento en gesto y da a cada emoción su manera de moverse (muelles, sacadas, parpadeo, sollozos…).
+- `escena.js`: la cabeza de laca negra en la gráfica (expresiones, giro, piel procedural), la luz, los planos y la composición con MSAA (three.js).
 - `sonido.js`: síntesis en el navegador (WebAudio), BASE y AMBIENT.
 - `espejo.js`: ESPEJO (cámara → rasgos de la cara → objetivo exagerado para el rostro).
 - `app.js` / `index.html`: consola. `salida.js` / `salida.html`: proyector.
 - `vendor/three-rostro.js`: three.js r170 y los módulos que usa, en un solo archivo (sin internet en sala).
+- `tools/build_cara.py`: convierte el ICT Face Model (OBJ) a `cara.json` + `cara.bin`.
+- `tools/frame.html` y `tools/render.html`: un frame de prueba y el render fotograma a fotograma de una pieza.
 - `tools/render-audio.html`: render del audio de una pieza sin tiempo real, para medirlo.
 
 ## Créditos
-Escaneo de cabeza: «Infinite, 3D Head Scan» de Lee Perry-Smith (Infinite-Realities), [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/), basado en una obra de triplegangers.com (ver `assets/LeePerrySmith_License.txt`). three.js (MIT), three-subdivide (MIT) y Human (MIT).
+Cabeza y expresiones: ICT Face Model, de [ICT-FaceKit](https://github.com/ICT-VGL/ICT-FaceKit) (USC Institute for Creative Technologies), licencia MIT. three.js (MIT) y Human (MIT).

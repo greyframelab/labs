@@ -1,0 +1,85 @@
+{
+  "name": "voidloom-rostro",
+  "productName": "VØID_LOOM ROSTRO",
+  "version": "1.0.0",
+  "description": "VØID_LOOM · ROSTRO · una cabeza gigante que se contorsiona al ritmo de su sonido, con modo ESPEJO, sin internet",
+  "author": "VØID_LOOM",
+  "license": "MIT",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "copy": "node scripts/copy.js",
+    "start": "npm run copy && electron .",
+    "dist:win": "npm run copy && electron-builder --win --publish never",
+    "dist:mac": "npm run copy && electron-builder --mac --publish never"
+  },
+  "devDependencies": {
+    "electron": "45.3.2",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "labs.greyframe.voidloom.rostro",
+    "productName": "VØID_LOOM ROSTRO",
+    "copyright": "VØID_LOOM",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "package.json",
+      "www/**/*"
+    ],
+    "asar": true,
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "VØID_LOOM ROSTRO",
+      "artifactName": "VOID_LOOM-ROSTRO-${version}-windows-instalador.${ext}"
+    },
+    "portable": {
+      "artifactName": "VOID_LOOM-ROSTRO-${version}-windows-portable.${ext}"
+    },
+    "mac": {
+      "icon": "build/icon.png",
+      "category": "public.app-category.entertainment",
+      "identity": "-",
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSCameraUsageDescription": "ROSTRO mira la cara del visitante en el modo ESPEJO para que la cabeza la copie y la exagere. La imagen se analiza en este ordenador y no se envía ni se guarda."
+      },
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ]
+    },
+    "dmg": {
+      "artifactName": "VOID_LOOM-ROSTRO-${version}-mac-${arch}.${ext}"
+    }
+  },
+  "repository": "github:greyframelab/labs"
+}

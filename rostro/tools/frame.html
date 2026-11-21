@@ -1,0 +1,16 @@
+<!doctype html><meta charset="utf-8"><title>ROSTRO · frame de prueba</title>
+<body style="margin:0;background:#000"><canvas id="c" style="display:block"></canvas>
+<script type="module">
+// Un frame fijo para revisar la cara: ?emo=FURIA&mix=1&shot=medio&acc=ff1a1a&w=1280&h=720
+import { crearEscena } from '../escena.js';
+import { pose } from '../rig.js';
+const q = new URLSearchParams(location.search), W = +q.get('w') || 1280, H = +q.get('h') || 720;
+const cv = document.getElementById('c'); cv.style.width = W + 'px'; cv.style.height = H + 'px';
+const esc = await crearEscena(cv, '#' + (q.get('acc') || 'ff1a1a'), '../assets/');
+esc.tamano(W, H);
+if (q.get('ligera')) esc.calidad(true);
+const c = pose(q.get('emo') || 'REPOSO', +(q.get('mix') ?? 1));
+esc.pose(c, 0.37, []); esc.camara(q.get('shot') || 'medio', 0); esc.luz(+(q.get('rim') ?? 0.9), 0, 0, 1);
+esc.render(0.37, 1); await new Promise(r => requestAnimationFrame(r)); esc.render(0.37, 1);
+window.done = true;
+</script>
