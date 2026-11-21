@@ -21,6 +21,7 @@ Una semilla decide el estilo de sonido, el tempo, el acento, la raíz y el arco 
 ## La cabeza
 - **ICT Face Model** (ICT-FaceKit, USC Institute for Creative Technologies, MIT): una cara media registrada a partir de escaneos de light stage. No es una persona concreta. Trae globos oculares, dientes, encías y lengua: la boca se abre de verdad.
 - **53 expresiones anatómicas** (nombres de ARKit, separadas en izquierda y derecha) mezcladas en la gráfica como morph targets. Encima, el giro de la cabeza sobre el cuello, el temblor y lo que empuja bajo la piel.
+- **Busto:** cuello, hombros y pecho se disuelven en el negro (fundido y grano), sin borde de corte.
 - **Piel:** laca negra con poros y arrugas procedurales que nacen con cada expresión (frente, entrecejo, patas de gallo, surco nasolabial, nariz, barbilla y tendones del cuello). Ojos de cristal negro.
 - **Veintisiete emociones** (más el reposo), cada una con su pose y **su propia manera de moverse**. Algunas:
   - MIEDO tiembla, retrocede y los ojos saltan;
@@ -69,6 +70,20 @@ Cada tecla pone esa emoción al momento, con su propio golpe, encima de la pieza
 |  |  | N | CONFUSIÓN | | |
 |  |  | M | LLANTO | | |
 
+### Luz: emociones positivas (Mayús + tecla)
+| Tecla | Emoción | Tecla | Emoción |
+|---|---|---|---|
+| ⇧Q | ALEGRÍA | ⇧O | ORGULLO |
+| ⇧W | EUFORIA | ⇧S | GRATITUD |
+| ⇧E | TERNURA | ⇧D | CURIOSIDAD |
+| ⇧R | AMOR | ⇧F | DIVERSIÓN |
+| ⇧T | SERENIDAD | ⇧J | SATISFACCIÓN |
+| ⇧Y | ALIVIO | ⇧K | INSPIRACIÓN |
+| ⇧U | ESPERANZA | ⇧L | COMPLICIDAD |
+| ⇧I | MARAVILLA | G | soltar |
+
+Cada una se mueve a su manera (la euforia ríe y rebota, la ternura ladea despacio, la serenidad respira con los ojos cerrados, el alivio suspira, la complicidad guiña…). Suenan con una voz propia: un acorde mayor suave y lento (LUZ). Algunas entran también en las piezas automáticas: euforia en la ruptura, serenidad, alivio y maravilla en el eco, curiosidad en la tensión.
+
 ## ESPEJO (`3`)
 Una cámara mira la sala desde cerca del proyector, a la altura de la cara. La cabeza copia al visitante y lo exagera:
 - lee la cara del visitante y la traduce a las mismas expresiones de la cabeza: si abre la boca, grita; si sube las cejas, se sorprende o se asusta; si frunce el ceño, entra en furia; si sonríe, se ríe con toda la cara; si arruga la nariz, asco;
@@ -100,6 +115,7 @@ Se cambia en directo. Agudos domados (estante −6 dB desde 2,2 kHz) y limitador
 
 Por defecto:
 - **DESTELLOS SEGUROS** limita los pulsos de luz y el barrido.
+- **Proyección en tiempo real:** el reloj de la obra (sonido, pieza y emoción) lo marca un worker que el navegador no frena aunque la consola quede tapada por la proyección o minimizada. Con la SALIDA abierta, la vista previa de la consola baja a 12 fps, pequeña y en calidad ligera, para dejar la gráfica al proyector. La SALIDA dibuja como mucho ~1080p de píxeles reales aunque el proyector sea 4K.
 - Fluidez: la deformación va entera en la gráfica y la SALIDA calcula la pieza por su cuenta, sincronizada por reloj con el audio de la consola (no espera mensajes, así que no da tirones).
 - Sin saltos en ordenadores modestos: si no llega a 60 fps baja la resolución al 85 %, fija 30 fps, quita sombras y bloom y, al final, baja al 65 %. Los cambios esperan a un corte de plano. Con la salida abierta, la vista previa de la consola va a 15 fps.
 - App de escritorio para sala, sin internet: [`rostro-app/`](../rostro-app/README.md).

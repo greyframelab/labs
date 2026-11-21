@@ -21,6 +21,9 @@ const TECLAS = {
   z: 'AGONÍA', x: 'ÉXTASIS', v: 'VERGÜENZA', n: 'CONFUSIÓN', m: 'LLANTO',
   4: 'DESESPERACIÓN', 5: 'NÁUSEA', 6: 'BURLA', 7: 'SOSPECHA', 8: 'ARROGANCIA', 9: 'AGOTAMIENTO', 0: 'VÉRTIGO',
   g: null };
+// LUZ: emociones positivas con Mayús + la misma tecla
+const TECLAS_LUZ = { q: 'ALEGRÍA', w: 'EUFORIA', e: 'TERNURA', r: 'AMOR', t: 'SERENIDAD', y: 'ALIVIO', u: 'ESPERANZA', i: 'MARAVILLA', o: 'ORGULLO',
+  s: 'GRATITUD', d: 'CURIOSIDAD', f: 'DIVERSIÓN', j: 'SATISFACCIÓN', k: 'INSPIRACIÓN', l: 'COMPLICIDAD', g: null };
 let esc, snd, ctx; const esp = crearEspejo(); let espOn = false;
 
 // ---------------------------------------------------------------- arranque
@@ -41,7 +44,11 @@ $('go').onclick = async () => {
     if (q.get('modo') === 'manual') setModo('manual'); else if (q.get('modo') === 'espejo') setModo('espejo');
     nueva(q.get('pieza') || null);
     if (q.has('museo')) proyectar();
-    requestAnimationFrame(frame);
+    // el cerebro de la obra lo marca un worker: el navegador no lo frena aunque la consola quede tapada
+    // por la proyección o minimizada (requestAnimationFrame sí se para). La vista previa va aparte.
+    try { const wk = new Worker(URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 15);'], { type: 'text/javascript' }))); wk.onmessage = () => logica(performance.now()); }
+    catch (err) { setInterval(() => logica(performance.now()), 15); }
+    requestAnimationFrame(pintar);
   } catch (e) {
     console.error('[ROSTRO_GPU_FALLO]', e); $('bootlog').classList.add('err'); log('NO SE PUDO ARRANCAR: ' + (e && e.message || e)); $('go').classList.remove('off');
   }
@@ -94,14 +101,16 @@ $('bCsv').onclick = () => {
 let last = 0, fpsAvg = 60, lowFor = 0, nivel = 0, lastShot = '', lastPreview = 0;
 const NIVELES = [{ esc: 1, fps: 60, ligera: false }, { esc: 0.8, fps: 60, ligera: false }, { esc: 0.8, fps: 30, ligera: false }, { esc: 0.8, fps: 30, ligera: true }, { esc: 0.6, fps: 30, ligera: true }];
 const salCh = new BroadcastChannel('rostro-salida');
-salCh.onmessage = (e) => { if (e.data && e.data.type === 'vivo') { if (e.data.code !== (S.P && S.P.code) && S.piezaMsg) salCh.postMessage(S.piezaMsg); S.salidaVista = performance.now(); if (!S.salida) { S.salida = true; $('bProj').classList.add('on'); tamano(); } } };
+salCh.onmessage = (e) => { if (e.data && e.data.type === 'vivo') { if (e.data.code !== (S.P && S.P.code) && S.piezaMsg) salCh.postMessage(S.piezaMsg); S.salidaVista = performance.now(); if (!S.salida) { S.salida = true; $('bProj').classList.add('on'); esc.calidad(true); tamano(); } } };
 let fadeOut = 1;
 const LAT = () => Math.min(0.2, ctx.outputLatency || ctx.baseLatency || 0);
 
-function frame(ts) {
-  requestAnimationFrame(frame);
-  const dt = (ts - last) / 1000; last = ts;
-  if (S.salida && performance.now() - S.salidaVista > 2500) { S.salida = false; $('bProj').classList.remove('on'); tamano(); }
+let V = null; // último estado calculado (lo dibuja la vista previa)
+setInterval(() => { if (S.salida && S.piezaMsg) salCh.postMessage(S.piezaMsg); }, 2000); // por si la salida se abrió tarde
+function logica(ts) {
+  if (!S.P) return;
+  const dt = last ? (ts - last) / 1000 : 0; last = ts;
+  if (S.salida && performance.now() - S.salidaVista > 6000) { S.salida = false; $('bProj').classList.remove('on'); esc.calidad(NIVELES[nivel].ligera); tamano(); }
   const P = S.P, now = ctx.currentTime - S.t0;
   // sonido: programa los golpes que caen en los próximos 250 ms (el reloj es el del audio: sin deriva)
   while (S.si < P.events.length && P.events[S.si].t < now + 0.25) {
@@ -116,6 +125,7 @@ function frame(ts) {
   const fade = fadeP * fadeOut;
   snd.vivo(st, ctx.currentTime, Math.max(0, Math.min(1, (P.dur + 3 - tt) / 3)));
   if (tt > P.dur + 2.6) { if (S.modo === 'auto') nueva(); else nueva(P.code, true); return; }
+  const hayVista = !document.hidden;
 
   // ESPEJO: la cara del visitante manda sobre el arco de la pieza mientras está delante
   let pres = 0;
@@ -141,14 +151,8 @@ function frame(ts) {
     fadeOut, bri: S.bri, seguro: S.seguro, ext, forzarMedio: pres > 0.5, fx: S.fx };
   salCh.postMessage(msg);
 
-  // calidad automática: si no llega, baja por pasos; la resolución solo cambia en un corte de plano
-  if (dt > 0 && dt < 0.5) fpsAvg += (1 / dt - fpsAvg) * 0.05;
-  const N = NIVELES[nivel];
-  if (fpsAvg < N.fps * 0.82) lowFor += dt; else lowFor = Math.max(0, lowFor - dt * 0.5);
-  const corte = pl.name + pl.at !== lastShot; lastShot = pl.name + pl.at;
-  if (lowFor > 2.5 && nivel < NIVELES.length - 1 && corte) { nivel++; lowFor = 0; esc.calidad(NIVELES[nivel].ligera); tamano(); }
-  $('chFps').textContent = Math.round(fpsAvg) + (nivel ? ` · Q${nivel}` : '');
-  const hud = hudTick(ts);
+  V = { st, pl, tt, fade };
+  const hud = hayVista && hudTick(ts);
   if (hud) {
     $('chAct').textContent = st.act;
     const top = Object.entries(st.emo).sort((a, b) => b[1] - a[1])[0];
@@ -156,10 +160,27 @@ function frame(ts) {
     $('tagTxt').textContent = `${pl.name.toUpperCase()} · ${st.act}`;
     const bar = $('tlBar'); if (bar) bar.style.width = (Math.min(1, tt / P.dur) * 100) + '%';
   }
-  // vista previa: a 15 fps si la salida está abierta (el proyector manda)
-  const prevFps = S.salida ? 15 : NIVELES[nivel].fps;
+}
+
+// vista previa: solo dibuja. Con la SALIDA abierta va pequeña, ligera y a 12 fps, para dejar la gráfica al proyector
+let lastP = 0;
+function pintar(ts) {
+  requestAnimationFrame(pintar);
+  if (!V) return;
+  const dt = lastP ? (ts - lastP) / 1000 : 0;
+  const prevFps = S.salida ? 12 : NIVELES[nivel].fps;
   if (ts - lastPreview < 1000 / prevFps - 2) return;
-  lastPreview = ts;
+  lastPreview = ts; lastP = ts;
+  if (!S.salida) {
+    // calidad automática: si no llega, baja por pasos; la resolución solo cambia en un corte de plano
+    if (dt > 0 && dt < 0.5) fpsAvg += (1 / dt - fpsAvg) * 0.05;
+    const N = NIVELES[nivel];
+    if (fpsAvg < N.fps * 0.82) lowFor += dt; else lowFor = Math.max(0, lowFor - dt * 0.5);
+    const corte = V.pl.name + V.pl.at !== lastShot; lastShot = V.pl.name + V.pl.at;
+    if (lowFor > 2.5 && nivel < NIVELES.length - 1 && corte) { nivel++; lowFor = 0; esc.calidad(NIVELES[nivel].ligera); tamano(); }
+    $('chFps').textContent = Math.round(fpsAvg) + (nivel ? ` · Q${nivel}` : '');
+  } else $('chFps').textContent = 'EN EL PROYECTOR';
+  const { st, pl, tt, fade } = V;
   esc.pose(st.c, tt, st.bumps); esc.camara(pl.name, pl.since); esc.luz(st.rim, st.sweep, st.swx, S.bri); esc.render(tt, fade, st.glitch, st.speed);
 }
 
@@ -168,7 +189,7 @@ const hudT = {}; function hudTick(ts, k = 'a') { if (ts - (hudT[k] || 0) > 200) 
 
 function tamano() {
   const v = $('c'), r = v.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2), k = NIVELES[nivel].esc;
-  const pv = S.salida ? 0.6 : 1;
+  const pv = S.salida ? 0.4 : 1;
   esc.tamano(r.width * dpr * k * pv, r.height * dpr * k * pv);
 }
 addEventListener('resize', () => esc && tamano());
@@ -224,16 +245,21 @@ $('bHelp').onclick = () => $('help').classList.toggle('on');
 $('help').onclick = () => $('help').classList.remove('on');
 function solo() { S.solo = !S.solo; document.body.classList.toggle('solo', S.solo); setTimeout(tamano, 50); }
 
-function tecla(k) {
-  const em = TECLAS[k];
+function tecla(k, luz = false) {
+  const em = luz ? TECLAS_LUZ[k] : TECLAS[k];
   if (em === null) { S.tecla = null; } else { S.tecla = em; S.teclaUlt = em; S.an.golpe(em); salCh.postMessage({ type: 'golpe', emo: em }); }
-  [...$('teclas').children].forEach(b => b.classList.toggle('on', b.dataset.k === k && em !== null));
+  [...$('teclas').children].forEach(b => b.classList.toggle('on', !luz && b.dataset.k === k && em !== null));
+  [...$('teclasLuz').children].forEach(b => b.classList.toggle('on', luz && b.dataset.k === k && em !== null));
   $('chEmo').textContent = em || '—';
 }
 addEventListener('keydown', (e) => {
   if (!esc || e.target.tagName === 'INPUT') return;
   const k = e.key;
-  if (!e.ctrlKey && !e.metaKey && !e.altKey && k.length === 1 && k.toLowerCase() in TECLAS) { if (!e.repeat) tecla(k.toLowerCase()); return; }
+  if (!e.ctrlKey && !e.metaKey && !e.altKey && k.length === 1) {
+    const kl = k.toLowerCase();
+    if (e.shiftKey && kl in TECLAS_LUZ) { if (!e.repeat) tecla(kl, true); return; }
+    if (!e.shiftKey && kl in TECLAS) { if (!e.repeat) tecla(kl); return; }
+  }
   if (k === '1') setModo('auto'); else if (k === '2') setModo('manual'); else if (k === '3') setModo('espejo');
   else if (k === ' ') { e.preventDefault(); nueva(); }
   else if (k === 'ArrowLeft') $('bPrev').click(); else if (k === 'ArrowRight') $('bNext').click();
@@ -246,6 +272,8 @@ addEventListener('keydown', (e) => {
 const ORDEN_TECLAS = 'qwertyuiosdfjklzxvnm4567890g'.split('');
 $('teclas').innerHTML = ORDEN_TECLAS.map(k => [k, TECLAS[k]]).map(([k, em]) => `<button data-k="${k}"><b>${k.toUpperCase()}</b>${em || 'SOLTAR'}</button>`).join('');
 $('teclas').onclick = (e) => { const b = e.target.closest('button'); if (b && esc) tecla(b.dataset.k); };
+$('teclasLuz').innerHTML = 'qwertyuiosdfjklg'.split('').map(k => `<button data-k="${k}"><b>⇧${k.toUpperCase()}</b>${TECLAS_LUZ[k] || 'SOLTAR'}</button>`).join('');
+$('teclasLuz').onclick = (e) => { const b = e.target.closest('button'); if (b && esc) tecla(b.dataset.k, true); };
 // FX: interruptores (por defecto, todos activos); la salida los recibe en el reloj
 const FXN = { glitch: 'GLITCH EN LOS GOLPES', estela: 'ESTELA', atmos: 'ATMÓSFERA Y HACES', destellos: 'DESTELLOS' };
 $('fxList').innerHTML = Object.entries(FXN).map(([k, n]) => `<button class="tbtn on" data-fx="${k}">${n}</button>`).join('');
