@@ -2,7 +2,7 @@
    El visitante ve su palabra: se descifra desde glifos, se sostiene y se deshace en la pieza que nace.
    No se guarda en ningún sitio. La usan la consola y la ventana de salida. */
 (function () {
-  const GLYPHS = '░▒▓/\\|<>_-=+*#ØΣΔ01';
+  const GLYPHS = '░▒▓/\\|<>_-=+*#1[]';   // sin glifos redondos ni griegos (Ø, 0, Δ, Σ): con el halo se leían como discos con letras del revés
   const WORD_DUR = 3.4;
   // devuelve la opacidad de la capa (0 = ya no se ve)
   function draw(x, W, H, word, t, acc) {
@@ -18,7 +18,7 @@
       if (t < on) continue;
       const fixed = t > on + 0.22 && t < off;
       const ch = fixed ? w[i] : GLYPHS[Math.floor((t * 24 + i * 7) % GLYPHS.length)];
-      x.shadowColor = acc; x.shadowBlur = size * (fixed ? 0.35 : 0.6);
+      x.shadowColor = acc; x.shadowBlur = size * 0.05;   // casi sin halo: el halo ancho de cada letra se veía como un disco de color detrás de la palabra
       x.fillStyle = fixed ? 'rgba(242,240,234,0.95)' : acc;
       x.globalAlpha = Math.max(0, Math.min(1, fadeIn * fadeOut * (fixed ? 1 : 0.7)));
       x.fillText(ch, x0 + i * cw, y);
