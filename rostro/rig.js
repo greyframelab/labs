@@ -27,6 +27,23 @@ export const EMOCIONES = {
   RISA:      sym({ mouthSmile: 1.25, cheekSquint: 1.0, cheekRaiser: 1.0, eyeSquint: 0.9, eyeBlink: 0.4, jawOpen: 0.45, mouthUpperUp: 0.4, mouthDimple: 0.6, noseSneer: 0.3, pitch: -0.28 }),
   DESPRECIO: Object.assign(sym({ eyeSquint: 0.3, yaw: -0.3, roll: 0.17, pitch: -0.24 }), { mouthSmile_R: 0.85, mouthDimple_R: 0.85, noseSneer_R: 0.45, mouthPress_L: 0.45, browDown_L: 0.35, eyeLookOut_R: 0.5, eyeLookIn_L: 0.5 }),
   'PÁNICO':  sym({ browInnerUp: 1.2, browOuterUp: 1.0, eyeWide: 1.25, jawOpen: 0.9, mouthStretch: 1.15, mouthLowerDown: 1.0, mouthUpperUp: 0.5, noseSneer: 0.5, thrust: -0.6, tremor: 1.2 }),
+  // --- ampliación: registro extremo
+  HORROR:    sym({ eyeWide: 1.3, browInnerUp: 1.3, browOuterUp: 1.1, jawOpen: 0.75, mouthStretch: 1.3, mouthLowerDown: 1.1, mouthFrown: 0.6, noseSneer: 0.3, pitch: -0.3, thrust: -0.75, tremor: 1.3 }),
+  ODIO:      sym({ browDown: 1.3, eyeSquint: 0.6, noseSneer: 0.9, mouthPress: 1.0, mouthRollUpper: 0.5, jawForward: 0.5, mouthFrown: 0.5, cheekSquint: 0.3, pitch: 0.22, thrust: 0.3, tremor: 0.6 }),
+  LOCURA:    { mouthSmile_L: 1.3, mouthSmile_R: 0.3, eyeWide_L: 1.2, eyeSquint_R: 0.8, browOuterUp_L: 1.1, browDown_R: 0.8, jawOpen: 0.3, jawLeft: 0.4, cheekRaiser_L: 0.6, mouthDimple_L: 0.5, roll: 0.3 },
+  'AGONÍA':  sym({ jawOpen: 1.0, mouthStretch: 1.3, browInnerUp: 1.2, browDown: 0.6, eyeSquint: 1.1, eyeBlink: 0.4, cheekRaiser: 1.0, noseSneer: 0.9, mouthUpperUp: 0.8, pitch: -0.35, roll: 0.2, tremor: 0.9 }),
+  'ÉXTASIS': sym({ eyeBlink: 0.7, eyeLookUp: 1.0, browInnerUp: 0.6, browOuterUp: 0.5, jawOpen: 0.55, mouthFunnel: 0.3, mouthSmile: 0.35, pitch: -0.45, roll: 0.1 }),
+  'VERGÜENZA': sym({ eyeLookDown: 1.0, mouthPress: 0.6, mouthRollLower: 0.5, mouthSmile: 0.15, browInnerUp: 0.5, eyeBlink: 0.3, pitch: 0.45, yaw: 0.35 }),
+  'CONFUSIÓN': { browDown_L: 0.9, browOuterUp_R: 1.0, eyeSquint_L: 0.5, mouthLeft: 0.6, mouthPress_R: 0.4, jawLeft: 0.2, roll: 0.25, pitch: -0.05 },
+  LLANTO:    sym({ browInnerUp: 1.3, eyeSquint: 1.0, eyeBlink: 0.6, cheekRaiser: 0.9, mouthFrown: 1.2, mouthStretch: 0.8, jawOpen: 0.35, mouthLowerDown: 0.5, noseSneer: 0.4, pitch: 0.3, tremor: 0.4 }),
+  'SÚPLICA': sym({ browInnerUp: 1.3, eyeWide: 0.5, eyeLookUp: 0.6, mouthFrown: 0.6, jawOpen: 0.25, mouthFunnel: 0.2, pitch: -0.25, thrust: 0.4, tremor: 0.3 }),
+  'DESESPERACIÓN': sym({ browInnerUp: 1.2, browDown: 0.4, eyeWide: 0.6, jawOpen: 0.6, mouthStretch: 1.1, mouthFrown: 0.8, pitch: -0.15, roll: -0.2, tremor: 0.8 }),
+  'NÁUSEA':  sym({ noseSneer: 0.7, mouthFrown: 0.7, cheekPuff: 1.0, mouthPucker: 0.3, eyeSquint: 0.7, eyeBlink: 0.3, browDown: 0.4, pitch: 0.25 }),
+  BURLA:     Object.assign(sym({ eyeSquint: 0.5, jawOpen: 0.2, roll: -0.18, pitch: -0.2, yaw: 0.2 }), { mouthSmile_L: 1.1, mouthSmile_R: 0.5, mouthDimple_L: 0.8, cheekSquint_L: 0.7, browOuterUp_R: 0.7, noseSneer_L: 0.3 }),
+  SOSPECHA:  Object.assign(sym({ eyeSquint: 1.0, browDown: 0.7, mouthPress: 0.5, pitch: 0.12, yaw: -0.25 }), { eyeLookOut_L: 0.6, eyeLookIn_R: 0.6, mouthLeft: 0.3 }),
+  ARROGANCIA: Object.assign(sym({ eyeLookDown: 0.6, eyeSquint: 0.3, mouthPress: 0.4, mouthShrugLower: 0.5, browOuterUp: 0.3, pitch: -0.4, thrust: -0.2 }), { mouthSmile_R: 0.3 }),
+  AGOTAMIENTO: sym({ eyeBlink: 0.75, eyeLookDown: 0.5, jawOpen: 0.3, mouthFrown: 0.4, browInnerUp: 0.3, pitch: 0.45, roll: 0.18 }),
+  'VÉRTIGO': Object.assign(sym({ eyeWide: 0.5, jawOpen: 0.3, mouthStretch: 0.4, browInnerUp: 0.5, roll: 0.3 }), { eyeLookUp_L: 0.5, eyeLookOut_R: 0.5 }),
 };
 
 export function pose(name, mix = 1) {

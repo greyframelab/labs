@@ -14,7 +14,12 @@ const S = {
   P: null, an: null, t0: 0, si: 0, hist: [], hi: -1, salida: false, salidaVista: 0,
 };
 // TECLADO: cada tecla pone una emoción en directo, encima de la pieza (que sigue con su ritmo); G la suelta
-const TECLAS = { q: 'MIEDO', w: 'FURIA', e: 'GRITO', r: 'RISA', t: 'TRISTEZA', y: 'ANGUSTIA', u: 'PÁNICO', i: 'SORPRESA', o: 'DOLOR', d: 'ASCO', f: 'DESPRECIO', g: null };
+const TECLAS = {
+  q: 'MIEDO', w: 'FURIA', e: 'GRITO', r: 'RISA', t: 'TRISTEZA', y: 'ANGUSTIA', u: 'PÁNICO', i: 'SORPRESA', o: 'DOLOR',
+  s: 'SÚPLICA', d: 'ASCO', f: 'DESPRECIO', j: 'HORROR', k: 'ODIO', l: 'LOCURA',
+  z: 'AGONÍA', x: 'ÉXTASIS', v: 'VERGÜENZA', n: 'CONFUSIÓN', m: 'LLANTO',
+  4: 'DESESPERACIÓN', 5: 'NÁUSEA', 6: 'BURLA', 7: 'SOSPECHA', 8: 'ARROGANCIA', 9: 'AGOTAMIENTO', 0: 'VÉRTIGO',
+  g: null };
 let esc, snd, ctx; const esp = crearEspejo(); let espOn = false;
 
 // ---------------------------------------------------------------- arranque
@@ -236,6 +241,8 @@ addEventListener('keydown', (e) => {
   else if (k === 'c' || k === 'C') captura(); else if (k === '?') $('help').classList.toggle('on');
   else if (k === 'ArrowUp' || k === 'ArrowDown') { e.preventDefault(); const r = $('rVol'); r.value = Math.max(0, Math.min(100, +r.value + (k === 'ArrowUp' ? 5 : -5))); r.oninput(); }
 });
-$('teclas').innerHTML = Object.entries(TECLAS).map(([k, em]) => `<button data-k="${k}"><b>${k.toUpperCase()}</b>${em || 'SOLTAR'}</button>`).join('');
+// orden de pantalla (las claves numéricas de un objeto se reordenan solas)
+const ORDEN_TECLAS = 'qwertyuiosdfjklzxvnm4567890g'.split('');
+$('teclas').innerHTML = ORDEN_TECLAS.map(k => [k, TECLAS[k]]).map(([k, em]) => `<button data-k="${k}"><b>${k.toUpperCase()}</b>${em || 'SOLTAR'}</button>`).join('');
 $('teclas').onclick = (e) => { const b = e.target.closest('button'); if (b && esc) tecla(b.dataset.k); };
 setModo('auto'); setAmbient(true);

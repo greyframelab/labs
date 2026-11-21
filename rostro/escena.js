@@ -77,7 +77,7 @@ float skinH(vec3 p){
   float nd = segD(vec2(ax, p.y), vec2(0.36, 1.02), vec2(0.66, 0.22));
   h -= exp(-nd * nd / 0.0035) * uWrk.w * 0.022 * front;
   // arrugas de la nariz (asco, furia) y barbilla que se arruga
-  h -= g2(vec2(p.x, p.y - 1.45), vec2(0.3, 0.16)) * uWrk2.x * 0.014 * pow(abs(sin(p.y * 40.0)), 4.0) * front;
+  h -= g2(vec2(p.x, p.y - 1.42), vec2(0.22, 0.1)) * uWrk2.x * 0.006 * pow(abs(sin(p.y * 26.0 + 0.8)), 3.0) * front;
   h -= g2(vec2(p.x, p.y + 0.35), vec2(0.35, 0.22)) * uWrk2.y * 0.012 * vnoise(p * 30.0) * front;
   // tendones del cuello en tensión
   h += g2(vec2(ax - 0.55, p.y + 1.35), vec2(0.12, 0.9)) * uWrk2.z * 0.028 * smoothstep(-0.5, 0.8, p.z);

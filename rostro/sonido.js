@@ -137,6 +137,8 @@ export function crearSonido(ctx) {
   voz('ASCO', g => { const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 8; bp.frequency.value = 700; lfo(3.7, 360, bp.frequency); lfo(0.9, 150, bp.frequency); loop(NB.white, 0.5).connect(bp).connect(g); }, 0.4, 0.4);
   voz('DESPRECIO', g => { const o = osc('square', 1.5), m = osc('sine', 1.5 * 1.33), rm = ctx.createGain(); rm.gain.value = 0; m.connect(rm.gain); const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 600; o.connect(rm).connect(lp).connect(g); }, 0.2, 0.4);
   voz('SORPRESA', g => { const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 3; bp.frequency.value = 400; L.sorpF = bp; loop(NB.pink, 1.2).connect(bp).connect(g); }, 0.3, 0.7);
+  const VOZ_DE = { HORROR: 'PÁNICO', ODIO: 'FURIA', LOCURA: 'RISA', 'AGONÍA': 'GRITO', 'ÉXTASIS': 'SORPRESA', 'VERGÜENZA': 'TRISTEZA', 'CONFUSIÓN': 'DESPRECIO',
+    LLANTO: 'TRISTEZA', 'SÚPLICA': 'ANGUSTIA', 'DESESPERACIÓN': 'ANGUSTIA', 'NÁUSEA': 'ASCO', BURLA: 'RISA', SOSPECHA: 'DESPRECIO', ARROGANCIA: 'DESPRECIO', AGOTAMIENTO: 'ANGUSTIA', 'VÉRTIGO': 'MIEDO' };
   const VGAIN = { MIEDO: 0.05, FURIA: 0.09, GRITO: 0.09, 'PÁNICO': 0.22, DOLOR: 0.06, RISA: 0.08, TRISTEZA: 0.07, ANGUSTIA: 0.08, ASCO: 0.5, DESPRECIO: 0.08, SORPRESA: 0.35 };
 
   function raiz(m, when = now()) { root = m; for (const { o, mul } of oscs) o.frequency.setTargetAtTime(hz(m) * mul, when, 0.3); }
@@ -274,7 +276,9 @@ export function crearSonido(ctx) {
       L.angustiaHz2.frequency.setTargetAtTime(hz(root) * (3.02 - 1.45 * Math.max(0, c.melt)), when, 0.5);
       L.sorpF.frequency.setTargetAtTime(300 + 900 * Math.max(0, c.brow), when, 0.2);
       L.aliento.gain.setTargetAtTime(A.aliento * (1 + st.speed * 0.15) * fadeK * aK, when, 0.3);
-      for (const [name, g] of Object.entries(V)) g.gain.setTargetAtTime(Math.min(1.2, st.emo[name] || 0) * (VGAIN[name] || 0.06) * fadeK * aK * AMB, when, 0.35);
+      // las emociones nuevas suenan con la voz de su familia
+      const ev = {}; for (const [k, val] of Object.entries(st.emo || {})) { const vz = VOZ_DE[k] || k; ev[vz] = (ev[vz] || 0) + val; }
+      for (const [name, g] of Object.entries(V)) g.gain.setTargetAtTime(Math.min(1.2, ev[name] || 0) * (VGAIN[name] || 0.06) * fadeK * aK * AMB, when, 0.35);
       flWet.gain.setTargetAtTime((st.act === 'ECO' ? 0.55 : 0.08) * aK, when, 1.2);
     },
   };

@@ -22,7 +22,7 @@ Una semilla decide el estilo de sonido, el tempo, el acento, la raíz y el arco 
 - **ICT Face Model** (ICT-FaceKit, USC Institute for Creative Technologies, MIT): una cara media registrada a partir de escaneos de light stage. No es una persona concreta. Trae globos oculares, dientes, encías y lengua: la boca se abre de verdad.
 - **53 expresiones anatómicas** (nombres de ARKit, separadas en izquierda y derecha) mezcladas en la gráfica como morph targets. Encima, el giro de la cabeza sobre el cuello, el temblor y lo que empuja bajo la piel.
 - **Piel:** laca negra con poros y arrugas procedurales que nacen con cada expresión (frente, entrecejo, patas de gallo, surco nasolabial, nariz, barbilla y tendones del cuello). Ojos de cristal negro.
-- **Doce emociones**, cada una con su pose y **su propia manera de moverse**:
+- **Veintisiete emociones** (más el reposo), cada una con su pose y **su propia manera de moverse**. Algunas:
   - MIEDO tiembla, retrocede y los ojos saltan;
   - FURIA sacude la cabeza y embiste con el bombo;
   - GRITO sostiene la boca con vibrato y se va hacia atrás;
@@ -34,7 +34,13 @@ Una semilla decide el estilo de sonido, el tempo, el acento, la raíz y el arco 
   - DOLOR se encoge en cada golpe;
   - ASCO se aparta;
   - DESPRECIO ladea con media sonrisa;
+  - HORROR se congela con la mirada clavada; ODIO aprieta la mandíbula y avanza; LOCURA se balancea con tics y risitas;
+  - AGONÍA se retuerce y convulsiona; ÉXTASIS echa la cabeza atrás con los ojos en blanco; VERGÜENZA aparta la cara;
+  - CONFUSIÓN ladea de un lado a otro; LLANTO llora a bocanadas; SÚPLICA asiente hacia arriba; DESESPERACIÓN niega;
+  - NÁUSEA tiene arcadas; BURLA se ríe a golpes; SOSPECHA mira de reojo; ARROGANCIA alza la barbilla;
+  - AGOTAMIENTO se duerme y despierta de golpe; VÉRTIGO gira la cabeza y los ojos en círculos;
   - REPOSO respira y parpadea.
+- Las piezas automáticas eligen su arco entre todas ellas; las nuevas suenan con la voz de su familia (horror como el pánico, odio como la furia…).
 
 ## Cada sonido es un gesto
 | Sonido | Gesto |
@@ -49,14 +55,19 @@ Una semilla decide el estilo de sonido, el tempo, el acento, la raíz y el arco 
 ## Teclado: emoción en directo
 Cada tecla pone esa emoción al momento, con su propio golpe, encima de la pieza. El ritmo y el sonido siguen; las voces del sonido cambian con la emoción. Funciona en cualquier modo y manda sobre ESPEJO. También están como botones en la consola (TECLADO).
 
-| Tecla | Emoción | Tecla | Emoción |
-|---|---|---|---|
-| Q | MIEDO | U | PÁNICO |
-| W | FURIA | I | SORPRESA |
-| E | GRITO | O | DOLOR |
-| R | RISA | D | ASCO |
-| T | TRISTEZA | F | DESPRECIO |
-| Y | ANGUSTIA | G | soltar: la cara vuelve al arco de la pieza |
+| Tecla | Emoción | Tecla | Emoción | Tecla | Emoción |
+|---|---|---|---|---|---|
+| Q | MIEDO | S | SÚPLICA | 4 | DESESPERACIÓN |
+| W | FURIA | D | ASCO | 5 | NÁUSEA |
+| E | GRITO | F | DESPRECIO | 6 | BURLA |
+| R | RISA | J | HORROR | 7 | SOSPECHA |
+| T | TRISTEZA | K | ODIO | 8 | ARROGANCIA |
+| Y | ANGUSTIA | L | LOCURA | 9 | AGOTAMIENTO |
+| U | PÁNICO | Z | AGONÍA | 0 | VÉRTIGO |
+| I | SORPRESA | X | ÉXTASIS | G | soltar: vuelve al arco de la pieza |
+| O | DOLOR | V | VERGÜENZA | | |
+|  |  | N | CONFUSIÓN | | |
+|  |  | M | LLANTO | | |
 
 ## ESPEJO (`3`)
 Una cámara mira la sala desde cerca del proyector, a la altura de la cara. La cabeza copia al visitante y lo exagera:
