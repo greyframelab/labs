@@ -255,16 +255,16 @@ export function crearSonido(ctx) {
     oleaje,
     // capas continuas desde el estado del rostro (st del animador) y el acto
     vivo(st, when = now(), fadeK = 1) {
-      const A = ACT[st.act] || ACT['SEÑAL'], aK = amb ? 1 : 0;
+      const A = ACT[st.act] || ACT['SEÑAL'], aK = amb ? 1 : 0, M = st.m || st.c; // resumen de la cara
       // BASE: dron del clip (sube hacia la ruptura con la tensión)
       const pre = st.preImpacto || 0;
       L.base.gain.setTargetAtTime((BASE_LVL[st.act] + 0.25 * pre) * fadeK * (amb ? 1.1 : 1.6), when, 0.5);
-      formante((FORM[st.act] + 600 * pre) * (1 + 0.2 * Math.max(0, st.c.skull)), when);
+      formante((FORM[st.act] + 600 * pre) * (1 + 0.2 * Math.max(0, M.skull)), when);
       L.sub.gain.setTargetAtTime(A.sub * fadeK * 0.45, when, 0.8);
       for (const k of ['dronA', 'dronB', 'dronC', 'retumbo', 'aliento', 'polvo']) L[k].gain.setTargetAtTime(A[k] * fadeK * aK * AMB, when, 0.8);
-      L.fmIdx.gain.setTargetAtTime(A.fm * (1 + st.c.skull * 0.5), when, 0.5);
-      L.dronAf.frequency.setTargetAtTime(A.lp * (1 + st.c.jaw * 0.5), when, 0.4);
-      const c = st.c;
+      L.fmIdx.gain.setTargetAtTime(A.fm * (1 + M.skull * 0.5), when, 0.5);
+      L.dronAf.frequency.setTargetAtTime(A.lp * (1 + M.jaw * 0.5), when, 0.4);
+      const c = M;
       L.pielF.frequency.setTargetAtTime(220 + 520 * Math.max(0, c.jaw) + 300 * Math.max(0, c.skull), when, 0.05);
       L.pielF2.frequency.setTargetAtTime(500 + 600 * Math.abs(c.twist) + 400 * Math.max(0, c.mouthWide), when, 0.05);
       L.piel.gain.setTargetAtTime(Math.min(0.5, st.speed * 0.09) * fadeK * aK, when, 0.04);

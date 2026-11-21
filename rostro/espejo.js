@@ -96,17 +96,19 @@ export function crearEspejo() {
     out.emocion = top; out.emo = e;
     // espejo directo, amplificado: lo que hace el visitante, la cabeza lo hace el doble de grande
     const A = 1.8 * amp;
-    const c = Object.fromEntries(CONTROLS.map(k => [k, 0]));
-    c.jaw = clamp(abre * 0.7 * A, -0.1, 1.5);
-    c.mouthWide = clamp((ancho * 0.6 + Math.max(0, son) * 0.5) * A, -0.3, 1.3);
-    c.mouthDown = clamp(-son * 0.6 * A, 0, 1.3);
-    c.cheeks = clamp(Math.max(0, son) * 0.4 * A - Math.max(0, abre) * 0.15, -0.6, 0.7);
-    c.brow = clamp((ceja > 0 ? ceja * 0.6 : ceja * 0.5 - cen * 0.35) * A, -1.2, 1.2);
-    c.browInner = clamp(Math.max(0, -son) * 0.4 * A, 0, 1.2);
-    c.eyes = clamp((ojo > 0 ? ojo * 0.45 : ojo * 0.5) * A - Math.max(0, son) * 0.3, -1, 1.1);
-    c.snarl = clamp(nar * 0.6 * A, 0, 1.3);
+    const c = Object.fromEntries(CONTROLS.map(k => [k, 0])), pos = (x) => Math.max(0, x);
+    const both = (k, val) => { c[k + '_L'] = val; c[k + '_R'] = val; };
+    c.jawOpen = clamp(pos(abre) * 0.42 * A, 0, 1.3);
+    both('mouthStretch', clamp(pos(ancho) * 0.45 * A * (son > 0.3 ? 0.3 : 1), 0, 1.3));
+    both('mouthSmile', clamp(pos(son) * 0.5 * A, 0, 1.4)); both('cheekSquint', clamp(pos(son) * 0.4 * A, 0, 1.2)); both('cheekRaiser', clamp(pos(son) * 0.35 * A, 0, 1.2));
+    both('mouthFrown', clamp(pos(-son) * 0.55 * A, 0, 1.3));
+    both('browInnerUp', clamp(pos(ceja) * 0.55 * A + pos(-son) * 0.2 * A, 0, 1.3)); both('browOuterUp', clamp(pos(ceja) * 0.5 * A, 0, 1.3));
+    both('browDown', clamp(pos(Math.max(cen, -ceja)) * 0.5 * A, 0, 1.3));
+    both('eyeWide', clamp(pos(ojo) * 0.5 * A, 0, 1.3)); both('eyeSquint', clamp(pos(-ojo) * 0.45 * A + pos(son) * 0.25 * A, 0, 1.3));
+    if (ojo < -1.4) both('eyeBlink', clamp((-ojo - 1.4) * 1.5, 0, 1));
+    both('noseSneer', clamp(pos(nar) * 0.55 * A, 0, 1.4)); both('mouthUpperUp', clamp(pos(nar) * 0.4 * A, 0, 1.3));
     // el giro, como en un espejo (yaw y roll invertidos)
-    c.yaw = clamp(-sm.yaw * 1.4, -0.7, 0.7); c.pitch = clamp(sm.pitch * 1.3, -0.5, 0.5); c.roll = clamp(-sm.roll * 1.4, -0.6, 0.6);
+    c.yaw = clamp(-sm.yaw * 1.4, -0.7, 0.7); c.pitch = clamp(sm.pitch * 1.3, -0.5, 0.5); c.roll = clamp(-sm.roll * 1.4, -0.5, 0.5);
     // y encima, la emoción que se reconoce, empujada a su extremo
     if (top !== 'NINGUNA') { const p = pose(top, 1.1); const w = clamp(tv, 0, 1) * 0.6; for (const k of CONTROLS) c[k] = c[k] * (1 - w * 0.5) + p[k] * w; }
     out.c = c;

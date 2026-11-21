@@ -10,7 +10,7 @@ export const ESTILOS = {
 const TENSION = ['MIEDO', 'SORPRESA', 'TRISTEZA', 'DESPRECIO', 'ASCO'];
 const RUPTURA = ['FURIA', 'GRITO', 'PÁNICO', 'RISA', 'DOLOR', 'MIEDO'];
 const ECO = ['ANGUSTIA', 'TRISTEZA', 'REPOSO'];
-const PLANOS_T = ['medio', 'macro', 'ojo', 'perfil', 'cenit'];
+const PLANOS_T = ['medio', 'macro', 'ojo', 'perfil', 'lejos'];
 const PLANOS_R = ['contra', 'boca', 'macro', 'ojo', 'medio', 'perfil'];
 
 export function rng(seedStr) {

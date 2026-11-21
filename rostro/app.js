@@ -35,7 +35,7 @@ $('go').onclick = async () => {
     if (q.has('museo')) proyectar();
     requestAnimationFrame(frame);
   } catch (e) {
-    console.error(e); $('bootlog').classList.add('err'); log('NO SE PUDO ARRANCAR: ' + (e && e.message || e)); $('go').classList.remove('off');
+    console.error('[ROSTRO_GPU_FALLO]', e); $('bootlog').classList.add('err'); log('NO SE PUDO ARRANCAR: ' + (e && e.message || e)); $('go').classList.remove('off');
   }
 };
 
@@ -46,7 +46,9 @@ function nueva(code, fromHist = false) {
   const opts = { evitar: prevAcc };
   if (S.modo === 'manual') { if (S.estilo) opts.estilo = S.estilo; if (S.acc) opts.acc = S.acc; if (S.emo) opts.emo = S.emo; }
   S.P = crearPieza(code, opts);
-  S.an = crearAnimador(S.P, code.charCodeAt(0) * 31 + code.charCodeAt(1), S.seguro ? 0.9 : 1);
+  S.piezaMsg = { type: 'pieza', code, opts, seed: code.charCodeAt(0) * 31 + code.charCodeAt(1), intensidad: S.seguro ? 0.9 : 1 };
+  S.an = crearAnimador(S.P, S.piezaMsg.seed, S.piezaMsg.intensidad);
+  if (typeof salCh !== 'undefined') salCh.postMessage(S.piezaMsg);
   S.t0 = ctx.currentTime + 0.25; S.si = 0;
   snd.pieza(S.P, S.t0);
   const imp = S.P.events.find(e => e.k === 'impact'); if (imp) snd.oleaje(S.t0 + imp.t - S.P.BAR, S.t0 + imp.t);
@@ -84,8 +86,9 @@ $('bCsv').onclick = () => {
 let last = 0, fpsAvg = 60, lowFor = 0, nivel = 0, lastShot = '', lastPreview = 0;
 const NIVELES = [{ esc: 1, fps: 60, ligera: false }, { esc: 0.8, fps: 60, ligera: false }, { esc: 0.8, fps: 30, ligera: false }, { esc: 0.8, fps: 30, ligera: true }, { esc: 0.6, fps: 30, ligera: true }];
 const salCh = new BroadcastChannel('rostro-salida');
-salCh.onmessage = (e) => { if (e.data && e.data.type === 'vivo') { S.salidaVista = performance.now(); if (!S.salida) { S.salida = true; $('bProj').classList.add('on'); tamano(); } } };
+salCh.onmessage = (e) => { if (e.data && e.data.type === 'vivo') { if (e.data.code !== (S.P && S.P.code) && S.piezaMsg) salCh.postMessage(S.piezaMsg); S.salidaVista = performance.now(); if (!S.salida) { S.salida = true; $('bProj').classList.add('on'); tamano(); } } };
 let fadeOut = 1;
+const LAT = () => Math.min(0.2, ctx.outputLatency || ctx.baseLatency || 0);
 
 function frame(ts) {
   requestAnimationFrame(frame);
@@ -110,14 +113,16 @@ function frame(ts) {
   let pres = 0;
   if (espOn) {
     const r = esp.leer(Math.min(0.1, dt), S.amp); pres = r.presencia;
-    S.an.externo(r.c, pres * 0.92, r.emo);
+    S.an.externo(r.c, pres * 0.92, r.emo); S.extC = r.c; S.extEmo = r.emo;
     if (hudTick(ts, 'e')) { $('eCara').textContent = pres > 0.5 ? 'DELANTE' : 'NADIE'; $('eEmo').textContent = pres > 0.5 ? r.emocion : '—'; $('eMs').textContent = Math.round(esp.ms) + ' ms';
       $('eLvl').style.width = (pres * 100) + '%'; }
   }
   let pl = S.an.plano(tt);
   // con alguien delante, planos frontales: un espejo se mira de frente
   if (pres > 0.5 && !FRONTAL.has(pl.name)) pl = { name: 'medio', since: pl.since, at: pl.at };
-  const msg = { type: 'frame', c: st.c, bumps: st.bumps, rim: st.rim, sweep: st.sweep, swx: st.swx, shot: pl.name, since: pl.since, fade, t: tt, acc: P.acc, bri: S.bri, at: performance.timeOrigin + performance.now() };
+  // la salida calcula la pieza por su cuenta: aquí solo va el reloj (en tiempo de pared) y la sala
+  const msg = { type: 'reloj', code: P.code, start: performance.timeOrigin + performance.now() - (ctx.currentTime - S.t0 - LAT()) * 1000, // compensa la latencia de salida del audio
+    fadeOut, bri: S.bri, seguro: S.seguro, ext: espOn && pres > 0.01 ? { c: S.extC, w: pres * 0.92, emo: S.extEmo } : null, forzarMedio: pres > 0.5 };
   salCh.postMessage(msg);
 
   // calidad automática: si no llega, baja por pasos; la resolución solo cambia en un corte de plano
