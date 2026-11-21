@@ -18,7 +18,6 @@ export const SHOTS = {
   contra: { pos: [-2.4, -2.4, 10.5], look: [0, 1.5, 0], fov: 30, drift: 0.18 },
   perfil: { pos: [11.0, 1.2, 3.6], look: [0, 1.3, 0.8], fov: 25, drift: 0.2 },
   boca:   { pos: [1.2, 0.35, 7.6], look: [0, 0.45, 1.9], fov: 26, drift: 0.1, follow: 0.95 },
-  cenit:  { pos: [0.8, 9.2, 6.4], look: [0, 1.2, 0.8], fov: 27, drift: 0.15 },
   lejos:  { pos: [0, 1.2, 15.0], look: [0, 1.1, 0], fov: 26, drift: -0.25 },
 };
 const NOSE = 4841, PIVOT = new Vector3(0, -1.5, -0.2);
@@ -71,9 +70,9 @@ float skinH(vec3 p){
   // dos surcos cortos a ambos lados del centro
   float bw = g2(vec2(ax - 0.11, p.y - 1.98), vec2(0.05, 0.2)) * front;
   h -= bw * uWrk.y * 0.022;
-  // patas de gallo: abanico desde el rabillo del ojo
-  vec2 cf = vec2(ax - 1.0, p.y - 1.62); float cw = g2(cf, vec2(0.2, 0.2)) * smoothstep(0.92, 1.02, ax);
-  h -= cw * uWrk.z * 0.008 * pow(abs(sin(atan(cf.y, cf.x) * 6.0 + vnoise(p * 9.0) * 2.0)), 3.0);
+  // rabillo del ojo: un pliegue suave y horizontal al apretar los ojos (sin líneas dibujadas)
+  float cw = g2(vec2(ax - 1.02, p.y - 1.6), vec2(0.16, 0.08)) * smoothstep(0.9, 1.0, ax);
+  h -= cw * uWrk.z * 0.012;
   // surco nasolabial: del ala de la nariz a la comisura
   float nd = segD(vec2(ax, p.y), vec2(0.36, 1.02), vec2(0.66, 0.22));
   h -= exp(-nd * nd / 0.0035) * uWrk.w * 0.022 * front;
