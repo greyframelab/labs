@@ -134,6 +134,12 @@ body.solo{cursor:none}
 .emo button{border:1px solid var(--line2);padding:7px 4px;font-size:8.5px;letter-spacing:.16em;color:var(--mute);text-align:center}
 .emo button:hover{color:var(--tx)}
 .emo button.on{color:#000;background:var(--tx)}
+.keys{display:grid;grid-template-columns:repeat(2,1fr);gap:4px}
+.keys button{border:1px solid var(--line2);padding:7px 4px;font-size:8.5px;letter-spacing:.14em;color:var(--mute);text-align:left;display:flex;gap:8px;align-items:center}
+.keys button b{color:var(--tx);font-weight:600;min-width:10px}
+.keys button:hover{color:var(--tx)}
+.keys button.on{background:var(--acc);color:#000;border-color:var(--acc)}
+.keys button.on b{color:#000}
 .credit{font-size:8.5px;letter-spacing:.08em;color:var(--dim);line-height:1.7}
 .credit a{color:var(--mute)}
 </style>
@@ -201,6 +207,11 @@ body.solo{cursor:none}
         </div>
       </div>
       <div class="sect">
+        <h3>TECLADO <em>EMOCIÓN EN DIRECTO</em></h3>
+        <div class="keys" id="teclas"></div>
+        <div class="note">Cada tecla pone esa emoción al momento, con un golpe, encima de la pieza: el ritmo y el sonido siguen. Funciona en cualquier modo y manda sobre ESPEJO. G la suelta y la cara vuelve a su arco.</div>
+      </div>
+      <div class="sect">
         <h3>PIEZA <em id="pieceRef">—</em></h3>
         <div class="code"><input id="inCode" maxlength="10" spellcheck="false" aria-label="Semilla"><button class="tbtn" id="bNew" title="espacio">NUEVA</button></div>
         <div class="row"><button class="tbtn" id="bPrev">‹ ANTERIOR</button><button class="tbtn" id="bNext">SIGUIENTE ›</button></div>
@@ -211,6 +222,11 @@ body.solo{cursor:none}
         <h3>AUDIO <em>A</em></h3>
         <div class="seg" id="segAud"><button data-a="0">BASE</button><button data-a="1">BASE + AMBIENT</button></div>
         <div class="note">BASE: bombo esculpido, chapa, crujidos de tendón, bajo, impacto y dron. AMBIENT añade encima capas de dron, ruido oscuro, reverb larga, flanger en el eco, una voz por emoción y el sonido de la piel al estirarse. Se cambia en directo.</div>
+      </div>
+      <div class="sect">
+        <h3>FX</h3>
+        <div class="row" id="fxList" style="flex-wrap:wrap"></div>
+        <div class="note">Glitch en los tirones y el impacto, estela en los gestos rápidos, conos de luz con polvo y destellos alargados en la laca. Todos van con el sonido y se encienden o apagan en directo; la proyección cambia al momento.</div>
       </div>
       <div class="sect">
         <h3>SALA</h3>
@@ -233,7 +249,7 @@ body.solo{cursor:none}
   </main>
   <footer>
     <span><b>1 2 3</b> MODO</span><span><b>ESPACIO</b> NUEVA</span><span><b>← →</b> HISTORIAL</span><span><b>P</b> PROYECTAR</span><span><b>H</b> VISTA LIMPIA</span>
-    <span><b>A</b> AUDIO</span><span><b>B</b> APAGAR</span><span><b>↑ ↓</b> VOLUMEN</span><span><b>C</b> CAPTURA</span><span><b>?</b> AYUDA</span>
+    <span><b>LETRAS · 4–0</b> EMOCIÓN</span><span><b>G</b> SOLTAR</span><span><b>A</b> AUDIO</span><span><b>B</b> APAGAR</span><span><b>↑ ↓</b> VOLUMEN</span><span><b>C</b> CAPTURA</span><span><b>?</b> AYUDA</span>
   </footer>
 </div>
 
@@ -246,6 +262,11 @@ body.solo{cursor:none}
   <b>← →</b><span>pieza anterior / siguiente del historial</span>
   <b>P</b><span>proyectar: abre la ventana de salida (llévala al proyector y doble clic)</span>
   <b>H</b><span>vista limpia en esta ventana</span>
+  <b>Q W E R T Y U I O</b><span>miedo, furia, grito, risa, tristeza, angustia, pánico, sorpresa, dolor</span>
+  <b>S D F J K L</b><span>súplica, asco, desprecio, horror, odio, locura</span>
+  <b>Z X V N M</b><span>agonía, éxtasis, vergüenza, confusión, llanto</span>
+  <b>4 5 6 7 8 9 0</b><span>desesperación, náusea, burla, sospecha, arrogancia, agotamiento, vértigo</span>
+  <b>G</b><span>soltar la emoción: la cara vuelve al arco de la pieza</span>
   <b>A</b><span>audio: BASE / BASE + AMBIENT</span>
   <b>B</b><span>apagar / encender con fundido</span>
   <b>↑ ↓ · C</b><span>volumen de sala · captura</span>

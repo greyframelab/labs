@@ -6,7 +6,8 @@ import {
   WebGLRenderer, WebGLRenderTarget, HalfFloatType, Scene, Color, Mesh, PlaneGeometry, MeshBasicMaterial, DoubleSide, FrontSide, PMREMGenerator,
   PerspectiveCamera, SpotLight, MeshPhysicalMaterial, MeshStandardMaterial, MeshDepthMaterial, RGBADepthPacking, Vector2, Vector3, Vector4, Matrix3, Euler, Matrix4,
   AgXToneMapping, PCFSoftShadowMap,
-  EffectComposer, RenderPass, UnrealBloomPass, ShaderPass, OutputPass,
+  EffectComposer, RenderPass, UnrealBloomPass, ShaderPass, OutputPass, AfterimagePass,
+  ConeGeometry, ShaderMaterial, AdditiveBlending, BufferGeometry, Float32BufferAttribute, Points, Object3D,
 } from './vendor/three-rostro.js';
 import { cargarCara } from './cara.js';
 import { ARKIT } from './rig.js';
@@ -77,7 +78,7 @@ float skinH(vec3 p){
   float nd = segD(vec2(ax, p.y), vec2(0.36, 1.02), vec2(0.66, 0.22));
   h -= exp(-nd * nd / 0.0035) * uWrk.w * 0.022 * front;
   // arrugas de la nariz (asco, furia) y barbilla que se arruga
-  h -= g2(vec2(p.x, p.y - 1.45), vec2(0.3, 0.16)) * uWrk2.x * 0.014 * pow(abs(sin(p.y * 40.0)), 4.0) * front;
+  h -= g2(vec2(p.x, p.y - 1.42), vec2(0.22, 0.1)) * uWrk2.x * 0.006 * pow(abs(sin(p.y * 26.0 + 0.8)), 3.0) * front;
   h -= g2(vec2(p.x, p.y + 0.35), vec2(0.35, 0.22)) * uWrk2.y * 0.012 * vnoise(p * 30.0) * front;
   // tendones del cuello en tensión
   h += g2(vec2(ax - 0.55, p.y + 1.35), vec2(0.12, 0.9)) * uWrk2.z * 0.028 * smoothstep(-0.5, 0.8, p.z);
@@ -130,6 +131,45 @@ export async function crearEscena(canvas, accentHex, base = './assets/', { msaa 
   const sweep = new SpotLight(0xffffff, 0, 30, 0.16, 0.6, 1.4); sweep.position.set(0, 1.5, 9); sweep.target.position.set(0, 1.4, 1.5);
   sc.add(key, key.target, rimA, rimA.target, rimB, rimB.target, sweep, sweep.target);
 
+  // FX · ATMÓSFERA: conos de luz (niebla iluminada) y polvo flotando en el haz
+  const atmos = new Object3D(); sc.add(atmos);
+  const coneMat = (col, k) => new ShaderMaterial({
+    uniforms: { uCol: { value: new Color(col) }, uK: { value: k }, uT: { value: 0 }, uLen: { value: 1 } },
+    vertexShader: 'varying vec3 vP; varying vec3 vN; varying vec3 vV; void main(){ vP = position; vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }',
+    fragmentShader: `uniform vec3 uCol; uniform float uK, uT, uLen; varying vec3 vP; varying vec3 vN; varying vec3 vV;
+      float h(vec3 p){ return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
+      float n3(vec3 p){ vec3 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+        return mix(mix(mix(h(i), h(i+vec3(1,0,0)), f.x), mix(h(i+vec3(0,1,0)), h(i+vec3(1,1,0)), f.x), f.y), mix(mix(h(i+vec3(0,0,1)), h(i+vec3(1,0,1)), f.x), mix(h(i+vec3(0,1,1)), h(i+vec3(1,1,1)), f.x), f.y), f.z); }
+      void main(){
+        float a = clamp(0.5 - vP.y / uLen, 0.0, 1.0);          // 0 en el foco, 1 al final del cono
+        float edge = pow(abs(dot(vN, vV)), 1.6);                 // bordes suaves
+        float fog = 0.55 + 0.45 * n3(vP * 1.3 + vec3(0.0, -uT * 0.25, uT * 0.1));
+        gl_FragColor = vec4(uCol * uK * edge * fog * smoothstep(0.0, 0.15, a) * (1.0 - a * 0.85), 1.0);
+      }`,
+    transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide,
+  });
+  const haz = (from, to, radio, col, k) => {
+    const L = from.distanceTo(to); const g = new ConeGeometry(radio, L, 48, 1, true); const m = coneMat(col, k); m.uniforms.uLen.value = L;
+    const c = new Mesh(g, m); c.position.copy(from).add(to).multiplyScalar(0.5); c.lookAt(to); c.rotateX(-Math.PI / 2); c.renderOrder = 2; atmos.add(c); return c; // la punta del cono, en el foco
+  };
+  const hazKey = haz(new Vector3(-8.5, 7.5, 4.5), new Vector3(1.5, -1.5, -1), 3.4, 0xf2efe9, 0.026);
+  const hazRim = haz(new Vector3(7.5, 4.5, -7), new Vector3(-1.2, 0.2, 1.8), 3.0, accent, 0.05);
+  const NP = 900, pp = new Float32Array(NP * 3), ps = new Float32Array(NP);
+  for (let i = 0; i < NP; i++) { pp[i * 3] = (Math.random() - 0.5) * 12; pp[i * 3 + 1] = (Math.random() - 0.3) * 9; pp[i * 3 + 2] = (Math.random() - 0.5) * 10; ps[i] = Math.random(); }
+  const pg = new BufferGeometry(); pg.setAttribute('position', new Float32BufferAttribute(pp, 3)); pg.setAttribute('aS', new Float32BufferAttribute(ps, 1));
+  const polvoMat = new ShaderMaterial({
+    uniforms: { uT: { value: 0 }, uCol: { value: new Color(0xf2efe9) }, uPx: { value: 1 } },
+    vertexShader: `attribute float aS; uniform float uT, uPx; varying float vA;
+      void main(){ vec3 p = position; p.y += mod(uT * (0.05 + aS * 0.08) + aS * 9.0, 9.0) - 4.5; p.x += sin(uT * 0.3 + aS * 30.0) * 0.3;
+        // solo brilla dentro del haz de la clave (de arriba a la izquierda hacia el centro)
+        vec3 d = normalize(vec3(10.0, -9.0, -5.5)); vec3 o = vec3(-8.5, 7.5, 4.5); vec3 q = p - o; float along = dot(q, d); float dist = length(q - d * along);
+        vA = smoothstep(along * 0.34 + 0.2, along * 0.12, dist) * (0.35 + 0.65 * aS);
+        vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv; gl_PointSize = uPx * (1.2 + aS * 2.2) * (6.0 / -mv.z); }`,
+    fragmentShader: 'uniform vec3 uCol; varying float vA; void main(){ vec2 c = gl_PointCoord - 0.5; float a = smoothstep(0.5, 0.0, length(c)) * vA; gl_FragColor = vec4(uCol * a * 0.5, 1.0); }',
+    transparent: true, depthWrite: false, blending: AdditiveBlending,
+  });
+  const polvo = new Points(pg, polvoMat); polvo.renderOrder = 3; atmos.add(polvo);
+
   const cara = await cargarCara(base);
   const U = { uHeadR: { value: new Matrix3() }, uPivot: { value: PIVOT.clone() }, uThrust: { value: 0 }, uTremor: { value: 0 }, uTime: { value: 0 },
     uBump: { value: Array.from({ length: 6 }, () => new Vector4(0, 0, -99, 0.3)) }, uBumpA: { value: new Array(6).fill(0) },
@@ -155,7 +195,36 @@ export async function crearEscena(canvas, accentHex, base = './assets/', { msaa 
   comp.addPass(new RenderPass(sc, cam));
   comp.addPass(new ShaderPass({ uniforms: { tDiffuse: { value: null } }, vertexShader: VS,
     fragmentShader: 'uniform sampler2D tDiffuse;varying vec2 v;void main(){vec3 c=texture2D(tDiffuse,v).rgb;float m=max(c.r,max(c.g,c.b));gl_FragColor=vec4(c*min(1.,1.6/max(m,1e-4)),1.);}' }));
+  // FX · DESTELLOS: los brillos de la laca se alargan en horizontal, con un poco del acento
+  const destellos = new ShaderPass({
+    uniforms: { tDiffuse: { value: null }, uRes: { value: new Vector2(16, 9) }, uAcc: { value: accent }, uK: { value: 1 } },
+    vertexShader: VS,
+    fragmentShader: `uniform sampler2D tDiffuse; uniform vec2 uRes; uniform vec3 uAcc; uniform float uK; varying vec2 v;
+      void main(){ vec3 c = texture2D(tDiffuse, v).rgb; vec3 s = vec3(0.0); float px = 1.0 / uRes.x;
+        // muestras continuas (paso de 3 px) y suavizadas en vertical: una línea limpia, nunca rayas
+        for (int i = -32; i <= 32; i++) { float o = float(i) * 3.0 * px * (uRes.x / 1280.0); float w = exp(-abs(float(i)) / 11.0);
+          vec3 t = texture2D(tDiffuse, v + vec2(o, 0.0)).rgb + texture2D(tDiffuse, v + vec2(o, 1.5 / uRes.y)).rgb + texture2D(tDiffuse, v - vec2(-o, 1.5 / uRes.y)).rgb;
+          t /= 3.0; float l = max(max(t.r, t.g), t.b); s += t * max(0.0, l - 1.15) * w; }
+        s = s * 0.05 * uK; s = mix(s, uAcc * dot(s, vec3(0.333)), 0.35);
+        gl_FragColor = vec4(c + s, 1.0); }`,
+  });
+  comp.addPass(destellos);
   const bloom = new UnrealBloomPass(new Vector2(256, 256), 0.15, 0.6, 0.86); comp.addPass(bloom);
+  // FX · ESTELA: el movimiento deja un eco que se apaga (más largo cuanto más rápido es el gesto)
+  const estela = new AfterimagePass(0.0); comp.addPass(estela);
+  // FX · GLITCH: separación RGB y franjas desplazadas en tirones e impacto
+  const glitch = new ShaderPass({
+    uniforms: { tDiffuse: { value: null }, uG: { value: 0 }, uT: { value: 0 } },
+    vertexShader: VS,
+    fragmentShader: `uniform sampler2D tDiffuse; uniform float uG, uT; varying vec2 v;
+      float h(float x){ return fract(sin(x * 91.17 + uT * 13.0) * 43758.5453); }
+      void main(){ vec2 uv = v; float band = floor(uv.y * (14.0 + 30.0 * h(1.0)));
+        float on = step(1.0 - uG * 0.55, h(band)); uv.x += (h(band + 7.0) - 0.5) * 0.12 * uG * on;
+        float ca = 0.006 * uG + 0.003 * uG * on;
+        vec3 c = vec3(texture2D(tDiffuse, uv + vec2(ca, 0.0)).r, texture2D(tDiffuse, uv).g, texture2D(tDiffuse, uv - vec2(ca, 0.0)).b);
+        gl_FragColor = vec4(c, 1.0); }`,
+  });
+  comp.addPass(glitch);
   const fin = new ShaderPass({
     uniforms: { tDiffuse: { value: null }, uT: { value: 0 }, uRes: { value: new Vector2(16, 9) }, uFade: { value: 1 } },
     vertexShader: VS,
@@ -168,21 +237,27 @@ export async function crearEscena(canvas, accentHex, base = './assets/', { msaa 
   });
   comp.addPass(fin); comp.addPass(new OutputPass());
 
+  let rimNow = 1, lastR = 0, corte = false, lastShot = '', lastSince = 0;
   const v3 = (a) => new Vector3(...a), eul = new Euler(), m4 = new Matrix4(), anchorD = new Vector3(), w = new Float32Array(cara.nTargets);
   const restNose = new Vector3(cara.rest[NOSE * 3], cara.rest[NOSE * 3 + 1], cara.rest[NOSE * 3 + 2]);
-  let curAcc = accentHex, W = 0, H = 0;
+  let curAcc = accentHex, W = 0, H = 0, lig = false;
+  const FX = { glitch: true, estela: true, atmos: true, destellos: true };
+  const aplicarFx = () => { glitch.enabled = FX.glitch; estela.enabled = FX.estela; atmos.visible = FX.atmos; destellos.enabled = FX.destellos && !lig; };
+  aplicarFx();
   return {
     renderer: r,
     tamano(wd, ht) {
       wd = Math.max(2, Math.round(wd)); ht = Math.max(2, Math.round(ht)); if (wd === W && ht === H) return;
-      W = wd; H = ht; r.setSize(wd, ht, false); comp.setSize(wd, ht); cam.aspect = wd / ht; cam.updateProjectionMatrix(); fin.uniforms.uRes.value.set(wd, ht);
+      W = wd; H = ht; r.setSize(wd, ht, false); comp.setSize(wd, ht); cam.aspect = wd / ht; cam.updateProjectionMatrix(); fin.uniforms.uRes.value.set(wd, ht); destellos.uniforms.uRes.value.set(wd, ht); polvoMat.uniforms.uPx.value = ht / 720;
     },
     acento(hex) {
       if (hex === curAcc) return; curAcc = hex; accent.set(hex);
-      rimA.color.copy(accent); rimB.color.copy(accent); accStrip.material.color.copy(accent).multiplyScalar(5); bakeEnv();
+      rimA.color.copy(accent); rimB.color.copy(accent); hazRim.material.uniforms.uCol.value.copy(accent); accStrip.material.color.copy(accent).multiplyScalar(5); bakeEnv();
     },
     // ligera: sin sombras ni bloom, poros más suaves (para gráficas integradas)
-    calidad(ligera) { key.castShadow = !ligera; bloom.enabled = !ligera; U.uPore.value = ligera ? 0.6 : 1; r.shadowMap.needsUpdate = true; },
+    calidad(ligera) { lig = ligera; key.castShadow = !ligera; bloom.enabled = !ligera; U.uPore.value = ligera ? 0.6 : 1; r.shadowMap.needsUpdate = true; aplicarFx(); },
+    // FX: { glitch, estela, atmos, destellos } — cada uno se enciende y se apaga en directo
+    fx(o) { Object.assign(FX, o); aplicarFx(); },
     // c: controles (53 expresiones + cabeza); bumps: impulsos bajo la piel
     pose(c, t, bumps) {
       for (let k = 0; k < ARKIT.length; k++) { const v = c[ARKIT[k]] || 0; w[idx[k]] = v; mesh.morphTargetInfluences[idx[k]] = v; }
@@ -199,15 +274,27 @@ export async function crearEscena(canvas, accentHex, base = './assets/', { msaa 
       anchorD.copy(q).sub(restNose).multiplyScalar(hw);
     },
     camara(name, since) {
+      if (name !== lastShot || since < lastSince) corte = true; lastShot = name; lastSince = since;
       const S = SHOTS[name] || SHOTS.medio; const p = v3(S.pos), l = v3(S.look);
       const dir = l.clone().sub(p).normalize(); const fol = S.follow ?? 0.6;
       p.addScaledVector(anchorD, fol); l.addScaledVector(anchorD, fol);
       cam.position.copy(p.addScaledVector(dir, S.drift * since)); cam.fov = S.fov; cam.updateProjectionMatrix(); cam.lookAt(l);
     },
     luz(rim, sw = 0, swx = 0, bri = 1) {
-      rimA.intensity = 160 * rim * bri; rimB.intensity = 60 * rim * bri; key.intensity = 80 * bri;
+      rimNow = rim; rimA.intensity = 160 * rim * bri; rimB.intensity = 60 * rim * bri; key.intensity = 80 * bri;
       sweep.intensity = 900 * sw * bri; sweep.position.x = swx * 6; sweep.target.position.x = swx * 1.2;
     },
-    render(t, fade = 1) { fin.uniforms.uT.value = t % 97; fin.uniforms.uFade.value = fade; comp.render(); },
+    // g: golpe de glitch (0..1) · speed: velocidad del gesto (alarga la estela)
+    render(t, fade = 1, g = 0, speed = 0) {
+      fin.uniforms.uT.value = t % 97; fin.uniforms.uFade.value = fade;
+      glitch.uniforms.uG.value = Math.min(1, g); glitch.uniforms.uT.value = Math.floor(t * 24) % 97; glitch.enabled = FX.glitch && g > 0.01;
+      // la estela dura en segundos, no en fotogramas (igual a 60 que a 30 fps), y se borra en cada corte de plano
+      const dtR = t > lastR && t - lastR < 0.25 ? t - lastR : 1 / 60; lastR = t; // tiempo de la pieza: vale igual en directo y en render
+      const tau = 0.035 + 0.075 * Math.min(1.4, speed);
+      estela.uniforms.damp.value = corte ? 0 : Math.exp(-dtR / tau); corte = false;
+      hazKey.material.uniforms.uT.value = t; hazRim.material.uniforms.uT.value = t; polvoMat.uniforms.uT.value = t;
+      hazRim.material.uniforms.uK.value = 0.05 * Math.min(2, rimNow);
+      comp.render();
+    },
   };
 }

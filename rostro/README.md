@@ -22,7 +22,7 @@ Una semilla decide el estilo de sonido, el tempo, el acento, la raíz y el arco 
 - **ICT Face Model** (ICT-FaceKit, USC Institute for Creative Technologies, MIT): una cara media registrada a partir de escaneos de light stage. No es una persona concreta. Trae globos oculares, dientes, encías y lengua: la boca se abre de verdad.
 - **53 expresiones anatómicas** (nombres de ARKit, separadas en izquierda y derecha) mezcladas en la gráfica como morph targets. Encima, el giro de la cabeza sobre el cuello, el temblor y lo que empuja bajo la piel.
 - **Piel:** laca negra con poros y arrugas procedurales que nacen con cada expresión (frente, entrecejo, patas de gallo, surco nasolabial, nariz, barbilla y tendones del cuello). Ojos de cristal negro.
-- **Doce emociones**, cada una con su pose y **su propia manera de moverse**:
+- **Veintisiete emociones** (más el reposo), cada una con su pose y **su propia manera de moverse**. Algunas:
   - MIEDO tiembla, retrocede y los ojos saltan;
   - FURIA sacude la cabeza y embiste con el bombo;
   - GRITO sostiene la boca con vibrato y se va hacia atrás;
@@ -34,7 +34,13 @@ Una semilla decide el estilo de sonido, el tempo, el acento, la raíz y el arco 
   - DOLOR se encoge en cada golpe;
   - ASCO se aparta;
   - DESPRECIO ladea con media sonrisa;
+  - HORROR se congela con la mirada clavada; ODIO aprieta la mandíbula y avanza; LOCURA se balancea con tics y risitas;
+  - AGONÍA se retuerce y convulsiona; ÉXTASIS echa la cabeza atrás con los ojos en blanco; VERGÜENZA aparta la cara;
+  - CONFUSIÓN ladea de un lado a otro; LLANTO llora a bocanadas; SÚPLICA asiente hacia arriba; DESESPERACIÓN niega;
+  - NÁUSEA tiene arcadas; BURLA se ríe a golpes; SOSPECHA mira de reojo; ARROGANCIA alza la barbilla;
+  - AGOTAMIENTO se duerme y despierta de golpe; VÉRTIGO gira la cabeza y los ojos en círculos;
   - REPOSO respira y parpadea.
+- Las piezas automáticas eligen su arco entre todas ellas; las nuevas suenan con la voz de su familia (horror como el pánico, odio como la furia…).
 
 ## Cada sonido es un gesto
 | Sonido | Gesto |
@@ -46,6 +52,23 @@ Una semilla decide el estilo de sonido, el tempo, el acento, la raíz y el arco 
 | Barrido | Una luz blanca recorre la cara (solo en la ruptura). |
 | Impacto | La ruptura: la emoción salta al extremo. |
 
+## Teclado: emoción en directo
+Cada tecla pone esa emoción al momento, con su propio golpe, encima de la pieza. El ritmo y el sonido siguen; las voces del sonido cambian con la emoción. Funciona en cualquier modo y manda sobre ESPEJO. También están como botones en la consola (TECLADO).
+
+| Tecla | Emoción | Tecla | Emoción | Tecla | Emoción |
+|---|---|---|---|---|---|
+| Q | MIEDO | S | SÚPLICA | 4 | DESESPERACIÓN |
+| W | FURIA | D | ASCO | 5 | NÁUSEA |
+| E | GRITO | F | DESPRECIO | 6 | BURLA |
+| R | RISA | J | HORROR | 7 | SOSPECHA |
+| T | TRISTEZA | K | ODIO | 8 | ARROGANCIA |
+| Y | ANGUSTIA | L | LOCURA | 9 | AGOTAMIENTO |
+| U | PÁNICO | Z | AGONÍA | 0 | VÉRTIGO |
+| I | SORPRESA | X | ÉXTASIS | G | soltar: vuelve al arco de la pieza |
+| O | DOLOR | V | VERGÜENZA | | |
+|  |  | N | CONFUSIÓN | | |
+|  |  | M | LLANTO | | |
+
 ## ESPEJO (`3`)
 Una cámara mira la sala desde cerca del proyector, a la altura de la cara. La cabeza copia al visitante y lo exagera:
 - lee la cara del visitante y la traduce a las mismas expresiones de la cabeza: si abre la boca, grita; si sube las cejas, se sorprende o se asusta; si frunce el ceño, entra en furia; si sonríe, se ríe con toda la cara; si arruga la nariz, asco;
@@ -55,6 +78,13 @@ Una cámara mira la sala desde cerca del proyector, a la altura de la cara. La c
 - la cara neutra de cada visitante se aprende sola en el primer segundo, así funciona con cualquier cara.
 
 En la consola: estado de la cámara, presencia, emoción que lee, **EXAGERAR** (50–200 %) y **VER CÁMARA** (solo en la consola, nunca en la proyección). La imagen no se guarda ni sale de la máquina: solo se leen la boca, las cejas, los ojos y el giro. Usa la visión de OJO (Human, modelos locales en `../ojo/models`), sin internet.
+
+## FX (consola › FX)
+Cuatro efectos que van con el sonido. Por defecto, todos activos; cada uno se enciende o apaga en directo y la proyección cambia al momento.
+- **GLITCH EN LOS GOLPES:** separación RGB y franjas desplazadas en los tirones (crujidos), los cortes digitales y el impacto. Solo dura el golpe.
+- **ESTELA:** los gestos rápidos dejan un eco que se apaga. Dura más cuanto más rápido es el gesto, se mide en segundos (igual a 30 que a 60 fps) y se borra en cada corte de plano.
+- **ATMÓSFERA Y HACES:** conos de luz con niebla que se mueve (el de la clave y el del acento, que late con los golpes) y polvo flotando dentro del haz.
+- **DESTELLOS:** los brillos de la laca se alargan en horizontal, con un poco del acento. Solo los brillos de verdad, en una línea limpia. En calidad ligera se apagan solos.
 
 ## Audio (`A`)
 - **BASE:** el sonido del clip de validación. Bombo esculpido, chapa FM, crujidos de cuerda física, bajo con armónicos para el móvil, impacto y dron aditivo en la raíz.

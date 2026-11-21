@@ -33,12 +33,32 @@ const KICK = {
   DOLOR: { eyeSquint_L: 6, eyeSquint_R: 6, mouthStretch_L: 5, mouthStretch_R: 5, cheekRaiser_L: 4, cheekRaiser_R: 4, pitch: 1.5, roll: 1 },
   ASCO: { thrust: -2.5, noseSneer_L: 6, mouthUpperUp_L: 4, yaw: 1.5 },
   DESPRECIO: { roll: 1, mouthSmile_R: 3, pitch: -0.8 },
+  HORROR: { thrust: -4.5, eyeWide_L: 5, eyeWide_R: 5, jawOpen: 3.5, pitch: -2 },
+  ODIO: { mouthPress_L: 5, mouthPress_R: 5, jawForward: 4, browDown_L: 4, browDown_R: 4, thrust: 2 },
+  LOCURA: { roll: 2.5, mouthSmile_L: 5, eyeWide_L: 4, jawLeft: 3, yaw: 1.5 },
+  'AGONÍA': { jawOpen: 5, mouthStretch_L: 5, mouthStretch_R: 5, eyeSquint_L: 5, eyeSquint_R: 5, roll: 2, pitch: -1.5 },
+  'ÉXTASIS': { pitch: -2.5, jawOpen: 2.5, eyeLookUp_L: 3, eyeLookUp_R: 3 },
+  'VERGÜENZA': { pitch: 2, yaw: 1.5, mouthPress_L: 3, mouthPress_R: 3 },
+  'CONFUSIÓN': { roll: 2, browOuterUp_R: 3, mouthLeft: 3 },
+  LLANTO: { jawOpen: 3, mouthFrown_L: 4, mouthFrown_R: 4, eyeSquint_L: 4, eyeSquint_R: 4, pitch: 1.5 },
+  'SÚPLICA': { thrust: 3, browInnerUp_L: 4, browInnerUp_R: 4, pitch: -1.5 },
+  'DESESPERACIÓN': { yaw: 3, jawOpen: 3, mouthStretch_L: 3, mouthStretch_R: 3 },
+  'NÁUSEA': { pitch: 3, cheekPuff_L: 5, cheekPuff_R: 5, jawOpen: 2 },
+  BURLA: { jawOpen: 2.5, mouthSmile_L: 4, roll: -1.5, pitch: -1 },
+  SOSPECHA: { eyeSquint_L: 3, eyeSquint_R: 3, yaw: 1.2 },
+  ARROGANCIA: { pitch: -1.5, thrust: -1.5 },
+  AGOTAMIENTO: { pitch: 2.5, eyeBlink_L: 3, eyeBlink_R: 3 },
+  'VÉRTIGO': { roll: 2.5, yaw: 2, eyeWide_L: 3, eyeWide_R: 3 },
 };
 // tirones (crujido/glitch): qué se descoloca de golpe en cada emoción
 const TIRON = {
   REPOSO: ['yaw', 'roll'], MIEDO: ['yaw', 'eyeLookOut_L', 'eyeLookIn_R', 'pitch'], FURIA: ['yaw', 'roll', 'jawLeft', 'jawRight'],
   GRITO: ['roll', 'jawLeft', 'jawRight'], RISA: ['pitch', 'roll'], TRISTEZA: ['roll', 'pitch'], ANGUSTIA: ['roll', 'jawLeft'],
   'PÁNICO': ['yaw', 'pitch', 'eyeLookUp_L', 'eyeLookOut_R'], SORPRESA: ['pitch'], DOLOR: ['roll', 'yaw', 'jawRight'], ASCO: ['yaw', 'roll'], DESPRECIO: ['roll', 'yaw'],
+  HORROR: ['pitch', 'roll'], ODIO: ['jawLeft', 'jawRight', 'roll'], LOCURA: ['roll', 'yaw', 'jawLeft', 'eyeLookOut_L', 'eyeLookUp_R', 'mouthSmile_L'],
+  'AGONÍA': ['roll', 'yaw', 'jawRight'], 'ÉXTASIS': ['roll'], 'VERGÜENZA': ['yaw', 'eyeLookDown_L'], 'CONFUSIÓN': ['roll', 'eyeLookOut_R'],
+  LLANTO: ['pitch', 'roll'], 'SÚPLICA': ['pitch'], 'DESESPERACIÓN': ['yaw', 'roll'], 'NÁUSEA': ['pitch'], BURLA: ['roll', 'pitch'],
+  SOSPECHA: ['eyeLookOut_L', 'eyeLookIn_R', 'yaw'], ARROGANCIA: ['roll'], AGOTAMIENTO: ['pitch', 'roll'], 'VÉRTIGO': ['roll', 'yaw', 'eyeLookOut_L'],
 };
 
 export function crearAnimador(P, seed = 1, intensidad = 1) {
@@ -46,7 +66,7 @@ export function crearAnimador(P, seed = 1, intensidad = 1) {
   const ev = P.events; let ei = 0;
   const tImp = (ev.find(e => e.k === 'impact') || { t: 1e9 }).t;
   const x = {}, v = {}, off = {}; for (const k of CONTROLS) { x[k] = 0; v[k] = 0; off[k] = 0; }
-  const bumps = []; let rimPulse = 0, bassEnv = 0, t = 0, sweep = 0, swx = 0, swDir = 1;
+  const bumps = []; let gEnv = 0, rimPulse = 0, bassEnv = 0, t = 0, sweep = 0, swx = 0, swDir = 1;
   const K = 150, D = 2 * 0.36 * Math.sqrt(K);
   const poseCache = new Map(); const P_ = (e, m) => { const k = e + m; if (!poseCache.has(k)) poseCache.set(k, pose(e, m)); return poseCache.get(k); };
   // estado de los gestos propios
@@ -85,6 +105,7 @@ export function crearAnimador(P, seed = 1, intensidad = 1) {
       const ang = (rnd() - 0.5) * 2.2, y = 0.2 + rnd() * 2.8;
       bumps.push({ x: Math.sin(ang) * 1.9, y, z: Math.cos(ang) * 1.9 + 0.2, r: 0.22 + rnd() * 0.22, a0: (0.1 + rnd() * 0.08) * vel * (rupt ? 1.4 : 1), t0: e.t });
     } else if (e.k === 'creak' || e.k === 'glitch') {
+      gEnv = Math.max(gEnv, (e.k === 'glitch' ? 0.45 : 0.6) * vel * (rupt ? 1.2 : 0.8));
       let best = 'REPOSO', bw = 0; for (const [k, val] of Object.entries(W)) if (val > bw) { bw = val; best = k; }
       const pool = TIRON[best] || TIRON.REPOSO, k = pool[Math.floor(rnd() * pool.length)];
       const amp = k.startsWith('eye') || k.startsWith('jaw') ? 0.6 : 0.2;
@@ -93,7 +114,7 @@ export function crearAnimador(P, seed = 1, intensidad = 1) {
     else if (e.k === 'sweep') { sweep = 1; swDir = e.dir || 1; swx = -swDir; }
     else if (e.k === 'impact') {
       v.jawOpen += 6; v.thrust -= 4; v.pitch -= 2.5; for (const k of [...S2('eyeWide'), ...S2('browInnerUp'), ...S2('mouthStretch')]) v[k] += 5;
-      rimPulse = 1; sweep = 1; swx = -1; swDir = 1;
+      rimPulse = 1; sweep = 1; swx = -1; swDir = 1; gEnv = 1;
       for (let i = 0; i < 3; i++) { const ang = (rnd() - 0.5) * 2; bumps.push({ x: Math.sin(ang) * 1.9, y: 0.5 + rnd() * 2.3, z: Math.cos(ang) * 1.9 + 0.2, r: 0.35, a0: 0.2, t0: e.t }); }
     }
   }
@@ -102,14 +123,14 @@ export function crearAnimador(P, seed = 1, intensidad = 1) {
   function gestos(tg, W, tt, dt) {
     const w = (k) => W[k] || 0, sn = Math.sin, PI2 = Math.PI * 2;
     // sacadas: ojos (y algo la cabeza) que saltan de un punto a otro
-    const rate = 0.5 + 2.5 * w('MIEDO') + 5 * w('PÁNICO') + 0.8 * w('ASCO');
+    const rate = (0.5 + 2.5 * w('MIEDO') + 5 * w('PÁNICO') + 0.8 * w('ASCO') + 4 * w('LOCURA') + 1.5 * w('CONFUSIÓN') + 0.6 * w('SOSPECHA')) * (1 - 0.85 * Math.min(1, w('HORROR') + w('ODIO') + w('ARROGANCIA') + w('ÉXTASIS')));
     if (tt >= sac.t) { sac.t = tt + (0.15 + rnd() * 0.6) / Math.max(0.3, rate); sac.ex = (rnd() - 0.5) * 2; sac.ey = (rnd() - 0.5) * 2; sac.hy = (rnd() - 0.5) * 2; sac.hp = (rnd() - 0.5) * 2; }
     const eyeA = 0.25 + 0.6 * (w('MIEDO') + w('PÁNICO')), headA = 0.04 + 0.16 * w('PÁNICO') + 0.06 * w('MIEDO');
     if (sac.ex > 0) { add(tg, 'eyeLookOut_L', sac.ex * eyeA); add(tg, 'eyeLookIn_R', sac.ex * eyeA); } else { add(tg, 'eyeLookIn_L', -sac.ex * eyeA); add(tg, 'eyeLookOut_R', -sac.ex * eyeA); }
     if (sac.ey > 0) { add(tg, 'eyeLookUp_L', sac.ey * eyeA * 0.7); add(tg, 'eyeLookUp_R', sac.ey * eyeA * 0.7); } else { add(tg, 'eyeLookDown_L', -sac.ey * eyeA * 0.7); add(tg, 'eyeLookDown_R', -sac.ey * eyeA * 0.7); }
     add(tg, 'yaw', sac.hy * headA); add(tg, 'pitch', sac.hp * headA * 0.6);
     // parpadeo: natural en calma, escaso con miedo o sorpresa, lento en la tristeza
-    const freeze = w('SORPRESA') + w('MIEDO') * 0.6 + w('PÁNICO') * 0.4;
+    const freeze = w('SORPRESA') + w('MIEDO') * 0.6 + w('PÁNICO') * 0.4 + w('HORROR') * 1.5 + w('ODIO') * 1.2 + w('LOCURA') * 0.8;
     if (tt >= blink.next) { blink.until = tt + 0.11 + 0.12 * w('TRISTEZA'); blink.next = tt + (2 + rnd() * 3.5) * (1 + 3 * freeze); }
     if (tt < blink.until) { add(tg, 'eyeBlink_L', 1); add(tg, 'eyeBlink_R', 1); }
     // FURIA: sacudida de cabeza y aletas de la nariz que laten
@@ -128,6 +149,41 @@ export function crearAnimador(P, seed = 1, intensidad = 1) {
     if (w('DESPRECIO')) { add(tg, 'roll', sn(tt * PI2 * 0.21) * 0.1 * w('DESPRECIO')); add(tg, 'mouthSmile_R', (0.5 + 0.5 * sn(tt * PI2 * 0.37)) * 0.35 * w('DESPRECIO')); }
     // MIEDO: retrocede poco a poco
     if (w('MIEDO')) add(tg, 'thrust', -0.15 * sm(Math.min(1, (tt % 8) / 8)) * w('MIEDO'));
+    // HORROR: se congela y se va hacia atrás muy despacio, la mirada clavada
+    if (w('HORROR')) { add(tg, 'thrust', -0.2 * sm(Math.min(1, (tt % 10) / 10)) * w('HORROR')); add(tg, 'pitch', -0.06 * sm(Math.min(1, (tt % 10) / 10)) * w('HORROR')); }
+    // ODIO: la mandíbula apretada tiembla y la cabeza baja y avanza despacio
+    if (w('ODIO')) { const cl = Math.abs(sn(tt * PI2 * 13)) * 0.25 * w('ODIO'); for (const k of S2('mouthPress')) add(tg, k, cl); add(tg, 'thrust', 0.15 * sm(Math.min(1, (tt % 7) / 7)) * w('ODIO')); }
+    // LOCURA: la cabeza se balancea ladeada, tics y risitas a ráfagas
+    if (w('LOCURA')) { add(tg, 'roll', sn(tt * PI2 * 0.35) * 0.2 * w('LOCURA')); const tic = Math.pow(Math.max(0, sn(tt * PI2 * 0.7 + sn(tt * 3.1) * 2)), 12); add(tg, 'mouthSmile_L', tic * 0.6 * w('LOCURA')); add(tg, 'eyeSquint_R', tic * 0.8 * w('LOCURA'));
+      add(tg, 'jawOpen', Math.max(0, sn(tt * PI2 * 6)) * Math.pow(Math.max(0, sn(tt * PI2 * 0.23)), 4) * 0.35 * w('LOCURA')); }
+    // AGONÍA: se retuerce despacio y convulsiona a intervalos
+    if (w('AGONÍA')) { add(tg, 'roll', sn(tt * PI2 * 0.4) * 0.15 * w('AGONÍA')); add(tg, 'yaw', sn(tt * PI2 * 0.27 + 1) * 0.15 * w('AGONÍA')); const cv = Math.pow(Math.max(0, sn(tt * PI2 * 0.6)), 20); add(tg, 'jawOpen', cv * 0.4 * w('AGONÍA')); add(tg, 'tremor', cv * 1.2 * w('AGONÍA')); }
+    // ÉXTASIS: la cabeza rueda hacia atrás, respiración honda, ojos en blanco
+    if (w('ÉXTASIS')) { add(tg, 'roll', sn(tt * PI2 * 0.18) * 0.15 * w('ÉXTASIS')); add(tg, 'jawOpen', (0.5 + 0.5 * sn(tt * PI2 * 0.25)) * 0.2 * w('ÉXTASIS')); add(tg, 'pitch', -0.08 * (0.5 + 0.5 * sn(tt * PI2 * 0.25)) * w('ÉXTASIS')); }
+    // VERGÜENZA: aparta la cara y de vez en cuando levanta la mirada un instante
+    if (w('VERGÜENZA')) { const mira = Math.pow(Math.max(0, sn(tt * PI2 * 0.15)), 16); add(tg, 'pitch', -mira * 0.35 * w('VERGÜENZA')); for (const k of S2('eyeLookDown')) add(tg, k, -mira * 0.9 * w('VERGÜENZA')); }
+    // CONFUSIÓN: ladea la cabeza de un lado a otro
+    if (w('CONFUSIÓN')) add(tg, 'roll', -0.25 + sm(0.5 + 0.5 * sn(tt * PI2 * 0.2)) * 0.5 * w('CONFUSIÓN') - 0.25 * (w('CONFUSIÓN') - 1));
+    // LLANTO: convulsiones de llanto, boca que se abre a bocanadas
+    if (w('LLANTO')) { const so = Math.pow(Math.max(0, sn(tt * PI2 * 1.3)), 4); add(tg, 'jawOpen', so * 0.3 * w('LLANTO')); add(tg, 'pitch', so * 0.1 * w('LLANTO')); add(tg, 'tremor', so * 0.6 * w('LLANTO')); }
+    // SÚPLICA: asiente hacia arriba despacio, los labios tiemblan
+    if (w('SÚPLICA')) { add(tg, 'pitch', sn(tt * PI2 * 0.5) * 0.08 * w('SÚPLICA')); add(tg, 'mouthShrugLower', Math.abs(sn(tt * PI2 * 9)) * 0.25 * w('SÚPLICA')); }
+    // DESESPERACIÓN: niega con la cabeza y jadea
+    if (w('DESESPERACIÓN')) { add(tg, 'yaw', sn(tt * PI2 * 1.6) * 0.2 * w('DESESPERACIÓN')); add(tg, 'jawOpen', Math.max(0, sn(tt * PI2 * 2.2)) * 0.2 * w('DESESPERACIÓN')); }
+    // NÁUSEA: arcadas a intervalos (la cabeza cae, las mejillas se hinchan)
+    if (w('NÁUSEA')) { const ar = Math.pow(Math.max(0, sn(tt * PI2 * 0.45)), 14); add(tg, 'pitch', ar * 0.25 * w('NÁUSEA')); add(tg, 'jawOpen', ar * 0.45 * w('NÁUSEA')); for (const k of S2('cheekPuff')) add(tg, k, -ar * 0.6 * w('NÁUSEA')); add(tg, 'thrust', ar * 0.3 * w('NÁUSEA')); }
+    // BURLA: risita a golpes y cabeceo de mofa
+    if (w('BURLA')) { const ch = Math.max(0, sn(tt * PI2 * 5)) * Math.pow(Math.max(0, sn(tt * PI2 * 0.4)), 3); add(tg, 'jawOpen', ch * 0.25 * w('BURLA')); add(tg, 'pitch', -ch * 0.06 * w('BURLA')); }
+    // SOSPECHA: mirada de reojo que va y viene, la cabeza la sigue un poco
+    if (w('SOSPECHA')) { const ro = sn(tt * PI2 * 0.25); add(tg, 'yaw', ro * 0.12 * w('SOSPECHA')); if (ro > 0) { add(tg, 'eyeLookOut_L', ro * 0.5 * w('SOSPECHA')); add(tg, 'eyeLookIn_R', ro * 0.5 * w('SOSPECHA')); } else { add(tg, 'eyeLookIn_L', -ro * 0.5 * w('SOSPECHA')); add(tg, 'eyeLookOut_R', -ro * 0.5 * w('SOSPECHA')); } }
+    // ARROGANCIA: casi inmóvil; la barbilla sube despacio
+    if (w('ARROGANCIA')) add(tg, 'pitch', -0.08 * sm(0.5 + 0.5 * sn(tt * PI2 * 0.1)) * w('ARROGANCIA'));
+    // AGOTAMIENTO: la cabeza se le cae y se levanta de golpe (se duerme)
+    if (w('AGOTAMIENTO')) { const cae = (tt * 0.22) % 1; const d = cae < 0.85 ? sm(cae / 0.85) : 1 - sm((cae - 0.85) / 0.15); add(tg, 'pitch', d * 0.3 * w('AGOTAMIENTO')); for (const k of S2('eyeBlink')) add(tg, k, d * 0.4 * w('AGOTAMIENTO')); }
+    // VÉRTIGO: la cabeza y los ojos describen círculos
+    if (w('VÉRTIGO')) { add(tg, 'roll', sn(tt * PI2 * 0.5) * 0.18 * w('VÉRTIGO')); add(tg, 'yaw', Math.cos(tt * PI2 * 0.5) * 0.15 * w('VÉRTIGO')); const ex = sn(tt * PI2 * 0.9), ey = Math.cos(tt * PI2 * 0.9);
+      if (ex > 0) { add(tg, 'eyeLookOut_L', ex * 0.6 * w('VÉRTIGO')); add(tg, 'eyeLookIn_R', ex * 0.6 * w('VÉRTIGO')); } else { add(tg, 'eyeLookIn_L', -ex * 0.6 * w('VÉRTIGO')); add(tg, 'eyeLookOut_R', -ex * 0.6 * w('VÉRTIGO')); }
+      for (const k of S2(ey > 0 ? 'eyeLookUp' : 'eyeLookDown')) add(tg, k, Math.abs(ey) * 0.5 * w('VÉRTIGO')); }
   }
 
   let prevSum = 0, speed = 0;
@@ -146,7 +202,7 @@ export function crearAnimador(P, seed = 1, intensidad = 1) {
         const a = K * (tg[k] + off[k] - x[k]) - D * v[k];
         v[k] += a * dt; x[k] += v[k] * dt; off[k] *= Math.exp(-dt / 0.09);
       }
-      bassEnv *= Math.exp(-dt / 0.35); rimPulse *= Math.exp(-dt / 0.14);
+      bassEnv *= Math.exp(-dt / 0.35); rimPulse *= Math.exp(-dt / 0.14); gEnv *= Math.exp(-dt / 0.07);
       sweep *= Math.exp(-dt / 0.5); swx += swDir * dt * 2.6;
       t += dt; steps++;
     }
@@ -161,12 +217,18 @@ export function crearAnimador(P, seed = 1, intensidad = 1) {
     const dtF = Math.max(1e-3, steps / 240); speed += (Math.min(6, Math.abs(sum - prevSum) / dtF * 0.25) - speed) * 0.3; prevSum = sum;
     const emo = pesos(time), a = act(time);
     const preImpacto = time < tImp ? Math.min(1, Math.max(0, (time - (tImp - P.BAR)) / P.BAR)) : 0;
-    return { c, m: macro(c), bumps: live, rim: BASE_RIM[a] + rimPulse * 0.9, sweep, swx: Math.max(-1, Math.min(1, swx)), act: a, emo, speed, preImpacto };
+    return { glitch: gEnv, c, m: macro(c), bumps: live, rim: BASE_RIM[a] + rimPulse * 0.9, sweep, swx: Math.max(-1, Math.min(1, swx)), act: a, emo, speed, preImpacto };
   }
 
   function plano(time) {
     let cur = P.shots[0]; for (const sh of P.shots) if (time >= sh[0]) cur = sh;
     return { name: cur[1], since: time - cur[0], at: cur[0] };
   }
-  return { avanzar, plano, externo };
+  // golpe a mano (teclado): la cara salta a la emoción con su propio espasmo
+  function golpe(emo, fuerza = 2.2) {
+    const K2 = KICK[emo] || KICK.REPOSO, sign = rnd() < 0.5 ? -1 : 1;
+    for (const [k, a] of Object.entries(K2)) v[k] += a * fuerza * (k === 'yaw' || k === 'roll' ? sign : 1);
+    rimPulse = Math.max(rimPulse, 0.8); gEnv = Math.max(gEnv, 0.7);
+  }
+  return { avanzar, plano, externo, golpe };
 }

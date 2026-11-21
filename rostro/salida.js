@@ -13,10 +13,11 @@ let P = null, an = null, code = '', start = 0, sala = { fadeOut: 1, bri: 1, segu
 ch.onmessage = (e) => {
   const d = e.data; if (!d) return;
   if (d.type === 'pieza') { P = crearPieza(d.code, d.opts); an = crearAnimador(P, d.seed, d.intensidad); code = d.code; esc.acento(P.acc); }
+  else if (d.type === 'golpe') { if (an) an.golpe(d.emo); }
   else if (d.type === 'reloj') {
     // el reloj se suaviza: pequeñas diferencias de entrega no se notan
     if (!haveClock || Math.abs(d.start - start) > 250) start = d.start; else start += (d.start - start) * 0.05;
-    haveClock = true; sala = d;
+    haveClock = true; sala = d; if (d.fx) esc.fx(d.fx);
   }
 };
 const vivo = () => ch.postMessage({ type: 'vivo', code }); setInterval(vivo, 500); vivo();
@@ -44,6 +45,6 @@ function frame(ts) {
   let pl = an.plano(tt); if (sala.forzarMedio && !FRONTAL.has(pl.name)) pl = { name: 'medio', since: pl.since, at: pl.at };
   if (pl.at !== lastCut) { if (low > 2.5 && n < NIV.length - 1) { n++; low = 0; esc.calidad(NIV[n].l); size(); } lastCut = pl.at; }
   const fadeP = Math.max(0, Math.min(1, tRaw / 1.2, (P.dur + 1.5 - tRaw) / 2.2));
-  esc.pose(st.c, tt, st.bumps); esc.camara(pl.name, pl.since); esc.luz(st.rim, st.sweep, st.swx, sala.bri); esc.render(tt, fadeP * sala.fadeOut);
+  esc.pose(st.c, tt, st.bumps); esc.camara(pl.name, pl.since); esc.luz(st.rim, st.sweep, st.swx, sala.bri); esc.render(tt, fadeP * sala.fadeOut, st.glitch, st.speed);
 }
 requestAnimationFrame(frame);

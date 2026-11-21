@@ -11,6 +11,6 @@ esc.tamano(W, H);
 if (q.get('ligera')) esc.calidad(true);
 const c = pose(q.get('emo') || 'REPOSO', +(q.get('mix') ?? 1));
 esc.pose(c, 0.37, []); esc.camara(q.get('shot') || 'medio', 0); esc.luz(+(q.get('rim') ?? 0.9), 0, 0, 1);
-esc.render(0.37, 1); await new Promise(r => requestAnimationFrame(r)); esc.render(0.37, 1);
+const g = +(q.get('g') || 0); esc.render(0.37, 1, g); await new Promise(r => requestAnimationFrame(r)); esc.render(0.37, 1, g);
 window.done = true;
 </script>
