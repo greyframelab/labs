@@ -208,34 +208,37 @@ vec3 twistY(vec3 p,float k){ float c=cos(k*p.y), s=sin(k*p.y); return vec3(c*p.x
 float tw(){ return (uV1.x-0.5)*2.0*(0.5+uChaos); }
 float bars0(){ return uT/uBar; }
 vec4 gEnj=vec4(1.0);
-// ARMILAR: una esfera armilar de obsidiana. Seis anillos-cuchilla anidados, cada uno partido en segmentos y girando sobre su propio eje,
-// alrededor de un núcleo de luz. Los anillos se cruzan, se alinean un instante con el bombo y en la ruptura se abren hacia fuera.
-float sep8(){ return 0.22*uImpact+0.03*uBass; }
-float armilar(vec3 p){
-  // punto medio: los anillos de fuera son cuchillas limpias y segmentadas (se lee el mecanismo);
-  // hacia el centro se vuelven vivos: respiran, se llenan de cuentas como vértebras, se retuercen y se funden como tendones
-  float d=1e9, ph=uPhase;
-  for(int i=0;i<6;i++){ float fi=float(i), o=fi/5.0; o=o*o*(3.0-2.0*o);   // 0 = mecanismo, 1 = vivo
-    float R=(1.08-fi*0.155)*(1.0+sep8()*(0.4+0.12*fi));
-    vec3 q=p;
-    q.xy=rot(fi*0.53+uV0.x*3.0+ph*(0.13+0.05*fi)*(mod(fi,2.0)<0.5?1.0:-1.0))*q.xy;
-    q.yz=rot(fi*1.17+uV0.y*3.0+ph*(0.21-0.03*fi))*q.yz;
-    q.xz=rot(ph*(0.3+0.1*fi))*q.xz;
-    float N=6.0+fi*2.0+floor(uV0.z*4.0), seg=6.2832/N, a=atan(q.z,q.x), r=length(q.xz), da=(fract(a/seg)-0.5)*seg;
-    float ond=(sin(a*(2.0+fi)+ph*1.3+fi)*0.035+sin(a*(5.0+fi)-ph*0.9)*0.012)*o;
-    float bead=pow(0.5+0.5*cos(a*N+ph*0.6*(mod(fi,2.0)<0.5?1.0:-1.0)),1.6);
-    bead*=1.0-0.6*clamp(sep8()*3.0,0.0,1.0)*o;                                            // en la ruptura los cuellos vivos casi se parten
-    float w=mix(0.07,0.035+0.05*bead,o)*(1.0-fi*0.05), th=mix(0.02,0.016+0.022*bead,o)*(1.0-fi*0.04);
-    vec2 cs=vec2(r-R*(1.0+ond),q.y+0.03*sin(a*3.0+ph+fi)*o);
-    cs=rot((a*1.5+ph*0.4+fi)*o)*cs;
-    float blade=length(max(abs(cs)-vec2(w,th),0.0))+min(max(abs(cs.x)-w,abs(cs.y)-th),0.0)-0.008;
-    float tube=(length(cs/vec2(w,th))-1.0)*min(w,th);
-    float ring=mix(blade,tube,o);
-    float gap=0.004+0.05*clamp(sep8()*4.0,0.0,1.0);
-    ring=mix(max(ring,abs(da)*r-(seg*0.5*r-gap)),ring,o);                                   // solo el mecanismo va partido en segmentos
-    d=smin(d,ring,0.004+0.045*o);
-  }
-  return d*0.85;
+// MÖBIUS: una banda de Möbius hecha de láminas de obsidiana (ver más abajo), con una cinta lisa interior que la atraviesa.
+vec3 preRot(vec3 p){    // el giro global que map() aplica a todas las formas (para la luz que va pegada a la cinta)
+  float ph=uPhase; if(uFam==7){ float k=uPhase*4.0; ph=(floor(k)+smoothstep(0.82,1.0,fract(k)))/4.0; }
+  p.xz=rot(ph+uV0.w*6.28)*p.xz; p.xy=rot(0.22*sin(ph)+uRot*0.25)*p.xy; return p; }
+float mobSplit(){ return clamp(uImpact*1.6+0.12*uBass,0.0,1.0); }
+vec3 mobCS2(vec3 p){    // la cinta interior: más estrecha, tres medias vueltas, gira al revés y cruza el plano de la grande
+  p.yz=rot(0.55+0.25*sin(uPhase*0.27)+(uV0.x-0.5)*0.8)*p.yz; p.xy=rot(0.9+0.2*sin(uPhase*0.19))*p.xy;
+  float a=atan(p.z,p.x), r=length(p.xz), R=0.6+0.03*sin(a*3.0-uPhase);
+  vec2 cs=rot(a*1.5-uPhase*0.5+uV0.z*6.28)*vec2(r-R,p.y);
+  return vec3(cs,a); }
+// la cinta está hecha de LÁMINAS: placas finas repartidas a lo largo de la vuelta, cada una girada media vuelta más que la anterior;
+// juntas dibujan la banda de Möbius y entre ellas pasa la luz. En la ruptura cada lámina gira por su cuenta, como un abanico.
+float mobN(){ return 54.0+floor(uV0.w*18.0); }
+vec4 mobPlate(vec3 p,float id){   // coordenadas locales de la lámina id: xy sección (ancho, grueso), z a lo largo de la vuelta; w = ángulo
+  float N=mobN(), seg=6.2832/N, a=id*seg;
+  vec3 q=p; q.xz=rot(a)*q.xz;      // la lámina queda sobre el eje x
+  float R=0.95+0.04*sin(a*2.0+uPhase*0.8);
+  float k=mobSplit(), fan=k*1.4*(h11(id*7.31+uV0.x*11.0)-0.5);
+  vec2 cs=rot(a*0.5+uPhase*0.35+uV0.y*6.28+fan)*vec2(q.x-R,q.y);
+  return vec4(cs,q.z,a); }
+float plateD(vec3 p,float id){
+  vec4 c=mobPlate(p,id); float hw=0.3+0.04*uV0.z;
+  vec3 b=abs(vec3(c.x,c.y,c.z))-vec3(hw,0.05,0.007);
+  return length(max(b,0.0))+min(max(b.x,max(b.y,b.z)),0.0)-0.004; }
+float mobius(vec3 p){
+  vec3 pr=p; pr.yz=rot(0.55+0.25*sin(uPhase*0.27)+(uV0.x-0.5)*0.8)*pr.yz;
+  float N=mobN(), seg=6.2832/N, a=atan(pr.z,pr.x), id=floor(a/seg+0.5);
+  float d1=min(plateD(pr,id),min(plateD(pr,id-1.0),plateD(pr,id+1.0)))*0.8;
+  vec3 c2=mobCS2(p); vec2 b2=abs(c2.xy)-vec2(0.11,0.016);
+  float d2=(length(max(b2,0.0))+min(max(b2.x,b2.y),0.0)-0.006)*0.55;
+  return min(d1,d2);
 }
 float map(vec3 p){
   float ph=uPhase;
@@ -298,8 +301,8 @@ float map(vec3 p){
     vec3 n=normalize(p);
     float sp=pow(max(0.0,sin(n.x*7.0+ph)*sin(n.y*7.0)*sin(n.z*7.0-ph)),1.6);
     d=(length(p)-0.55-sp*(0.45+0.3*uBass+0.2*uChaos))*0.45;
-  } else if(uForm==8){     // ARMILAR
-    d=armilar(p);   // pasa por la capa común: respira, y la familia de la palabra la deforma como al resto
+  } else if(uForm==8){     // MÖBIUS de láminas
+    d=mobius(p);   // pasa por la capa común: respira, y la familia de la palabra la deforma como al resto
   } else if(uForm==9){     // LÁMINAS: estratos de vidrio negro que se desplazan
     float sp=0.32, id=floor(p.y/sp+0.5); vec3 r=p; r.y-=id*sp;
     float hw=fract(sin(id*17.3+uV0.x*31.0)*43758.5);
@@ -350,7 +353,7 @@ float map(vec3 p){
     vec3 c=vec3(cos(ph*0.8)*(2.1-1.6*k),0.25*sin(ph*1.3),sin(ph*0.8)*(1.2-0.9*k));
     d=smin(d,length(p-c)-(0.34+0.06*uBass),0.18+0.4*k);
   }
-  if(uFam==2&&uForm!=8){ float cr=abs(gyr(p*5.5+vec3(0.0,uT*0.2,0.0)))/5.5-0.005; d=max(d,min(-cr,d+0.05)); }   // en ARMILAR las tallas partían los anillos finos en trozos sueltos   // FUEGO: grietas
+  if(uFam==2&&uForm!=8){ float cr=abs(gyr(p*5.5+vec3(0.0,uT*0.2,0.0)))/5.5-0.005; d=max(d,min(-cr,d+0.05)); }   // en la forma 8 las tallas partían las piezas finas en trozos sueltos   // FUEGO: grietas
   if(uFam==7&&uForm!=8){ float g=(0.5-abs(fract(p.y*9.0)-0.5))/9.0-0.004; d=max(d,min(-g,d+0.035)); }        // MÁQUINA: ranuras exactas
   if(uFam==9){ vec3 f=abs(fract(cpo*cz)-0.5); float gap=0.012+0.05*uImpact+0.03*uChaos*smoothstep(4.0,8.0,bars)*(1.0-smoothstep(12.0,15.5,bars));
     float bd=(0.5-max(f.x,max(f.y,f.z)))/cz; d=max(d,gap-bd); }
@@ -405,11 +408,15 @@ vec3 shade(vec3 p, vec3 rd, float t, float bars, float lift, bool full){
     col+=mix(uAcc,vec3(1.0,0.82,0.55),cr*cr*0.6)*cr*(0.18+1.1*uEnergy+2.2*uImpact)*(0.85+0.15*sin(uT*19.0+p.y*11.0)); }
   if(uFam==6){ float s=fract(p.y/0.11+0.5); col*=0.7+0.3*step(0.5,fract((p.y/0.11+0.5)*0.5)); col+=uAcc*exp(-min(s,1.0-s)*70.0)*(0.04+0.25*uEnergy*uEnergy)*lift; }
   if(uFam==7){ float sy=mod(bars*0.5,1.0)*2.4-1.2; col+=uAcc*exp(-abs(p.y-sy)*38.0)*(0.25+0.8*uEnergy)*(0.4+fr); }   // MÁQUINA: una lectura que barre
-  if(uForm==8){            // ARMILAR: el núcleo ilumina las caras de los anillos que lo miran
-    vec3 lp=-p; float dl=length(lp); vec3 ld=lp/max(dl,1e-4);
-    float pulse=0.35+0.9*uKick+1.6*uImpact+0.4*uEnergy;
-    float fin=max(dot(n,ld),0.0);
-    col+=mix(uAcc,vec3(1.0,0.96,0.9),0.25)*(fin*fin*0.75+pow(fin,16.0)*0.7)*pulse/(0.2+dl*dl*1.15)*(0.5+0.5*ao); }
+  if(uForm==8){            // MÖBIUS de láminas: el canto exterior de cada lámina coge luz, y la luz corre por la vuelta con el bombo
+    vec3 pp=preRot(p); pp.yz=rot(0.55+0.25*sin(uPhase*0.27)+(uV0.x-0.5)*0.8)*pp.yz;
+    float N=mobN(), seg=6.2832/N, id=floor(atan(pp.z,pp.x)/seg+0.5); vec4 c=mobPlate(pp,id); float hw=0.3+0.04*uV0.z;
+    float e=exp(-max(hw-abs(c.x),0.0)/0.014)*step(abs(c.z),0.02);
+    float run=pow(0.5+0.5*sin(c.w*2.0-uT*2.4),3.0);              // un pulso de luz recorre la banda lámina a lámina
+    float pulse=0.3+1.0*uKick+1.8*uImpact+0.45*uEnergy;
+    col+=mix(uAcc,vec3(1.0,0.97,0.92),0.3*e)*e*(0.35+0.65*run)*pulse*1.25;
+    vec3 c2=mobCS2(preRot(p)); float e2=exp(-max(0.11-abs(c2.x),0.0)/0.009)*step(abs(c2.y),0.05);
+    col+=uAcc*e2*(0.55+0.45*sin(c2.z*5.0+uT*3.1))*(0.25+0.6*uKick+1.4*uImpact)*0.8; }
   if(uSurf==4&&uForm<8&&uComp==0){ float hl=holeF(p); float inside=smoothstep(-0.002,-0.03,hl);   // dentro del hueco, el acento: se enciende con el pulso
     col+=uAcc*inside*(0.03+0.35*uKick+0.5*uImpact+0.1*uEnergy)*(0.3+0.7*ao); }
   if(uFam==1){ // AGUA: cáusticas, la luz que atraviesa un agua invisible y se enreda sobre la materia negra
@@ -432,7 +439,7 @@ void main(){
   vec3 dir=normalize(vec3(cos(K*31.0),0.35*sin(K*17.0),sin(K*31.0)));
   if(uForm==11) dir=normalize(vec3(dir.x*0.8,dir.y,abs(dir.z)+0.45));   // la palabra se mira de frente: detrás solo hay su estela
   vec3 ro, ta; float lens;
-  bool field=uForm>=9&&uForm<=10;   // ARMILAR (8) es un objeto: se rodea
+  bool field=uForm>=9&&uForm<=10;   // MÖBIUS (8) es un objeto: se rodea
   if(uFam==2) sp+=vec2(0.0025*sin(q.y*55.0+uT*8.0)*(0.3+uEnergy),0.0);   // FUEGO: el aire tiembla de calor
   if(uFam==9&&bars0()>=8.0&&bars0()<12.0) sp+=(vec2(h11(floor(uT*24.0)),h11(floor(uT*24.0)+7.0))-0.5)*0.012*uImpact;
   if(uShot==1){            // MACRO: la materia tan cerca que deja de ser un objeto
@@ -442,14 +449,14 @@ void main(){
     vec3 so=aim+dir*2.6+vec3(0.0,(K-0.5)*0.6,0.0), sd=normalize(aim-so); float st=0.0;
     for(int j=0;j<32;j++){ float dd=map(so+sd*st); if(dd<0.002||st>4.0) break; st+=dd; }
     ta=field?dir:uForm==11?aim:so+sd*min(st,3.0); vec3 md=uForm==11?normalize(vec3(dir.x*0.45,dir.y*0.25,1.0)):normalize(dir+vec3(0.3*sin(K*9.0),0.25,0.0));   // la palabra, siempre casi de frente
-    ro=ta+md*(field?0.8:uForm==11?1.35-push*1.5:(uComp>0?1.8:1.4)-push*2.0); lens=1.7+0.8*fract(K*7.0);   // macro con aire y lente moderada: se lee la materia, no una mancha   // las composiciones se ven mejor con algo de aire
+    ro=ta+md*(field?0.8:uForm==11?1.35-push*1.5:uForm==8?1.9-push*1.5:(uComp>0?1.8:1.4)-push*2.0); lens=1.7+0.8*fract(K*7.0);   // macro con aire y lente moderada: se lee la materia, no una mancha   // las composiciones se ven mejor con algo de aire
   } else if(uShot==2){     // RASANTE: desde el suelo, a contraluz
     ro=vec3(sin(K*12.0)*2.6,-0.86,cos(K*12.0)*2.6)*(1.0-push); ta=vec3(0.0,-0.25+0.3*fract(K*5.0),0.0); lens=2.2;
   } else if(uShot==3){     // CENITAL: desde arriba, la forma como signo
     ro=vec3(0.3*sin(K*7.0),3.2-push*3.0,0.25); ta=vec3(0.0); lens=1.9+0.8*fract(K*3.0);
   } else {                 // GENERAL
     float ca=uPhase+uV0.w*6.0, dist=(4.1+1.5*uV1.y)/(0.75+0.35*uZoom)-push*2.0;
-    if(uForm==8) dist*=0.72+0.25*step(0.5,fract(K*3.0));   // ARMILAR: llena el cuadro, a veces entera
+    if(uForm==8) dist*=0.68+0.25*step(0.5,fract(K*3.0));   // MÖBIUS: llena el cuadro, a veces entera
     ro=vec3(sin(ca)*0.55,0.18+0.14*cos(ca)+0.3*(uV1.z-0.5),dist); ta=vec3(uOff*0.55,0.0); lens=1.5+0.6*uV1.w;
     if(uForm==11){ ro=vec3(sin(ca)*0.4,0.1+0.1*cos(ca),max(dist,uWH.x*1.7*1.3/(0.5*min(uRes.x/uRes.y,1.8))+uWH.w)+0.4-push*1.0); ta=vec3(0.0); lens=1.7; }
   }
@@ -480,7 +487,7 @@ void main(){
     if(d<0.0004*t+0.0002||t>9.0) break; t+=d*(uQ>0.5?0.9:1.0); }
   float bars=uT/uBar;
   vec3 col=vec3(0.0);
-  float lift=uForm==8?1.05+0.45*uEnergy:field?0.95+0.45*uEnergy:0.78+0.5*uEnergy;   // ARMILAR: obsidiana pulida, la luz la pone el núcleo
+  float lift=uForm==8?1.05+0.45*uEnergy:field?0.95+0.45*uEnergy:0.78+0.5*uEnergy;   // MÖBIUS: laca pulida, la luz la ponen los reflejos y el borde
     // la ruptura se nota en el ritmo y el color, no en inundar de luz   // la SEÑAL en penumbra (visible en proyección), la RUPTURA a plena luz
   if(uFam==4&&h11(floor(uT*13.0)+uV0.x*99.0)<0.07+0.1*uEnergy) lift*=0.2;   // MIEDO: la luz falla
   // la materia que llena el cuadro (muy cerca) se oscurece: el negro domina y nada se quema
@@ -490,11 +497,6 @@ void main(){
   if(cov>0.0&&!field) col=mix(col,uQ>1.5?shade(ro+rd*tMin,rd,tMin,bars,lift,false)*mix(0.5,1.0,smoothstep(0.25,2.6,tMin)):INK*0.22*lift,cov);   // bordes suaves, sin dientes de sierra   // la materia pegada a la lente se hunde en negro, no en gris
   col+=uAcc*exp(-minD*9.0)*(t>=9.0?1.0:0.0)*(uRig==3?0.16+uImpact*0.3:0.02)*(0.5+uEnergy);
   if(field) col=mix(col,uAcc*(0.003+0.018*uEnergy*uEnergy+0.06*uImpact),1.0-exp(-min(t,9.0)*0.13));
-  if(uForm==8){            // ARMILAR: el núcleo, una estrella pequeña; su luz se derrama en el aire entre los anillos
-    float tc=dot(-ro,rd), dc=length(cross(rd,-ro)); float pulse=0.35+0.9*uKick+1.6*uImpact+0.4*uEnergy;
-    float vis=(t>=9.0||tc<t)?1.0:0.0;
-    col+=vis*(vec3(1.0,0.97,0.92)*smoothstep(0.04,0.018,dc)*(0.8+0.6*pulse)+mix(uAcc,vec3(1.0),0.35*exp(-dc*40.0))*(exp(-dc*28.0)*0.9+exp(-dc*7.0)*0.25+exp(-dc*2.5)*0.06)*pulse);   // núcleo pequeño y muy caliente; la corona toma el color
-    col+=uAcc*0.02*exp(-dc*1.2)*pulse; }
   // suelo negro pulido: refleja de verdad la materia, cada vez más difuso con la distancia
   // la PALABRA no se refleja: su reflejo salía del revés y el desenfoque lo convertía en discos rojos con la palabra dentro
   if(rd.y<0.0&&!field&&uQ>1.5&&uForm!=11){ float tp=(-1.0-ro.y)/rd.y; if(tp>0.0&&(tp<t||t>=9.0)){
