@@ -212,22 +212,30 @@ vec4 gEnj=vec4(1.0);
 // alrededor de un núcleo de luz. Los anillos se cruzan, se alinean un instante con el bombo y en la ruptura se abren hacia fuera.
 float sep8(){ return 0.22*uImpact+0.03*uBass; }
 float armilar(vec3 p){
+  // punto medio: los anillos de fuera son cuchillas limpias y segmentadas (se lee el mecanismo);
+  // hacia el centro se vuelven vivos: respiran, se llenan de cuentas como vértebras, se retuercen y se funden como tendones
   float d=1e9, ph=uPhase;
-  for(int i=0;i<6;i++){ float fi=float(i);
+  for(int i=0;i<6;i++){ float fi=float(i), o=fi/5.0; o=o*o*(3.0-2.0*o);   // 0 = mecanismo, 1 = vivo
     float R=(1.08-fi*0.155)*(1.0+sep8()*(0.4+0.12*fi));
     vec3 q=p;
     q.xy=rot(fi*0.53+uV0.x*3.0+ph*(0.13+0.05*fi)*(mod(fi,2.0)<0.5?1.0:-1.0))*q.xy;
     q.yz=rot(fi*1.17+uV0.y*3.0+ph*(0.21-0.03*fi))*q.yz;
     q.xz=rot(ph*(0.3+0.1*fi))*q.xz;
-    float N=6.0+fi*2.0+floor(uV0.z*4.0), seg=6.2832/N, a=atan(q.z,q.x), da=(fract(a/seg)-0.5)*seg, r=length(q.xz);
-    float w=0.07-fi*0.007, th=0.02-fi*0.0015;
-    vec2 cs=vec2(r-R,q.y);
-    float ring=length(max(abs(cs)-vec2(w,th),0.0))+min(max(abs(cs.x)-w,abs(cs.y)-th),0.0)-0.008;
+    float N=6.0+fi*2.0+floor(uV0.z*4.0), seg=6.2832/N, a=atan(q.z,q.x), r=length(q.xz), da=(fract(a/seg)-0.5)*seg;
+    float ond=(sin(a*(2.0+fi)+ph*1.3+fi)*0.035+sin(a*(5.0+fi)-ph*0.9)*0.012)*o;
+    float bead=pow(0.5+0.5*cos(a*N+ph*0.6*(mod(fi,2.0)<0.5?1.0:-1.0)),1.6);
+    bead*=1.0-0.6*clamp(sep8()*3.0,0.0,1.0)*o;                                            // en la ruptura los cuellos vivos casi se parten
+    float w=mix(0.07,0.035+0.05*bead,o)*(1.0-fi*0.05), th=mix(0.02,0.016+0.022*bead,o)*(1.0-fi*0.04);
+    vec2 cs=vec2(r-R*(1.0+ond),q.y+0.03*sin(a*3.0+ph+fi)*o);
+    cs=rot((a*1.5+ph*0.4+fi)*o)*cs;
+    float blade=length(max(abs(cs)-vec2(w,th),0.0))+min(max(abs(cs.x)-w,abs(cs.y)-th),0.0)-0.008;
+    float tube=(length(cs/vec2(w,th))-1.0)*min(w,th);
+    float ring=mix(blade,tube,o);
     float gap=0.004+0.05*clamp(sep8()*4.0,0.0,1.0);
-    ring=max(ring,abs(da)*r-(seg*0.5*r-gap));
-    d=min(d,ring);
+    ring=mix(max(ring,abs(da)*r-(seg*0.5*r-gap)),ring,o);                                   // solo el mecanismo va partido en segmentos
+    d=smin(d,ring,0.004+0.045*o);
   }
-  return d;
+  return d*0.85;
 }
 float map(vec3 p){
   float ph=uPhase;
@@ -237,7 +245,7 @@ float map(vec3 p){
   else { p.xz=rot(ph+uV0.w*6.28)*p.xz; p.xy=rot(0.22*sin(ph)+uRot*0.25)*p.xy; }
   float sc=1.0+uKick*0.025+(uFam==10?0.05*uBass:0.0); p/=sc;
   float bars=uT/uBar, lip=1.0;
-  if(uFam==6){ float id=floor(p.y/0.11+0.5); p.x+=0.09*sin(id*2.1+ph*(1.0+fract(id*0.37)))*(0.4+uEnergy); lip=0.55; }   // TIEMPO: estratos que se deslizan
+  if(uFam==6){ float id=floor(p.y/0.11+0.5); p.x+=(uForm==8?0.035:0.09)*sin(id*2.1+ph*(1.0+fract(id*0.37)))*(0.4+uEnergy); lip=0.55; }   // TIEMPO: estratos que se deslizan
   // CAOS: la materia se parte en bloques que se separan con la ruptura
   vec3 cid=vec3(0.0), cpo=p; float cz=2.4;
   if(uFam==9){ cid=floor(p*cz); vec3 hh=fract(sin(cid*vec3(12.9898,78.233,37.719)+uV0.x*9.0)*43758.5453);
@@ -291,7 +299,7 @@ float map(vec3 p){
     float sp=pow(max(0.0,sin(n.x*7.0+ph)*sin(n.y*7.0)*sin(n.z*7.0-ph)),1.6);
     d=(length(p)-0.55-sp*(0.45+0.3*uBass+0.2*uChaos))*0.45;
   } else if(uForm==8){     // ARMILAR
-    return armilar(p);
+    d=armilar(p);   // pasa por la capa común: respira, y la familia de la palabra la deforma como al resto
   } else if(uForm==9){     // LÁMINAS: estratos de vidrio negro que se desplazan
     float sp=0.32, id=floor(p.y/sp+0.5); vec3 r=p; r.y-=id*sp;
     float hw=fract(sin(id*17.3+uV0.x*31.0)*43758.5);
@@ -326,13 +334,13 @@ float map(vec3 p){
     vec3 r=p; r.xz=rot(0.3*sin(ph))*r.xz;
     d=sdBox(r,vec3(0.26,1.02,0.1))-0.015;
   }
-  if(uFam!=8&&uForm!=11) d+=0.018*(0.3+uBass+uChaos)*sin(p.x*9.0+ph*2.0)*sin(p.y*8.0-ph)*sin(p.z*10.0+ph*3.0);
+  if(uFam!=8&&uForm!=11) d+=(uForm==8?0.45:1.0)*0.018*(0.3+uBass+uChaos)*sin(p.x*9.0+ph*2.0)*sin(p.y*8.0-ph)*sin(p.z*10.0+ph*3.0);
   // SUPERFICIE: talla fina sobre la piel (solo cerca de la superficie): ranuras, paneles o perforaciones
-  if(uSurf==1&&uForm!=11){ float k=14.0+10.0*uV1.w; vec3 q=p*k; float g=min(0.5-abs(fract(q.y)-0.5),0.5-abs(fract(q.x+q.z*0.5)-0.5))/k-0.0025; d=max(d,min(-g,d+0.012)); }
-  else if(uSurf==2&&uForm!=11){ float k=6.0+5.0*uV1.w; vec3 f=abs(fract(p*k)-0.5); float g=(0.5-max(f.x,max(f.y,f.z)))/k-0.003; d=max(d,min(-g,d+0.02)); }
+  if(uSurf==1&&uForm!=11&&uForm!=8){ float k=14.0+10.0*uV1.w; vec3 q=p*k; float g=min(0.5-abs(fract(q.y)-0.5),0.5-abs(fract(q.x+q.z*0.5)-0.5))/k-0.0025; d=max(d,min(-g,d+0.012)); }
+  else if(uSurf==2&&uForm!=11&&uForm!=8){ float k=6.0+5.0*uV1.w; vec3 f=abs(fract(p*k)-0.5); float g=(0.5-max(f.x,max(f.y,f.z)))/k-0.003; d=max(d,min(-g,d+0.02)); }
   // ESTRÍAS: surcos finos en espiral que siguen la forma (antes perforaciones redondas: parecían letras «o» sueltas)
-  else if(uSurf==3&&uForm!=11){ float k=26.0+14.0*uV1.w; float g=(0.5-abs(fract((p.y+atan(p.z,p.x)*0.08)*k)-0.5))/k-0.003; d=max(d,min(-g,d+0.015)); }
-  else if(uSurf==4&&uForm!=11){ float hl=holeF(p); d=-smin(-d,-min(hl,d+0.05),0.014); }   // PERFORADA: huecos profundos e irregulares
+  else if(uSurf==3&&uForm!=11&&uForm!=8){ float k=26.0+14.0*uV1.w; float g=(0.5-abs(fract((p.y+atan(p.z,p.x)*0.08)*k)-0.5))/k-0.003; d=max(d,min(-g,d+0.015)); }
+  else if(uSurf==4&&uForm!=11&&uForm!=8){ float hl=holeF(p); d=-smin(-d,-min(hl,d+0.05),0.014); }   // PERFORADA: huecos profundos e irregulares
   d*=cs; if(uComp==3&&uForm<8) d*=0.7;
   // AGUA: oleaje cruzado que recorre la materia (sin anillos concéntricos: hacían una espiral)
   if(uFam==1) d+=(0.006+0.006*uBass)*sin(dot(p,vec3(0.8,0.3,0.5))*11.0-uT*1.9)*sin(dot(p,vec3(-0.4,0.6,0.7))*8.0+uT*1.3)+0.016*sin(p.x*2.3+uT*0.7)*sin(p.y*1.9-uT*0.5);
@@ -342,8 +350,8 @@ float map(vec3 p){
     vec3 c=vec3(cos(ph*0.8)*(2.1-1.6*k),0.25*sin(ph*1.3),sin(ph*0.8)*(1.2-0.9*k));
     d=smin(d,length(p-c)-(0.34+0.06*uBass),0.18+0.4*k);
   }
-  if(uFam==2){ float cr=abs(gyr(p*5.5+vec3(0.0,uT*0.2,0.0)))/5.5-0.005; d=max(d,min(-cr,d+0.05)); }   // FUEGO: grietas
-  if(uFam==7){ float g=(0.5-abs(fract(p.y*9.0)-0.5))/9.0-0.004; d=max(d,min(-g,d+0.035)); }        // MÁQUINA: ranuras exactas
+  if(uFam==2&&uForm!=8){ float cr=abs(gyr(p*5.5+vec3(0.0,uT*0.2,0.0)))/5.5-0.005; d=max(d,min(-cr,d+0.05)); }   // en ARMILAR las tallas partían los anillos finos en trozos sueltos   // FUEGO: grietas
+  if(uFam==7&&uForm!=8){ float g=(0.5-abs(fract(p.y*9.0)-0.5))/9.0-0.004; d=max(d,min(-g,d+0.035)); }        // MÁQUINA: ranuras exactas
   if(uFam==9){ vec3 f=abs(fract(cpo*cz)-0.5); float gap=0.012+0.05*uImpact+0.03*uChaos*smoothstep(4.0,8.0,bars)*(1.0-smoothstep(12.0,15.5,bars));
     float bd=(0.5-max(f.x,max(f.y,f.z)))/cz; d=max(d,gap-bd); }
   return d*sc*lip;
@@ -401,7 +409,7 @@ vec3 shade(vec3 p, vec3 rd, float t, float bars, float lift, bool full){
     vec3 lp=-p; float dl=length(lp); vec3 ld=lp/max(dl,1e-4);
     float pulse=0.35+0.9*uKick+1.6*uImpact+0.4*uEnergy;
     float fin=max(dot(n,ld),0.0);
-    col+=mix(uAcc,vec3(1.0,0.96,0.9),0.25)*(fin*fin*0.55+pow(fin,16.0)*0.6)*pulse/(0.25+dl*dl*1.6)*(0.45+0.55*ao); }
+    col+=mix(uAcc,vec3(1.0,0.96,0.9),0.25)*(fin*fin*0.75+pow(fin,16.0)*0.7)*pulse/(0.2+dl*dl*1.15)*(0.5+0.5*ao); }
   if(uSurf==4&&uForm<8&&uComp==0){ float hl=holeF(p); float inside=smoothstep(-0.002,-0.03,hl);   // dentro del hueco, el acento: se enciende con el pulso
     col+=uAcc*inside*(0.03+0.35*uKick+0.5*uImpact+0.1*uEnergy)*(0.3+0.7*ao); }
   if(uFam==1){ // AGUA: cáusticas, la luz que atraviesa un agua invisible y se enreda sobre la materia negra
@@ -472,7 +480,7 @@ void main(){
     if(d<0.0004*t+0.0002||t>9.0) break; t+=d*(uQ>0.5?0.9:1.0); }
   float bars=uT/uBar;
   vec3 col=vec3(0.0);
-  float lift=uForm==8?0.85+0.45*uEnergy:field?0.95+0.45*uEnergy:0.78+0.5*uEnergy;   // ARMILAR: obsidiana pulida, la luz la pone el núcleo
+  float lift=uForm==8?1.05+0.45*uEnergy:field?0.95+0.45*uEnergy:0.78+0.5*uEnergy;   // ARMILAR: obsidiana pulida, la luz la pone el núcleo
     // la ruptura se nota en el ritmo y el color, no en inundar de luz   // la SEÑAL en penumbra (visible en proyección), la RUPTURA a plena luz
   if(uFam==4&&h11(floor(uT*13.0)+uV0.x*99.0)<0.07+0.1*uEnergy) lift*=0.2;   // MIEDO: la luz falla
   // la materia que llena el cuadro (muy cerca) se oscurece: el negro domina y nada se quema

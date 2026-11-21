@@ -24,7 +24,7 @@
     { id: 'fractura', form: 5, name: 'FRACTURA', idea: 'un bloque que se abre en lonchas en la ruptura', acc: ['rojo', 'magenta', 'ambar'], w: 3 },
     { id: 'espina', form: 6, name: 'ESPINA', idea: 'un cuerpo erizado que se defiende de la luz', acc: ['rojo', 'verde', 'violeta'], w: 2 },
     { id: 'monolito', form: 7, name: 'MONOLITO', idea: 'una losa en el vacío y una luz que la recorre', acc: ['blanco', 'rojo', 'cian'], w: 1 },
-    { id: 'armilar', form: 8, name: 'ARMILAR', idea: 'seis anillos de obsidiana que giran alrededor de una estrella pequeña', acc: ['cian', 'rojo', 'violeta', 'ambar'], w: 4 },
+    { id: 'armilar', form: 8, name: 'ARMILAR', idea: 'un mecanismo de obsidiana que se vuelve vivo hacia su centro, alrededor de una estrella pequeña', acc: ['cian', 'rojo', 'violeta', 'ambar'], w: 4 },
     { id: 'laminas', form: 9, name: 'LÁMINAS', idea: 'estratos de vidrio negro que se desplazan', acc: ['rojo', 'blanco', 'cian'], w: 4 },
     { id: 'filos', form: 10, name: 'FILOS', idea: 'un bosque de cuchillas que corta la luz', acc: ['ambar', 'rojo', 'verde'], w: 0 },
     { id: 'palabra', form: 11, name: 'PALABRA', idea: 'la palabra dicha convertida en materia negra', acc: ['blanco', 'rojo', 'cian'], w: 0 },
