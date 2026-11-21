@@ -79,6 +79,13 @@ Una cámara mira la sala desde cerca del proyector, a la altura de la cara. La c
 
 En la consola: estado de la cámara, presencia, emoción que lee, **EXAGERAR** (50–200 %) y **VER CÁMARA** (solo en la consola, nunca en la proyección). La imagen no se guarda ni sale de la máquina: solo se leen la boca, las cejas, los ojos y el giro. Usa la visión de OJO (Human, modelos locales en `../ojo/models`), sin internet.
 
+## FX (consola › FX)
+Cuatro efectos que van con el sonido. Por defecto, todos activos; cada uno se enciende o apaga en directo y la proyección cambia al momento.
+- **GLITCH EN LOS GOLPES:** separación RGB y franjas desplazadas en los tirones (crujidos), los cortes digitales y el impacto. Solo dura el golpe.
+- **ESTELA:** los gestos rápidos dejan un eco que se apaga. Dura más cuanto más rápido es el gesto, se mide en segundos (igual a 30 que a 60 fps) y se borra en cada corte de plano.
+- **ATMÓSFERA Y HACES:** conos de luz con niebla que se mueve (el de la clave y el del acento, que late con los golpes) y polvo flotando dentro del haz.
+- **DESTELLOS:** los brillos de la laca se alargan en horizontal, con un poco del acento. Solo los brillos de verdad, en una línea limpia. En calidad ligera se apagan solos.
+
 ## Audio (`A`)
 - **BASE:** el sonido del clip de validación. Bombo esculpido, chapa FM, crujidos de cuerda física, bajo con armónicos para el móvil, impacto y dron aditivo en la raíz.
 - **BASE + AMBIENT:** encima, dark ambient: capas de dron (sierras desafinadas, coro aditivo, pad FM en una reverb de 9 s), ruido oscuro (retumbo, aliento, polvo), flanger en el eco, una voz por emoción y el sonido de la piel al estirarse, que sigue la velocidad de la deformación.

@@ -16,7 +16,7 @@ window.frame = (i) => {
   const t = i / FPS, tt = Math.min(t, P.dur), st = an.avanzar(tt), pl = an.plano(tt);
   st.sweep *= 0.6;
   esc.pose(st.c, tt, st.bumps); esc.camara(pl.name, pl.since); esc.luz(st.rim, st.sweep, st.swx, 1);
-  esc.render(tt, Math.max(0, Math.min(1, t / 1.2, (P.dur + 1.5 - t) / 2.2)));
+  esc.render(tt, Math.max(0, Math.min(1, t / 1.2, (P.dur + 1.5 - t) / 2.2)), st.glitch, st.speed);
   return cv.toDataURL('image/jpeg', 0.93);
 };
 // avanza la simulación sin dibujar (para empezar el clip a mitad de pieza con el mismo estado)

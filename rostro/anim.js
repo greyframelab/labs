@@ -66,7 +66,7 @@ export function crearAnimador(P, seed = 1, intensidad = 1) {
   const ev = P.events; let ei = 0;
   const tImp = (ev.find(e => e.k === 'impact') || { t: 1e9 }).t;
   const x = {}, v = {}, off = {}; for (const k of CONTROLS) { x[k] = 0; v[k] = 0; off[k] = 0; }
-  const bumps = []; let rimPulse = 0, bassEnv = 0, t = 0, sweep = 0, swx = 0, swDir = 1;
+  const bumps = []; let gEnv = 0, rimPulse = 0, bassEnv = 0, t = 0, sweep = 0, swx = 0, swDir = 1;
   const K = 150, D = 2 * 0.36 * Math.sqrt(K);
   const poseCache = new Map(); const P_ = (e, m) => { const k = e + m; if (!poseCache.has(k)) poseCache.set(k, pose(e, m)); return poseCache.get(k); };
   // estado de los gestos propios
@@ -105,6 +105,7 @@ export function crearAnimador(P, seed = 1, intensidad = 1) {
       const ang = (rnd() - 0.5) * 2.2, y = 0.2 + rnd() * 2.8;
       bumps.push({ x: Math.sin(ang) * 1.9, y, z: Math.cos(ang) * 1.9 + 0.2, r: 0.22 + rnd() * 0.22, a0: (0.1 + rnd() * 0.08) * vel * (rupt ? 1.4 : 1), t0: e.t });
     } else if (e.k === 'creak' || e.k === 'glitch') {
+      gEnv = Math.max(gEnv, (e.k === 'glitch' ? 0.45 : 0.6) * vel * (rupt ? 1.2 : 0.8));
       let best = 'REPOSO', bw = 0; for (const [k, val] of Object.entries(W)) if (val > bw) { bw = val; best = k; }
       const pool = TIRON[best] || TIRON.REPOSO, k = pool[Math.floor(rnd() * pool.length)];
       const amp = k.startsWith('eye') || k.startsWith('jaw') ? 0.6 : 0.2;
@@ -113,7 +114,7 @@ export function crearAnimador(P, seed = 1, intensidad = 1) {
     else if (e.k === 'sweep') { sweep = 1; swDir = e.dir || 1; swx = -swDir; }
     else if (e.k === 'impact') {
       v.jawOpen += 6; v.thrust -= 4; v.pitch -= 2.5; for (const k of [...S2('eyeWide'), ...S2('browInnerUp'), ...S2('mouthStretch')]) v[k] += 5;
-      rimPulse = 1; sweep = 1; swx = -1; swDir = 1;
+      rimPulse = 1; sweep = 1; swx = -1; swDir = 1; gEnv = 1;
       for (let i = 0; i < 3; i++) { const ang = (rnd() - 0.5) * 2; bumps.push({ x: Math.sin(ang) * 1.9, y: 0.5 + rnd() * 2.3, z: Math.cos(ang) * 1.9 + 0.2, r: 0.35, a0: 0.2, t0: e.t }); }
     }
   }
@@ -201,7 +202,7 @@ export function crearAnimador(P, seed = 1, intensidad = 1) {
         const a = K * (tg[k] + off[k] - x[k]) - D * v[k];
         v[k] += a * dt; x[k] += v[k] * dt; off[k] *= Math.exp(-dt / 0.09);
       }
-      bassEnv *= Math.exp(-dt / 0.35); rimPulse *= Math.exp(-dt / 0.14);
+      bassEnv *= Math.exp(-dt / 0.35); rimPulse *= Math.exp(-dt / 0.14); gEnv *= Math.exp(-dt / 0.07);
       sweep *= Math.exp(-dt / 0.5); swx += swDir * dt * 2.6;
       t += dt; steps++;
     }
@@ -216,7 +217,7 @@ export function crearAnimador(P, seed = 1, intensidad = 1) {
     const dtF = Math.max(1e-3, steps / 240); speed += (Math.min(6, Math.abs(sum - prevSum) / dtF * 0.25) - speed) * 0.3; prevSum = sum;
     const emo = pesos(time), a = act(time);
     const preImpacto = time < tImp ? Math.min(1, Math.max(0, (time - (tImp - P.BAR)) / P.BAR)) : 0;
-    return { c, m: macro(c), bumps: live, rim: BASE_RIM[a] + rimPulse * 0.9, sweep, swx: Math.max(-1, Math.min(1, swx)), act: a, emo, speed, preImpacto };
+    return { glitch: gEnv, c, m: macro(c), bumps: live, rim: BASE_RIM[a] + rimPulse * 0.9, sweep, swx: Math.max(-1, Math.min(1, swx)), act: a, emo, speed, preImpacto };
   }
 
   function plano(time) {
@@ -227,7 +228,7 @@ export function crearAnimador(P, seed = 1, intensidad = 1) {
   function golpe(emo, fuerza = 2.2) {
     const K2 = KICK[emo] || KICK.REPOSO, sign = rnd() < 0.5 ? -1 : 1;
     for (const [k, a] of Object.entries(K2)) v[k] += a * fuerza * (k === 'yaw' || k === 'roll' ? sign : 1);
-    rimPulse = Math.max(rimPulse, 0.8);
+    rimPulse = Math.max(rimPulse, 0.8); gEnv = Math.max(gEnv, 0.7);
   }
   return { avanzar, plano, externo, golpe };
 }

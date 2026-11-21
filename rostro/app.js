@@ -10,6 +10,7 @@ import { crearEspejo } from './espejo.js';
 const $ = (id) => document.getElementById(id);
 const S = {
   modo: 'auto', estilo: null, acc: null, emo: null, ambient: true, vol: 0.7, bri: 1, seguro: true, apagado: false, solo: false,
+  fx: { glitch: true, estela: true, atmos: true, destellos: true },
   amp: 1, verCam: false, tecla: null, teclaUlt: null, teclaW: 0,
   P: null, an: null, t0: 0, si: 0, hist: [], hi: -1, salida: false, salidaVista: 0,
 };
@@ -31,7 +32,7 @@ $('go').onclick = async () => {
     ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'playback', sampleRate: 48000 });
     await ctx.resume(); snd = crearSonido(ctx); snd.volumen(S.vol);
     log('MODELANDO EL ROSTRO', 0.4);
-    esc = await crearEscena($('c'), '#FF1A1A');
+    esc = await crearEscena($('c'), '#FF1A1A'); esc.fx(S.fx);
     log('CALENTANDO LA LUZ', 0.85);
     tamano(); esc.pose(pose('REPOSO'), 0); esc.render(0, 0);
     log('', 1);
@@ -137,7 +138,7 @@ function frame(ts) {
   if (pres > 0.5 && !FRONTAL.has(pl.name)) pl = { name: 'medio', since: pl.since, at: pl.at };
   // la salida calcula la pieza por su cuenta: aquí solo va el reloj (en tiempo de pared) y la sala
   const msg = { type: 'reloj', code: P.code, start: performance.timeOrigin + performance.now() - (ctx.currentTime - S.t0 - LAT()) * 1000, // compensa la latencia de salida del audio
-    fadeOut, bri: S.bri, seguro: S.seguro, ext, forzarMedio: pres > 0.5 };
+    fadeOut, bri: S.bri, seguro: S.seguro, ext, forzarMedio: pres > 0.5, fx: S.fx };
   salCh.postMessage(msg);
 
   // calidad automática: si no llega, baja por pasos; la resolución solo cambia en un corte de plano
@@ -159,7 +160,7 @@ function frame(ts) {
   const prevFps = S.salida ? 15 : NIVELES[nivel].fps;
   if (ts - lastPreview < 1000 / prevFps - 2) return;
   lastPreview = ts;
-  esc.pose(st.c, tt, st.bumps); esc.camara(pl.name, pl.since); esc.luz(st.rim, st.sweep, st.swx, S.bri); esc.render(tt, fade);
+  esc.pose(st.c, tt, st.bumps); esc.camara(pl.name, pl.since); esc.luz(st.rim, st.sweep, st.swx, S.bri); esc.render(tt, fade, st.glitch, st.speed);
 }
 
 const FRONTAL = new Set(['medio', 'macro', 'boca', 'ojo', 'lejos']);
@@ -245,4 +246,8 @@ addEventListener('keydown', (e) => {
 const ORDEN_TECLAS = 'qwertyuiosdfjklzxvnm4567890g'.split('');
 $('teclas').innerHTML = ORDEN_TECLAS.map(k => [k, TECLAS[k]]).map(([k, em]) => `<button data-k="${k}"><b>${k.toUpperCase()}</b>${em || 'SOLTAR'}</button>`).join('');
 $('teclas').onclick = (e) => { const b = e.target.closest('button'); if (b && esc) tecla(b.dataset.k); };
+// FX: interruptores (por defecto, todos activos); la salida los recibe en el reloj
+const FXN = { glitch: 'GLITCH EN LOS GOLPES', estela: 'ESTELA', atmos: 'ATMÓSFERA Y HACES', destellos: 'DESTELLOS' };
+$('fxList').innerHTML = Object.entries(FXN).map(([k, n]) => `<button class="tbtn on" data-fx="${k}">${n}</button>`).join('');
+$('fxList').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; const k = b.dataset.fx; S.fx[k] = !S.fx[k]; b.classList.toggle('on', S.fx[k]); esc && esc.fx(S.fx); };
 setModo('auto'); setAmbient(true);
