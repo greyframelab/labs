@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VØID_LOOM · ROSTRO · SALIDA</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden;cursor:none}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block}
+#hint{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);font:400 10px 'JetBrains Mono',ui-monospace,monospace;letter-spacing:.24em;color:#8f8c86;text-align:center;line-height:1.9;transition:opacity .6s;cursor:default}
+#hint.off{opacity:0}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hint">SALIDA DE VØID_LOOM · ROSTRO<br>LLEVA ESTA VENTANA AL PROYECTOR Y HAZ DOBLE CLIC: PANTALLA COMPLETA</div>
+<script type="module" src="salida.js"></script>
+</body>
+</html>

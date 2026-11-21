@@ -10,6 +10,8 @@ Experiments in UI, motion and creative coding for games, apps and interfaces.
 
 **VØID_LOOM · SEMILLA** (materia negra que nace de una palabra, generador infinito en tiempo real): https://greyframelab.github.io/labs/semilla/
 
+**VØID_LOOM · ROSTRO** (una cabeza gigante que se contorsiona al ritmo de su sonido, con modo ESPEJO): https://greyframelab.github.io/labs/rostro/
+
 | # | Lab | Category |
 |---|-----|----------|
 | 44 | [Surco](lab-44-surco/) | Motion |

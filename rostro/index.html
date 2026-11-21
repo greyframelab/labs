@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VØID_LOOM · ROSTRO · Greyframe Labs</title>
+<meta name="description" content="VØID_LOOM · ROSTRO: una cabeza gigante de laca negra que se contorsiona al ritmo de su propio sonido. Miedo, furia, grito, pánico: cada pieza es un arco emocional que existe una sola vez.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+:root{
+  --bg:#060606;--panel:#0b0b0b;--panel2:#101010;--line:#1d1c1b;--line2:#2a2927;
+  --tx:#f2f0ea;--tx2:#bdbab3;--mute:#8f8c86;--dim:#5d5b57;
+  --red:#FF1A1A;--acc:#00E5FF;
+  --f:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--tx);font:400 11px var(--f);letter-spacing:.06em;overflow:hidden;-webkit-font-smoothing:antialiased}
+button{all:unset;cursor:pointer;box-sizing:border-box}
+button:focus-visible,input:focus-visible{outline:1px solid var(--acc);outline-offset:2px}
+button[disabled]{opacity:.35;pointer-events:none}
+
+#boot{position:fixed;inset:0;z-index:100;background:#000;display:grid;place-items:center;transition:opacity .9s}
+#boot.off{opacity:0;pointer-events:none}
+.boot-in{display:flex;flex-direction:column;align-items:center;gap:34px;text-align:center}
+.boot-in .mark{font-size:34px;font-weight:300;letter-spacing:.42em;margin-right:-.42em}
+.boot-in .mark i{font-style:normal;color:var(--acc)}
+.boot-in .sub{color:var(--mute);letter-spacing:.32em;font-size:10px;margin-top:-18px;line-height:2}
+#go{border:1px solid var(--line2);padding:16px 34px;letter-spacing:.36em;font-size:11px;transition:border-color .2s,color .2s,background .2s;background:#000}
+#go:hover{border-color:var(--acc);color:#fff;background:rgba(0,229,255,.06)}
+#bootlog{min-height:14px;color:var(--dim);font-size:9.5px;letter-spacing:.2em;max-width:560px;line-height:1.8}
+#bootlog.err{color:var(--red)}
+#go.off{display:none}
+#bootbar{width:260px;height:1px;background:var(--line);overflow:hidden;opacity:0;transition:opacity .4s}
+#bootbar.on{opacity:1}
+#bootfill{display:block;height:100%;background:var(--acc);transform:scaleX(0);transform-origin:left;transition:transform .25s}
+
+.app{display:grid;grid-template-rows:46px 1fr 30px;height:100vh}
+header{display:flex;align-items:center;gap:22px;padding:0 18px;border-bottom:1px solid var(--line);background:#050505;min-width:0}
+.brand{display:flex;align-items:baseline;gap:12px;letter-spacing:.34em;font-size:12px;white-space:nowrap}
+.brand i{font-style:normal;color:var(--acc)}
+.brand span{color:var(--mute);font-size:9px;letter-spacing:.3em}
+.chips{display:flex;gap:18px;margin-left:8px;min-width:0;overflow:hidden}
+.chip{display:flex;align-items:center;gap:8px;font-size:9px;letter-spacing:.22em;color:var(--mute);white-space:nowrap}
+.chip b{font-weight:400;color:var(--tx2);font-variant-numeric:tabular-nums}
+.led{width:6px;height:6px;border-radius:50%;background:#2a2927;flex:none}
+.led.on{background:#39FF6A;box-shadow:0 0 8px #39FF6A}
+.led.warn{background:#FFB000;box-shadow:0 0 8px #FFB000}
+.led.err{background:var(--red);box-shadow:0 0 8px var(--red)}
+.tools{margin-left:auto;display:flex;align-items:center;gap:10px}
+.seg{display:flex;border:1px solid var(--line2)}
+.seg button{padding:7px 10px;font-size:9px;letter-spacing:.22em;color:var(--mute);transition:color .15s,background .15s;white-space:nowrap;flex:1;text-align:center}
+.seg button+button{border-left:1px solid var(--line2)}
+.seg button:hover{color:var(--tx)}
+.seg button.on{color:#000;background:var(--tx)}
+.tbtn{border:1px solid var(--line2);padding:7px 11px;font-size:9px;letter-spacing:.22em;color:var(--tx2);transition:all .15s;white-space:nowrap;text-align:center}
+.tbtn:hover{border-color:var(--mute);color:var(--tx)}
+.tbtn.on{border-color:var(--acc);color:#fff;background:color-mix(in srgb,var(--acc) 12%,transparent)}
+.tbtn.rec.on{border-color:var(--red);background:rgba(255,26,26,.14);animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:.55}}
+
+main{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:1px;background:var(--line);min-height:0}
+main>*{background:var(--panel);min-height:0}
+.params{overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:#2a2927 transparent}
+.view{position:relative;background:#000;overflow:hidden}
+#c{position:absolute;inset:0;width:100%;height:100%;display:block}
+.cv{position:absolute;left:2.4%;bottom:3.2%;margin:0;white-space:pre;display:flex;flex-direction:column;font:400 clamp(8px,1.05vh,13px)/1.65 'JetBrains Mono',ui-monospace,monospace;letter-spacing:.04em;color:rgba(242,240,234,.5);pointer-events:none;transition:opacity .5s;z-index:3}
+.cv.off{opacity:0}
+.cv s,.cv u{text-decoration:none;color:rgba(242,240,234,.3)}
+.cv i,.cv b,.cv em{font-style:normal;color:var(--acc,#F2F0EA)}
+.cv b{font-weight:600}
+.cv>*{display:block}
+.cv .now{color:rgba(242,240,234,.88)}
+.view .cv{left:auto;right:2.4%;bottom:46px}
+
+.v-tag{position:absolute;left:16px;top:14px;display:flex;gap:10px;align-items:center;font-size:9px;letter-spacing:.24em;color:var(--tx2);text-shadow:0 0 12px #000;pointer-events:none}
+.v-tag .air{border:1px solid var(--acc);color:var(--acc);padding:3px 6px;font-size:8px}
+.v-big{position:absolute;left:16px;bottom:34px;display:flex;flex-direction:column;gap:8px;pointer-events:none;text-shadow:0 0 18px rgba(0,0,0,.9)}
+.v-big b{font-size:22px;font-weight:300;letter-spacing:.36em}
+.v-big span{font-size:9px;letter-spacing:.2em;color:var(--mute);max-width:520px;line-height:1.7}
+.tl{position:absolute;left:0;right:0;bottom:0;height:20px;pointer-events:none}
+.tl i{position:absolute;left:0;bottom:0;height:2px;background:var(--acc);box-shadow:0 0 8px var(--acc)}
+.tl span{position:absolute;bottom:6px;font-size:8px;letter-spacing:.2em;color:var(--dim);transform:translateX(4px)}
+.tl em{position:absolute;bottom:0;width:1px;height:8px;background:var(--line2)}
+
+.sect{padding:14px 16px 16px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:12px}
+.sect h3{margin:0;font-weight:400;font-size:9px;letter-spacing:.26em;color:var(--mute);display:flex;justify-content:space-between}
+.sect h3 em{font-style:normal;color:var(--acc)}
+.note{font-size:9px;letter-spacing:.06em;color:var(--mute);line-height:1.6}
+.sl{display:grid;grid-template-columns:86px 1fr 34px;align-items:center;gap:10px;font-size:9px;letter-spacing:.18em;color:var(--tx2)}
+.sl output{text-align:right;color:var(--dim);font-variant-numeric:tabular-nums}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:18px;background:transparent;margin:0;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:1px;background:linear-gradient(90deg,var(--acc) var(--v,50%),var(--line2) var(--v,50%))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:9px;height:9px;margin-top:-4px;background:var(--tx);border:0;transform:rotate(45deg)}
+input[type=range]::-moz-range-track{height:1px;background:var(--line2)}
+input[type=range]::-moz-range-progress{height:1px;background:var(--acc)}
+input[type=range]::-moz-range-thumb{width:8px;height:8px;background:var(--tx);border:0;border-radius:0}
+input[type=range][disabled]{opacity:.45;pointer-events:none}
+.sw{display:flex;gap:6px;flex-wrap:wrap}
+.sw button{width:30px;height:18px;border:1px solid var(--line2);position:relative;font-size:8px;letter-spacing:.1em;color:var(--mute);text-align:center;line-height:16px}
+.sw button i{position:absolute;inset:4px;background:var(--c)}
+.sw button.on{border-color:var(--tx);color:var(--tx)}
+.row{display:flex;gap:6px;flex-wrap:wrap}
+.row .tbtn{flex:1}
+.code{display:flex;gap:6px;align-items:stretch}
+.code input{all:unset;box-sizing:border-box;flex:1;min-width:0;border:1px solid var(--line2);padding:8px 10px;font:300 17px var(--f);letter-spacing:.34em;color:var(--tx);text-transform:uppercase}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;font-size:9px;letter-spacing:.18em;color:var(--mute)}
+.kv b{font-weight:400;color:var(--tx2);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meter{height:2px;background:var(--line2);position:relative;overflow:hidden}
+.meter i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--acc);box-shadow:0 0 8px var(--acc);transition:width .15s}
+.list{display:flex;flex-direction:column;max-height:160px;overflow-y:auto;scrollbar-width:thin}
+.list div{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #141413;font-size:9px;letter-spacing:.16em;color:var(--tx2)}
+.list div button{color:var(--mute)}
+.list div button:hover{color:var(--tx)}
+.list div .go{flex:1;color:var(--tx2)}
+.list div i{font-style:normal;color:var(--dim)}
+.hide{display:none!important}
+
+footer{display:flex;align-items:center;gap:18px;padding:0 18px;border-top:1px solid var(--line);background:#050505;color:var(--dim);font-size:8.5px;letter-spacing:.2em;white-space:nowrap;overflow:hidden}
+footer b{color:var(--tx2);font-weight:400}
+
+body.solo .app{grid-template-rows:1fr}
+body.solo header,body.solo footer,body.solo .params,body.solo .v-tag,body.solo .v-big,body.solo .tl{display:none}
+body.solo main{grid-template-columns:1fr}
+body.solo{cursor:none}
+
+#help{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.88);display:none;place-items:center}
+#help.on{display:grid}
+#help .box{border:1px solid var(--line2);background:#070707;padding:28px 34px;display:grid;grid-template-columns:auto auto;gap:9px 34px;font-size:10px;letter-spacing:.16em;color:var(--tx2)}
+#help .box b{color:var(--acc);font-weight:400}
+#help h4{grid-column:1/-1;margin:0 0 8px;font-weight:400;letter-spacing:.3em;color:var(--tx)}
+
+.emo{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.emo button{border:1px solid var(--line2);padding:7px 4px;font-size:8.5px;letter-spacing:.16em;color:var(--mute);text-align:center}
+.emo button:hover{color:var(--tx)}
+.emo button.on{color:#000;background:var(--tx)}
+.credit{font-size:8.5px;letter-spacing:.08em;color:var(--dim);line-height:1.7}
+.credit a{color:var(--mute)}
+</style>
+</head>
+<body>
+<div id="boot">
+  <div class="boot-in">
+    <div class="mark">VØID<i>_</i>LOOM</div>
+    <div class="sub">ROSTRO<br>UNA CABEZA QUE SIENTE AL RITMO DE SU SONIDO · CADA PIEZA EXISTE UNA VEZ</div>
+    <button id="go">ARRANCAR</button>
+    <div id="bootbar"><i id="bootfill"></i></div>
+    <div id="bootlog"></div>
+  </div>
+</div>
+
+<div class="app">
+  <header>
+    <div class="brand">VØID<i>_</i>LOOM <span>ROSTRO</span></div>
+    <div class="chips">
+      <div class="chip"><span class="led on"></span>MODO <b id="chMode">AUTOMÁTICO</b></div>
+      <div class="chip">PIEZA <b id="chCode">—</b></div>
+      <div class="chip">ESTILO <b id="chSt">—</b></div>
+      <div class="chip">BPM <b id="chBpm">—</b></div>
+      <div class="chip">ACTO <b id="chAct">—</b></div>
+      <div class="chip">EMOCIÓN <b id="chEmo">—</b></div>
+      <div class="chip">AUDIO <b id="chAud">—</b></div>
+      <div class="chip">FPS <b id="chFps">—</b></div>
+    </div>
+    <div class="tools">
+      <button class="tbtn" id="bProj" title="P">PROYECTAR</button>
+      <button class="tbtn" id="bHelp" title="?">?</button>
+    </div>
+  </header>
+  <main>
+    <div class="view">
+      <canvas id="c"></canvas>
+      <div class="v-tag"><span class="air">EN EL AIRE</span><span id="tagTxt">—</span></div>
+      <div class="v-big"><b id="bigName">—</b><span id="bigIdea">—</span></div>
+      <div class="tl" id="tl"></div>
+      <video id="camPrev" class="hide" muted playsinline style="position:absolute;right:14px;top:14px;width:22%;max-width:260px;transform:scaleX(-1);border:1px solid var(--line2);opacity:.85"></video>
+    </div>
+    <div class="params">
+      <div class="sect">
+        <h3>MODO <em>1 · 2 · 3</em></h3>
+        <div class="seg" id="segMode"><button data-m="auto">AUTOMÁTICO</button><button data-m="manual">MANUAL</button><button data-m="espejo">ESPEJO</button></div>
+        <div class="note" id="modeNote"></div>
+        <div id="boxManual" class="hide" style="display:flex;flex-direction:column;gap:10px">
+          <div class="note">EMOCIÓN</div>
+          <div class="emo" id="emoList"></div>
+          <div class="note">ESTILO</div>
+          <div class="seg" id="segSt"><button data-s="AZAR" class="on">AZAR</button><button data-s="GOLPE">GOLPE</button><button data-s="PULSO">PULSO</button><button data-s="QUIEBRE">QUIEBRE</button></div>
+        </div>
+        <div id="boxEsp" class="hide" style="display:flex;flex-direction:column;gap:10px">
+          <div class="kv">
+            <span>CÁMARA</span><b><span class="led" id="ledEsp" style="display:inline-block;margin-right:8px"></span><span id="eCam">APAGADA</span></b>
+            <span>VISITANTE</span><b id="eCara">—</b>
+            <span>EMOCIÓN QUE LEE</span><b id="eEmo">—</b>
+            <span>LECTURA</span><b id="eMs">—</b>
+          </div>
+          <div class="note">PRESENCIA</div><div class="meter"><i id="eLvl"></i></div>
+          <div class="sl"><span>EXAGERAR</span><input type="range" id="rAmp" min="50" max="200" value="100"><output id="oAmp">100</output></div>
+          <div class="hide" id="rowCam"><select id="selCam" aria-label="Cámara" style="width:100%;background:#000;color:#bdbab3;border:1px solid #2a2927;padding:7px 8px;font:400 9px 'JetBrains Mono',monospace;letter-spacing:.14em"></select></div>
+          <div class="row"><button class="tbtn" id="bCam">VER CÁMARA (SOLO CONSOLA)</button></div>
+          <div class="note">La cámara mira la sala, cerca del proyector y a la altura de la cara. La imagen no se proyecta ni se guarda: solo se leen la boca, las cejas, los ojos y el giro de la cabeza.</div>
+        </div>
+      </div>
+      <div class="sect">
+        <h3>PIEZA <em id="pieceRef">—</em></h3>
+        <div class="code"><input id="inCode" maxlength="10" spellcheck="false" aria-label="Semilla"><button class="tbtn" id="bNew" title="espacio">NUEVA</button></div>
+        <div class="row"><button class="tbtn" id="bPrev">‹ ANTERIOR</button><button class="tbtn" id="bNext">SIGUIENTE ›</button></div>
+        <div class="note">ACENTO</div>
+        <div class="sw" id="swAcc"></div>
+      </div>
+      <div class="sect">
+        <h3>AUDIO <em>A</em></h3>
+        <div class="seg" id="segAud"><button data-a="0">BASE</button><button data-a="1">BASE + AMBIENT</button></div>
+        <div class="note">BASE: bombo esculpido, chapa, crujidos de tendón, bajo, impacto y dron. AMBIENT añade encima capas de dron, ruido oscuro, reverb larga, flanger en el eco, una voz por emoción y el sonido de la piel al estirarse. Se cambia en directo.</div>
+      </div>
+      <div class="sect">
+        <h3>SALA</h3>
+        <div class="sl"><span>VOLUMEN</span><input type="range" id="rVol" min="0" max="100" value="70"><output id="oVol">70</output></div>
+        <div class="sl"><span>BRILLO</span><input type="range" id="rBri" min="40" max="140" value="100"><output id="oBri">100</output></div>
+        <div class="row"><button class="tbtn on" id="bSafe" title="destellos limitados para público general">DESTELLOS SEGUROS</button><button class="tbtn" id="bBlack" title="B">APAGAR</button></div>
+        <div class="row"><button class="tbtn" id="bShot" title="C">CAPTURA</button></div>
+      </div>
+      <div class="sect">
+        <h3>REGISTRO <em id="nLog">0</em></h3>
+        <div class="note">Cada pieza que nace queda anotada con su semilla, su estilo y su arco. Clic para volver a ella.</div>
+        <div class="list" id="listLog"></div>
+        <div class="row"><button class="tbtn" id="bCsv">EXPORTAR CSV</button></div>
+      </div>
+      <div class="sect">
+        <h3>CRÉDITOS</h3>
+        <div class="credit">Escaneo de cabeza: «Infinite, 3D Head Scan» de Lee Perry-Smith (Infinite-Realities), licencia <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a>, basado en una obra de triplegangers.com. Deformación, material, luz y sonido: VØID_LOOM.</div>
+      </div>
+    </div>
+  </main>
+  <footer>
+    <span><b>1 2 3</b> MODO</span><span><b>ESPACIO</b> NUEVA</span><span><b>← →</b> HISTORIAL</span><span><b>P</b> PROYECTAR</span><span><b>H</b> VISTA LIMPIA</span>
+    <span><b>A</b> AUDIO</span><span><b>B</b> APAGAR</span><span><b>↑ ↓</b> VOLUMEN</span><span><b>C</b> CAPTURA</span><span><b>?</b> AYUDA</span>
+  </footer>
+</div>
+
+<div id="help"><div class="box">
+  <h4>VØID_LOOM · ROSTRO</h4>
+  <b>1</b><span>AUTOMÁTICO: las piezas nacen y se suceden solas, de negro a negro</span>
+  <b>2</b><span>MANUAL: emoción, estilo y acento a mano; la pieza se repite</span>
+  <b>3</b><span>ESPEJO: la cabeza copia la cara de quien tiene delante y la exagera</span>
+  <b>ESPACIO</b><span>pieza nueva</span>
+  <b>← →</b><span>pieza anterior / siguiente del historial</span>
+  <b>P</b><span>proyectar: abre la ventana de salida (llévala al proyector y doble clic)</span>
+  <b>H</b><span>vista limpia en esta ventana</span>
+  <b>A</b><span>audio: BASE / BASE + AMBIENT</span>
+  <b>B</b><span>apagar / encender con fundido</span>
+  <b>↑ ↓ · C</b><span>volumen de sala · captura</span>
+</div></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
