@@ -81,7 +81,7 @@
       const { valencia: v, activacion: a, calor: c, luz: l, maquina: m, dureza: d, peso: p, abstraccion: b } = ax;
       const acc = m > 0.75 ? pick(['verde', 'cian']) : c > 0.68 ? (v < 0.45 ? 'rojo' : 'ambar') : c < 0.32 ? (v < 0.45 ? 'violeta' : 'cian')
         : l < 0.3 ? (v < 0.45 ? 'violeta' : 'rojo') : a > 0.7 && v > 0.55 ? 'magenta' : l > 0.7 ? 'blanco' : pick(['blanco', 'cian', 'ambar', 'violeta']);
-      const forms = b > 0.72 ? ['armilar', 'laminas', 'concha'] : d > 0.65 && p > 0.6 ? ['monolito', 'fractura', 'torsion'] : d > 0.65 && a > 0.6 ? ['espina', 'fractura']
+      const forms = b > 0.72 ? ['mobius', 'laminas', 'concha'] : d > 0.65 && p > 0.6 ? ['monolito', 'fractura', 'torsion'] : d > 0.65 && a > 0.6 ? ['espina', 'fractura']
         : d < 0.35 ? ['masa', 'pliegue', 'concha'] : m > 0.65 ? ['torsion', 'laminas', 'fractura'] : ['concha', 'torsion', 'masa', 'pliegue'];
       f = {
         forms, acc: [acc, l < 0.4 ? 'blanco' : pick(['blanco', 'cian', 'ambar'])],
