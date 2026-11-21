@@ -10,9 +10,11 @@ import { crearEspejo } from './espejo.js';
 const $ = (id) => document.getElementById(id);
 const S = {
   modo: 'auto', estilo: null, acc: null, emo: null, ambient: true, vol: 0.7, bri: 1, seguro: true, apagado: false, solo: false,
-  amp: 1, verCam: false,
+  amp: 1, verCam: false, tecla: null, teclaUlt: null, teclaW: 0,
   P: null, an: null, t0: 0, si: 0, hist: [], hi: -1, salida: false, salidaVista: 0,
 };
+// TECLADO: cada tecla pone una emoción en directo, encima de la pieza (que sigue con su ritmo); G la suelta
+const TECLAS = { q: 'MIEDO', w: 'FURIA', e: 'GRITO', r: 'RISA', t: 'TRISTEZA', y: 'ANGUSTIA', u: 'PÁNICO', i: 'SORPRESA', o: 'DOLOR', d: 'ASCO', f: 'DESPRECIO', g: null };
 let esc, snd, ctx; const esp = crearEspejo(); let espOn = false;
 
 // ---------------------------------------------------------------- arranque
@@ -117,12 +119,20 @@ function frame(ts) {
     if (hudTick(ts, 'e')) { $('eCara').textContent = pres > 0.5 ? 'DELANTE' : 'NADIE'; $('eEmo').textContent = pres > 0.5 ? r.emocion : '—'; $('eMs').textContent = Math.round(esp.ms) + ' ms';
       $('eLvl').style.width = (pres * 100) + '%'; }
   }
+  // tecla pulsada: manda sobre el arco de la pieza y sobre ESPEJO
+  if (dt > 0 && dt < 0.5) S.teclaW += ((S.tecla ? 1 : 0) - S.teclaW) * Math.min(1, dt * 6);
+  let ext = espOn && pres > 0.01 ? { c: S.extC, w: pres * 0.92, emo: S.extEmo } : null;
+  if (S.teclaW > 0.01 && (S.tecla || S.teclaUlt)) {
+    const em = S.tecla || S.teclaUlt;
+    ext = { c: pose(em, 1.1), w: S.teclaW, emo: { [em]: 1.1 * S.teclaW } };
+    S.an.externo(ext.c, ext.w, ext.emo);
+  } else if (!espOn) S.an.externo(null, 0);
   let pl = S.an.plano(tt);
   // con alguien delante, planos frontales: un espejo se mira de frente
   if (pres > 0.5 && !FRONTAL.has(pl.name)) pl = { name: 'medio', since: pl.since, at: pl.at };
   // la salida calcula la pieza por su cuenta: aquí solo va el reloj (en tiempo de pared) y la sala
   const msg = { type: 'reloj', code: P.code, start: performance.timeOrigin + performance.now() - (ctx.currentTime - S.t0 - LAT()) * 1000, // compensa la latencia de salida del audio
-    fadeOut, bri: S.bri, seguro: S.seguro, ext: espOn && pres > 0.01 ? { c: S.extC, w: pres * 0.92, emo: S.extEmo } : null, forzarMedio: pres > 0.5 };
+    fadeOut, bri: S.bri, seguro: S.seguro, ext, forzarMedio: pres > 0.5 };
   salCh.postMessage(msg);
 
   // calidad automática: si no llega, baja por pasos; la resolución solo cambia en un corte de plano
@@ -208,9 +218,16 @@ $('bHelp').onclick = () => $('help').classList.toggle('on');
 $('help').onclick = () => $('help').classList.remove('on');
 function solo() { S.solo = !S.solo; document.body.classList.toggle('solo', S.solo); setTimeout(tamano, 50); }
 
+function tecla(k) {
+  const em = TECLAS[k];
+  if (em === null) { S.tecla = null; } else { S.tecla = em; S.teclaUlt = em; S.an.golpe(em); salCh.postMessage({ type: 'golpe', emo: em }); }
+  [...$('teclas').children].forEach(b => b.classList.toggle('on', b.dataset.k === k && em !== null));
+  $('chEmo').textContent = em || '—';
+}
 addEventListener('keydown', (e) => {
   if (!esc || e.target.tagName === 'INPUT') return;
   const k = e.key;
+  if (!e.ctrlKey && !e.metaKey && !e.altKey && k.length === 1 && k.toLowerCase() in TECLAS) { if (!e.repeat) tecla(k.toLowerCase()); return; }
   if (k === '1') setModo('auto'); else if (k === '2') setModo('manual'); else if (k === '3') setModo('espejo');
   else if (k === ' ') { e.preventDefault(); nueva(); }
   else if (k === 'ArrowLeft') $('bPrev').click(); else if (k === 'ArrowRight') $('bNext').click();
@@ -219,4 +236,6 @@ addEventListener('keydown', (e) => {
   else if (k === 'c' || k === 'C') captura(); else if (k === '?') $('help').classList.toggle('on');
   else if (k === 'ArrowUp' || k === 'ArrowDown') { e.preventDefault(); const r = $('rVol'); r.value = Math.max(0, Math.min(100, +r.value + (k === 'ArrowUp' ? 5 : -5))); r.oninput(); }
 });
+$('teclas').innerHTML = Object.entries(TECLAS).map(([k, em]) => `<button data-k="${k}"><b>${k.toUpperCase()}</b>${em || 'SOLTAR'}</button>`).join('');
+$('teclas').onclick = (e) => { const b = e.target.closest('button'); if (b && esc) tecla(b.dataset.k); };
 setModo('auto'); setAmbient(true);

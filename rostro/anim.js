@@ -168,5 +168,11 @@ export function crearAnimador(P, seed = 1, intensidad = 1) {
     let cur = P.shots[0]; for (const sh of P.shots) if (time >= sh[0]) cur = sh;
     return { name: cur[1], since: time - cur[0], at: cur[0] };
   }
-  return { avanzar, plano, externo };
+  // golpe a mano (teclado): la cara salta a la emoción con su propio espasmo
+  function golpe(emo, fuerza = 2.2) {
+    const K2 = KICK[emo] || KICK.REPOSO, sign = rnd() < 0.5 ? -1 : 1;
+    for (const [k, a] of Object.entries(K2)) v[k] += a * fuerza * (k === 'yaw' || k === 'roll' ? sign : 1);
+    rimPulse = Math.max(rimPulse, 0.8);
+  }
+  return { avanzar, plano, externo, golpe };
 }

@@ -46,6 +46,18 @@ Una semilla decide el estilo de sonido, el tempo, el acento, la raíz y el arco 
 | Barrido | Una luz blanca recorre la cara (solo en la ruptura). |
 | Impacto | La ruptura: la emoción salta al extremo. |
 
+## Teclado: emoción en directo
+Cada tecla pone esa emoción al momento, con su propio golpe, encima de la pieza. El ritmo y el sonido siguen; las voces del sonido cambian con la emoción. Funciona en cualquier modo y manda sobre ESPEJO. También están como botones en la consola (TECLADO).
+
+| Tecla | Emoción | Tecla | Emoción |
+|---|---|---|---|
+| Q | MIEDO | U | PÁNICO |
+| W | FURIA | I | SORPRESA |
+| E | GRITO | O | DOLOR |
+| R | RISA | D | ASCO |
+| T | TRISTEZA | F | DESPRECIO |
+| Y | ANGUSTIA | G | soltar: la cara vuelve al arco de la pieza |
+
 ## ESPEJO (`3`)
 Una cámara mira la sala desde cerca del proyector, a la altura de la cara. La cabeza copia al visitante y lo exagera:
 - lee la cara del visitante y la traduce a las mismas expresiones de la cabeza: si abre la boca, grita; si sube las cejas, se sorprende o se asusta; si frunce el ceño, entra en furia; si sonríe, se ríe con toda la cara; si arruga la nariz, asco;

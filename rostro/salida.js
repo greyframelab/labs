@@ -13,6 +13,7 @@ let P = null, an = null, code = '', start = 0, sala = { fadeOut: 1, bri: 1, segu
 ch.onmessage = (e) => {
   const d = e.data; if (!d) return;
   if (d.type === 'pieza') { P = crearPieza(d.code, d.opts); an = crearAnimador(P, d.seed, d.intensidad); code = d.code; esc.acento(P.acc); }
+  else if (d.type === 'golpe') { if (an) an.golpe(d.emo); }
   else if (d.type === 'reloj') {
     // el reloj se suaviza: pequeñas diferencias de entrega no se notan
     if (!haveClock || Math.abs(d.start - start) > 250) start = d.start; else start += (d.start - start) * 0.05;
