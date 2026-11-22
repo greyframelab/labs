@@ -119,7 +119,7 @@ Siete efectos que van con el sonido. Por defecto, todos activos; cada uno se enc
 - **NORMAL:** la laca negra.
 - **CÓDIGO · la piel es el código:** la cara está cubierta del código que la mueve, escrito sobre la piel en 3D. Cada altura lleva lo suyo: la emoción y la plástica en el cráneo, las cejas, los ojos, mejillas y nariz, la boca, la mandíbula y el giro en el cuello, con los valores en vivo. Donde la cara trabaja, el código se enciende con el acento; el texto se estira, se retuerce y se derrite con ella, y en cada cambio se reescribe de arriba abajo con el láser.
 - **VECTORES · campo de fuerzas:** cada punto de piel lanza una línea de luz desde donde estaría en reposo hacia donde está, amplificada y hacia fuera. Quieta, la cara no tiene nada; cuanto más intensa es la emoción, más largo y brillante es el campo.
-- **AUTO** (por defecto): en cada cambio de expresión elige entre las tres (la laca casi la mitad de las veces). La consola y la salida eligen lo mismo.
+- **AUTO** (por defecto): en cada cambio de expresión elige entre la laca y CÓDIGO. VECTORES no entra sola: solo con su botón o con Tab. La consola y la salida eligen lo mismo.
 
 ## Audio (`A`)
 - **BASE:** el sonido del clip de validación. Bombo esculpido, chapa FM, crujidos de cuerda física, bajo con armónicos para el móvil, impacto y dron aditivo en la raíz.
