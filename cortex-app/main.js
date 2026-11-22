@@ -34,7 +34,7 @@ const cfg = Object.assign({ instalacion: false, modo: 'auto' }, (() => { try { r
 const saveCfg = () => { try { fs.writeFileSync(CFG_FILE, JSON.stringify(cfg, null, 2)); } catch (e) {} };
 const INSTALL = cfg.instalacion || process.argv.includes('--instalacion');
 // en instalación con proyector: consola en la pantalla principal y la SALIDA sola en el proyector
-const pageURL = () => 'cortex://app/index.html' + (INSTALL ? '?museo&modo=' + (cfg.modo === 'pub' ? 'pub' : 'auto') : '');
+const pageURL = () => 'cortex://app/index.html' + (INSTALL ? '?museo&modo=' + (['pub', 'ddj'].includes(cfg.modo) ? cfg.modo : 'auto') : '');
 const OUT_DIR = (kind) => path.join(app.getPath(kind === 'video' ? 'videos' : 'pictures'), 'VØID_LOOM CÓRTEX');
 
 let win = null, quitting = false;
@@ -127,8 +127,9 @@ function buildMenu() {
     { label: 'Córtex', submenu: [
       { label: 'Modo instalación (arranca sola en el proyector)', type: 'checkbox', checked: cfg.instalacion, click: (m) => { cfg.instalacion = m.checked; saveCfg(); restartAsk(m.checked ? 'Modo instalación activado' : 'Modo instalación desactivado'); } },
       { label: 'La instalación arranca en', submenu: [
-        { label: 'AUTOPLAY (cada pase toca otro tramo de la noche)', type: 'radio', checked: cfg.modo !== 'pub', click: () => { cfg.modo = 'auto'; saveCfg(); if (INSTALL) restartAsk('La instalación arrancará en AUTOPLAY'); } },
-        { label: 'PÚBLICO (el micro de la sala entra al cerebro)', type: 'radio', checked: cfg.modo === 'pub', click: () => { cfg.modo = 'pub'; saveCfg(); if (INSTALL) restartAsk('La instalación arrancará en PÚBLICO'); } },
+        { label: 'AUTOPLAY (cada pase toca otro tramo de la noche)', type: 'radio', checked: !['pub', 'ddj'].includes(cfg.modo), click: () => { cfg.modo = 'auto'; saveCfg(); if (INSTALL) restartAsk('La instalación arrancará en AUTOPLAY'); } },
+        { label: 'PÚBLICO (el cerebro duerme hasta que la sala lo toca con la voz o las manos)', type: 'radio', checked: cfg.modo === 'pub', click: () => { cfg.modo = 'pub'; saveCfg(); if (INSTALL) restartAsk('La instalación arrancará en PÚBLICO'); } },
+        { label: 'INTÉRPRETE (DDJ-200 + micro)', type: 'radio', checked: cfg.modo === 'ddj', click: () => { cfg.modo = 'ddj'; saveCfg(); if (INSTALL) restartAsk('La instalación arrancará en INTÉRPRETE'); } },
       ] },
       { label: 'Abrir al encender el ordenador', type: 'checkbox', checked: app.getLoginItemSettings().openAtLogin, click: (m) => app.setLoginItemSettings({ openAtLogin: m.checked }) },
       { type: 'separator' },
@@ -138,6 +139,7 @@ function buildMenu() {
     { label: 'Pantalla', submenu: [
       { label: 'Pantalla completa sí / no', accelerator: 'CmdOrCtrl+Shift+F', click: toggleFull },
       { label: 'Mover a la siguiente pantalla', accelerator: 'CmdOrCtrl+Shift+M', click: moveNext },
+      { label: 'Calibrar la sala (4 s en silencio)', accelerator: 'CmdOrCtrl+Shift+K', click: () => { if (win) { win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'K' }); win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'K' }); } } },
     ] },
     { label: 'Ver', submenu: [
       { label: 'Recargar', accelerator: 'CmdOrCtrl+Shift+R', click: async () => {
@@ -158,7 +160,7 @@ app.on('before-quit', () => { quitting = true; });
 
 app.whenReady().then(async () => {
   const ses = session.defaultSession;
-  const allow = new Set(['media', 'screen-wake-lock', 'fullscreen']);
+  const allow = new Set(['media', 'midi', 'midiSysex', 'screen-wake-lock', 'fullscreen']);   // micro y DDJ-200 sin preguntar
   ses.setPermissionRequestHandler((wc, perm, cb) => cb(allow.has(perm)));
   ses.setPermissionCheckHandler((wc, perm) => allow.has(perm));
   ses.on('will-download', (e, item) => {

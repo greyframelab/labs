@@ -24,11 +24,13 @@ La app no está firmada con certificado de pago, así que la primera vez el sist
 
 ## PÚBLICO, sin internet
 
-El micrófono de la sala se analiza **en el propio ordenador**: solo se lee el nivel y los golpes de sonido. No se graba, no se envía y no se guarda.
+El micrófono de la sala se analiza **en el propio ordenador**: nivel, golpes, tono y lado. Los últimos segundos de voz se quedan solo en memoria para cantarlos en granos y se borran al cerrar. No se graba en disco, no se envía y no se guarda.
+
+**Calibrar la sala:** *Pantalla › Calibrar la sala* (o la tecla K) con la sala en silencio 4 s; la app lo recuerda. La DDJ-200 funciona sin preguntar (permiso MIDI).
 
 ## Menú
 
-- **Córtex › Modo instalación:** al abrir, arranca sola (sin clic) en el modo elegido en *La instalación arranca en*: AUTOPLAY o PÚBLICO. La obra va al proyector (o a la única pantalla) a pantalla completa. Escape no saca de pantalla completa en este modo.
+- **Córtex › Modo instalación:** al abrir, arranca sola (sin clic) en el modo elegido en *La instalación arranca en*: AUTOPLAY, PÚBLICO o INTÉRPRETE (DDJ-200). La obra va al proyector (o a la única pantalla) a pantalla completa. Escape no saca de pantalla completa en este modo.
 - **Córtex › Abrir al encender el ordenador:** junto con el modo instalación, el ordenador arranca directamente en la obra.
 - **Pantalla › Pantalla completa** (Ctrl/⌘+⇧+F) y **Mover a la siguiente pantalla** (Ctrl/⌘+⇧+M), para llevarla al proyector.
 
