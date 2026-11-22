@@ -1,0 +1,85 @@
+{
+  "name": "voidloom-cortex",
+  "productName": "VØID_LOOM CÓRTEX",
+  "version": "1.0.0",
+  "description": "VØID_LOOM · CÓRTEX · instrumento cerebro: una noche real de EEG toca sonido e imagen en tiempo real, con modo PÚBLICO por micrófono, sin internet",
+  "author": "VØID_LOOM",
+  "license": "MIT",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "copy": "node scripts/copy.js",
+    "start": "npm run copy && electron .",
+    "dist:win": "npm run copy && electron-builder --win --publish never",
+    "dist:mac": "npm run copy && electron-builder --mac --publish never"
+  },
+  "devDependencies": {
+    "electron": "45.3.2",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "labs.greyframe.voidloom.cortex",
+    "productName": "VØID_LOOM CÓRTEX",
+    "copyright": "VØID_LOOM",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "package.json",
+      "www/**/*"
+    ],
+    "asar": true,
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "VØID_LOOM CÓRTEX",
+      "artifactName": "VOID_LOOM-CORTEX-${version}-windows-instalador.${ext}"
+    },
+    "portable": {
+      "artifactName": "VOID_LOOM-CORTEX-${version}-windows-portable.${ext}"
+    },
+    "mac": {
+      "icon": "build/icon.png",
+      "category": "public.app-category.entertainment",
+      "identity": "-",
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "CÓRTEX escucha la sala en el modo PÚBLICO: los sonidos del visitante entran al cerebro como un canal más. El audio se analiza en este ordenador y no se envía ni se guarda."
+      },
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ]
+    },
+    "dmg": {
+      "artifactName": "VOID_LOOM-CORTEX-${version}-mac-${arch}.${ext}"
+    }
+  },
+  "repository": "github:greyframelab/labs"
+}

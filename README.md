@@ -12,6 +12,8 @@ Experiments in UI, motion and creative coding for games, apps and interfaces.
 
 **VØID_LOOM · ROSTRO** (una cabeza gigante que se contorsiona al ritmo de su sonido, con modo ESPEJO): https://greyframelab.github.io/labs/rostro/
 
+**VØID_LOOM · CÓRTEX** (un cerebro hecho de neuronas que toca, con una noche real de EEG, su sonido y su imagen en tiempo real; modos AUTOPLAY y PÚBLICO por micrófono): https://greyframelab.github.io/labs/cortex/
+
 | # | Lab | Category |
 |---|-----|----------|
 | 44 | [Surco](lab-44-surco/) | Motion |

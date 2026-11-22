@@ -1,0 +1,74 @@
+# VØID_LOOM · CÓRTEX · genera la app de escritorio para Windows y Mac
+# Se ejecuta al cambiar cortex/ o cortex-app/ en main, o a mano desde la pestaña Actions.
+# En una PR también genera la app (artefactos descargables desde la ejecución) para probarla antes del merge.
+# Mete dentro el código y la noche de EEG que hace de partitura: la app funciona sin internet.
+# Deja los ejecutables en la release "cortex-app-latest" del repo.
+name: VØID_LOOM · CÓRTEX · app
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['cortex/**', 'cortex-app/**', '.github/workflows/cortex-app.yml']
+  pull_request:
+    paths: ['cortex/**', 'cortex-app/**', '.github/workflows/cortex-app.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cortex-app-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: win
+          - os: macos-latest
+            target: mac
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: cortex-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cortex-app/package-lock.json
+      - run: npm ci
+      - run: npm run dist:${{ matrix.target }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: voidloom-cortex-${{ matrix.target }}
+          path: |
+            cortex-app/dist/*.exe
+            cortex-app/dist/*.dmg
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Release cortex-app-latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          ls -la out
+          gh release delete cortex-app-latest --cleanup-tag -y || true
+          gh release create cortex-app-latest out/* --prerelease --target "$GITHUB_SHA" \
+            --title "VØID_LOOM · CÓRTEX · app de escritorio (última)" \
+            --notes "App de escritorio de VØID_LOOM · CÓRTEX para Windows y Mac: un cerebro hecho de neuronas que toca, con una noche real de EEG, su sonido y su imagen en tiempo real. Modos AUTOPLAY y PÚBLICO (micrófono). Funciona sin internet. Instrucciones en cortex-app/README.md."
