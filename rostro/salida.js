@@ -54,6 +54,6 @@ function frame(ts) {
   if (pl.at !== lastCut) { if (low > 2.5 && n < NIV.length - 1) { n++; low = 0; esc.calidad(NIV[n].l); size(); } lastCut = pl.at; }
   const fadeP = P.continuo ? (P.primera ? Math.min(1, tRaw / 1.2) : 1) : Math.max(0, Math.min(1, tRaw / 1.2, (P.dur + 1.5 - tRaw) / 2.2));
   esc.acento(accAt(P, tt));
-  esc.pose(st.c, tt, st.bumps); esc.camara(pl.name, pl.since); esc.luz(st.rim, st.sweep, st.swx, sala.bri); esc.render(tt, fadeP * sala.fadeOut, st.glitch, st.speed);
+  esc.pose(st.c, tt, st.bumps); esc.camara(pl.name, pl.since); esc.luz(st.rim, st.sweep, st.swx, sala.bri); esc.render(tt, fadeP * sala.fadeOut, st.glitch, st.speed, st.morphAge);
 }
 requestAnimationFrame(frame);

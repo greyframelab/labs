@@ -17,7 +17,7 @@ window.frame = (i) => {
   st.sweep *= 0.6;
   esc.acento(accAt(P, tt));
   esc.pose(st.c, tt, st.bumps); esc.camara(pl.name, pl.since); esc.luz(st.rim, st.sweep, st.swx, 1);
-  esc.render(tt, P.continuo ? Math.min(1, t / 1.2) : Math.max(0, Math.min(1, t / 1.2, (P.dur + 1.5 - t) / 2.2)), st.glitch, st.speed);
+  esc.render(tt, P.continuo ? Math.min(1, t / 1.2) : Math.max(0, Math.min(1, t / 1.2, (P.dur + 1.5 - t) / 2.2)), st.glitch, st.speed, st.morphAge);
   return cv.toDataURL('image/jpeg', 0.93);
 };
 // avanza la simulación sin dibujar (para empezar el clip a mitad de pieza con el mismo estado)

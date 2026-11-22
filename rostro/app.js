@@ -10,7 +10,7 @@ import { crearEspejo } from './espejo.js';
 const $ = (id) => document.getElementById(id);
 const S = {
   modo: 'auto', estilo: null, acc: null, emo: null, ambient: true, vol: 0.7, bri: 1, seguro: true, apagado: false, solo: false,
-  fx: { glitch: true, estela: true, atmos: true, destellos: true },
+  fx: { glitch: true, estela: true, atmos: true, destellos: true, laser: true, doble: true, lente: true },
   amp: 1, verCam: false, tecla: null, teclaUlt: null, teclaW: 0,
   autoTipo: 'continuo', piezaN: 0, accNow: '',
   P: null, an: null, t0: 0, si: 0, hist: [], hi: -1, salida: false, salidaVista: 0,
@@ -191,7 +191,7 @@ function pintar(ts) {
     $('chFps').textContent = Math.round(fpsAvg) + (nivel ? ` · Q${nivel}` : '');
   } else $('chFps').textContent = 'EN EL PROYECTOR';
   const { st, pl, tt, fade } = V;
-  esc.pose(st.c, tt, st.bumps); esc.camara(pl.name, pl.since); esc.luz(st.rim, st.sweep, st.swx, S.bri); esc.render(tt, fade, st.glitch, st.speed);
+  esc.pose(st.c, tt, st.bumps); esc.camara(pl.name, pl.since); esc.luz(st.rim, st.sweep, st.swx, S.bri); esc.render(tt, fade, st.glitch, st.speed, st.morphAge);
 }
 
 const FRONTAL = new Set(['medio', 'macro', 'boca', 'ojo', 'lejos']);
@@ -293,7 +293,7 @@ $('teclas').onclick = (e) => { const b = e.target.closest('button'); if (b && es
 $('teclasLuz').innerHTML = 'qwertyuiosdfjklg'.split('').map(k => `<button data-k="${k}"><b>⇧${k.toUpperCase()}</b>${TECLAS_LUZ[k] || 'SOLTAR'}</button>`).join('');
 $('teclasLuz').onclick = (e) => { const b = e.target.closest('button'); if (b && esc) tecla(b.dataset.k, true); };
 // FX: interruptores (por defecto, todos activos); la salida los recibe en el reloj
-const FXN = { glitch: 'GLITCH EN LOS GOLPES', estela: 'ESTELA', atmos: 'ATMÓSFERA Y HACES', destellos: 'DESTELLOS' };
+const FXN = { glitch: 'GLITCH EN LOS GOLPES', estela: 'ESTELA', atmos: 'ATMÓSFERA Y HACES', destellos: 'DESTELLOS', laser: 'LÁSER', doble: 'DOBLE EXPOSICIÓN', lente: 'LENTE' };
 $('fxList').innerHTML = Object.entries(FXN).map(([k, n]) => `<button class="tbtn on" data-fx="${k}">${n}</button>`).join('');
 $('fxList').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; const k = b.dataset.fx; S.fx[k] = !S.fx[k]; b.classList.toggle('on', S.fx[k]); esc && esc.fx(S.fx); };
 setModo('auto'); setAmbient(true);
