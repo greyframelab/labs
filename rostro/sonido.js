@@ -202,6 +202,15 @@ export function crearSonido(ctx) {
     const t = ctx.createOscillator(); t.type = 'sawtooth'; t.frequency.value = hz(root) * 2; const tg = ctx.createGain(); env(tg, when, 0.01, 0.12, 1.5); const tl = ctx.createBiquadFilter(); tl.type = 'lowpass'; tl.frequency.value = 600;
     t.connect(tl).connect(tg); send(tg, 0, 1.5); t.start(when); t.stop(when + 6);
   }
+  function morph(when, v) { // la materia cede: barrido de ruido resonante que cae por el estéreo + golpe sordo que se hunde
+    const n = ctx.createBufferSource(); n.buffer = NB.white; const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 6;
+    bp.frequency.setValueAtTime(1800, when); bp.frequency.exponentialRampToValueAtTime(90, when + 0.5);
+    const g = ctx.createGain(); env(g, when, 0.005, v * 0.45, 0.18);
+    const p = ctx.createStereoPanner(); p.pan.setValueAtTime(-0.6, when); p.pan.linearRampToValueAtTime(0.6, when + 0.5);
+    n.connect(bp).connect(g).connect(p).connect(drum); send(p, 0.2, amb ? 0.7 : 0.2); n.start(when, Math.random() * 3); n.stop(when + 0.8);
+    const o = ctx.createOscillator(); o.frequency.setValueAtTime(95, when); o.frequency.exponentialRampToValueAtTime(40, when + 0.4);
+    const og = ctx.createGain(); env(og, when, 0.003, v * 0.55, 0.22); o.connect(og).connect(drum); o.start(when); o.stop(when + 1.2);
+  }
   function oleaje(from, to) { // swell invertido hacia el impacto: ruido que sube y se abre
     const n = ctx.createBufferSource(); n.buffer = NB.pink; n.loop = true; const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.4;
     f.frequency.setValueAtTime(180, from); f.frequency.exponentialRampToValueAtTime(2200, to);
@@ -255,6 +264,8 @@ export function crearSonido(ctx) {
         case 'impact': impacto(when); break;
         case 'glitch': glitch(when, e.v); break;
         case 'sweep': barrido(when, e.dir || 1); break;
+        case 'morph': morph(when, e.v); break;
+        case 'swell': oleaje(when, when + (e.dur || 0.55)); break;
       }
     },
     oleaje,

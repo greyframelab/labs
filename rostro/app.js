@@ -2,7 +2,7 @@
 // y manda cada frame a la ventana de SALIDA, que dibuja la misma cabeza a la resolución del proyector.
 import { crearEscena } from './escena.js';
 import { crearAnimador } from './anim.js';
-import { crearPieza, nuevoCodigo, ACENTOS, ESTILOS } from './partitura.js';
+import { crearPieza, nuevoCodigo, accAt, ACENTOS, ESTILOS } from './partitura.js';
 import { EMOCIONES, pose } from './rig.js';
 import { crearSonido } from './sonido.js';
 import { crearEspejo } from './espejo.js';
@@ -10,8 +10,9 @@ import { crearEspejo } from './espejo.js';
 const $ = (id) => document.getElementById(id);
 const S = {
   modo: 'auto', estilo: null, acc: null, emo: null, ambient: true, vol: 0.7, bri: 1, seguro: true, apagado: false, solo: false,
-  fx: { glitch: true, estela: true, atmos: true, destellos: true },
+  fx: { glitch: true, estela: true, atmos: true, destellos: true, laser: true, doble: true, lente: true },
   amp: 1, verCam: false, tecla: null, teclaUlt: null, teclaW: 0,
+  autoTipo: 'continuo', piezaN: 0, accNow: '',
   P: null, an: null, t0: 0, si: 0, hist: [], hi: -1, salida: false, salidaVista: 0,
 };
 // TECLADO: cada tecla pone una emoción en directo, encima de la pieza (que sigue con su ritmo); G la suelta
@@ -57,17 +58,21 @@ $('go').onclick = async () => {
 // ---------------------------------------------------------------- piezas
 function nueva(code, fromHist = false) {
   code = (code || nuevoCodigo()).toUpperCase();
-  const prevAcc = S.P && S.P.acc;
+  const prev = S.P, prevAcc = prev && S.accNow;
   const opts = { evitar: prevAcc };
   if (S.modo === 'manual') { if (S.estilo) opts.estilo = S.estilo; if (S.acc) opts.acc = S.acc; if (S.emo) opts.emo = S.emo; }
+  // AUTOMÁTICO · CONTINUO: un paso sin cortes por todas las expresiones; el siguiente empieza justo donde acaba este
+  const sigue = !!(prev && prev.continuo && S.modo === 'auto' && S.autoTipo === 'continuo' && !fromHist && ctx.currentTime - S.t0 >= prev.dur - 0.1);
+  if (S.modo === 'auto' && S.autoTipo === 'continuo') { opts.continuo = true; opts.primera = !sigue; if (prev && prev.orden) opts.desde = prev.orden[prev.orden.length - 1]; }
   S.P = crearPieza(code, opts);
-  S.piezaMsg = { type: 'pieza', code, opts, seed: code.charCodeAt(0) * 31 + code.charCodeAt(1), intensidad: S.seguro ? 0.9 : 1 };
-  S.an = crearAnimador(S.P, S.piezaMsg.seed, S.piezaMsg.intensidad);
+  S.t0 = sigue ? S.t0 + prev.dur : ctx.currentTime + 0.25; S.si = 0;
+  S.piezaMsg = { type: 'pieza', id: ++S.piezaN, code, opts, seed: code.charCodeAt(0) * 31 + code.charCodeAt(1), intensidad: S.seguro ? 0.9 : 1, sigue,
+    start: performance.timeOrigin + performance.now() - (ctx.currentTime - S.t0 - LAT()) * 1000 };
+  S.an = crearAnimador(S.P, S.piezaMsg.seed, S.piezaMsg.intensidad, sigue ? S.an : null);
   if (typeof salCh !== 'undefined') salCh.postMessage(S.piezaMsg);
-  S.t0 = ctx.currentTime + 0.25; S.si = 0;
   snd.pieza(S.P, S.t0);
   const imp = S.P.events.find(e => e.k === 'impact'); if (imp) snd.oleaje(S.t0 + imp.t - S.P.BAR, S.t0 + imp.t);
-  esc.acento(S.P.acc);
+  S.accNow = accAt(S.P, 0); esc.acento(S.accNow);
   if (!fromHist) { S.hist = S.hist.slice(0, S.hi + 1); S.hist.push(code); S.hi = S.hist.length - 1; }
   registrar(S.P);
   pintarPieza();
@@ -77,12 +82,15 @@ function pintarPieza() {
   $('chCode').textContent = P.code; $('chSt').textContent = P.estilo; $('chBpm').textContent = P.bpm;
   $('inCode').value = P.code; $('pieceRef').textContent = P.estilo;
   $('bigName').textContent = P.arco.slice(0, 3).join(' · ');
-  $('bigIdea').textContent = `${ESTILOS[P.estilo].idea} · ${Math.round(P.dur)} s · eco: ${P.arco[3].toLowerCase()}`;
+  $('bigIdea').textContent = P.continuo
+    ? `${P.orden.length} expresiones sin cortes · ${Math.round(P.dur / 60 * 10) / 10} min · ${P.orden.slice(0, 4).map(e => e.toLowerCase()).join(' → ')} …`
+    : `${ESTILOS[P.estilo].idea} · ${Math.round(P.dur)} s · eco: ${P.arco[3].toLowerCase()}`;
   document.documentElement.style.setProperty('--acc', P.acc);
   [...$('swAcc').children].forEach(b => b.classList.toggle('on', b.dataset.c === P.acc));
   // línea de tiempo con los actos
   const tl = $('tl'); tl.innerHTML = '<i id="tlBar"></i>';
-  for (const [t, n] of P.acts) { const x = (t / P.dur) * 100; tl.insertAdjacentHTML('beforeend', `<em style="left:${x}%"></em><span style="left:${x}%">${n}</span>`); }
+  if (P.continuo) for (const s of P.segs) { const x = (s.t0 / P.dur) * 100; tl.insertAdjacentHTML('beforeend', `<em style="left:${x}%"></em>`); }
+  else for (const [t, n] of P.acts) { const x = (t / P.dur) * 100; tl.insertAdjacentHTML('beforeend', `<em style="left:${x}%"></em><span style="left:${x}%">${n}</span>`); }
 }
 const REG = [];
 function registrar(P) {
@@ -101,12 +109,11 @@ $('bCsv').onclick = () => {
 let last = 0, fpsAvg = 60, lowFor = 0, nivel = 0, lastShot = '', lastPreview = 0;
 const NIVELES = [{ esc: 1, fps: 60, ligera: false }, { esc: 0.8, fps: 60, ligera: false }, { esc: 0.8, fps: 30, ligera: false }, { esc: 0.8, fps: 30, ligera: true }, { esc: 0.6, fps: 30, ligera: true }];
 const salCh = new BroadcastChannel('rostro-salida');
-salCh.onmessage = (e) => { if (e.data && e.data.type === 'vivo') { if (e.data.code !== (S.P && S.P.code) && S.piezaMsg) salCh.postMessage(S.piezaMsg); S.salidaVista = performance.now(); if (!S.salida) { S.salida = true; $('bProj').classList.add('on'); esc.calidad(true); tamano(); } } };
+salCh.onmessage = (e) => { if (e.data && e.data.type === 'vivo') { if (e.data.id !== S.piezaN && S.piezaMsg) salCh.postMessage(S.piezaMsg); S.salidaVista = performance.now(); if (!S.salida) { S.salida = true; $('bProj').classList.add('on'); esc.calidad(true); tamano(); } } };
 let fadeOut = 1;
 const LAT = () => Math.min(0.2, ctx.outputLatency || ctx.baseLatency || 0);
 
 let V = null; // último estado calculado (lo dibuja la vista previa)
-setInterval(() => { if (S.salida && S.piezaMsg) salCh.postMessage(S.piezaMsg); }, 2000); // por si la salida se abrió tarde
 function logica(ts) {
   if (!S.P) return;
   const dt = last ? (ts - last) / 1000 : 0; last = ts;
@@ -120,11 +127,14 @@ function logica(ts) {
   const st = S.an.avanzar(Math.min(tt, P.dur));
   if (S.seguro) { st.sweep *= 0.6; st.rim = Math.min(st.rim, 1.4); }
   // negro → negro: cada pieza entra y sale de la oscuridad
-  const fadeP = Math.max(0, Math.min(1, tt / 1.2, (P.dur + 1.5 - tt) / 2.2));
+  const fadeP = P.continuo ? (P.primera ? Math.min(1, tt / 1.2) : 1) : Math.max(0, Math.min(1, tt / 1.2, (P.dur + 1.5 - tt) / 2.2));
   fadeOut += ((S.apagado ? 0 : 1) - fadeOut) * Math.min(1, dt * 1.2);
   const fade = fadeP * fadeOut;
-  snd.vivo(st, ctx.currentTime, Math.max(0, Math.min(1, (P.dur + 3 - tt) / 3)));
-  if (tt > P.dur + 2.6) { if (S.modo === 'auto') nueva(); else nueva(P.code, true); return; }
+  snd.vivo(st, ctx.currentTime, P.continuo ? 1 : Math.max(0, Math.min(1, (P.dur + 3 - tt) / 3)));
+  if (P.continuo && tt >= P.dur) { if (S.modo === 'auto' && S.autoTipo === 'continuo') nueva(); else nueva(null); return; }
+  if (!P.continuo && tt > P.dur + 2.6) { if (S.modo === 'auto') nueva(); else nueva(P.code, true); return; }
+  // en el continuo, el acento cambia con cada expresión (los entornos están en caché: sin tirón)
+  const ac = accAt(P, tt); if (ac !== S.accNow) { S.accNow = ac; esc.acento(ac); document.documentElement.style.setProperty('--acc', ac); }
   const hayVista = !document.hidden;
 
   // ESPEJO: la cara del visitante manda sobre el arco de la pieza mientras está delante
@@ -181,7 +191,7 @@ function pintar(ts) {
     $('chFps').textContent = Math.round(fpsAvg) + (nivel ? ` · Q${nivel}` : '');
   } else $('chFps').textContent = 'EN EL PROYECTOR';
   const { st, pl, tt, fade } = V;
-  esc.pose(st.c, tt, st.bumps); esc.camara(pl.name, pl.since); esc.luz(st.rim, st.sweep, st.swx, S.bri); esc.render(tt, fade, st.glitch, st.speed);
+  esc.pose(st.c, tt, st.bumps); esc.camara(pl.name, pl.since); esc.luz(st.rim, st.sweep, st.swx, S.bri); esc.render(tt, fade, st.glitch, st.speed, st.morphAge);
 }
 
 const FRONTAL = new Set(['medio', 'macro', 'boca', 'ojo', 'lejos']);
@@ -195,13 +205,21 @@ function tamano() {
 addEventListener('resize', () => esc && tamano());
 
 // ---------------------------------------------------------------- controles
+function setAuto(tipo) {
+  S.autoTipo = tipo; [...$('segAuto').children].forEach(b => b.classList.toggle('on', b.dataset.a === tipo));
+  if (S.modo === 'auto') { setModo('auto'); if (S.P && !!S.P.continuo !== (tipo === 'continuo')) nueva(); }
+}
+$('segAuto').onclick = (e) => { const b = e.target.closest('button'); if (b) setAuto(b.dataset.a); };
 function setModo(m) {
   S.modo = m; [...$('segMode').children].forEach(b => b.classList.toggle('on', b.dataset.m === m));
   $('chMode').textContent = { auto: 'AUTOMÁTICO', manual: 'MANUAL', espejo: 'ESPEJO' }[m];
   $('boxManual').classList.toggle('hide', m !== 'manual');
+  $('boxAuto').classList.toggle('hide', m !== 'auto');
   $('boxEsp').classList.toggle('hide', m !== 'espejo');
   $('modeNote').textContent = {
-    auto: 'Las piezas nacen solas y se suceden de negro a negro, sin repetir acento seguido. Cada una tiene su arco: tensión, ruptura y eco.',
+    auto: S.autoTipo === 'continuo'
+      ? 'CONTINUO: un paso sin cortes por todas las expresiones, de la más oscura a la más luminosa y vuelta, con un golpe plástico en cada cambio (la materia se estira, se retuerce y rebota) y ráfagas de caras. Nunca se repite el orden.'
+      : 'PIEZAS: nacen solas y se suceden de negro a negro, sin repetir acento seguido. Cada una tiene su arco: tensión, ruptura y eco.',
     manual: 'Elige emoción, estilo y acento. La pieza se repite hasta pulsar NUEVA.',
     espejo: 'La cabeza copia la cara de quien tiene delante y la lleva al extremo. El ritmo y los golpes siguen; sin nadie delante, vuelve al AUTOMÁTICO.' }[m];
   if (m === 'espejo' && !espOn) encenderEspejo(); else if (m !== 'espejo' && espOn) apagarEspejo();
@@ -275,7 +293,7 @@ $('teclas').onclick = (e) => { const b = e.target.closest('button'); if (b && es
 $('teclasLuz').innerHTML = 'qwertyuiosdfjklg'.split('').map(k => `<button data-k="${k}"><b>⇧${k.toUpperCase()}</b>${TECLAS_LUZ[k] || 'SOLTAR'}</button>`).join('');
 $('teclasLuz').onclick = (e) => { const b = e.target.closest('button'); if (b && esc) tecla(b.dataset.k, true); };
 // FX: interruptores (por defecto, todos activos); la salida los recibe en el reloj
-const FXN = { glitch: 'GLITCH EN LOS GOLPES', estela: 'ESTELA', atmos: 'ATMÓSFERA Y HACES', destellos: 'DESTELLOS' };
+const FXN = { glitch: 'GLITCH EN LOS GOLPES', estela: 'ESTELA', atmos: 'ATMÓSFERA Y HACES', destellos: 'DESTELLOS', laser: 'LÁSER', doble: 'DOBLE EXPOSICIÓN', lente: 'LENTE' };
 $('fxList').innerHTML = Object.entries(FXN).map(([k, n]) => `<button class="tbtn on" data-fx="${k}">${n}</button>`).join('');
 $('fxList').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; const k = b.dataset.fx; S.fx[k] = !S.fx[k]; b.classList.toggle('on', S.fx[k]); esc && esc.fx(S.fx); };
 setModo('auto'); setAmbient(true);

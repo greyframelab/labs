@@ -3,24 +3,30 @@
 // con el reloj que le pasa la consola, así que va fluida aunque los mensajes lleguen a destiempo.
 // El sonido sale de la consola.
 import { crearEscena } from './escena.js';
-import { crearPieza } from './partitura.js';
+import { crearPieza, accAt } from './partitura.js';
 import { crearAnimador } from './anim.js';
 
 const cv = document.getElementById('c'), hint = document.getElementById('hint');
 let esc; try { esc = await crearEscena(cv, '#FF1A1A'); } catch (e) { console.error('[ROSTRO_GPU_FALLO]', e); throw e; }
 const ch = new BroadcastChannel('rostro-salida');
-let P = null, an = null, code = '', start = 0, sala = { fadeOut: 1, bri: 1, seguro: true, ext: null, forzarMedio: false }, haveClock = false;
+let P = null, an = null, code = '', id = 0, start = 0, sala = { fadeOut: 1, bri: 1, seguro: true, ext: null, forzarMedio: false }, haveClock = false;
 ch.onmessage = (e) => {
   const d = e.data; if (!d) return;
-  if (d.type === 'pieza') { P = crearPieza(d.code, d.opts); an = crearAnimador(P, d.seed, d.intensidad); code = d.code; esc.acento(P.acc); }
+  if (d.type === 'pieza') {
+    if (d.id === id && P) return;                                  // ya la tiene: no la reinicia
+    P = crearPieza(d.code, d.opts); an = crearAnimador(P, d.seed, d.intensidad, d.sigue && an ? an : null);
+    code = d.code; id = d.id; esc.acento(accAt(P, 0));
+    if (d.start) { start = d.start; haveClock = true; }            // el reloj de la pieza nueva llega con ella: sin saltos
+  }
   else if (d.type === 'golpe') { if (an) an.golpe(d.emo); }
   else if (d.type === 'reloj') {
     // el reloj se suaviza: pequeñas diferencias de entrega no se notan
+    if (d.code !== code) return;                                   // reloj de una pieza que aún no tiene
     if (!haveClock || Math.abs(d.start - start) > 250) start = d.start; else start += (d.start - start) * 0.05;
     haveClock = true; sala = d; if (d.fx) esc.fx(d.fx);
   }
 };
-const vivo = () => ch.postMessage({ type: 'vivo', code }); setInterval(vivo, 500); vivo();
+const vivo = () => ch.postMessage({ type: 'vivo', code, id }); setInterval(vivo, 500); vivo();
 addEventListener('dblclick', () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {}));
 document.addEventListener('fullscreenchange', () => hint.classList.toggle('off', !!document.fullscreenElement));
 setTimeout(() => hint.classList.add('off'), 9000);
@@ -46,7 +52,8 @@ function frame(ts) {
   if (sala.seguro) { st.sweep *= 0.6; st.rim = Math.min(st.rim, 1.4); }
   let pl = an.plano(tt); if (sala.forzarMedio && !FRONTAL.has(pl.name)) pl = { name: 'medio', since: pl.since, at: pl.at };
   if (pl.at !== lastCut) { if (low > 2.5 && n < NIV.length - 1) { n++; low = 0; esc.calidad(NIV[n].l); size(); } lastCut = pl.at; }
-  const fadeP = Math.max(0, Math.min(1, tRaw / 1.2, (P.dur + 1.5 - tRaw) / 2.2));
-  esc.pose(st.c, tt, st.bumps); esc.camara(pl.name, pl.since); esc.luz(st.rim, st.sweep, st.swx, sala.bri); esc.render(tt, fadeP * sala.fadeOut, st.glitch, st.speed);
+  const fadeP = P.continuo ? (P.primera ? Math.min(1, tRaw / 1.2) : 1) : Math.max(0, Math.min(1, tRaw / 1.2, (P.dur + 1.5 - tRaw) / 2.2));
+  esc.acento(accAt(P, tt));
+  esc.pose(st.c, tt, st.bumps); esc.camara(pl.name, pl.since); esc.luz(st.rim, st.sweep, st.swx, sala.bri); esc.render(tt, fadeP * sala.fadeOut, st.glitch, st.speed, st.morphAge);
 }
 requestAnimationFrame(frame);

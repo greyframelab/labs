@@ -12,9 +12,12 @@
 //   ASCO      se aparta y tuerce la nariz en cada golpe
 //   DESPRECIO ladea la cabeza despacio, media sonrisa que va y viene
 // Todo en pasos fijos y con azar sembrado: la consola y la salida calculan exactamente lo mismo.
-import { CONTROLS, pose, macro } from './rig.js';
+import { CONTROLS, PLASTICA, pose, macro } from './rig.js';
 
-const LIM = { jawOpen: [0, 1.3], pitch: [-0.55, 0.55], yaw: [-0.7, 0.7], roll: [-0.5, 0.5], thrust: [-0.9, 0.9], tremor: [0, 1.4] };
+const LIM = { jawOpen: [0, 1.3], pitch: [-0.55, 0.55], yaw: [-0.7, 0.7], roll: [-0.5, 0.5], thrust: [-0.9, 0.9], tremor: [0, 1.4],
+  stretch: [-0.8, 1.4], twist: [-1.0, 1.0], melt: [0, 1.1], bulge: [0, 1.4] };
+// la materia plástica es gelatina: muelles blandos y poco amortiguados, rebota después de cada golpe
+const KD = { stretch: [95, 0.16], twist: [70, 0.18], bulge: [120, 0.13], melt: [40, 0.5] };
 const sm = u => u * u * (3 - 2 * u);
 const BASE_RIM = { 'SEÑAL': 0.35, 'TENSIÓN': 0.75, 'RUPTURA': 1.1, 'ECO': 0.6 };
 const S2 = (k) => [k + '_L', k + '_R'];
@@ -68,12 +71,16 @@ const TIRON = {
   ORGULLO: ['pitch'], GRATITUD: ['pitch'], CURIOSIDAD: ['roll', 'eyeLookOut_R'], 'DIVERSIÓN': ['roll', 'browOuterUp_R'], 'SATISFACCIÓN': ['pitch'], 'INSPIRACIÓN': ['pitch'], COMPLICIDAD: ['eyeBlink_L', 'roll'],
 };
 
-export function crearAnimador(P, seed = 1, intensidad = 1) {
+export function crearAnimador(P, seed = 1, intensidad = 1, previo = null) {
+  const CONT = !!P.continuo, PLAS = CONT ? 1 : 0.35; // en el paso continuo, la plástica va entera
   let s = seed >>> 0; const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
   const ev = P.events; let ei = 0;
   const tImp = (ev.find(e => e.k === 'impact') || { t: 1e9 }).t;
   const x = {}, v = {}, off = {}; for (const k of CONTROLS) { x[k] = 0; v[k] = 0; off[k] = 0; }
-  const bumps = []; let gEnv = 0, rimPulse = 0, bassEnv = 0, t = 0, sweep = 0, swx = 0, swDir = 1;
+  // continuidad entre pases: la cara sigue desde donde estaba (no vuelve a neutro)
+  if (previo && previo.estado) { const s0 = previo.estado(); for (const k of CONTROLS) { x[k] = s0.x[k] || 0; v[k] = s0.v[k] || 0; } }
+  const KK = {}, DD = {}; for (const k of CONTROLS) { const [k0, z] = KD[k] || [150, 0.36]; KK[k] = k0; DD[k] = 2 * z * Math.sqrt(k0); }
+  const bumps = []; let lastMorph = -99, gEnv = 0, rimPulse = 0, bassEnv = 0, t = 0, sweep = 0, swx = 0, swDir = 1;
   const K = 150, D = 2 * 0.36 * Math.sqrt(K);
   const poseCache = new Map(); const P_ = (e, m) => { const k = e + m; if (!poseCache.has(k)) poseCache.set(k, pose(e, m)); return poseCache.get(k); };
   // estado de los gestos propios
@@ -108,6 +115,14 @@ export function crearAnimador(P, seed = 1, intensidad = 1) {
         for (const [k, a] of Object.entries(K2)) v[k] += a * wt * vel * g * (k === 'yaw' || k === 'roll' ? sign : 1);
       }
       rimPulse = Math.max(rimPulse, 0.45 * vel * (e.ratchet ? 0.35 : 1));
+      // squash & stretch: el bombo aplasta el cráneo y la materia rebota
+      v.stretch -= 2.2 * vel * g * PLAS; v.bulge += 1.2 * vel * g * PLAS;
+    } else if (e.k === 'morph') {
+      // CAMBIO DE EXPRESIÓN: la materia cede de golpe (se estira, se retuerce, se hincha) y la cara salta a la siguiente
+      v.stretch += 6.5 * vel; v.twist += sign * 5 * vel; v.bulge += 5 * vel; if (rnd() < 0.35) v.melt += 3 * vel;
+      v.jawOpen += 4 * vel; v.thrust += (rnd() - 0.4) * 7 * vel; v.pitch += (rnd() - 0.5) * 4 * vel; v.roll += sign * 2.5 * vel;
+      lastMorph = e.t; gEnv = Math.max(gEnv, 1.0 * vel); rimPulse = 1; sweep = Math.max(sweep, 0.8 * vel); swDir = sign; swx = -sign;
+      for (let i = 0; i < 2; i++) { const ang = (rnd() - 0.5) * 2.2; bumps.push({ x: Math.sin(ang) * 1.9, y: 0.4 + rnd() * 2.4, z: Math.cos(ang) * 1.9 + 0.2, r: 0.4, a0: 0.22 * vel, t0: e.t }); }
     } else if (e.k === 'metal') {
       const ang = (rnd() - 0.5) * 2.2, y = 0.2 + rnd() * 2.8;
       bumps.push({ x: Math.sin(ang) * 1.9, y, z: Math.cos(ang) * 1.9 + 0.2, r: 0.22 + rnd() * 0.22, a0: (0.1 + rnd() * 0.08) * vel * (rupt ? 1.4 : 1), t0: e.t });
@@ -121,7 +136,7 @@ export function crearAnimador(P, seed = 1, intensidad = 1) {
     else if (e.k === 'sweep') { sweep = 1; swDir = e.dir || 1; swx = -swDir; }
     else if (e.k === 'impact') {
       v.jawOpen += 6; v.thrust -= 4; v.pitch -= 2.5; for (const k of [...S2('eyeWide'), ...S2('browInnerUp'), ...S2('mouthStretch')]) v[k] += 5;
-      rimPulse = 1; sweep = 1; swx = -1; swDir = 1; gEnv = 1;
+      rimPulse = 1; sweep = 1; swx = -1; swDir = 1; gEnv = 1; lastMorph = e.t;
       for (let i = 0; i < 3; i++) { const ang = (rnd() - 0.5) * 2; bumps.push({ x: Math.sin(ang) * 1.9, y: 0.5 + rnd() * 2.3, z: Math.cos(ang) * 1.9 + 0.2, r: 0.35, a0: 0.2, t0: e.t }); }
     }
   }
@@ -230,10 +245,10 @@ export function crearAnimador(P, seed = 1, intensidad = 1) {
       gestos(tg, avanzar.W, t, dt);
       tg.jawOpen += 0.03 * Math.sin(t * 1.4) + 0.12 * bassEnv; tg.pitch += 0.012 * Math.sin(t * 0.9);  // respira; el bajo abre la boca
       for (const k of CONTROLS) {
-        const a = K * (tg[k] + off[k] - x[k]) - D * v[k];
+        const a = KK[k] * (tg[k] + off[k] - x[k]) - DD[k] * v[k];
         v[k] += a * dt; x[k] += v[k] * dt; off[k] *= Math.exp(-dt / 0.09);
       }
-      bassEnv *= Math.exp(-dt / 0.35); rimPulse *= Math.exp(-dt / 0.14); gEnv *= Math.exp(-dt / 0.07);
+      bassEnv *= Math.exp(-dt / 0.35); rimPulse *= Math.exp(-dt / 0.14); gEnv *= Math.exp(-dt / 0.1);
       sweep *= Math.exp(-dt / 0.5); swx += swDir * dt * 2.6;
       t += dt; steps++;
     }
@@ -242,13 +257,14 @@ export function crearAnimador(P, seed = 1, intensidad = 1) {
     // límites suaves: las expresiones admiten un poco de exceso (hasta 1,4) y la cabeza tiene tope
     const c = {}; let sum = 0;
     for (const k of CONTROLS) {
-      const [lo, hi] = LIM[k] || [-0.1, 1.4]; const mid = (hi + lo) / 2, h = (hi - lo) / 2;
+      const [lo, hi] = LIM[k] || [-0.1, CONT ? 1.75 : 1.4]; const mid = (hi + lo) / 2, h = (hi - lo) / 2; // en continuo, las expresiones se pasan de rosca
       c[k] = mid + h * Math.tanh((x[k] - mid) / h); sum += Math.abs(c[k]);
     }
+    for (const k of PLASTICA) c[k] *= PLAS;
     const dtF = Math.max(1e-3, steps / 240); speed += (Math.min(6, Math.abs(sum - prevSum) / dtF * 0.25) - speed) * 0.3; prevSum = sum;
     const emo = pesos(time), a = act(time);
     const preImpacto = time < tImp ? Math.min(1, Math.max(0, (time - (tImp - P.BAR)) / P.BAR)) : 0;
-    return { glitch: gEnv, c, m: macro(c), bumps: live, rim: BASE_RIM[a] + rimPulse * 0.9, sweep, swx: Math.max(-1, Math.min(1, swx)), act: a, emo, speed, preImpacto };
+    return { morphAge: time - lastMorph, glitch: gEnv, c, m: macro(c), bumps: live, rim: BASE_RIM[a] + rimPulse * 0.9, sweep, swx: Math.max(-1, Math.min(1, swx)), act: a, emo, speed, preImpacto };
   }
 
   function plano(time) {
@@ -259,7 +275,7 @@ export function crearAnimador(P, seed = 1, intensidad = 1) {
   function golpe(emo, fuerza = 2.2) {
     const K2 = KICK[emo] || KICK.REPOSO, sign = rnd() < 0.5 ? -1 : 1;
     for (const [k, a] of Object.entries(K2)) v[k] += a * fuerza * (k === 'yaw' || k === 'roll' ? sign : 1);
-    rimPulse = Math.max(rimPulse, 0.8); gEnv = Math.max(gEnv, 0.7);
+    rimPulse = Math.max(rimPulse, 0.8); gEnv = Math.max(gEnv, 0.7); lastMorph = t;
   }
-  return { avanzar, plano, externo, golpe };
+  return { avanzar, plano, externo, golpe, estado: () => ({ x, v }) };
 }

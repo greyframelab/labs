@@ -7,9 +7,20 @@ Una cabeza gigante de laca negra, proyectada en sala oscura, que se contorsiona 
 ## Modos (`1` `2` `3`)
 | | Modo | Qué hace |
 |---|---|---|
-| 1 | AUTOMÁTICO | Las piezas nacen solas y se suceden de negro a negro, sin repetir acento seguido. |
+| 1 | AUTOMÁTICO | CONTINUO (por defecto): un paso sin cortes por todas las expresiones. PIEZAS: piezas de negro a negro. |
 | 2 | MANUAL | Emoción, estilo y acento a mano. La pieza se repite hasta pulsar NUEVA. |
 | 3 | ESPEJO | La cabeza copia la cara de quien tiene delante y la lleva al extremo. Sin nadie delante, sigue en AUTOMÁTICO. |
+
+## AUTOMÁTICO · CONTINUO (por defecto)
+Un paso sin cortes a negro por **todas las expresiones** (42), pensado para que quien entra en la sala se quede clavado:
+- **Orden de contraste máximo:** de cada expresión salta a la más lejana de unas pocas candidatas, alternando oscuridad y luz (del horror a la ternura, del odio a la gratitud). Cada paso tiene un orden distinto y el siguiente empieza donde acaba el anterior: la cara nunca vuelve a neutro.
+- **Cambio plástico:** cada cambio de expresión es un golpe en la materia. El cráneo se estira, la cabeza se retuerce sobre su eje, la cara se hincha y a veces se derrite, y todo rebota como gelatina. En el mismo instante hay corte de plano, barrido de luz, glitch, cambio de acento y un golpe de sonido que se hunde, anunciado por un oleaje de ruido.
+- **Squash & stretch:** cada bombo aplasta el cráneo y la materia rebota.
+- **Expresiones pasadas de rosca:** en el continuo pueden ir hasta 1,75 (fuera de la anatomía).
+- **Ritmo:** las expresiones extremas duran dos compases con el bombo lleno, las de tensión dos compases con un pulso medio y las calmas dos compases y medio, casi sin golpes. Cada pocos cambios llega una **RÁFAGA**: cuatro o cinco caras a medio compás cada una, con cortes secos.
+- **Color por familia:** rojo, violeta o magenta para lo extremo, cian o verde para la tensión, ámbar o blanco para la luz.
+
+Un paso dura unos 2,5–3 minutos según el tempo. En la consola, **AUTOMÁTICO › CONTINUO / PIEZAS** cambia al modo anterior (piezas de ~40 s de negro a negro).
 
 ## La pieza
 Una semilla decide el estilo de sonido, el tempo, el acento, la raíz y el arco emocional. Cada pieza tiene cuatro actos:
@@ -95,11 +106,14 @@ Una cámara mira la sala desde cerca del proyector, a la altura de la cara. La c
 En la consola: estado de la cámara, presencia, emoción que lee, **EXAGERAR** (50–200 %) y **VER CÁMARA** (solo en la consola, nunca en la proyección). La imagen no se guarda ni sale de la máquina: solo se leen la boca, las cejas, los ojos y el giro. Usa la visión de OJO (Human, modelos locales en `../ojo/models`), sin internet.
 
 ## FX (consola › FX)
-Cuatro efectos que van con el sonido. Por defecto, todos activos; cada uno se enciende o apaga en directo y la proyección cambia al momento.
+Siete efectos que van con el sonido. Por defecto, todos activos; cada uno se enciende o apaga en directo y la proyección cambia al momento.
 - **GLITCH EN LOS GOLPES:** separación RGB y franjas desplazadas en los tirones (crujidos), los cortes digitales y el impacto. Solo dura el golpe.
 - **ESTELA:** los gestos rápidos dejan un eco que se apaga. Dura más cuanto más rápido es el gesto, se mide en segundos (igual a 30 que a 60 fps) y se borra en cada corte de plano.
 - **ATMÓSFERA Y HACES:** conos de luz con niebla que se mueve (el de la clave y el del acento, que late con los golpes) y polvo flotando dentro del haz.
 - **DESTELLOS:** los brillos de la laca se alargan en horizontal, con un poco del acento. Solo los brillos de verdad, en una línea limpia. En calidad ligera se apagan solos.
+- **LÁSER:** en cada cambio de expresión, una línea del color del acento recorre la cara de arriba abajo en menos de un segundo, como un escáner.
+- **DOBLE EXPOSICIÓN:** la cara de antes se queda un instante sobreimpresionada sobre la nueva, algo más grande, y se disuelve.
+- **LENTE:** aberración cromática en los bordes, como un objetivo grande; da un tirón con cada cambio y cada golpe.
 
 ## Audio (`A`)
 - **BASE:** el sonido del clip de validación. Bombo esculpido, chapa FM, crujidos de cuerda física, bajo con armónicos para el móvil, impacto y dron aditivo en la raíz.
