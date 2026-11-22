@@ -173,9 +173,9 @@ export async function crearEscena(canvas, accentHex, base = './assets/', { msaa 
         return mix(mix(mix(h(i), h(i+vec3(1,0,0)), f.x), mix(h(i+vec3(0,1,0)), h(i+vec3(1,1,0)), f.x), f.y), mix(mix(h(i+vec3(0,0,1)), h(i+vec3(1,0,1)), f.x), mix(h(i+vec3(0,1,1)), h(i+vec3(1,1,1)), f.x), f.y), f.z); }
       void main(){
         float a = clamp(0.5 - vP.y / uLen, 0.0, 1.0);          // 0 en el foco, 1 al final del cono
-        float edge = pow(abs(dot(vN, vV)), 1.6);                 // bordes suaves
+        float edge = pow(abs(dot(vN, vV)), 2.6);                 // bordes muy suaves: el haz no tiene silueta
         float fog = 0.55 + 0.45 * n3(vP * 1.3 + vec3(0.0, -uT * 0.25, uT * 0.1));
-        gl_FragColor = vec4(uCol * uK * edge * fog * smoothstep(0.0, 0.15, a) * (1.0 - a * 0.85), 1.0);
+        gl_FragColor = vec4(uCol * uK * edge * fog * smoothstep(0.0, 0.15, a) * (1.0 - a * 0.6) * smoothstep(1.0, 0.45, a), 1.0); // se apaga antes de acabar: sin borde circular al final
       }`,
     transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide,
   });
