@@ -427,7 +427,7 @@ export async function crearEscena(canvas, accentHex, base = './assets/', { msaa 
       ghostLive = mAge > 0.6; doble.uniforms.uA.value = FX.doble && mAge < 1.2 ? 0.6 * Math.exp(-mAge / 0.38) : 0; doble.uniforms.uS.value = 1 + Math.min(1.2, mAge) * 0.14;
       fin.uniforms.uLensP.value = FX.lente ? Math.exp(-mAge / 0.18) + g * 0.5 : 0;
       // vista: en AUTO elige en cada cambio de expresión, con la hora del cambio como semilla (consola y salida eligen lo mismo)
-      if (vista === 'auto' && mAge < 50) { const key = Math.round((t - mAge) * 10); if (key !== vAutoKey) { vAutoKey = key; const h = Math.abs(Math.sin(key * 12.9898) * 43758.5453) % 1; vAuto = h < 0.55 ? 'normal' : 'codigo'; // VECTORES no entra sola: solo a mano } }
+      if (vista === 'auto' && mAge < 50) { const key = Math.round((t - mAge) * 10); if (key !== vAutoKey) { vAutoKey = key; const h = Math.abs(Math.sin(key * 12.9898) * 43758.5453) % 1; vAuto = h < 0.55 ? 'normal' : 'codigo'; } } // VECTORES no entra sola: solo a mano
       const vv = vista === 'auto' ? vAuto : vista, dv = t > lastV && t - lastV < 0.25 ? t - lastV : 1 / 30; lastV = t;
       const kv = 1 - Math.exp(-dv / 0.12); vCode += ((vv === 'codigo' ? 1 : 0) - vCode) * kv; vVec += ((vv === 'vectores' ? 1 : 0) - vVec) * kv;
       U.uCode.value = vCode; U.uVec.value = vVec; vecMesh.visible = vVec > 0.01;
