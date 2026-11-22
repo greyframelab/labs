@@ -971,6 +971,9 @@ void main(){
       gl.uniform3f(F.u.uAccP, a[0], a[1], a[2]); gl.uniform1f(F.u.uStreak, (o.streak ?? 1) * ((this.quality ?? 1) > 0.5 ? 1 : 0));
       gl.uniform1f(F.u.uGlitch, fx.glitch || 0); gl.uniform1f(F.u.uGSeed, fx.seed || 0); gl.uniform1f(F.u.uGhost, fx.ghost || 0); }
     if (o.sting && o.stingA > 0) {
+      // OJO: subir a la textura del rótulo, no a la última unidad activa. Antes se subía a la del eco de plano (unidad 5):
+      // el rótulo de la palabra aparecía del revés y desenfocado como discos con letras dentro, y el rótulo real no se veía
+      gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.sting);
       gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, o.sting);
     }
