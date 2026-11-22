@@ -292,6 +292,8 @@ export async function crearEscena(canvas, accentHex, base = './assets/', { msaa 
   const v3 = (a) => new Vector3(...a), eul = new Euler(), m4 = new Matrix4(), anchorD = new Vector3(), w = new Float32Array(cara.nTargets);
   const restNose = new Vector3(cara.rest[NOSE * 3], cara.rest[NOSE * 3 + 1], cara.rest[NOSE * 3 + 2]);
   let curAcc = accentHex, W = 0, H = 0, lig = false;
+  // en vertical (reel, pantalla girada) abre el campo para que la cabeza quepa igual que en horizontal
+  const vfov = (fv) => { const a = W / H; if (!(a < 1)) return fv; const k = 0.95 / a; return 2 * Math.atan(Math.tan(fv * Math.PI / 360) * k) * 180 / Math.PI; };
   const FX = { glitch: true, estela: true, atmos: true, destellos: true, laser: true, doble: true, lente: true };
   const aplicarFx = () => { glitch.enabled = FX.glitch; estela.enabled = FX.estela; atmos.visible = FX.atmos; destellos.enabled = FX.destellos && !lig; fin.uniforms.uLens.value = FX.lente ? 1 : 0; };
   aplicarFx();
@@ -330,7 +332,7 @@ export async function crearEscena(canvas, accentHex, base = './assets/', { msaa 
       const S = SHOTS[name] || SHOTS.medio; const p = v3(S.pos), l = v3(S.look);
       const dir = l.clone().sub(p).normalize(); const fol = S.follow ?? 0.6;
       p.addScaledVector(anchorD, fol); l.addScaledVector(anchorD, fol);
-      cam.position.copy(p.addScaledVector(dir, S.drift * since)); cam.fov = S.fov; cam.updateProjectionMatrix(); cam.lookAt(l);
+      cam.position.copy(p.addScaledVector(dir, S.drift * since)); cam.fov = vfov(S.fov); cam.updateProjectionMatrix(); cam.lookAt(l);
     },
     luz(rim, sw = 0, swx = 0, bri = 1) {
       rimNow = rim; rimA.intensity = 160 * rim * bri; rimB.intensity = 60 * rim * bri; key.intensity = 80 * bri;
