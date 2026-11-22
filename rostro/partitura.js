@@ -7,9 +7,9 @@ export const ESTILOS = {
   PULSO:   { bpm: [118, 126], idea: 'bombo a negras inamovible, grave físico, tensión por densidad' },
   QUIEBRE: { bpm: [100, 112], idea: 'breaks programados, cortes rápidos, el bombo se parte' },
 };
-const TENSION = ['MIEDO', 'SORPRESA', 'TRISTEZA', 'DESPRECIO', 'ASCO', 'SOSPECHA', 'VERGÜENZA', 'CONFUSIÓN', 'NÁUSEA', 'ARROGANCIA', 'SÚPLICA'];
-const RUPTURA = ['FURIA', 'GRITO', 'PÁNICO', 'RISA', 'DOLOR', 'MIEDO', 'HORROR', 'ODIO', 'LOCURA', 'AGONÍA', 'ÉXTASIS', 'DESESPERACIÓN', 'BURLA', 'LLANTO'];
-const ECO = ['ANGUSTIA', 'TRISTEZA', 'REPOSO', 'AGOTAMIENTO', 'VÉRTIGO'];
+const TENSION = ['MIEDO', 'SORPRESA', 'TRISTEZA', 'DESPRECIO', 'ASCO', 'SOSPECHA', 'VERGÜENZA', 'CONFUSIÓN', 'NÁUSEA', 'ARROGANCIA', 'SÚPLICA', 'CURIOSIDAD'];
+const RUPTURA = ['FURIA', 'GRITO', 'PÁNICO', 'RISA', 'DOLOR', 'MIEDO', 'HORROR', 'ODIO', 'LOCURA', 'AGONÍA', 'ÉXTASIS', 'DESESPERACIÓN', 'BURLA', 'LLANTO', 'EUFORIA'];
+const ECO = ['ANGUSTIA', 'TRISTEZA', 'REPOSO', 'AGOTAMIENTO', 'VÉRTIGO', 'SERENIDAD', 'ALIVIO', 'MARAVILLA'];
 const PLANOS_T = ['medio', 'macro', 'ojo', 'perfil', 'lejos'];
 const PLANOS_R = ['contra', 'boca', 'macro', 'ojo', 'medio', 'perfil'];
 

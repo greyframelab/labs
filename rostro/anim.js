@@ -49,6 +49,11 @@ const KICK = {
   ARROGANCIA: { pitch: -1.5, thrust: -1.5 },
   AGOTAMIENTO: { pitch: 2.5, eyeBlink_L: 3, eyeBlink_R: 3 },
   'VÉRTIGO': { roll: 2.5, yaw: 2, eyeWide_L: 3, eyeWide_R: 3 },
+  'ALEGRÍA': { jawOpen: 2, pitch: -1.2, cheekSquint_L: 2, cheekSquint_R: 2 }, EUFORIA: { jawOpen: 4, pitch: -2, cheekRaiser_L: 3, cheekRaiser_R: 3 },
+  TERNURA: { roll: 0.8, pitch: 0.5 }, AMOR: { thrust: 1, mouthSmile_L: 1.5, mouthSmile_R: 1.5 }, SERENIDAD: { pitch: 0.4 }, ALIVIO: { jawOpen: 1.5, pitch: 1 },
+  ESPERANZA: { pitch: -1, browInnerUp_L: 2, browInnerUp_R: 2 }, MARAVILLA: { eyeWide_L: 3, eyeWide_R: 3, jawOpen: 2, thrust: 1 }, ORGULLO: { pitch: -1.2 },
+  GRATITUD: { pitch: 1.4 }, CURIOSIDAD: { roll: 1.5, thrust: 1.5 }, 'DIVERSIÓN': { browOuterUp_R: 4, jawOpen: 1.5, roll: -1 }, 'SATISFACCIÓN': { pitch: 1, mouthSmile_L: 1.5, mouthSmile_R: 1.5 },
+  'INSPIRACIÓN': { pitch: -1.5, eyeWide_L: 2, eyeWide_R: 2 }, COMPLICIDAD: { eyeBlink_L: 4, mouthSmile_L: 3, roll: 1 },
 };
 // tirones (crujido/glitch): qué se descoloca de golpe en cada emoción
 const TIRON = {
@@ -59,6 +64,8 @@ const TIRON = {
   'AGONÍA': ['roll', 'yaw', 'jawRight'], 'ÉXTASIS': ['roll'], 'VERGÜENZA': ['yaw', 'eyeLookDown_L'], 'CONFUSIÓN': ['roll', 'eyeLookOut_R'],
   LLANTO: ['pitch', 'roll'], 'SÚPLICA': ['pitch'], 'DESESPERACIÓN': ['yaw', 'roll'], 'NÁUSEA': ['pitch'], BURLA: ['roll', 'pitch'],
   SOSPECHA: ['eyeLookOut_L', 'eyeLookIn_R', 'yaw'], ARROGANCIA: ['roll'], AGOTAMIENTO: ['pitch', 'roll'], 'VÉRTIGO': ['roll', 'yaw', 'eyeLookOut_L'],
+  'ALEGRÍA': ['pitch'], EUFORIA: ['pitch', 'yaw'], TERNURA: ['roll'], AMOR: ['roll'], SERENIDAD: ['pitch'], ALIVIO: ['pitch'], ESPERANZA: ['pitch'], MARAVILLA: ['pitch', 'eyeLookUp_L'],
+  ORGULLO: ['pitch'], GRATITUD: ['pitch'], CURIOSIDAD: ['roll', 'eyeLookOut_R'], 'DIVERSIÓN': ['roll', 'browOuterUp_R'], 'SATISFACCIÓN': ['pitch'], 'INSPIRACIÓN': ['pitch'], COMPLICIDAD: ['eyeBlink_L', 'roll'],
 };
 
 export function crearAnimador(P, seed = 1, intensidad = 1) {
@@ -123,14 +130,14 @@ export function crearAnimador(P, seed = 1, intensidad = 1) {
   function gestos(tg, W, tt, dt) {
     const w = (k) => W[k] || 0, sn = Math.sin, PI2 = Math.PI * 2;
     // sacadas: ojos (y algo la cabeza) que saltan de un punto a otro
-    const rate = (0.5 + 2.5 * w('MIEDO') + 5 * w('PÁNICO') + 0.8 * w('ASCO') + 4 * w('LOCURA') + 1.5 * w('CONFUSIÓN') + 0.6 * w('SOSPECHA')) * (1 - 0.85 * Math.min(1, w('HORROR') + w('ODIO') + w('ARROGANCIA') + w('ÉXTASIS')));
+    const rate = (0.5 + 1.2 * w('CURIOSIDAD') + 2.5 * w('MIEDO') + 5 * w('PÁNICO') + 0.8 * w('ASCO') + 4 * w('LOCURA') + 1.5 * w('CONFUSIÓN') + 0.6 * w('SOSPECHA')) * (1 - 0.85 * Math.min(1, w('HORROR') + w('ODIO') + w('ARROGANCIA') + w('ÉXTASIS') + w('SERENIDAD') + w('MARAVILLA') * 0.6));
     if (tt >= sac.t) { sac.t = tt + (0.15 + rnd() * 0.6) / Math.max(0.3, rate); sac.ex = (rnd() - 0.5) * 2; sac.ey = (rnd() - 0.5) * 2; sac.hy = (rnd() - 0.5) * 2; sac.hp = (rnd() - 0.5) * 2; }
     const eyeA = 0.25 + 0.6 * (w('MIEDO') + w('PÁNICO')), headA = 0.04 + 0.16 * w('PÁNICO') + 0.06 * w('MIEDO');
     if (sac.ex > 0) { add(tg, 'eyeLookOut_L', sac.ex * eyeA); add(tg, 'eyeLookIn_R', sac.ex * eyeA); } else { add(tg, 'eyeLookIn_L', -sac.ex * eyeA); add(tg, 'eyeLookOut_R', -sac.ex * eyeA); }
     if (sac.ey > 0) { add(tg, 'eyeLookUp_L', sac.ey * eyeA * 0.7); add(tg, 'eyeLookUp_R', sac.ey * eyeA * 0.7); } else { add(tg, 'eyeLookDown_L', -sac.ey * eyeA * 0.7); add(tg, 'eyeLookDown_R', -sac.ey * eyeA * 0.7); }
     add(tg, 'yaw', sac.hy * headA); add(tg, 'pitch', sac.hp * headA * 0.6);
     // parpadeo: natural en calma, escaso con miedo o sorpresa, lento en la tristeza
-    const freeze = w('SORPRESA') + w('MIEDO') * 0.6 + w('PÁNICO') * 0.4 + w('HORROR') * 1.5 + w('ODIO') * 1.2 + w('LOCURA') * 0.8;
+    const freeze = w('MARAVILLA') * 0.8 + w('SERENIDAD') * 3 + w('SORPRESA') + w('MIEDO') * 0.6 + w('PÁNICO') * 0.4 + w('HORROR') * 1.5 + w('ODIO') * 1.2 + w('LOCURA') * 0.8;
     if (tt >= blink.next) { blink.until = tt + 0.11 + 0.12 * w('TRISTEZA'); blink.next = tt + (2 + rnd() * 3.5) * (1 + 3 * freeze); }
     if (tt < blink.until) { add(tg, 'eyeBlink_L', 1); add(tg, 'eyeBlink_R', 1); }
     // FURIA: sacudida de cabeza y aletas de la nariz que laten
@@ -180,6 +187,30 @@ export function crearAnimador(P, seed = 1, intensidad = 1) {
     if (w('ARROGANCIA')) add(tg, 'pitch', -0.08 * sm(0.5 + 0.5 * sn(tt * PI2 * 0.1)) * w('ARROGANCIA'));
     // AGOTAMIENTO: la cabeza se le cae y se levanta de golpe (se duerme)
     if (w('AGOTAMIENTO')) { const cae = (tt * 0.22) % 1; const d = cae < 0.85 ? sm(cae / 0.85) : 1 - sm((cae - 0.85) / 0.15); add(tg, 'pitch', d * 0.3 * w('AGOTAMIENTO')); for (const k of S2('eyeBlink')) add(tg, k, d * 0.4 * w('AGOTAMIENTO')); }
+    // ALEGRÍA / EUFORIA: rebote ligero; la euforia ríe y sacude la cabeza de alegría
+    if (w('ALEGRÍA')) { const b = Math.abs(sn(tt * PI2 * 2.2)); add(tg, 'pitch', -b * 0.05 * w('ALEGRÍA')); add(tg, 'jawOpen', b * 0.12 * w('ALEGRÍA')); }
+    if (w('EUFORIA')) { const b = Math.abs(sn(tt * PI2 * 4.8)); add(tg, 'jawOpen', b * 0.3 * w('EUFORIA')); add(tg, 'yaw', sn(tt * PI2 * 2.6) * 0.1 * w('EUFORIA')); add(tg, 'pitch', -b * 0.08 * w('EUFORIA')); }
+    // TERNURA / AMOR: ladea despacio, parpadea lento, se acerca al respirar
+    if (w('TERNURA')) add(tg, 'roll', sn(tt * PI2 * 0.15) * 0.1 * w('TERNURA'));
+    if (w('AMOR')) { const r = 0.5 + 0.5 * sn(tt * PI2 * 0.2); add(tg, 'thrust', r * 0.15 * w('AMOR')); for (const k of S2('mouthSmile')) add(tg, k, r * 0.2 * w('AMOR')); }
+    // SERENIDAD: respiración muy lenta, ojos cerrados
+    if (w('SERENIDAD')) { const r = sn(tt * PI2 * 0.12); add(tg, 'pitch', -r * 0.04 * w('SERENIDAD')); add(tg, 'jawOpen', (0.5 + 0.5 * r) * 0.05 * w('SERENIDAD')); }
+    // ALIVIO: un gran suspiro cada pocos segundos (abre, suelta y baja la cabeza)
+    if (w('ALIVIO')) { const s6 = Math.pow(Math.max(0, sn(tt * PI2 * 0.17)), 3); add(tg, 'jawOpen', s6 * 0.25 * w('ALIVIO')); add(tg, 'pitch', s6 * 0.12 * w('ALIVIO')); }
+    // ESPERANZA / INSPIRACIÓN / MARAVILLA: la mirada sube despacio y la cabeza la sigue
+    if (w('ESPERANZA')) add(tg, 'pitch', -0.08 * sm(0.5 + 0.5 * sn(tt * PI2 * 0.12)) * w('ESPERANZA'));
+    if (w('INSPIRACIÓN')) { const up = sm(0.5 + 0.5 * sn(tt * PI2 * 0.1)); add(tg, 'pitch', -up * 0.12 * w('INSPIRACIÓN')); add(tg, 'jawOpen', up * 0.12 * w('INSPIRACIÓN')); }
+    if (w('MARAVILLA')) { add(tg, 'thrust', -0.15 * sm(Math.min(1, (tt % 9) / 9)) * w('MARAVILLA')); add(tg, 'roll', sn(tt * PI2 * 0.09) * 0.06 * w('MARAVILLA')); }
+    // ORGULLO: la barbilla sube; GRATITUD y SATISFACCIÓN: asienten despacio
+    if (w('ORGULLO')) add(tg, 'pitch', -0.07 * sm(0.5 + 0.5 * sn(tt * PI2 * 0.14)) * w('ORGULLO'));
+    if (w('GRATITUD')) add(tg, 'pitch', Math.max(0, sn(tt * PI2 * 0.5)) * 0.1 * w('GRATITUD'));
+    if (w('SATISFACCIÓN')) { add(tg, 'pitch', Math.max(0, sn(tt * PI2 * 0.35)) * 0.06 * w('SATISFACCIÓN')); for (const k of S2('mouthSmile')) add(tg, k, (0.5 + 0.5 * sn(tt * PI2 * 0.3)) * 0.15 * w('SATISFACCIÓN')); }
+    // CURIOSIDAD: ladea a un lado y a otro, se acerca
+    if (w('CURIOSIDAD')) { add(tg, 'roll', sn(tt * PI2 * 0.22) * 0.18 * w('CURIOSIDAD')); add(tg, 'thrust', (0.5 + 0.5 * sn(tt * PI2 * 0.15)) * 0.15 * w('CURIOSIDAD')); }
+    // DIVERSIÓN: la ceja baila a ráfagas y se le escapa una risa
+    if (w('DIVERSIÓN')) { const r = Math.pow(Math.max(0, sn(tt * PI2 * 0.3)), 6); add(tg, 'browOuterUp_R', Math.abs(sn(tt * PI2 * 3.2)) * r * 0.6 * w('DIVERSIÓN')); add(tg, 'jawOpen', Math.max(0, sn(tt * PI2 * 5)) * r * 0.2 * w('DIVERSIÓN')); }
+    // COMPLICIDAD: guiña de vez en cuando
+    if (w('COMPLICIDAD')) { const g = Math.pow(Math.max(0, sn(tt * PI2 * 0.25)), 10); add(tg, 'eyeBlink_L', -0.6 * (1 - g) * w('COMPLICIDAD')); }
     // VÉRTIGO: la cabeza y los ojos describen círculos
     if (w('VÉRTIGO')) { add(tg, 'roll', sn(tt * PI2 * 0.5) * 0.18 * w('VÉRTIGO')); add(tg, 'yaw', Math.cos(tt * PI2 * 0.5) * 0.15 * w('VÉRTIGO')); const ex = sn(tt * PI2 * 0.9), ey = Math.cos(tt * PI2 * 0.9);
       if (ex > 0) { add(tg, 'eyeLookOut_L', ex * 0.6 * w('VÉRTIGO')); add(tg, 'eyeLookIn_R', ex * 0.6 * w('VÉRTIGO')); } else { add(tg, 'eyeLookIn_L', -ex * 0.6 * w('VÉRTIGO')); add(tg, 'eyeLookOut_R', -ex * 0.6 * w('VÉRTIGO')); }

@@ -28,7 +28,9 @@ setTimeout(() => hint.classList.add('off'), 9000);
 // calidad automática: baja por pasos y solo en un corte de plano
 const NIV = [{ k: 1, fps: 60, l: false }, { k: 0.85, fps: 60, l: false }, { k: 0.85, fps: 30, l: false }, { k: 0.8, fps: 30, l: true }, { k: 0.65, fps: 30, l: true }];
 let n = 0, avg = 60, low = 0, lastDraw = 0, lastCut = -1;
-const size = () => { const d = Math.min(devicePixelRatio || 1, 2); esc.tamano(innerWidth * d * NIV[n].k, innerHeight * d * NIV[n].k); };
+// resolución acotada: como mucho ~1080p de píxeles reales (un proyector 4K no hunde la gráfica)
+const size = () => { let d = Math.min(devicePixelRatio || 1, 2); const px = innerWidth * innerHeight * d * d; if (px > 2.2e6) d *= Math.sqrt(2.2e6 / px);
+  esc.tamano(innerWidth * d * NIV[n].k, innerHeight * d * NIV[n].k); };
 addEventListener('resize', size); size();
 const FRONTAL = new Set(['medio', 'macro', 'boca', 'ojo', 'lejos']);
 function frame(ts) {

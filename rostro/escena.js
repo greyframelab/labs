@@ -91,16 +91,30 @@ vec3 perturb(vec3 pos, vec3 n, float h){
 }
 `;
 
+// el busto se disuelve en el negro: cuello, hombros y pecho se apagan y se deshacen en grano (sin borde de corte)
+const FRAG_BUSTO = `
+float bustoFade(vec3 p){
+  float y = smoothstep(-2.45, -0.95, p.y);                                   // de abajo hacia el cuello
+  float lado = 1.0 - smoothstep(1.15, 2.4, abs(p.x)) * smoothstep(-0.55, -1.6, p.y); // hombros por los lados
+  float atras = 1.0 - smoothstep(-0.2, -1.6, p.z) * smoothstep(-0.4, -1.8, p.y);   // espalda
+  return clamp(y * lado * atras, 0.0, 1.0);
+}
+float ign(vec2 c){ return fract(52.9829189 * fract(dot(c, vec2(0.06711056, 0.00583715)))); }
+`;
+const DISOLVER = 'float bF = bustoFade(vObj); if (bF < ign(gl_FragCoord.xy) * 0.9) discard;';
+
 function inyectar(mat, U, piel) {
   mat.onBeforeCompile = (s) => {
     Object.assign(s.uniforms, U);
     s.vertexShader = VERT_HEAD + s.vertexShader
       .replace('#include <morphnormal_vertex>', VERT_NORMAL)
       .replace('#include <morphtarget_vertex>', VERT_POS);
-    if (piel) {
-      s.fragmentShader = FRAG_SKIN_HEAD + s.fragmentShader
-        .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nnormal = perturb(-vViewPosition, normal, skinH(vObj));');
-    } else s.fragmentShader = 'varying vec3 vObj;\n' + s.fragmentShader;
+    const pre = (piel ? FRAG_SKIN_HEAD : 'varying vec3 vObj;\n') + FRAG_BUSTO;
+    let fs = pre + s.fragmentShader.replace('void main() {', 'void main() {\n' + DISOLVER);
+    if (piel) fs = fs.replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nnormal = perturb(-vViewPosition, normal, skinH(vObj));');
+    // además del grano, la luz se apaga hacia abajo: un fundido, no un corte
+    if (fs.includes('#include <dithering_fragment>')) fs = fs.replace('#include <dithering_fragment>', '#include <dithering_fragment>\ngl_FragColor.rgb *= bF * bF;');
+    s.fragmentShader = fs;
   };
   mat.customProgramCacheKey = () => 'rostro-' + (piel ? 'piel' : 'otro');
 }
@@ -204,7 +218,7 @@ export async function crearEscena(canvas, accentHex, base = './assets/', { msaa 
         // muestras continuas (paso de 3 px) y suavizadas en vertical: una línea limpia, nunca rayas
         for (int i = -32; i <= 32; i++) { float o = float(i) * 3.0 * px * (uRes.x / 1280.0); float w = exp(-abs(float(i)) / 11.0);
           vec3 t = texture2D(tDiffuse, v + vec2(o, 0.0)).rgb + texture2D(tDiffuse, v + vec2(o, 1.5 / uRes.y)).rgb + texture2D(tDiffuse, v - vec2(-o, 1.5 / uRes.y)).rgb;
-          t /= 3.0; float l = max(max(t.r, t.g), t.b); s += t * max(0.0, l - 1.15) * w; }
+          t /= 3.0; float l = max(max(t.r, t.g), t.b); s += t * max(0.0, l - 1.4) * w; }
         s = s * 0.05 * uK; s = mix(s, uAcc * dot(s, vec3(0.333)), 0.35);
         gl_FragColor = vec4(c + s, 1.0); }`,
   });

@@ -136,10 +136,13 @@ export function crearSonido(ctx) {
   // ASCO: el filtro nunca baja de ~190 Hz (un filtro en frecuencia negativa da NaN y apaga todo)
   voz('ASCO', g => { const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 8; bp.frequency.value = 700; lfo(3.7, 360, bp.frequency); lfo(0.9, 150, bp.frequency); loop(NB.white, 0.5).connect(bp).connect(g); }, 0.4, 0.4);
   voz('DESPRECIO', g => { const o = osc('square', 1.5), m = osc('sine', 1.5 * 1.33), rm = ctx.createGain(); rm.gain.value = 0; m.connect(rm.gain); const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 600; o.connect(rm).connect(lp).connect(g); }, 0.2, 0.4);
+  // LUZ: la voz de las emociones positivas — un acorde mayor suave (parciales 4, 5 y 6 de la raíz), cálido y lento
+  voz('LUZ', g => { for (const [m, d, p] of [[4, -4, -0.4], [5, 3, 0.4], [6, -2, 0], [8, 5, 0.2]]) { const o = osc('sine', m, d), t = ctx.createGain(); t.gain.value = 0.5; lfo(0.18 + Math.random() * 0.1, 0.25, t.gain); o.connect(t).connect(pan(p)).connect(g); } }, 0.3, 1.0);
   voz('SORPRESA', g => { const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 3; bp.frequency.value = 400; L.sorpF = bp; loop(NB.pink, 1.2).connect(bp).connect(g); }, 0.3, 0.7);
-  const VOZ_DE = { HORROR: 'PÁNICO', ODIO: 'FURIA', LOCURA: 'RISA', 'AGONÍA': 'GRITO', 'ÉXTASIS': 'SORPRESA', 'VERGÜENZA': 'TRISTEZA', 'CONFUSIÓN': 'DESPRECIO',
+  const LUCES = ['ALEGRÍA', 'EUFORIA', 'TERNURA', 'AMOR', 'SERENIDAD', 'ALIVIO', 'ESPERANZA', 'MARAVILLA', 'ORGULLO', 'GRATITUD', 'CURIOSIDAD', 'DIVERSIÓN', 'SATISFACCIÓN', 'INSPIRACIÓN', 'COMPLICIDAD'];
+  const VOZ_DE = { ...Object.fromEntries(LUCES.map(k => [k, 'LUZ'])), EUFORIA: ['LUZ', 'RISA'], 'DIVERSIÓN': ['LUZ', 'RISA'], MARAVILLA: ['LUZ', 'SORPRESA'], HORROR: 'PÁNICO', ODIO: 'FURIA', LOCURA: 'RISA', 'AGONÍA': 'GRITO', 'ÉXTASIS': 'SORPRESA', 'VERGÜENZA': 'TRISTEZA', 'CONFUSIÓN': 'DESPRECIO',
     LLANTO: 'TRISTEZA', 'SÚPLICA': 'ANGUSTIA', 'DESESPERACIÓN': 'ANGUSTIA', 'NÁUSEA': 'ASCO', BURLA: 'RISA', SOSPECHA: 'DESPRECIO', ARROGANCIA: 'DESPRECIO', AGOTAMIENTO: 'ANGUSTIA', 'VÉRTIGO': 'MIEDO' };
-  const VGAIN = { MIEDO: 0.05, FURIA: 0.09, GRITO: 0.09, 'PÁNICO': 0.22, DOLOR: 0.06, RISA: 0.08, TRISTEZA: 0.07, ANGUSTIA: 0.08, ASCO: 0.5, DESPRECIO: 0.08, SORPRESA: 0.35 };
+  const VGAIN = { LUZ: 0.05, MIEDO: 0.05, FURIA: 0.09, GRITO: 0.09, 'PÁNICO': 0.22, DOLOR: 0.06, RISA: 0.08, TRISTEZA: 0.07, ANGUSTIA: 0.08, ASCO: 0.5, DESPRECIO: 0.08, SORPRESA: 0.35 };
 
   function raiz(m, when = now()) { root = m; for (const { o, mul } of oscs) o.frequency.setTargetAtTime(hz(m) * mul, when, 0.3); }
   raiz(36);
@@ -277,7 +280,7 @@ export function crearSonido(ctx) {
       L.sorpF.frequency.setTargetAtTime(300 + 900 * Math.max(0, c.brow), when, 0.2);
       L.aliento.gain.setTargetAtTime(A.aliento * (1 + st.speed * 0.15) * fadeK * aK, when, 0.3);
       // las emociones nuevas suenan con la voz de su familia
-      const ev = {}; for (const [k, val] of Object.entries(st.emo || {})) { const vz = VOZ_DE[k] || k; ev[vz] = (ev[vz] || 0) + val; }
+      const ev = {}; for (const [k, val] of Object.entries(st.emo || {})) { for (const vz of [].concat(VOZ_DE[k] || k)) ev[vz] = (ev[vz] || 0) + val; }
       for (const [name, g] of Object.entries(V)) g.gain.setTargetAtTime(Math.min(1.2, ev[name] || 0) * (VGAIN[name] || 0.06) * fadeK * aK * AMB, when, 0.35);
       flWet.gain.setTargetAtTime((st.act === 'ECO' ? 0.55 : 0.08) * aK, when, 1.2);
     },

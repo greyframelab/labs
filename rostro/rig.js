@@ -44,7 +44,25 @@ export const EMOCIONES = {
   ARROGANCIA: Object.assign(sym({ eyeLookDown: 0.6, eyeSquint: 0.3, mouthPress: 0.4, mouthShrugLower: 0.5, browOuterUp: 0.3, pitch: -0.4, thrust: -0.2 }), { mouthSmile_R: 0.3 }),
   AGOTAMIENTO: sym({ eyeBlink: 0.75, eyeLookDown: 0.5, jawOpen: 0.3, mouthFrown: 0.4, browInnerUp: 0.3, pitch: 0.45, roll: 0.18 }),
   'VÉRTIGO': Object.assign(sym({ eyeWide: 0.5, jawOpen: 0.3, mouthStretch: 0.4, browInnerUp: 0.5, roll: 0.3 }), { eyeLookUp_L: 0.5, eyeLookOut_R: 0.5 }),
+  // --- luz: emociones positivas (Mayús + tecla)
+  'ALEGRÍA':   sym({ mouthSmile: 1.1, cheekSquint: 0.8, cheekRaiser: 0.8, eyeSquint: 0.5, jawOpen: 0.25, mouthUpperUp: 0.2, browOuterUp: 0.3, pitch: -0.12 }),
+  EUFORIA:     sym({ mouthSmile: 1.3, jawOpen: 0.75, cheekRaiser: 1.0, cheekSquint: 1.0, eyeSquint: 0.7, browInnerUp: 0.5, browOuterUp: 0.8, mouthUpperUp: 0.4, pitch: -0.4 }),
+  TERNURA:     sym({ mouthSmile: 0.45, eyeSquint: 0.35, eyeBlink: 0.25, browInnerUp: 0.5, cheekRaiser: 0.3, roll: 0.2, pitch: 0.1 }),
+  AMOR:        sym({ mouthSmile: 0.55, mouthPucker: 0.15, eyeBlink: 0.35, eyeSquint: 0.25, browInnerUp: 0.35, cheekRaiser: 0.35, roll: -0.12, thrust: 0.2 }),
+  SERENIDAD:   sym({ eyeBlink: 0.95, mouthSmile: 0.2, browInnerUp: 0.1, pitch: -0.08 }),
+  ALIVIO:      sym({ browInnerUp: 0.6, eyeBlink: 0.5, mouthSmile: 0.3, jawOpen: 0.2, mouthFunnel: 0.2, pitch: 0.2 }),
+  ESPERANZA:   sym({ browInnerUp: 0.7, eyeLookUp: 0.55, eyeWide: 0.2, mouthSmile: 0.35, pitch: -0.25 }),
+  MARAVILLA:   sym({ eyeWide: 0.9, browOuterUp: 0.8, browInnerUp: 0.6, jawOpen: 0.4, mouthFunnel: 0.25, mouthSmile: 0.3, pitch: -0.2, thrust: 0.2 }),
+  ORGULLO:     sym({ mouthSmile: 0.4, mouthPress: 0.3, cheekRaiser: 0.3, eyeSquint: 0.2, pitch: -0.3, thrust: -0.1 }),
+  GRATITUD:    sym({ mouthSmile: 0.6, browInnerUp: 0.5, eyeSquint: 0.4, eyeBlink: 0.3, cheekRaiser: 0.5, pitch: 0.15 }),
+  CURIOSIDAD:  { browOuterUp_L: 0.9, browDown_R: 0.3, eyeWide_L: 0.4, eyeSquint_R: 0.3, mouthLeft: 0.2, roll: 0.28, thrust: 0.25 },
+  'DIVERSIÓN': Object.assign(sym({ cheekSquint: 0.5, eyeSquint: 0.4, jawOpen: 0.15, roll: -0.1 }), { mouthSmile_L: 0.9, mouthSmile_R: 0.5, browOuterUp_R: 0.6 }),
+  'SATISFACCIÓN': sym({ mouthSmile: 0.55, mouthPress: 0.4, eyeSquint: 0.5, eyeBlink: 0.3, cheekRaiser: 0.4, pitch: -0.05 }),
+  'INSPIRACIÓN': sym({ eyeWide: 0.5, eyeLookUp: 0.7, browOuterUp: 0.7, browInnerUp: 0.4, jawOpen: 0.25, mouthSmile: 0.2, pitch: -0.3 }),
+  COMPLICIDAD: { eyeBlink_L: 1, cheekSquint_L: 0.7, mouthSmile_L: 0.9, mouthSmile_R: 0.3, browDown_L: 0.3, roll: 0.12, yaw: -0.12 },
 };
+// emociones de luz: el resto del código las trata igual, pero así se pueden agrupar
+export const LUZ = ['ALEGRÍA', 'EUFORIA', 'TERNURA', 'AMOR', 'SERENIDAD', 'ALIVIO', 'ESPERANZA', 'MARAVILLA', 'ORGULLO', 'GRATITUD', 'CURIOSIDAD', 'DIVERSIÓN', 'SATISFACCIÓN', 'INSPIRACIÓN', 'COMPLICIDAD'];
 
 export function pose(name, mix = 1) {
   const e = EMOCIONES[name] || {}; const p = {}; for (const k of CONTROLS) p[k] = (e[k] || 0) * mix; return p;
