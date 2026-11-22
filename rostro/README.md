@@ -7,9 +7,20 @@ Una cabeza gigante de laca negra, proyectada en sala oscura, que se contorsiona 
 ## Modos (`1` `2` `3`)
 | | Modo | Qué hace |
 |---|---|---|
-| 1 | AUTOMÁTICO | Las piezas nacen solas y se suceden de negro a negro, sin repetir acento seguido. |
+| 1 | AUTOMÁTICO | CONTINUO (por defecto): un paso sin cortes por todas las expresiones. PIEZAS: piezas de negro a negro. |
 | 2 | MANUAL | Emoción, estilo y acento a mano. La pieza se repite hasta pulsar NUEVA. |
 | 3 | ESPEJO | La cabeza copia la cara de quien tiene delante y la lleva al extremo. Sin nadie delante, sigue en AUTOMÁTICO. |
+
+## AUTOMÁTICO · CONTINUO (por defecto)
+Un paso sin cortes a negro por **todas las expresiones** (42), pensado para que quien entra en la sala se quede clavado:
+- **Orden de contraste máximo:** de cada expresión salta a la más lejana de unas pocas candidatas, alternando oscuridad y luz (del horror a la ternura, del odio a la gratitud). Cada paso tiene un orden distinto y el siguiente empieza donde acaba el anterior: la cara nunca vuelve a neutro.
+- **Cambio plástico:** cada cambio de expresión es un golpe en la materia. El cráneo se estira, la cabeza se retuerce sobre su eje, la cara se hincha y a veces se derrite, y todo rebota como gelatina. En el mismo instante hay corte de plano, barrido de luz, glitch, cambio de acento y un golpe de sonido que se hunde, anunciado por un oleaje de ruido.
+- **Squash & stretch:** cada bombo aplasta el cráneo y la materia rebota.
+- **Expresiones pasadas de rosca:** en el continuo pueden ir hasta 1,75 (fuera de la anatomía).
+- **Ritmo:** las expresiones extremas duran dos compases con el bombo lleno, las de tensión dos compases con un pulso medio y las calmas dos compases y medio, casi sin golpes. Cada pocos cambios llega una **RÁFAGA**: cuatro o cinco caras a medio compás cada una, con cortes secos.
+- **Color por familia:** rojo, violeta o magenta para lo extremo, cian o verde para la tensión, ámbar o blanco para la luz.
+
+Un paso dura unos 2,5–3 minutos según el tempo. En la consola, **AUTOMÁTICO › CONTINUO / PIEZAS** cambia al modo anterior (piezas de ~40 s de negro a negro).
 
 ## La pieza
 Una semilla decide el estilo de sonido, el tempo, el acento, la raíz y el arco emocional. Cada pieza tiene cuatro actos:

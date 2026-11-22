@@ -27,6 +27,8 @@ const VS = 'varying vec2 v;void main(){v=uv;gl_Position=vec4(position.xy,0.,1.);
 // --- deformación extra en la gráfica (después de las expresiones)
 const VERT_HEAD = `
 uniform mat3 uHeadR; uniform vec3 uPivot; uniform float uThrust, uTremor, uTime;
+uniform float uStretch, uTwist, uMelt, uBulge;
+float twistA(vec3 p){ return uTwist * 0.75 * smoothstep(-1.3, 3.6, p.y) * smoothstep(-1.95, -0.85, p.y); }
 uniform vec4 uBump[6]; uniform float uBumpA[6];
 varying vec3 vObj;
 float headW(vec3 p){ return smoothstep(-1.95, -0.85, p.y); }
@@ -34,7 +36,9 @@ float hash3(vec3 p){ return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 4
 `;
 const VERT_NORMAL = `
 #include <morphnormal_vertex>
-{ float hw = headW(position); objectNormal = normalize(mix(objectNormal, uHeadR * objectNormal, hw)); }
+{ float hw = headW(position); float tw = twistA(position); float c0 = cos(tw), s0 = sin(tw);
+  objectNormal = vec3(objectNormal.x * c0 + objectNormal.z * s0, objectNormal.y, -objectNormal.x * s0 + objectNormal.z * c0);
+  objectNormal = normalize(mix(objectNormal, uHeadR * objectNormal, hw)); }
 `;
 const VERT_POS = `
 #include <morphtarget_vertex>
@@ -44,6 +48,16 @@ vObj = transformed;
   for (int b = 0; b < 6; b++) { vec3 d = transformed - uBump[b].xyz; transformed += nn * uBumpA[b] * exp(-dot(d, d) / (uBump[b].w * uBump[b].w)); }
   float fr = smoothstep(0.4, 1.6, position.z) * step(position.y, 3.0);
   transformed += nn * (hash3(floor(position * 9.0)) - 0.5) * sin(uTime * 53.0 + hash3(position) * 40.0) * uTremor * 0.012 * fr;
+  // PLÁSTICA: el cráneo se estira, la cara se derrite, la materia se hincha y la cabeza se retuerce sobre su eje
+  float hwP = headW(position), frP = smoothstep(-0.2, 1.2, position.z);
+  transformed.y += (transformed.y - 1.9) * uStretch * 0.42 * smoothstep(1.5, 2.8, position.y);
+  transformed.y += (transformed.y - 0.45) * uStretch * 0.14 * smoothstep(0.9, -0.6, position.y) * hwP;
+  float mw = uMelt * smoothstep(2.1, -0.8, position.y) * frP * hwP;
+  transformed.y -= mw * 0.75 * (0.75 + 0.25 * sin(position.x * 3.1 + 1.7)); transformed.z -= mw * 0.12;
+  float bn = sin(position.x * 2.3 + uTime * 1.7) * sin(position.y * 1.9 - uTime * 1.3) * sin(position.z * 2.1 + uTime * 1.1);
+  transformed += nn * uBulge * 0.22 * (0.4 + 0.6 * bn) * hwP;
+  { float tw = twistA(position); float c1 = cos(tw), s1 = sin(tw); vec2 xz = vec2(transformed.x, transformed.z - 0.3);
+    transformed.x = xz.x * c1 + xz.y * s1; transformed.z = 0.3 - xz.x * s1 + xz.y * c1; }
   float hw = headW(position);
   vec3 rp = uPivot + uHeadR * (transformed - uPivot) + vec3(0.0, 0.0, uThrust);
   transformed = mix(transformed, rp, hw);
@@ -133,7 +147,8 @@ export async function crearEscena(canvas, accentHex, base = './assets/', { msaa 
   strip(9, 0.2, 0, 7, 3, 0xffffff, 2);
   const accStrip = strip(0.25, 8, 7, 1, -4, accent, 5);
   const pm = new PMREMGenerator(r);
-  const bakeEnv = () => { const old = sc.environment; sc.environment = pm.fromScene(envS, 0.02).texture; if (old) old.dispose(); };
+  const envCache = new Map();
+  const bakeEnv = () => { const k = accent.getHexString(); let tex = envCache.get(k); if (!tex) { tex = pm.fromScene(envS, 0.02).texture; envCache.set(k, tex); } sc.environment = tex; };
   bakeEnv();
 
   const cam = new PerspectiveCamera(26, 16 / 9, 0.1, 100);
@@ -185,7 +200,7 @@ export async function crearEscena(canvas, accentHex, base = './assets/', { msaa 
   const polvo = new Points(pg, polvoMat); polvo.renderOrder = 3; atmos.add(polvo);
 
   const cara = await cargarCara(base);
-  const U = { uHeadR: { value: new Matrix3() }, uPivot: { value: PIVOT.clone() }, uThrust: { value: 0 }, uTremor: { value: 0 }, uTime: { value: 0 },
+  const U = { uStretch: { value: 0 }, uTwist: { value: 0 }, uMelt: { value: 0 }, uBulge: { value: 0 }, uHeadR: { value: new Matrix3() }, uPivot: { value: PIVOT.clone() }, uThrust: { value: 0 }, uTremor: { value: 0 }, uTime: { value: 0 },
     uBump: { value: Array.from({ length: 6 }, () => new Vector4(0, 0, -99, 0.3)) }, uBumpA: { value: new Array(6).fill(0) },
     uWrk: { value: new Vector4() }, uWrk2: { value: new Vector4() }, uPore: { value: 1 } };
   const piel = new MeshPhysicalMaterial({ color: 0x030303, roughness: 0.34, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.12, specularIntensity: 1, envMapIntensity: 1 });
@@ -276,6 +291,7 @@ export async function crearEscena(canvas, accentHex, base = './assets/', { msaa 
     pose(c, t, bumps) {
       for (let k = 0; k < ARKIT.length; k++) { const v = c[ARKIT[k]] || 0; w[idx[k]] = v; mesh.morphTargetInfluences[idx[k]] = v; }
       eul.set(c.pitch || 0, c.yaw || 0, c.roll || 0, 'XYZ'); m4.makeRotationFromEuler(eul); U.uHeadR.value.setFromMatrix4(m4);
+      U.uStretch.value = c.stretch || 0; U.uTwist.value = c.twist || 0; U.uMelt.value = Math.max(0, c.melt || 0); U.uBulge.value = Math.max(0, c.bulge || 0);
       U.uThrust.value = (c.thrust || 0) * 0.9; U.uTremor.value = Math.max(0, c.tremor || 0); U.uTime.value = t % 1000;
       for (let b = 0; b < 6; b++) { const B = bumps && bumps[b]; if (B) { U.uBump.value[b].set(B.x, B.y, B.z, B.r); U.uBumpA.value[b] = B.a; } else U.uBumpA.value[b] = 0; }
       // arrugas: cada una nace de las expresiones que la provocan

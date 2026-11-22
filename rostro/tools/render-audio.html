@@ -6,14 +6,15 @@ import { crearAnimador } from '../anim.js';
 import { crearSonido } from '../sonido.js';
 globalThis.ROSTRO_OFF = (new URLSearchParams(location.search).get('off') || '').split(',');
 const q = new URLSearchParams(location.search), code = q.get('code') || 'ROSTRO';
-const P = crearPieza(code, q.get('estilo') ? { estilo: q.get('estilo') } : {});
-const SR = 48000, ctx = new OfflineAudioContext(2, Math.ceil((P.dur + 3) * SR), SR);
+const P = crearPieza(code, Object.assign(q.get('estilo') ? { estilo: q.get('estilo') } : {}, q.get('continuo') ? { continuo: true, primera: true } : {}));
+const HASTA = +(q.get('hasta') || 1e9); // segundos a renderizar (el continuo dura minutos)
+const LEN = Math.min(P.dur + 3, HASTA), SR = 48000, ctx = new OfflineAudioContext(2, Math.ceil(LEN * SR), SR);
 const snd = crearSonido(ctx); snd.pieza(P, 0); snd.ambiente(q.get('amb') !== '0');
 const an = crearAnimador(P, 3); const T0 = 0.1;
 const imp = P.events.find(e => e.k === 'impact'); if (imp) snd.oleaje(T0 + imp.t - P.BAR, T0 + imp.t);
-for (let t = 0; t <= P.dur + 2.5; t += 1 / 60) {
+for (let t = 0; t <= LEN - 0.5; t += 1 / 60) {
   const st = an.avanzar(Math.min(t, P.dur), e => snd.golpe(e, T0 + e.t, P));
-  const fade = Math.max(0, Math.min(1, (P.dur + 2.5 - t) / 2.5));
+  const fade = Math.max(0, Math.min(1, (LEN - 0.5 - t) / 2.5));
   snd.vivo(st, T0 + t, fade);
 }
 const buf = await ctx.startRendering();

@@ -4,10 +4,10 @@
 // Render fotograma a fotograma de una pieza (para clips de validación): ?code=XXXX&w=1280&h=720&fps=30
 // window.frame(i) devuelve el JPEG del fotograma i. Mismo animador que la app: sale idéntico al directo.
 import { crearEscena } from '../escena.js';
-import { crearPieza } from '../partitura.js';
+import { crearPieza, accAt } from '../partitura.js';
 import { crearAnimador } from '../anim.js';
 const q = new URLSearchParams(location.search), W = +q.get('w') || 1280, H = +q.get('h') || 720, FPS = +q.get('fps') || 30;
-const opts = q.get('estilo') ? { estilo: q.get('estilo') } : {};
+const opts = Object.assign(q.get('estilo') ? { estilo: q.get('estilo') } : {}, q.get('continuo') ? { continuo: true, primera: true } : {});
 const P = crearPieza(q.get('code') || 'ROSTRO', opts), an = crearAnimador(P, (q.get('code') || 'RO').charCodeAt(0) * 31 + (q.get('code') || 'RO').charCodeAt(1), 0.9);
 const cv = document.getElementById('c'); cv.style.width = W + 'px'; cv.style.height = H + 'px';
 const esc = await crearEscena(cv, P.acc, '../assets/'); esc.tamano(W, H);
@@ -15,8 +15,9 @@ window.total = Math.ceil((P.dur + 2.5) * FPS); window.info = { dur: P.dur, acts:
 window.frame = (i) => {
   const t = i / FPS, tt = Math.min(t, P.dur), st = an.avanzar(tt), pl = an.plano(tt);
   st.sweep *= 0.6;
+  esc.acento(accAt(P, tt));
   esc.pose(st.c, tt, st.bumps); esc.camara(pl.name, pl.since); esc.luz(st.rim, st.sweep, st.swx, 1);
-  esc.render(tt, Math.max(0, Math.min(1, t / 1.2, (P.dur + 1.5 - t) / 2.2)), st.glitch, st.speed);
+  esc.render(tt, P.continuo ? Math.min(1, t / 1.2) : Math.max(0, Math.min(1, t / 1.2, (P.dur + 1.5 - t) / 2.2)), st.glitch, st.speed);
   return cv.toDataURL('image/jpeg', 0.93);
 };
 // avanza la simulación sin dibujar (para empezar el clip a mitad de pieza con el mismo estado)
