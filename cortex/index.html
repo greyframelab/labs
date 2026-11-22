@@ -7,10 +7,16 @@ canvas{display:block;width:100vw;height:100vh}
 #inicio button:hover{border-color:#00e5ff;color:#00e5ff}</style></head><body>
 <canvas id="c"></canvas>
 <div id="carga">VØID_LOOM · CÓRTEX<span>PREPARANDO LA MATERIA</span></div>
-<div id="inicio">VØID_LOOM · CÓRTEX<div><button onclick="arrancar('auto')">AUTOPLAY</button> <button onclick="arrancar('pub')">PÚBLICO · MICRO</button></div><span style="opacity:.5">F · PANTALLA COMPLETA</span></div>
+<div id="inicio">VØID_LOOM · CÓRTEX<div><button onclick="arrancar('auto')">AUTOPLAY</button> <button onclick="arrancar('pub')">PÚBLICO · MICRO</button> <button onclick="arrancar('ddj')">INTÉRPRETE · DDJ-200</button></div><span style="opacity:.5">F · PANTALLA COMPLETA &nbsp; K · CALIBRAR LA SALA (4 s EN SILENCIO)</span></div>
+<script src="partitura.js"></script>
 <script src="shaders.js"></script>
 <script src="cerebro.js"></script>
 <script src="red.js"></script>
+<script src="sonido.js"></script>
+<script src="oido.js"></script>
+<script src="instrumento.js"></script>
+<script src="ddj.js"></script>
+<script src="imagen.js"></script>
 <script src="main.js"></script>
 <script>iniciar().catch(e=>{document.title='ERR '+e.message;console.error('[CORTEX_GPU_FALLO]',e);});</script>
 </body></html>

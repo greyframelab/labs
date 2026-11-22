@@ -1,8 +1,8 @@
 const B_VS=`#version 300 es
 precision highp float;
 in vec4 a; in vec2 b; in vec3 nr;
-uniform mat4 VP; uniform float T, focus, ap, RY, burst, kick, dark, fireAmt, inset, rs; uniform vec3 cam;
-uniform vec4 wv[4];
+uniform mat4 VP; uniform float T, focus, ap, RY, burst, kick, dark, fireAmt, inset, rs, oreja, cortexA; uniform vec3 cam;
+uniform vec4 wv[8]; uniform float wa[8];
 out float vI; out float vS; out float vN; out float vH;
 float hh(float n){return fract(sin(n*12.9898)*43758.5453);}
 void main(){
@@ -21,10 +21,14 @@ void main(){
   float base = (kind>=3.) ? .05*(.1+crest*(.3+1.*key))+.09*rim*crest + .012*(1.-crest) : .02;
   // ondas de disparo que recorren la corteza
   float fire=0.;
-  for(int i=0;i<4;i++){ float d=length(p-wv[i].xyz); float R=wv[i].w;
-    fire+=(exp(-pow((d-R)*34.,2.))*2.8 + step(d,R)*exp(-(R-d)*6.)*.32)*step(0.,R)*(1.-smoothstep(.3,1.8,R)); }
-  fire*=fireAmt*(.08+.92*pow(crest,1.5));
-  float crack = (kind>=3.&&kind<5.) ? smoothstep(.0,.15,burst)*(1.-crest)*(1.6-burst*1.2)*1.4 : 0.;   // el interior se ve por las grietas
+  for(int i=0;i<8;i++){ float d=length(p-wv[i].xyz); float R=wv[i].w;
+    fire+=(exp(-pow((d-R)*34.,2.))*2.8 + step(d,R)*exp(-(R-d)*6.)*.32)*step(0.,R)*(1.-smoothstep(.3,1.8,R))*wa[i]; }
+  // luz bajo la corteza: el disparo también se ve dentro de los surcos, como luz atrapada
+  fire*=fireAmt*(.22+.78*pow(crest,1.5));
+  // EL OÍDO: el lóbulo temporal vibra con lo que oye la sala
+  float de2=min(length(p-vec3(.47,-.22,.18)),length(p-vec3(-.47,-.22,.18)));
+  fire+=oreja*exp(-de2*de2*28.)*(.25+.75*crest)*(.6+.4*sin(T*40.+hr*30.))*1.1;
+  float crack = (kind>=3.&&kind<5.) ? smoothstep(.0,.15,burst)*pow(1.-crest,2.)*(.18+kick*.9) : 0.;   // las grietas laten con el pulso   // el interior se ve por las grietas
   fire+=crack;
   float kk=kick*exp(-pow((length(p)-.35-kick*.0)*0.,2.))*.0+kick*.6*(.2+g);   // pulso global del bombo: la materia respira
   float dust = kind==5. ? .004*(.4+.6*hh(id+floor(T*2.+hr*9.))) : 0.;
@@ -32,11 +36,12 @@ void main(){
   if(kind==6.){ float per=4.+5.*hh(id*.37); float lt=mod(T+hh(id)*per,per); float act=step(.68,hh(id*1.9+floor((T+hh(id)*per)/per)));
     float wv=exp(-pow((a.w-lt*.9)*5.,2.))*act; bg=.06+(wv*1.2+(a.w==0.?exp(-lt*2.)*act*.8:0.));
     fire=wv*1.2*act; base=.0; }
-  float I=(base*(1.+kk*3.))*(1.-dark)+fire*(kind==6.?0.:1.)+dust+bg;
+  float I=(base*(1.+kk*3.))*(1.-dark)*(kind<5.?cortexA:1.)+fire*(kind==6.?0.:1.)*(kind<5.?mix(1.,cortexA,.85):1.)+dust+bg;
   float coc=ap*abs(dep-focus)/max(dep,.05)*RY*(kind==6.?6.:1.);
-  float sz=max(1.25,coc+1.);
-  gl_PointSize=inset>0.?(kind>=5.?0.:3.5):min(sz,70.);
-  float energy=(1.25*1.25)/(gl_PointSize*gl_PointSize);
+  float s0=clamp(1.25*2.6/max(dep,.1),1.25,7.);              // de cerca, cada partícula cubre más: la superficie no se vacía
+  float sz=max(s0,coc+1.);
+  gl_PointSize=inset>0.?(kind>=5.?0.:clamp(3.2*2.6/max(dep,.2)*RY/900.,2.,7.)):min(sz,70.);
+  float energy=(s0*s0)/(gl_PointSize*gl_PointSize);
   vI=I*energy*rs*smoothstep(.05,.3,dep); vS=gl_PointSize; vN=kind==6.?clamp(fire*1.5,0.,1.):clamp(fire/(base+fire+1e-4),0.,1.); vH=smoothstep(1.9,3.6,fire);
 }`;
 const B_FS=`#version 300 es
@@ -49,14 +54,14 @@ void main(){ vec2 q=gl_PointCoord*2.-1.; float r=length(q);
 const B_LVS=`#version 300 es
 precision highp float;
 in vec4 a; in vec2 b; in vec3 nr;
-uniform mat4 VP; uniform float burst, fireAmt, dark; uniform vec4 wv[4];
+uniform mat4 VP; uniform float burst, fireAmt, dark, lr; uniform vec4 wv[8]; uniform float wa[8];
 out float vI; out float vN;
 float hh(float n){return fract(sin(n*12.9898)*43758.5453);}
 void main(){ float hr=hh(b.x);
   vec3 p=a.xyz + nr*burst*(.15+1.1*hr);
   gl_Position=VP*vec4(p,1.);
-  float fire=0.; for(int i=0;i<4;i++){ float d=length(p-wv[i].xyz); float R=wv[i].w; fire+=exp(-pow((d-R)*10.,2.))*step(0.,R)*(1.-smoothstep(.2,1.6,R)); }
-  vI=.006*(1.-dark)+fire*fireAmt*.9; vN=clamp(fire*fireAmt*8.,0.,1.); }`;
+  float fire=0.; for(int i=0;i<8;i++){ float d=length(p-wv[i].xyz); float R=wv[i].w; fire+=exp(-pow((d-R)*10.,2.))*step(0.,R)*(1.-smoothstep(.2,1.6,R))*wa[i]; }
+  vI=(.006*(1.-dark)+fire*fireAmt*.35)*lr; vN=clamp(fire*fireAmt*8.,0.,1.); }`;
 const B_LFS=`#version 300 es
 precision highp float; in float vI; in float vN; uniform vec3 neon; out vec4 o;
 void main(){ o=vec4(mix(vec3(.82,.86,.95),neon,vN)*vI,1.); }`;
@@ -156,3 +161,26 @@ void main(){
 }`;
 const R_LFS=`#version 300 es
 precision highp float; in float vI; uniform vec3 neon; out vec4 o; void main(){ o=vec4(neon*vI,1.); }`;
+// TRACTOGRAFÍA: fibras blancas que aparecen cuando el cerebro se vuelve translúcido; impulsos que las recorren
+const T_VS=`#version 300 es
+precision highp float;
+in vec4 a; in vec2 b;
+uniform mat4 VP; uniform float T, tract, focus, ap, RY, lr; uniform vec4 wv[8]; uniform float wa[8];
+out float vI; out float vN;
+float hh(float n){return fract(sin(n*12.9898)*43758.5453);}
+void main(){ vec4 cp=VP*vec4(a.xyz,1.); gl_Position=cp; float dep=cp.w; float id=b.x;
+  float sp=.6+.8*hh(id); float ph=fract(T*sp*.5+hh(id*3.)); float L=1.4;
+  float imp=exp(-pow((a.w-ph*L)*16.,2.))*step(.55,hh(id*7.+floor(T*sp*.5+hh(id*3.))));
+  float w=0.; for(int i=0;i<8;i++){ float d=length(a.xyz-wv[i].xyz); w+=exp(-pow((d-wv[i].w)*9.,2.))*step(0.,wv[i].w)*wa[i]; }
+  float coc=ap*abs(dep-focus)/max(dep,.05)*RY;
+  float stem=smoothstep(.12,.42,length(a.xyz-vec3(0.,-.4,-.27)));     // donde los haces se juntan no se quema
+  vI=tract*(.006+imp*.5+w*.22)*exp(-coc*.25)*stem*lr; vN=clamp((imp+w)*2.,0.,1.); }`;
+const T_FS=`#version 300 es
+precision highp float; in float vI; in float vN; uniform vec3 neon; out vec4 o;
+void main(){ o=vec4(mix(vec3(.8,.85,.95),neon,vN)*vI,1.); }`;
+// PERSISTENCIA: cada fotograma deja una huella que se apaga (fosfeno); 0 en los cortes
+const K_FS=`#version 300 es
+precision highp float; uniform sampler2D S; uniform sampler2D Tp; uniform vec2 R; uniform float k; out vec4 o;
+void main(){ vec2 uv=gl_FragCoord.xy/R; vec3 c=texture(S,uv).rgb, p=texture(Tp,uv).rgb*k;
+  // solo deja huella lo que brilla (el neón), nunca la materia: el fosfeno no ensucia
+  o=vec4(max(c,max(p-vec3(.09),0.)),1.); }`;

@@ -79,3 +79,30 @@ for(let i=0;i<NB;i++){
 
 return {pos,att,nrm,lpos,latt,lnrm};
 }
+
+// TRACTOGRAFÍA: haces de fibra blanca (cuerpo calloso, radiación de proyección y fascículos de asociación)
+function genTractos(P){
+  const pos=[], att=[]; let fid=0;
+  const bez=(a,b,c,d,t)=>{const u=1-t;return [0,1,2].map(i=>u*u*u*a[i]+3*u*u*t*b[i]+3*u*t*t*c[i]+t*t*t*d[i]);};
+  const linea=(pts)=>{ let arc=0; for(let i=1;i<pts.length;i++){ const a=pts[i-1],b=pts[i]; const l=Math.hypot(b[0]-a[0],b[1]-a[1],b[2]-a[2]);
+    pos.push(a[0],a[1],a[2],arc,b[0],b[1],b[2],arc+l); att.push(fid,0,fid,0); arc+=l; } fid++; };
+  const N=+(P.nt||1400);
+  for(let i=0;i<N;i++){ const ty=i%3, j=()=>rn()*.03; let pts=[];
+    if(ty===0){ // cuerpo calloso: de un hemisferio al otro, en U por debajo de la corteza
+      const z=(rnd()*2-1)*.62, xa=.3+rnd()*.18, y0=.28+rnd()*.18;
+      const A=[-xa,y0,z],B=[-.12,y0-.28,z*.9],C=[.12,y0-.28,z*.9],D=[xa,y0,z];
+      for(let k=0;k<=40;k++) pts.push(bez(A,B,C,D,k/40).map(v=>v+j()*.3));
+    } else if(ty===1){ // radiación de proyección: del tronco a la corteza en abanico
+      const sx=rnd()<.5?-1:1, az=(rnd()*2-1)*1.2, el=.3+rnd()*1.0;
+      const D=[sx*(.18+.3*Math.cos(el)),.08+.45*Math.sin(el),.75*Math.sin(az)];
+      const A=[sx*.03,-.42,-.28],B=[sx*.06,-.15,-.15],C=[D[0]*.6,D[1]*.55,D[2]*.6];
+      for(let k=0;k<=40;k++) pts.push(bez(A,B,C,D,k/40).map(v=>v+j()*.3));
+    } else { // fascículos de asociación: de delante a atrás dentro de cada hemisferio
+      const sx=rnd()<.5?-1:1, x=sx*(.22+rnd()*.16), y=.05+rnd()*.3;
+      const A=[x,y,.62+rnd()*.15],B=[x*1.25,y+.22,.2],C=[x*1.25,y+.2,-.25],D=[x,y-.05,-.66-rnd()*.1];
+      for(let k=0;k<=46;k++) pts.push(bez(A,B,C,D,k/46).map(v=>v+j()*.3));
+    }
+    linea(pts);
+  }
+  return {pos,att};
+}

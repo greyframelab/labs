@@ -14,11 +14,17 @@ function grow(o,dir,len,rad,depth,arc0,id,dens,kind){
       const a=rnd()*6.2832, b=rn()*r;
       emit(p[0]+Math.cos(a)*r+b*.2,p[1]+Math.sin(a)*r+b*.2,p[2]+rn()*r,arc,id,kind);
     }
+    if(kind===2 && Math.floor(arc/0.09)!==Math.floor((arc-st)/0.09)){ // nodo de Ranvier: el impulso salta de uno a otro
+      for(let k=0;k<5;k++) emit(p[0]+rn()*.006,p[1]+rn()*.006,p[2]+rn()*.006,Math.floor(arc/0.09)*0.09,id,5);
+    }
     if(depth>0 && rnd()<0.03+0.012*depth){
       const nd=norm([d[0]+rn()*.75,d[1]+rn()*.75,d[2]+rn()*.75]);
       grow(p,nd,len*(1-f)*(0.5+rnd()*0.5),r*0.75,depth-1,arc,id,dens,kind);
     }
   }
+  // botón sináptico al final de cada rama + nube de neurotransmisor que sale al llegar el impulso
+  for(let k=0;k<16;k++){ const v=norm([rn(),rn(),rn()]); emit(p[0]+v[0]*.007,p[1]+v[1]*.007,p[2]+v[2]*.007,arc,id,3); }
+  for(let k=0;k<18;k++){ const v=norm([rn(),rn(),rn()]); emit(p[0]+v[0]*.002,p[1]+v[1]*.002,p[2]+v[2]*.002,arc,id,4); }
 }
 const NN=+(P.n||1300), ZL=+(P.zl||40), neurons=[];
 const HEROES=[[3.9,.9,.42],[8.2,-2.2,.5],[13.1,2.6,.4],[19.4,-.6,.55],[25,1.8,.45]];
