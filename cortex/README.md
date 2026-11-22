@@ -40,8 +40,11 @@ El micro se analiza en el ordenador: no se graba, no se envía y no se guarda.
 - **FX:** onda de choque con refracción, glitch de franjas en el mismo acento, pixel sort, destello anamórfico corto, dark pulse, profundidad de campo real.
 - Un solo acento por pieza: cian (`?neon=r,g,b` para probar otro).
 
+## Fluidez
+Calidad automática: si no llega a 60 fps, por este orden baja la resolución al 80 %, fija 30 fps exactos, dibuja el 65 % de las partículas, baja al 60 % y al 45 % de las partículas. Si va sobrado, recupera poco a poco. Los cambios esperan a un corte de plano.
+
 ## Sonido
-Motor WebAudio en vivo (referencia: Autechre; seco, ritmo en plantillas que rotan): bombo diseñado, micro-golpes FM (DATOS), bajo, sub, dron FM, dron aditivo con formante y la segunda menor de la ruptura. Estante −6 dB desde 2,2 kHz, compresor y limitador en el máster.
+Motor WebAudio en vivo (referencia: Autechre; seco, ritmo en plantillas que rotan): bombo diseñado, micro-golpes FM (DATOS), bajo, sub, dron FM, dron aditivo con formante y la segunda menor de la ruptura. Estante −6 dB desde 2,2 kHz, compresor y limitador en el máster; ≈ −13 LUFS (en sala manda el volumen).
 
 ## Herramientas
 - `tools/eeg_night.py n16.edf`: regenera `noche.bin` / `noche.json` (2 Hz, 6 bandas × 5 canales).

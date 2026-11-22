@@ -19,6 +19,7 @@ La app no está firmada con certificado de pago, así que la primera vez el sist
 
 - Fuerza la gráfica de alto rendimiento en portátiles con dos gráficas.
 - No deja que el sistema frene la animación cuando la ventana pierde el foco ni que la pantalla se apague.
+- Calidad automática: si no llega a 60 fps, baja resolución, fija 30 fps y dibuja menos partículas; los cambios esperan a un corte de plano.
 - Si la tarjeta no consigue preparar el cerebro con el modo gráfico por defecto (Direct3D en Windows), la app se reinicia sola probando otro (OpenGL, D3D11on12, Vulkan) y recuerda el que funciona.
 
 ## PÚBLICO, sin internet

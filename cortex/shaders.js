@@ -34,9 +34,10 @@ void main(){
     fire=wv*1.2*act; base=.0; }
   float I=(base*(1.+kk*3.))*(1.-dark)+fire*(kind==6.?0.:1.)+dust+bg;
   float coc=ap*abs(dep-focus)/max(dep,.05)*RY*(kind==6.?6.:1.);
-  float sz=max(1.25,coc+1.);
-  gl_PointSize=inset>0.?(kind>=5.?0.:3.5):min(sz,70.);
-  float energy=(1.25*1.25)/(gl_PointSize*gl_PointSize);
+  float s0=clamp(1.25*2.6/max(dep,.1),1.25,7.);              // de cerca, cada partícula cubre más: la superficie no se vacía
+  float sz=max(s0,coc+1.);
+  gl_PointSize=inset>0.?(kind>=5.?0.:clamp(3.2*2.6/max(dep,.2)*RY/900.,2.,7.)):min(sz,70.);
+  float energy=(s0*s0)/(gl_PointSize*gl_PointSize);
   vI=I*energy*rs*smoothstep(.05,.3,dep); vS=gl_PointSize; vN=kind==6.?clamp(fire*1.5,0.,1.):clamp(fire/(base+fire+1e-4),0.,1.); vH=smoothstep(1.9,3.6,fire);
 }`;
 const B_FS=`#version 300 es
