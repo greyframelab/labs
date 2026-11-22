@@ -10,6 +10,7 @@ import { crearEspejo } from './espejo.js';
 const $ = (id) => document.getElementById(id);
 const S = {
   modo: 'auto', estilo: null, acc: null, emo: null, ambient: true, vol: 0.7, bri: 1, seguro: true, apagado: false, solo: false,
+  vista: 'auto',
   fx: { glitch: true, estela: true, atmos: true, destellos: true, laser: true, doble: true, lente: true },
   amp: 1, verCam: false, tecla: null, teclaUlt: null, teclaW: 0,
   autoTipo: 'continuo', piezaN: 0, accNow: '',
@@ -36,7 +37,7 @@ $('go').onclick = async () => {
     ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'playback', sampleRate: 48000 });
     await ctx.resume(); snd = crearSonido(ctx); snd.volumen(S.vol);
     log('MODELANDO EL ROSTRO', 0.4);
-    esc = await crearEscena($('c'), '#FF1A1A'); esc.fx(S.fx);
+    esc = await crearEscena($('c'), '#FF1A1A'); esc.fx(S.fx); esc.vista(S.vista);
     log('CALENTANDO LA LUZ', 0.85);
     tamano(); esc.pose(pose('REPOSO'), 0); esc.render(0, 0);
     log('', 1);
@@ -158,7 +159,7 @@ function logica(ts) {
   if (pres > 0.5 && !FRONTAL.has(pl.name)) pl = { name: 'medio', since: pl.since, at: pl.at };
   // la salida calcula la pieza por su cuenta: aquí solo va el reloj (en tiempo de pared) y la sala
   const msg = { type: 'reloj', code: P.code, start: performance.timeOrigin + performance.now() - (ctx.currentTime - S.t0 - LAT()) * 1000, // compensa la latencia de salida del audio
-    fadeOut, bri: S.bri, seguro: S.seguro, ext, forzarMedio: pres > 0.5, fx: S.fx };
+    fadeOut, bri: S.bri, seguro: S.seguro, ext, forzarMedio: pres > 0.5, fx: S.fx, vista: S.vista };
   salCh.postMessage(msg);
 
   V = { st, pl, tt, fade };
@@ -191,7 +192,7 @@ function pintar(ts) {
     $('chFps').textContent = Math.round(fpsAvg) + (nivel ? ` · Q${nivel}` : '');
   } else $('chFps').textContent = 'EN EL PROYECTOR';
   const { st, pl, tt, fade } = V;
-  esc.pose(st.c, tt, st.bumps); esc.camara(pl.name, pl.since); esc.luz(st.rim, st.sweep, st.swx, S.bri); esc.render(tt, fade, st.glitch, st.speed, st.morphAge);
+  esc.pose(st.c, tt, st.bumps, st.emo); esc.camara(pl.name, pl.since); esc.luz(st.rim, st.sweep, st.swx, S.bri); esc.render(tt, fade, st.glitch, st.speed, st.morphAge);
 }
 
 const FRONTAL = new Set(['medio', 'macro', 'boca', 'ojo', 'lejos']);
@@ -283,6 +284,7 @@ addEventListener('keydown', (e) => {
   else if (k === 'ArrowLeft') $('bPrev').click(); else if (k === 'ArrowRight') $('bNext').click();
   else if (k === 'p' || k === 'P') proyectar(); else if (k === 'h' || k === 'H') solo();
   else if (k === 'b' || k === 'B') apagar(); else if (k === 'a' || k === 'A') setAmbient(!S.ambient);
+  else if (k === 'Tab') { e.preventDefault(); setVista(VISTAS[(VISTAS.indexOf(S.vista) + 1) % VISTAS.length]); }
   else if (k === 'c' || k === 'C') captura(); else if (k === '?') $('help').classList.toggle('on');
   else if (k === 'ArrowUp' || k === 'ArrowDown') { e.preventDefault(); const r = $('rVol'); r.value = Math.max(0, Math.min(100, +r.value + (k === 'ArrowUp' ? 5 : -5))); r.oninput(); }
 });
@@ -292,6 +294,11 @@ $('teclas').innerHTML = ORDEN_TECLAS.map(k => [k, TECLAS[k]]).map(([k, em]) => `
 $('teclas').onclick = (e) => { const b = e.target.closest('button'); if (b && esc) tecla(b.dataset.k); };
 $('teclasLuz').innerHTML = 'qwertyuiosdfjklg'.split('').map(k => `<button data-k="${k}"><b>⇧${k.toUpperCase()}</b>${TECLAS_LUZ[k] || 'SOLTAR'}</button>`).join('');
 $('teclasLuz').onclick = (e) => { const b = e.target.closest('button'); if (b && esc) tecla(b.dataset.k, true); };
+// VISTA: NORMAL, CÓDIGO (la piel es el código que la mueve), VECTORES (campo de fuerzas) o AUTO (cambia sola en los cambios)
+const VISTAS = ['auto', 'normal', 'codigo', 'vectores'];
+function setVista(v) { S.vista = v; esc && esc.vista(v); [...$('segVista').children].forEach(b => b.classList.toggle('on', b.dataset.v === v)); }
+$('segVista').onclick = (e) => { const b = e.target.closest('button'); if (b) setVista(b.dataset.v); };
+setVista(S.vista);
 // FX: interruptores (por defecto, todos activos); la salida los recibe en el reloj
 const FXN = { glitch: 'GLITCH EN LOS GOLPES', estela: 'ESTELA', atmos: 'ATMÓSFERA Y HACES', destellos: 'DESTELLOS', laser: 'LÁSER', doble: 'DOBLE EXPOSICIÓN', lente: 'LENTE' };
 $('fxList').innerHTML = Object.entries(FXN).map(([k, n]) => `<button class="tbtn on" data-fx="${k}">${n}</button>`).join('');

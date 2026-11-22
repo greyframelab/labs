@@ -7,7 +7,7 @@ import {
   PerspectiveCamera, SpotLight, MeshPhysicalMaterial, MeshStandardMaterial, MeshDepthMaterial, RGBADepthPacking, Vector2, Vector3, Vector4, Matrix3, Euler, Matrix4,
   AgXToneMapping, PCFSoftShadowMap,
   EffectComposer, RenderPass, UnrealBloomPass, ShaderPass, OutputPass, AfterimagePass,
-  ConeGeometry, ShaderMaterial, OrthographicCamera, AdditiveBlending, BufferGeometry, Float32BufferAttribute, Points, Object3D,
+  ConeGeometry, ShaderMaterial, OrthographicCamera, CanvasTexture, LineSegments, LineBasicMaterial, AdditiveBlending, BufferGeometry, Float32BufferAttribute, Points, Object3D,
 } from './vendor/three-rostro.js';
 import { cargarCara } from './cara.js';
 import { ARKIT } from './rig.js';
@@ -30,7 +30,7 @@ uniform mat3 uHeadR; uniform vec3 uPivot; uniform float uThrust, uTremor, uTime;
 uniform float uStretch, uTwist, uMelt, uBulge;
 float twistA(vec3 p){ return uTwist * 0.75 * smoothstep(-1.3, 3.6, p.y) * smoothstep(-1.95, -0.85, p.y); }
 uniform vec4 uBump[6]; uniform float uBumpA[6];
-varying vec3 vObj;
+varying vec3 vObj; varying vec3 vRest; varying float vDef;
 float headW(vec3 p){ return smoothstep(-1.95, -0.85, p.y); }
 float hash3(vec3 p){ return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
 `;
@@ -42,7 +42,7 @@ const VERT_NORMAL = `
 `;
 const VERT_POS = `
 #include <morphtarget_vertex>
-vObj = transformed;
+vObj = transformed; vRest = position;
 {
   vec3 nn = normalize(normal);
   for (int b = 0; b < 6; b++) { vec3 d = transformed - uBump[b].xyz; transformed += nn * uBumpA[b] * exp(-dot(d, d) / (uBump[b].w * uBump[b].w)); }
@@ -58,6 +58,7 @@ vObj = transformed;
   transformed += nn * uBulge * 0.22 * (0.4 + 0.6 * bn) * hwP;
   { float tw = twistA(position); float c1 = cos(tw), s1 = sin(tw); vec2 xz = vec2(transformed.x, transformed.z - 0.3);
     transformed.x = xz.x * c1 + xz.y * s1; transformed.z = 0.3 - xz.x * s1 + xz.y * c1; }
+  vDef = length(transformed - position);   // cuánto se ha movido este punto de piel (expresión + plástica)
   float hw = headW(position);
   vec3 rp = uPivot + uHeadR * (transformed - uPivot) + vec3(0.0, 0.0, uThrust);
   transformed = mix(transformed, rp, hw);
@@ -65,7 +66,7 @@ vObj = transformed;
 `;
 // --- piel: poros + arrugas que nacen con la expresión (bump procedural con derivadas de pantalla)
 const FRAG_SKIN_HEAD = `
-varying vec3 vObj; uniform vec4 uWrk; uniform vec4 uWrk2; uniform float uPore; uniform float uScan, uScanK; uniform vec3 uScanCol;
+varying vec3 vObj; uniform vec4 uWrk; uniform vec4 uWrk2; uniform float uPore; uniform float uScan, uScanK; uniform vec3 uScanCol; varying vec3 vRest; varying float vDef; uniform sampler2D tCode; uniform float uCode, uVec;
 float h31(vec3 p){ p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }
 float vnoise(vec3 p){ vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(mix(h31(i), h31(i + vec3(1,0,0)), f.x), mix(h31(i + vec3(0,1,0)), h31(i + vec3(1,1,0)), f.x), f.y),
@@ -129,7 +130,11 @@ function inyectar(mat, U, piel) {
     // además del grano, la luz se apaga hacia abajo: un fundido, no un corte
     if (fs.includes('#include <dithering_fragment>')) fs = fs.replace('#include <dithering_fragment>', '#include <dithering_fragment>\ngl_FragColor.rgb *= bF * bF;');
     // FX · LÁSER: una línea de luz del acento recorre la piel de arriba abajo (y deja una estela tenue encima)
-    if (piel) fs = fs.replace('gl_FragColor.rgb *= bF * bF;', 'gl_FragColor.rgb *= bF * bF;\n{ float dS = (vObj.y - uScan) / 0.016; float tr = vObj.y > uScan ? exp(-(vObj.y - uScan) / 0.3) * 0.08 : 0.0; gl_FragColor.rgb += uScanCol * uScanK * (2.2 * exp(-dS * dS) + tr) * bF; }');
+    if (piel) fs = fs.replace('gl_FragColor.rgb *= bF * bF;', 'gl_FragColor.rgb *= bF * bF;\n{ float dS = (vObj.y - uScan) / 0.016; float tr = vObj.y > uScan ? exp(-(vObj.y - uScan) / 0.3) * 0.08 : 0.0; gl_FragColor.rgb += uScanCol * uScanK * (2.2 * exp(-dS * dS) + tr) * bF; }\n'
+      // VISTA CÓDIGO: la piel es el código que la mueve. Proyección cilíndrica en reposo: el texto va pegado a la piel y se estira, se retuerce y se derrite con ella
+      + '{ gl_FragColor.rgb *= 1.0 - 0.55 * uVec; if (uCode > 0.002) { float ang = atan(vRest.x, vRest.z - 0.3); vec2 cu = vec2(ang / 6.2831853 + 0.5, (vRest.y + 1.0) / 4.8);'
+      + ' float gc = texture2D(tCode, cu).r; float act = smoothstep(0.004, 0.11, vDef); vec3 ink = mix(vec3(0.82, 0.86, 0.9), uScanCol * 1.4, 0.35 + 0.65 * act);'
+      + ' gl_FragColor.rgb = gl_FragColor.rgb * (1.0 - 0.6 * uCode) + ink * gc * (0.06 + 1.7 * act * act + 0.5 * act) * uCode * bF * bF; } }');
     s.fragmentShader = fs;
   };
   mat.customProgramCacheKey = () => 'rostro-' + (piel ? 'piel' : 'otro');
@@ -202,7 +207,7 @@ export async function crearEscena(canvas, accentHex, base = './assets/', { msaa 
   const polvo = new Points(pg, polvoMat); polvo.renderOrder = 3; atmos.add(polvo);
 
   const cara = await cargarCara(base);
-  const U = { uScan: { value: -9 }, uScanK: { value: 0 }, uScanCol: { value: new Color(accentHex) }, uStretch: { value: 0 }, uTwist: { value: 0 }, uMelt: { value: 0 }, uBulge: { value: 0 }, uHeadR: { value: new Matrix3() }, uPivot: { value: PIVOT.clone() }, uThrust: { value: 0 }, uTremor: { value: 0 }, uTime: { value: 0 },
+  const U = { tCode: { value: null }, uCode: { value: 0 }, uVec: { value: 0 }, uScan: { value: -9 }, uScanK: { value: 0 }, uScanCol: { value: new Color(accentHex) }, uStretch: { value: 0 }, uTwist: { value: 0 }, uMelt: { value: 0 }, uBulge: { value: 0 }, uHeadR: { value: new Matrix3() }, uPivot: { value: PIVOT.clone() }, uThrust: { value: 0 }, uTremor: { value: 0 }, uTime: { value: 0 },
     uBump: { value: Array.from({ length: 6 }, () => new Vector4(0, 0, -99, 0.3)) }, uBumpA: { value: new Array(6).fill(0) },
     uWrk: { value: new Vector4() }, uWrk2: { value: new Vector4() }, uPore: { value: 1 } };
   const piel = new MeshPhysicalMaterial({ color: 0x030303, roughness: 0.34, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.12, specularIntensity: 1, envMapIntensity: 1 });
@@ -219,6 +224,80 @@ export async function crearEscena(canvas, accentHex, base = './assets/', { msaa 
   mesh.frustumCulled = false;
   sc.add(mesh);
   const idx = ARKIT.map(n => cara.names[n]);
+
+  // ---------------------------------------------------------------- VISTA CÓDIGO
+  // Un lienzo de 72 renglones que envuelve la cabeza: cada altura lleva el código de lo que mueve esa zona
+  // (cejas arriba, ojos, mejillas y nariz, boca, mandíbula; el cuello lleva el giro; el cráneo, la emoción y la plástica).
+  const CW = 2048, CH = 1152, ROWS = 72, RH = CH / ROWS;
+  const lienzo = document.createElement('canvas'); lienzo.width = CW; lienzo.height = CH;
+  const ctx = lienzo.getContext('2d');
+  const codeTex = new CanvasTexture(lienzo); codeTex.anisotropy = Math.min(8, r.capabilities.getMaxAnisotropy()); U.tCode.value = codeTex;
+  const zona = (y) => y > 2.45 ? 'craneo' : y > 1.86 ? 'ceja' : y > 1.3 ? 'ojo' : y > 0.64 ? 'mejilla' : y > 0.2 ? 'boca' : y > -0.25 ? 'mandibula' : 'cuello';
+  const DE = {
+    ceja: ARKIT.filter(n => /^brow/.test(n)), ojo: ARKIT.filter(n => /^eye|^Pupil/.test(n)), mejilla: ARKIT.filter(n => /^cheek|^nose/.test(n)),
+    boca: ARKIT.filter(n => /^mouth/.test(n) && !/Close|ShrugLower|LowerDown/.test(n)), mandibula: ARKIT.filter(n => /^jaw|mouthClose|mouthShrugLower|mouthLowerDown/.test(n)),
+    cuello: ['pitch', 'yaw', 'roll', 'thrust', 'tremor'], craneo: ['stretch', 'twist', 'melt', 'bulge'],
+  };
+  const rowY = (i) => 3.8 - 4.8 * (i + 0.5) / ROWS;
+  const filas = new Array(ROWS).fill(null), GLIFOS = '01{}[]();=+-*/<>#ØΔΣ%&|^~$@:._';
+  let codeC = {}, codeEmo = '', codeTick = -1, codeOn = false;
+  ctx.font = '500 ' + Math.round(RH * 0.86) + 'px "JetBrains Mono", "DejaVu Sans Mono", monospace'; const cw = ctx.measureText('M').width;
+  const fmt = (v) => (v < 0 ? '' : ' ') + (+v || 0).toFixed(2);
+  function fila(i, t) {
+    const z = zona(rowY(i)), lista = DE[z], segs = []; let n = 0, k = i * 3;
+    const push = (s, bright) => { segs.push([n, s, bright]); n += s.length; };
+    while (n < CW / cw + 8) {
+      if (z === 'craneo' && k % 5 === 0) { push('emocion = ', 0); push('"' + codeEmo + '"', 1); push(';  ', 0); }
+      else if (z === 'craneo' && k % 5 === 2) { push('t = ', 0); push(t.toFixed(3), 1); push(';  ', 0); }
+      else { const nm = lista[k % lista.length]; push(nm + ' =', 0); push(fmt(codeC[nm]), 1); push(';  ', 0); }
+      k++;
+    }
+    return segs;
+  }
+  function basura(i) { let s = ''; for (let j = 0; j < CW / cw + 2; j++) s += GLIFOS[(Math.random() * GLIFOS.length) | 0]; return [[0, s, 1]]; }
+  function pintarCodigo(t, mAge) {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, CW, CH); ctx.textBaseline = 'alphabetic';
+    const sc = U.uScan.value, rees = mAge < 0.9;
+    for (let i = 0; i < ROWS; i++) {
+      const y = rowY(i);
+      // en cada cambio de expresión el código se reescribe con el láser: arriba ya nuevo, en la línea basura, debajo el de antes
+      if (!rees || y > sc + 0.14 || !filas[i]) filas[i] = fila(i, t); else if (y > sc - 0.14) filas[i] = basura(i);
+      const by = (i + 0.82) * RH;
+      for (const [x, s, b] of filas[i]) { ctx.fillStyle = b ? '#ffffff' : '#6c6c6c'; ctx.fillText(s, x * cw, by); }
+    }
+    codeTex.needsUpdate = true;
+  }
+
+  // ---------------------------------------------------------------- VISTA VECTORES
+  // Cada punto de piel traza una línea de luz desde donde estaría en reposo hasta donde está (amplificado):
+  // la emoción se ve como un campo de fuerzas que sale de la cara.
+  const vecMesh = (() => {
+    const g0 = cara.geometry, P0 = g0.attributes.position.array, N0 = g0.attributes.normal.array, I0 = g0.index.array;
+    const piel0 = g0.groups.find(gr => gr.materialIndex === 0), usado = new Uint8Array(cara.N);
+    for (let j = piel0.start; j < piel0.start + piel0.count; j++) usado[I0[j]] = 1;
+    const sel = []; for (let i = 0; i < cara.N; i += 5) if (usado[i] && P0[i * 3 + 1] > -0.9) sel.push(i);
+    const n = sel.length, pos = new Float32Array(n * 6), nor = new Float32Array(n * 6), end = new Float32Array(n * 2);
+    sel.forEach((v, j) => { for (let e = 0; e < 2; e++) { for (let c = 0; c < 3; c++) { pos[(j * 2 + e) * 3 + c] = P0[v * 3 + c]; nor[(j * 2 + e) * 3 + c] = N0[v * 3 + c]; } end[j * 2 + e] = e; } });
+    const g = new BufferGeometry(); g.setAttribute('position', new Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new Float32BufferAttribute(nor, 3)); g.setAttribute('aEnd', new Float32BufferAttribute(end, 1));
+    g.morphAttributes.position = g0.morphAttributes.position.map(a => { const d = new Float32Array(n * 6); sel.forEach((v, j) => { for (let e = 0; e < 2; e++) for (let c = 0; c < 3; c++) d[(j * 2 + e) * 3 + c] = a.array[v * 3 + c]; }); return new Float32BufferAttribute(d, 3); });
+    g.morphTargetsRelative = true; g.computeBoundingSphere(); g.boundingSphere.radius *= 3;
+    const m = new LineBasicMaterial({ color: 0xffffff, transparent: true, depthWrite: false, blending: AdditiveBlending });
+    m.onBeforeCompile = (s) => {
+      Object.assign(s.uniforms, U, { uAmp: { value: 3.2 }, uVcol: { value: accent } });
+      s.vertexShader = VERT_HEAD + 'attribute float aEnd; uniform float uAmp; varying float vL; varying float vE;\n' + s.vertexShader.replace('#include <morphtarget_vertex>', VERT_POS + `
+{ vec3 r0 = position + normalize(normal) * 0.012; float hw0 = headW(position);
+  vec3 rr = mix(r0, uPivot + uHeadR * (r0 - uPivot) + vec3(0.0, 0.0, uThrust), hw0);
+  vec3 dl = transformed - rr; vL = length(dl); vE = aEnd;
+  vec3 nr = normalize(uHeadR * normal); transformed = rr + (dl * uAmp * 0.6 + nr * min(vL, 0.4) * uAmp * 0.55) * aEnd; } // hacia fuera: un campo que sale de la piel`);
+      s.fragmentShader = 'varying float vL; varying float vE; uniform float uVec; uniform vec3 uVcol;\n' + s.fragmentShader.replace('#include <opaque_fragment>', `#include <opaque_fragment>
+  { float k = smoothstep(0.006, 0.16, vL); vec3 c = mix(vec3(0.75, 0.8, 0.85) * 0.05, uVcol * 3.0 + vec3(0.5), clamp(vE, 0.0, 1.0) * sqrt(clamp(vE, 0.0, 1.0)) * k);
+    gl_FragColor = vec4(c * k * mix(0.02, 1.6, vE * vE) * uVec, 1.0); }`);
+    };
+    m.customProgramCacheKey = () => 'rostro-vectores';
+    const L = new LineSegments(g, m); L.morphTargetInfluences = mesh.morphTargetInfluences; L.frustumCulled = false; L.renderOrder = 4; L.visible = false;
+    sc.add(L); return L;
+  })();
+  let vista = 'auto', vCode = 0, vVec = 0, vAuto = 'normal', vAutoKey = null, lastV = -1;
 
   // composición: MSAA real, recorte de brillos antes del bloom, viñeta y grano sutil
   const rt = new WebGLRenderTarget(16, 16, { type: HalfFloatType, samples: msaa });
@@ -312,7 +391,10 @@ export async function crearEscena(canvas, accentHex, base = './assets/', { msaa 
     // FX: { glitch, estela, atmos, destellos } — cada uno se enciende y se apaga en directo
     fx(o) { Object.assign(FX, o); aplicarFx(); },
     // c: controles (53 expresiones + cabeza); bumps: impulsos bajo la piel
-    pose(c, t, bumps) {
+    // VISTA: 'normal' · 'codigo' · 'vectores' · 'auto' (cambia sola en los cambios de expresión)
+    vista(v) { vista = v; },
+    pose(c, t, bumps, emo) {
+      codeC = c; if (emo) { let mx = -1; for (const k in emo) if (emo[k] > mx) { mx = emo[k]; codeEmo = k; } }
       for (let k = 0; k < ARKIT.length; k++) { const v = c[ARKIT[k]] || 0; w[idx[k]] = v; mesh.morphTargetInfluences[idx[k]] = v; }
       eul.set(c.pitch || 0, c.yaw || 0, c.roll || 0, 'XYZ'); m4.makeRotationFromEuler(eul); U.uHeadR.value.setFromMatrix4(m4);
       U.uStretch.value = c.stretch || 0; U.uTwist.value = c.twist || 0; U.uMelt.value = Math.max(0, c.melt || 0); U.uBulge.value = Math.max(0, c.bulge || 0);
@@ -344,6 +426,12 @@ export async function crearEscena(canvas, accentHex, base = './assets/', { msaa 
       U.uScan.value = 3.3 - Math.min(1, mAge / 0.9) * 5.0; U.uScanK.value = FX.laser ? mk * mk * 1.3 : 0;
       ghostLive = mAge > 0.6; doble.uniforms.uA.value = FX.doble && mAge < 1.2 ? 0.6 * Math.exp(-mAge / 0.38) : 0; doble.uniforms.uS.value = 1 + Math.min(1.2, mAge) * 0.14;
       fin.uniforms.uLensP.value = FX.lente ? Math.exp(-mAge / 0.18) + g * 0.5 : 0;
+      // vista: en AUTO elige en cada cambio de expresión, con la hora del cambio como semilla (consola y salida eligen lo mismo)
+      if (vista === 'auto' && mAge < 50) { const key = Math.round((t - mAge) * 10); if (key !== vAutoKey) { vAutoKey = key; const h = Math.abs(Math.sin(key * 12.9898) * 43758.5453) % 1; vAuto = h < 0.45 ? 'normal' : h < 0.73 ? 'codigo' : 'vectores'; } }
+      const vv = vista === 'auto' ? vAuto : vista, dv = t > lastV && t - lastV < 0.25 ? t - lastV : 1 / 30; lastV = t;
+      const kv = 1 - Math.exp(-dv / 0.12); vCode += ((vv === 'codigo' ? 1 : 0) - vCode) * kv; vVec += ((vv === 'vectores' ? 1 : 0) - vVec) * kv;
+      U.uCode.value = vCode; U.uVec.value = vVec; vecMesh.visible = vVec > 0.01;
+      if (vCode > 0.01 && (t - codeTick > 1 / 15 || t < codeTick)) { codeTick = t; pintarCodigo(t, mAge); }
       fin.uniforms.uT.value = t % 97; fin.uniforms.uFade.value = fade;
       glitch.uniforms.uG.value = Math.min(1, g); glitch.uniforms.uT.value = Math.floor(t * 24) % 97; glitch.enabled = FX.glitch && g > 0.01;
       // la estela dura en segundos, no en fotogramas (igual a 60 que a 30 fps), y se borra en cada corte de plano
