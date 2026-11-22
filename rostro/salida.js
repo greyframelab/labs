@@ -23,7 +23,7 @@ ch.onmessage = (e) => {
     // el reloj se suaviza: pequeñas diferencias de entrega no se notan
     if (d.code !== code) return;                                   // reloj de una pieza que aún no tiene
     if (!haveClock || Math.abs(d.start - start) > 250) start = d.start; else start += (d.start - start) * 0.05;
-    haveClock = true; sala = d; if (d.fx) esc.fx(d.fx);
+    haveClock = true; sala = d; if (d.fx) esc.fx(d.fx); if (d.vista) esc.vista(d.vista);
   }
 };
 const vivo = () => ch.postMessage({ type: 'vivo', code, id }); setInterval(vivo, 500); vivo();
@@ -54,6 +54,6 @@ function frame(ts) {
   if (pl.at !== lastCut) { if (low > 2.5 && n < NIV.length - 1) { n++; low = 0; esc.calidad(NIV[n].l); size(); } lastCut = pl.at; }
   const fadeP = P.continuo ? (P.primera ? Math.min(1, tRaw / 1.2) : 1) : Math.max(0, Math.min(1, tRaw / 1.2, (P.dur + 1.5 - tRaw) / 2.2));
   esc.acento(accAt(P, tt));
-  esc.pose(st.c, tt, st.bumps); esc.camara(pl.name, pl.since); esc.luz(st.rim, st.sweep, st.swx, sala.bri); esc.render(tt, fadeP * sala.fadeOut, st.glitch, st.speed, st.morphAge);
+  esc.pose(st.c, tt, st.bumps, st.emo); esc.camara(pl.name, pl.since); esc.luz(st.rim, st.sweep, st.swx, sala.bri); esc.render(tt, fadeP * sala.fadeOut, st.glitch, st.speed, st.morphAge);
 }
 requestAnimationFrame(frame);
