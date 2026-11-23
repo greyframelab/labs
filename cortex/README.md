@@ -16,8 +16,8 @@ Un cerebro hecho de neuronas, proyectado en sala oscura, que toca su propio soni
 ### El instrumento (PÚBLICO)
 - **Te oye:** el lóbulo temporal (el oído) vibra con lo que llega al micro.
 - **Golpe** (palmada, chasquido, golpe en la mesa): dispara una región y su voz. El timbre sale del brillo del sonido: sordo → pulso de sub (occipital); medio → cuerda física (central) o voz en granos (temporal); brillante → metal FM (frontal) o micro-clics (cerebelo). Cada golpe corta el plano a la región que suena.
-- **Voz sostenida:** la región se queda encendida mientras dura y el cerebro sostiene la nota, ajustada a la escala del sueño (grave → temporal, media → parietal, aguda → frontal). Travelling lento sobre la corteza.
-- **Pregunta y respuesta:** al callarse, el cerebro contesta la frase transformada (otras regiones y timbres; en espejo, a otra velocidad o transportada).
+- **Voz sostenida, la voz dibuja:** el cerebro sostiene la nota ajustada a la escala del sueño y la sigue si cambias de tono. La luz viaja por la corteza con tu tono: grave atrás (occipital), agudo delante (frontal). Plano lateral del hemisferio para verlo.
+- **Pregunta y respuesta:** al callarse, se ve la señal cruzar la corteza (un arco de luz) de la región que tocaste a la que contesta, y el cerebro devuelve la frase transformada y armonizada (otras regiones y timbres; en espejo, a otra velocidad o transportada).
 - **Aprende el tempo:** con palmas regulares se sincroniza y construye un groove IDM encima.
 - **Ruptura:** un sonido muy fuerte con la sala encendida desgarra el cerebro, aparece la tractografía y la cámara viaja dentro. Después, ECO y vuelta al sueño.
 - **Tu voz en granos:** los últimos segundos de voz se quedan **solo en memoria** para que el lóbulo temporal la cante en granos. No se graba en disco, no se envía, no se guarda; se borra al cerrar.
@@ -71,14 +71,14 @@ Un cerebro hecho de neuronas, proyectado en sala oscura, que toca su propio soni
 Calidad automática: si no llega a 60 fps, por este orden baja la resolución al 80 %, fija 30 fps exactos, dibuja el 65 % de las partículas, baja al 60 % y al 45 % de las partículas. Si va sobrado, recupera poco a poco. Los cambios esperan a un corte de plano.
 
 ## Sonido
-Motor WebAudio en vivo (referencia: Autechre; seco, ritmo en plantillas que rotan): bombo diseñado, micro-golpes FM (DATOS), bajo, sub, dron FM, dron aditivo con formante y la segunda menor de la ruptura. Estante −6 dB desde 2,2 kHz, compresor y limitador en el máster; ≈ −13 LUFS (en sala manda el volumen).
+Voces físicas en un AudioWorklet propio (`dsp.js`): cuerda Karplus-Strong con púa y brillo, y chapa por síntesis modal (metal golpeado, sin campanas). Bombo de cuerpo, armónico y clic; hats tipo 909 tratados IDM (rejilla euclidiana que rota, ratchets a 1/32, abierto a contratiempo). Motor WebAudio en vivo (referencia: Autechre; seco, ritmo en plantillas que rotan): bombo diseñado, micro-golpes FM (DATOS), bajo, sub, dron FM, dron aditivo con formante y la segunda menor de la ruptura. Estante −6 dB desde 2,2 kHz, compresor y limitador en el máster; ≈ −13 LUFS (en sala manda el volumen).
 
 ## Herramientas
 - `tools/eeg_night.py n16.edf`: regenera `noche.bin` / `noche.json` (2 Hz, 6 bandas × 5 canales).
 - `tools/preview.js`: render offline (frames + audio) con el mismo motor. Con `SIM=1`, visitantes simulados (palmadas, voz, silencio, palmas a tempo, un grito) para validar el modo PÚBLICO. `index.html?render=1` expone `window.CORTEX.prepara(dur)`, `frame(t)` y `audio(dur)`.
 
 ## Código
-`partitura.js` (noche de EEG y sueños) · `oido.js` (micro) · `instrumento.js` (lógica: AUTOPLAY, instrumento, cámara) · `sonido.js` (motor WebAudio) · `ddj.js` (DDJ-200) · `imagen.js` (WebGL2) · `cerebro.js` / `red.js` / `shaders.js` (materia) · `main.js` (arranque).
+`partitura.js` (noche de EEG y sueños) · `dsp.js` (voces físicas, AudioWorklet) · `oido.js` (micro) · `instrumento.js` (lógica: AUTOPLAY, instrumento, cámara) · `sonido.js` (motor WebAudio) · `ddj.js` (DDJ-200) · `imagen.js` (WebGL2) · `cerebro.js` / `red.js` / `shaders.js` (materia) · `main.js` (arranque).
 
 ## App de escritorio
 [`cortex-app/`](../cortex-app/README.md): .exe y .dmg sin internet, con modo instalación.

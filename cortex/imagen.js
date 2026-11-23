@@ -125,7 +125,7 @@ function camara(S,u,t){
   const s=S.s, side=(s<.5?-1:1);
   switch(S.type){
     case 'orbit':  { const dir=s<.5?1:-1, az=s*6.28+dir*ease(u)*1.3, e=sph(3.3-.6*ease(u),az,-.05+.35*H1(s*91)+.15*u); return {eye:e,tgt:[0,-.05,0],fov:36,focus:Math.hypot(...e),ap:.006,scene:'out'}; }
-    case 'sueno':  { const az=s*6.28+u*1.6; const e=sph(3.6,az,.12+.1*Math.sin(u*6)); return {eye:e,tgt:[0,-.05,0],fov:34,focus:3.6,ap:.005,scene:'out'}; }
+    case 'sueno':  { const az=s*6.28+u*1.6; const e=sph(2.95+.15*Math.sin(u*3),az,.18+.12*Math.sin(u*6)); return {eye:e,tgt:[0,-.08,0],fov:34,focus:Math.hypot(...e)-.2,ap:.006,scene:'out'}; }
     case 'lateral':{ const z=lerp(1.1,-.7,u)*side; return {eye:[2.55*side*-1,.18+.1*s,z],tgt:[0,-.08,z*.25],fov:38,focus:2.6,ap:.007,scene:'out'}; }
     case 'top':    { const az=s*6.28+u*.5; return {eye:[Math.sin(az)*.9,2.7-.3*u,Math.cos(az)*.9],tgt:[0,0,0],fov:34,focus:2.6,ap:.007,scene:'out',roll:az*.2}; }
     case 'low':    { const az=(s<.5?1.9:4.4)+u*.25; const e=sph(2.5,az,-.12); return {eye:[e[0],-.32,e[2]],tgt:[0,-.25,-.25],fov:36,focus:2.45,ap:.008,scene:'out'}; }
@@ -141,6 +141,7 @@ function camara(S,u,t){
     case 'region': { const R=REG[S.reg??0], c=[R[0]*(S.sx||1),R[1],R[2]]; const n=norm([c[0]*1.6,c[1]*.8+.3,c[2]]); const k=ease(u), d=2.5-.3*k;
       const tn=norm(cross(n,[0,1,0])), e=[n[0]*d+tn[0]*(s-.5)*.6,n[1]*d,n[2]*d+tn[2]*(s-.5)*.6], tg=[c[0]*.55,c[1]*.55,c[2]*.55];
       return {eye:e,tgt:tg,fov:36,focus:Math.hypot(...sub(e,c)),ap:.008,scene:'out'}; }
+    case 'voz':    { const sx=S.sx||1; const k=ease(u); return {eye:[sx*2.4,.32-.1*k,lerp(.35,-.15,k)],tgt:[sx*.18,.04,lerp(.05,-.05,k)],fov:38,focus:2.3,ap:.006,scene:'out'}; }
     case 'burst':  { const az=s*6.28; return {eye:sph(3.3+u*.3,az,.15),tgt:[0,-.05,0],fov:38,focus:3.4,ap:.006,scene:'out'}; }
     case 'tract':  { const az=s*6.28+u*.6; const e=sph(2.2-.3*u,az,.25); return {eye:e,tgt:[0,0,0],fov:38,focus:Math.hypot(...e),ap:.007,scene:'out',roll:(s-.5)*.3}; }
     case 'dive':   { const az=s*6.28; const k=ease(u); return {eye:sph(lerp(3.1,.35,k),az,.15),tgt:[0,0,0],fov:lerp(38,70,k),focus:lerp(3,.5,k),ap:.006,scene:'out'}; }
@@ -150,6 +151,9 @@ function camara(S,u,t){
     default: return {eye:[0,0,3],tgt:[0,0,0],fov:36,focus:3,ap:.006,scene:'black'};
   }
 }
+// la ruta de la voz por la corteza: occipital (grave) → parietal → central → frontal (agudo)
+function rutaVoz(m,sx){ const x=clamp((m-(INST.S?INST.S.root:38)-10)/26,0,1)*3, i=Math.min(2,Math.floor(x)), f=x-i, Rt=[REG[3],REG[2],REG[1],REG[0]];
+  const a=Rt[i], b=Rt[i+1]; const p=[lerp(a[0],b[0],f)*sx,lerp(a[1],b[1],f)+.06*Math.sin(f*3.14),lerp(a[2],b[2],f)]; return p; }
 function shotAt(t){ let r=null; for(const S of TL.shots){ if(S.t0<=t+1e-6) r=S; else break; } return r||TL.shots[0]||{t0:0,type:'sueno',s:.3,dur:60}; }
 
 // estado visual en el instante t
@@ -167,9 +171,12 @@ function estado(t){
   C.eye=C.eye.map((v,i)=>v+sh[i]); C.fov-=kenv*(acto==='RUPTURA'?2.5:1);
   // ondas: las 8 más recientes (+ las sostenidas por la voz)
   const W8=[],A8=[];
-  for(const h of TL.holds){ if(h.t>t || W8.length>=8) continue; const R=REG[h.reg]; const held=h.t1==null||h.t1>t; const tt=held?t-h.t:(h.t1-h.t)+(t-h.t1);
-    const Rr=held?Math.min(tt*.9,.34)+.02*Math.sin(t*6):Math.min((h.t1-h.t)*.9,.34)+(t-h.t1)*1.2; if(Rr>1.8) continue;
-    W8.push(R[0]*h.sx,R[1],R[2],Rr); A8.push(held?.9:.8); }
+  for(const h of TL.holds){ if(h.t>t || W8.length>=8) continue; const held=h.t1==null||h.t1>t;
+    let mm=h.m0; for(const q of (h.samples||[])) if(q.t<=t) mm=q.m;
+    const c=h.samples&&h.samples.length>1?rutaVoz(mm,h.sx):[REG[h.reg][0]*h.sx,REG[h.reg][1],REG[h.reg][2]];
+    const tt=held?t-h.t:(h.t1-h.t)+(t-h.t1);
+    const Rr=held?Math.min(tt*.9,.22)+.02*Math.sin(t*6):Math.min((h.t1-h.t)*.9,.22)+(t-h.t1)*1.2; if(Rr>1.8) continue;
+    W8.push(...c,Rr); A8.push(held?1.1:.8); }
   for(let i=TL.waves.length-1;i>=0&&W8.length<32;i--){ const w=TL.waves[i]; if(w.t>t) continue; const R=(t-w.t)*.95; if(R>1.8) break; W8.push(...w.c,R); A8.push(w.amp??1); }
   while(W8.length<32){ W8.push(0,0,0,-1); A8.push(0); }
   // estallido
@@ -189,7 +196,10 @@ function estado(t){
   const sp=espectro(t);
   // persistencia (fosfeno): más larga con la voz y en la ruptura; 0 justo en el corte
   let persist=acto==='RUPTURA'?.55:sp.voz?.66:.45; if(t-S.t0<1/50) persist=0; if(C.scene==='in') persist*=.85;
-  return {S,u,C,kenv,ki,lk,W8,A8,burst,gli,shock,dp:S.type==='black'?1:0,dark:sp.dark,sp,spread:clamp(.15+.55*sp.be,0,.85),tract,persist,acto};
+  // arcos de propagación activos
+  const AR=[],BR=[]; for(let i=TL.arcs.length-1;i>=0&&AR.length<8;i--){ const a=TL.arcs[i]; const pr=(t-a.t)/a.dur; if(pr<0||pr>1.15) continue; AR.push(...a.A,Math.min(pr,1)); BR.push(...a.B); }
+  while(AR.length<8){ AR.push(0,0,0,-1); BR.push(0,0,0); }
+  return {S,u,C,kenv,ki,lk,W8,A8,AR,BR,burst,gli,shock,dp:S.type==='black'?1:0,dark:sp.dark,sp,spread:clamp(.15+.55*sp.be,0,.85),tract,persist,acto};
 }
 
 let RS=1,RSi=1;
@@ -223,7 +233,7 @@ function render(t){
     gl.uniformMatrix4fv(u('VP'),false,VP); gl.uniform3fv(u('cam'),C.eye); gl.uniform1f(u('T'),t); gl.uniform1f(u('focus'),C.focus);
     gl.uniform1f(u('RY'),H); gl.uniform1f(u('burst'),E.burst); gl.uniform1f(u('kick'),E.kenv); gl.uniform1f(u('dark'),E.dark); gl.uniform1f(u('fireAmt'),1);
     gl.uniform4fv(u('wv[0]'),W8); gl.uniform1fv(u('wa[0]'),A8); gl.uniform3fv(u('neon'),NEON); gl.uniform1f(u('rs'),RS);
-    gl.uniform1f(u('oreja'),ST.mode==='auto'?0:(instAt(t).oreja||0)); gl.uniform1f(u('cortexA'),cortexA);
+    gl.uniform1f(u('oreja'),ST.mode==='auto'?0:(instAt(t).oreja||0)); gl.uniform4fv(u('arA[0]'),new Float32Array(E.AR)); gl.uniform3fv(u('arB[0]'),new Float32Array(E.BR)); gl.uniform1f(u('cortexA'),cortexA);
     if(E.tract<.5){ gl.disable(gl.BLEND); gl.colorMask(false,false,false,false); gl.uniform1f(u('inset'),C.focus<1.2?.06:.03); gl.uniform1f(u('ap'),0); gl.drawArrays(gl.POINTS,0,Math.floor(G.nA*PF)); }
     gl.colorMask(true,true,true,true); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE,gl.ONE); gl.depthMask(false); gl.depthFunc(gl.LEQUAL);
     if(E.tract>=.5) gl.disable(gl.DEPTH_TEST);
@@ -233,7 +243,7 @@ function render(t){
     gl.uniform4fv(l('wv[0]'),W8); gl.uniform1fv(l('wa[0]'),A8); gl.uniform3fv(l('neon'),NEON); gl.uniform1f(l('lr'),clamp(W*H/(1600*900),.15,2)); gl.drawArrays(gl.LINES,0,G.nL);
     if(E.tract>.01){ gl.disable(gl.DEPTH_TEST); gl.useProgram(G.TT); gl.bindVertexArray(G.vaT); const k=U.TT;
       gl.uniformMatrix4fv(k('VP'),false,VP); gl.uniform1f(k('T'),t); gl.uniform1f(k('tract'),E.tract); gl.uniform1f(k('focus'),C.focus); gl.uniform1f(k('ap'),C.ap); gl.uniform1f(k('RY'),H);
-      gl.uniform4fv(k('wv[0]'),W8); gl.uniform1fv(k('wa[0]'),A8); gl.uniform3fv(k('neon'),NEON); gl.uniform1f(k('lr'),clamp(W*H/(1600*900),.15,2)); gl.drawArrays(gl.LINES,0,G.nT); }
+      gl.uniform4fv(k('wv[0]'),W8); gl.uniform1fv(k('wa[0]'),A8); gl.uniform4fv(k('arA[0]'),new Float32Array(E.AR)); gl.uniform3fv(k('arB[0]'),new Float32Array(E.BR)); gl.uniform3fv(k('neon'),NEON); gl.uniform1f(k('lr'),clamp(W*H/(1600*900),.15,2)); gl.drawArrays(gl.LINES,0,G.nT); }
   } else if(C.scene==='in'){
     gl.disable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE,gl.ONE);
     const lkT=E.lk?t-E.lk.t:9;

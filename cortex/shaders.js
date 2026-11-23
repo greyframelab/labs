@@ -2,7 +2,7 @@ const B_VS=`#version 300 es
 precision highp float;
 in vec4 a; in vec2 b; in vec3 nr;
 uniform mat4 VP; uniform float T, focus, ap, RY, burst, kick, dark, fireAmt, inset, rs, oreja, cortexA; uniform vec3 cam;
-uniform vec4 wv[8]; uniform float wa[8];
+uniform vec4 wv[8]; uniform float wa[8]; uniform vec4 arA[2]; uniform vec3 arB[2];
 out float vI; out float vS; out float vN; out float vH;
 float hh(float n){return fract(sin(n*12.9898)*43758.5453);}
 void main(){
@@ -25,6 +25,12 @@ void main(){
     fire+=(exp(-pow((d-R)*34.,2.))*2.8 + step(d,R)*exp(-(R-d)*6.)*.32)*step(0.,R)*(1.-smoothstep(.3,1.8,R))*wa[i]; }
   // luz bajo la corteza: el disparo también se ve dentro de los surcos, como luz atrapada
   fire*=fireAmt*(.22+.78*pow(crest,1.5));
+  // ARCOS: la señal cruza la corteza de una región a otra (pregunta → respuesta)
+  for(int j=0;j<2;j++){ float pr=arA[j].w; if(pr<0.) continue;
+    vec3 A=arA[j].xyz, B=arB[j]; float rA=length(A), rB=length(B);
+    for(int k=0;k<5;k++){ float q=pr-float(k)*.07; if(q<0.) break;
+      vec3 M=normalize(mix(normalize(A),normalize(B),q))*mix(rA,rB,q)*1.18;
+      float dm=length(p-M); fire+=exp(-dm*dm*220.)*(k==0?3.2:1.1*exp(-float(k)*.6))*(.35+.65*crest); } }
   // EL OÍDO: el lóbulo temporal vibra con lo que oye la sala
   float de2=min(length(p-vec3(.47,-.22,.18)),length(p-vec3(-.47,-.22,.18)));
   fire+=oreja*exp(-de2*de2*28.)*(.25+.75*crest)*(.6+.4*sin(T*40.+hr*30.))*1.1;
@@ -165,13 +171,14 @@ precision highp float; in float vI; uniform vec3 neon; out vec4 o; void main(){ 
 const T_VS=`#version 300 es
 precision highp float;
 in vec4 a; in vec2 b;
-uniform mat4 VP; uniform float T, tract, focus, ap, RY, lr; uniform vec4 wv[8]; uniform float wa[8];
+uniform mat4 VP; uniform float T, tract, focus, ap, RY, lr; uniform vec4 wv[8]; uniform float wa[8]; uniform vec4 arA[2]; uniform vec3 arB[2];
 out float vI; out float vN;
 float hh(float n){return fract(sin(n*12.9898)*43758.5453);}
 void main(){ vec4 cp=VP*vec4(a.xyz,1.); gl_Position=cp; float dep=cp.w; float id=b.x;
   float sp=.6+.8*hh(id); float ph=fract(T*sp*.5+hh(id*3.)); float L=1.4;
   float imp=exp(-pow((a.w-ph*L)*16.,2.))*step(.55,hh(id*7.+floor(T*sp*.5+hh(id*3.))));
   float w=0.; for(int i=0;i<8;i++){ float d=length(a.xyz-wv[i].xyz); w+=exp(-pow((d-wv[i].w)*9.,2.))*step(0.,wv[i].w)*wa[i]; }
+  for(int j=0;j<2;j++){ float pr=arA[j].w; if(pr<0.) continue; vec3 M=mix(arA[j].xyz,arB[j],pr)*.7; float dm=length(a.xyz-M); w+=exp(-dm*dm*40.)*1.5; }
   float coc=ap*abs(dep-focus)/max(dep,.05)*RY;
   float stem=smoothstep(.12,.42,length(a.xyz-vec3(0.,-.4,-.27)));     // donde los haces se juntan no se quema
   vI=tract*(.006+imp*.5+w*.22)*exp(-coc*.25)*stem*lr; vN=clamp((imp+w)*2.,0.,1.); }`;
