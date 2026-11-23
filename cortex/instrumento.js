@@ -5,8 +5,8 @@
 // · PÚBLICO / INTÉRPRETE: el cerebro duerme hasta que alguien lo toca (micro o DDJ-200);
 //   cada gesto suena y se ve al instante, el cerebro contesta, aprende el tempo y llega a la ruptura.
 // ======================================================================
-const TL={list:['kicks','blips','bass','rats','glitch','hits','latidos','notasOn','notasOff'],
-  kicks:[],blips:[],bass:[],rats:[],glitch:[],hits:[],latidos:[],notasOn:[],notasOff:[],
+const TL={list:['kicks','blips','bass','rats','glitch','hits','latidos','notasOn','notasMod','notasOff','hats'],
+  kicks:[],blips:[],bass:[],rats:[],glitch:[],hits:[],latidos:[],notasOn:[],notasMod:[],notasOff:[],hats:[],arcs:[],
   waves:[],holds:[],shots:[],impacts:[],bars:[],visitante:[],tract:[]};
 const euclid=(k,n,r)=>Array.from({length:n},(_,i)=>(((i+r)*k)%n)<k);
 function insertar(arr,e,key='t'){ let i=arr.length; while(i>0 && arr[i-1][key]>e[key]) i--; arr.splice(i,0,e); return e; }
@@ -42,6 +42,13 @@ function grooveBar(t0,beat,acto,gb,be,ga,th,de,S){
   if(acto!=='SENAL'){ const pb=euclid(acto==='RUPTURA'?7:5,16,gb%4), root=S?S.root:38;
     for(let s=1;s<16;s++) if(pb[s]) insertar(TL.bass,{t:tq(s),m:(acto==='RUPTURA'&&s>=10)?root+1:root,d:acto==='RUPTURA'?.22:.32,v:.5+.4*Math.min(th,1.2)*(acto==='ECO'?.6:1)}); }
   if(acto==='RUPTURA' && (ga>.85||r(77)<.4)) insertar(TL.glitch,{t:t0+14*st,len:2*st});
+  // hats tipo 909, muy IDM: rejilla euclidiana que rota, ratchets a 1/32 con crescendo al final de frase, abierto a contratiempo
+  if(acto==='PULSO'||acto==='TENSION'||acto==='RUPTURA'){
+    const kh=clamp(Math.round(5+7*be),5,12), ph=euclid(kh,16,(gb*5+3)%16);
+    for(let s=0;s<16;s++) if(ph[s] && !(gb%2===1&&s>=13)) insertar(TL.hats,{t:tq(s)+.004,v:(s%4===2?.55:.32)*(acto==='RUPTURA'?1:.8),ab:false,pan:(s%3-1)*.35});
+    for(const s of [2,6,10,14]) if(r(200+s)<.35+.4*be) insertar(TL.hats,{t:tq(s),v:.38,ab:true,pan:.25});
+    if(gb%2===1) for(let i=0;i<6;i++) insertar(TL.hats,{t:t0+13*st+i*st/2,v:.18+.07*i,ab:false,pan:(i%2?.4:-.4)});
+  }
 }
 
 // ================= AUTOPLAY: la noche toca sola =================
@@ -105,6 +112,8 @@ const REG_OCT=[1,1,1,0,1,2];
 function regPorBrillo(b,n){ if(b<.22) return 3; if(b<.42) return n%2?1:4; if(b<.62) return n%3===0?5:1; return n%2?0:5; }
 INST.evento=function(ev){
   const I=INST, S=I.S, t=ev.t; I.cnt++;
+  if(ev.kind==='notaMod'){ const H=TL.holds.find(h=>h.id===ev.id&&h.t1==null); if(!H) return; const m=ev.m??cuantiza(I.S,ev.f);
+    if(m!==H.mLast){ H.mLast=m; H.samples.push({t,m}); insertar(TL.notasMod,{t,id:ev.id,m}); emitir('notasMod'); } return; }
   if(ev.kind==='notaOff'){ insertar(TL.notasOff,{t,id:ev.id}); const H=TL.holds.find(h=>h.id===ev.id&&h.t1==null); if(H) H.t1=t; emitir('notasOff'); return; }
   I.lastEv=t;
   if(I.acto==='REPOSO'){ I.despertar=t; nuevaSesion(t); I.acto='VIVO';             // se despierta: onda por todo el cerebro
@@ -113,9 +122,9 @@ INST.evento=function(ev){
   if(ev.kind==='notaOn'){
     if(reg==null) reg=ev.f<150?4:ev.f<300?2:0;
     m=m??cuantiza(S,ev.f||220); const sx=lado(pan,t);
-    insertar(TL.notasOn,{t,id:ev.id,m,v,reg,pan}); TL.holds.push({id:ev.id,t,t1:null,reg,sx}); emitir('notasOn');
+    insertar(TL.notasOn,{t,id:ev.id,m,v,reg,pan}); TL.holds.push({id:ev.id,t,t1:null,reg,sx,m0:m,mLast:m,samples:[{t,m}]}); emitir('notasOn');
     I.E=clamp(I.E+.08*v,0,1); I.voz=true;
-    corte(t,'trace',{reg,sx,dur:6,prio:1});
+    corte(t,'voz',{reg,sx,dur:6,prio:1});      // plano lateral del hemisferio: se ve la luz viajar con el tono
     return;
   }
   // golpe / pad / respuesta
@@ -136,7 +145,9 @@ INST.evento=function(ev){
   const tipo=fuerte&&I.acto!=='RUPTURA'?'in':(ev.src==='resp'?(I.cnt%2?'region':'macro'):(I.cnt%3===2?'region':'macro'));
   corte(t,I.acto==='RUPTURA'?(I.cnt%3?'in':'tract'):tipo,{reg,sx,dur:1.4,z:H1(t)*50,roll:(H1(t*3)-.5)*.6,side:H1(t*5)});
 };
-function corte(t,type,o){ const I=INST; const gap=o.prio?.15:.38; if(t-I.lastCut<gap) return; I.lastCut=t; shot(t,type,{...o,live:true}); }
+function corte(t,type,o){ const I=INST; const gap=o.prio?0:.38; if(t-I.lastCut<gap) return;
+  // mientras alguien sostiene la voz, el plano es suyo: las respuestas no lo cortan
+  if(!o.prio && TL.holds.some(h=>h.t<=t&&(h.t1==null||h.t1>t))) return; I.lastCut=t; shot(t,type,{...o,live:true}); }
 function emitir(L){ if(OFF||!window.MOTOR) return; const off=MOTOR.off, arr=TL[L]; for(let i=arr.length-1;i>=0&&i>=arr.length-12;i--){ const e=arr[i]; if(!e.done && e.t<MOTOR.horizonte) MOTOR.tocar(L,e,off); } }
 function detectarTempo(t){ const O=INST.onsets; if(O.length<4) return; const d=[]; for(let i=O.length-4;i<O.length-1;i++) d.push(O[i+1]-O[i]);
   const m=d.reduce((a,b)=>a+b)/d.length, sd=Math.sqrt(d.reduce((a,b)=>a+(b-m)**2,0)/d.length);
@@ -153,7 +164,12 @@ function responder(t){ const I=INST, F=I.frase.slice(); I.frase=[]; if(F.length<
   let evs=F.map(e=>({dt:(e.t-base)*stretch,reg:(e.reg+1+modo)%6,v:clamp(e.v*.85,.3,.9),m:e.m+[0,3,-5,7][modo]}));
   if(modo===1) evs=evs.map(e=>({...e,dt:dur*stretch-e.dt})).reverse();
   if(I.tempo){ const q=I.tempo.beat/2; evs=evs.map(e=>({...e,dt:Math.round(e.dt/q)*q})); }
-  const t0=t+.18; for(const e of evs){ const m=I.S? cuantiza(I.S,hz(e.m)) : e.m; INST.evento({t:t0+e.dt,kind:'golpe',reg:e.reg,m,vel:e.v,pan:-(e.reg%2?.4:-.4),src:'resp'}); }
+  const t0=t+.32;
+  // la señal cruza el cerebro: de la última región que tocó el visitante a la primera que contesta
+  const A=REG[F[F.length-1].reg], B=REG[evs[0].reg], sA=H1(t)<.5?-1:1;
+  TL.arcs.push({t:t+.02,dur:.3,A:[A[0]*sA,A[1],A[2]],B:[B[0]*-sA,B[1],B[2]]});
+  evs.forEach((e,i)=>{ const m=I.S? cuantiza(I.S,hz(e.m)) : e.m; INST.evento({t:t0+e.dt,kind:'golpe',reg:e.reg,m,vel:e.v,pan:-(e.reg%2?.4:-.4),src:'resp'});
+    if(i%2===0) INST.evento({t:t0+e.dt+.012,kind:'golpe',reg:(e.reg+3)%6,m:grado(I.S,0,0)+ (cuantiza(I.S,hz(m+4))-grado(I.S,0,0)),vel:e.v*.55,pan:(e.reg%2?.4:-.4),src:'resp'}); });
   I.respHasta=t0+evs[evs.length-1].dt+.3; }
 // cada fotograma (o cada paso de la simulación)
 INST.tick=function(t){
@@ -211,7 +227,7 @@ function asegurar(t){ if(ST.mode!=='auto') return; while(TL.bars.length===0 || T
 function guionVisitantes(){
   const E=[]; const g=(t,b,v)=>E.push({t,kind:'golpe',bright:b,vel:v,pan:(H1(t)-.5)*.8,src:'sim'});
   g(6.0,.8,.75); g(6.55,.75,.7); g(7.05,.15,.8); g(7.4,.5,.65);
-  E.push({t:10.0,kind:'notaOn',id:'s1',f:196,vel:.75,pan:-.4,src:'sim'}); E.push({t:11.9,kind:'notaOff',id:'s1',src:'sim'});
+  E.push({t:10.0,kind:'notaOn',id:'s1',f:147,vel:.75,pan:-.4,src:'sim'}); for(let k=1;k<=30;k++) E.push({t:10.2+k*.05,kind:'notaMod',id:'s1',f:147*Math.pow(2,k/30*1.6),src:'sim'}); E.push({t:11.9,kind:'notaOff',id:'s1',src:'sim'});
   E.push({t:12.5,kind:'notaOn',id:'s2',f:330,vel:.7,pan:.4,src:'sim'}); E.push({t:13.4,kind:'notaOff',id:'s2',src:'sim'});
   for(let i=0;i<10;i++) g(15+i*.5,i%4===0?.2:.7,i%4===0?.85:.65);
   g(20.3,.6,.7); g(20.8,.3,.75); E.push({t:21.2,kind:'notaOn',id:'s3',f:247,vel:.8,pan:0,src:'sim'}); E.push({t:22.0,kind:'notaOff',id:'s3',src:'sim'});

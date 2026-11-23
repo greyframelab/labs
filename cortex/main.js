@@ -22,7 +22,7 @@ async function iniciar(){
     window.CORTEX={ready:true,
       prepara:(dur)=>{ if(sim) simular(dur); else asegurar(dur+4); return {hits:TL.hits.length,shots:TL.shots.length,actos:TL.shots.map(s=>s.type).slice(0,80).join(',')}; },
       frame:(t)=>{ if(!sim) asegurar(t+4); render(t); return cv.toDataURL('image/jpeg',.94);},
-      audio:async(dur)=>{ if(!sim) asegurar(dur+4); const ctx=new OfflineAudioContext(2,Math.ceil(48000*dur),48000); const M=new Motor(ctx,INST.S);
+      audio:async(dur)=>{ if(!sim) asegurar(dur+4); const ctx=new OfflineAudioContext(2,Math.ceil(48000*dur),48000); const M=new Motor(ctx,INST.S); await M.init();
         if(sim){ M.voz=vozSintetica(ctx,196); M.vozHz=196; visitantesAudio(ctx,M); }
         for(const L of TL.list) for(const e of TL[L]) e.done=false;
         M.agendaTodo=true; M.agenda(0,dur,0); const buf=await ctx.startRendering(); return wav(buf); }};
@@ -51,10 +51,10 @@ async function arrancar(modo){
   document.getElementById('inicio').style.display='none'; document.body.style.cursor='none';
   const ctx=new AudioContext({latencyHint:'interactive'}); await ctx.resume();
   ST.mode=modo;
-  for(const L of [...TL.list,'waves','holds','shots','impacts','bars','tract']) TL[L].length=0;
+  for(const L of [...TL.list,'waves','holds','shots','impacts','bars','tract','arcs']) TL[L].length=0;
   if(modo!=='auto'){ try{ await activarOido(ctx); }catch(e){ if(modo==='pub') ST.mode='auto'; } }
   iniciarDDJ();
-  const M=new Motor(ctx,INST.S); window.MOTOR=M; const t0=ctx.currentTime+.15; M.off=t0; let agendado=0; M.horizonte=0;
+  const M=new Motor(ctx,INST.S); await M.init(); window.MOTOR=M; const t0=ctx.currentTime+.15; M.off=t0; let agendado=0; M.horizonte=0;
   window.AHORA=()=>ctx.currentTime-t0;
   if(ST.mode!=='auto'){ shot(0,'sueno',{dur:60,live:true}); INST.lastEv=-99; INST.acto='REPOSO'; }
   Q.base=[W,H];

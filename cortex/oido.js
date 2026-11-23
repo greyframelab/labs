@@ -50,6 +50,7 @@ function escuchar(tp,ctx,inst){
   const voiced=cl>.86 && f0>0;
   if(voiced){ if(OIDO.vozDesde<0) OIDO.vozDesde=tp; OIDO.vozHasta=tp; OIDO.f0=OIDO.f0?OIDO.f0*.8+f0*.2:f0; }
   if(voiced && !OIDO.notaId && tp-OIDO.vozDesde>.25){ OIDO.notaId='v'+Math.round(tp*1000); inst.evento({t:tp+.02,kind:'notaOn',id:OIDO.notaId,f:OIDO.f0,vel:clamp(lvl*1.3,.3,1),pan:OIDO.lado,src:'mic'}); }
+  if(OIDO.notaId && voiced && tp-(OIDO._mod||0)>.05){ OIDO._mod=tp; inst.evento({t:tp+.02,kind:'notaMod',id:OIDO.notaId,f:OIDO.f0,src:'mic'}); }   // la voz dibuja
   if(OIDO.notaId && tp-OIDO.vozHasta>.18){ inst.evento({t:tp+.02,kind:'notaOff',id:OIDO.notaId,dur:OIDO.vozHasta-OIDO.vozDesde,src:'mic'});
     if(window.MOTOR && OIDO.vozHasta-OIDO.vozDesde>.4){ const b=vozReciente(ctx,Math.min(2.5,OIDO.vozHasta-OIDO.vozDesde+.2)); if(b){ MOTOR.voz=b; MOTOR.vozHz=OIDO.f0; } }
     OIDO.notaId=null; OIDO.vozDesde=-1; OIDO.f0=0; }
