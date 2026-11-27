@@ -9,7 +9,7 @@
 // ======================================================================
 (function(){
 const VUELTA=34, T_RUPTURA=22.3;
-const PLANOS=[[0,'HEROE',.55],[6,'CIELO',.9],[11,'CUENCO',.9],[16,'NOCHE',.9],[20.6,'NEGRO',0],[22.3,'NOMBRE',1.25],[25.3,'HEROE',1.2],[28,'NOCHE',.7]];
+const PLANOS=[[0,'PERFIL',.85],[6,'BAJO',.9],[11,'CUENCO',.9],[16,'CIELO',.9],[20.6,'NEGRO',0],[22.3,'NOMBRE',1.25],[25.3,'HEROE',1.2],[28,'PERFIL',.85]];
 // el TESTIGO: solo se escribe con datos en vivo (o forzado en el render de validación)
 function testigo(t,d,forzar){
   if(!(d.vivo||forzar)) return null;
