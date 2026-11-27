@@ -22,6 +22,7 @@
 
 ## Hecho
 - **PR #139** (rama `murmullo`): `museo/EXPOSICION.md`; `murmullo/` (flujo, partitura, imagen, sonido RITMO, NADIR, TESTIGO, consola y salida); `murmullo-app/` y su workflow `.github/workflows/murmullo-app.yml`.
+- **Reel de Instagram** (27 nov): 9:16, 18,8 s. Arranca en el corte a la vista cenital de la TENSIÓN y pasa por negro, silencio, BRAAM, grieta y ECO, con audio NADIR y la firma en ámbar. Sin TESTIGO, porque el render usa datos simulados. Se regenera con `tools/reel.js` + `tools/firma.html` + `tools/firma_audio.py` (semilla 7, `EXTRA="&ritmo=60"`, recorte desde el frame 53).
 - **PR #141** (rama `semilla-matriz`): arregla la lectura de la tipografía MATRIZ 5×7 en `semilla/score.js` (la fila superior de cada letra se leía mal). Es preventivo: esa función no se usa hoy.
 
 ## Pendiente
