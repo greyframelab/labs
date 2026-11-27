@@ -1,18 +1,53 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>VØID_LOOM · MURMULLO</title>
-<style>html,body{margin:0;background:#000;overflow:hidden;height:100%;font-family:ui-monospace,Menlo,monospace;color:#9aa3b2}
-canvas{display:block;width:100vw;height:100vh}
-#carga,#inicio{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px;letter-spacing:.32em;font-size:11px;background:#000}
-#inicio{display:none}#inicio button{background:none;border:1px solid #2a2f38;color:#c9d2e0;padding:12px 22px;letter-spacing:.3em;font:inherit;cursor:pointer}
-#inicio button:hover{border-color:#ffb000;color:#ffb000}</style></head><body>
-<canvas id="c"></canvas>
-<div id="carga">VØID_LOOM · MURMULLO<span>ESCUCHANDO EL MUNDO</span></div>
-<div id="inicio">VØID_LOOM · MURMULLO<div><button onclick="arrancar()">ARRANCAR</button></div><span style="opacity:.5">F · PANTALLA COMPLETA</span></div>
-<script src="flujo.js"></script>
-<script src="partitura.js"></script>
-<script src="imagen.js"></script>
-<script src="sonido.js"></script>
-<script src="nadir.js"></script>
-<script src="main.js"></script>
+<title>VØID_LOOM · MURMULLO · CONSOLA</title><link rel="icon" href="data:,">
+<style>
+html,body{margin:0;background:#000;height:100%;overflow:hidden;font:400 11px/1.6 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.14em;color:#8d929c}
+#carga{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;letter-spacing:.32em;background:#000;z-index:9}
+#consola{display:none;height:100%;grid-template-columns:1fr 340px}
+#consola.on{display:grid}
+#vista{position:relative;background:#000;display:flex;align-items:center;justify-content:center;padding:18px}
+#marco{position:relative;width:100%;aspect-ratio:16/9;max-height:100%;border:1px solid #16181d}
+#c,#t{position:absolute;inset:0;width:100%;height:100%;display:block}
+#vista .pie{position:absolute;left:20px;bottom:6px;font-size:9px;color:#4a4e57}
+#panel{border-left:1px solid #16181d;padding:22px 22px;display:flex;flex-direction:column;gap:18px;overflow:auto}
+h1{margin:0;font-size:12px;letter-spacing:.34em;color:#d6d9e0;font-weight:400}
+h2{margin:0 0 6px;font-size:9px;letter-spacing:.3em;color:#4f535c;font-weight:400}
+.f{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid #111317;padding:4px 0}
+.f b{font-weight:400;color:#c9cdd6;text-align:right}
+.vivo{color:#ffb000!important}.mem{color:#7a7f8a!important}
+button,select{background:none;border:1px solid #2a2e36;color:#c9cdd6;padding:10px 12px;font:inherit;letter-spacing:.24em;cursor:pointer;width:100%}
+button:hover:not(:disabled){border-color:#ffb000;color:#ffb000} button:disabled{color:#ffb000;border-color:#3a2c08;cursor:default}
+select{padding:6px 8px;letter-spacing:.14em;width:auto} label{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0}
+input[type=range]{width:150px;accent-color:#ffb000} input[type=checkbox]{accent-color:#ffb000}
+.nota{font-size:9.5px;line-height:1.7;color:#5a5e67;letter-spacing:.08em}
+</style></head><body>
+<div id="carga">VØID_LOOM · MURMULLO<span>PREPARANDO LA PIEDRA</span></div>
+<div id="consola">
+  <div id="vista"><div id="marco"><canvas id="c"></canvas><canvas id="t"></canvas></div><div class="pie">VISTA PREVIA · F PANTALLA COMPLETA</div></div>
+  <div id="panel">
+    <h1>VØID_LOOM · MURMULLO</h1>
+    <div><button id="arrancar">ARRANCAR</button></div>
+    <div><button id="salida">ABRIR SALIDA (PROYECTOR)</button></div>
+    <div><h2>EL MUNDO</h2>
+      <div class="f">FLUJO <b id="e-flujo">—</b></div>
+      <div class="f">EDICIONES <b id="e-ritmo">—</b></div>
+      <div class="f">RECIBIDAS <b id="e-rec">0</b></div>
+      <div class="f">HUMANAS · 34 s <b id="e-hum">—</b></div>
+      <div class="f">ÚLTIMA <b id="e-ult">—</b></div></div>
+    <div><h2>LA PIEZA</h2>
+      <div class="f">ACTO <b id="e-acto">—</b></div>
+      <div class="f">TEMPO <b id="e-bpm">—</b></div>
+      <div class="f">PLANO <b id="e-plano">—</b></div>
+      <div class="f">SALIDA <b id="e-salida">SIN ABRIR</b></div></div>
+    <div><h2>SALA</h2>
+      <label>AUDIO <select id="audio"><option value="nadir">NADIR · AMBIENT</option><option value="ritmo">RITMO · IDM</option></select></label>
+      <label>IDIOMA QUE SIGUE <select id="idioma"><option value="es">ESPAÑOL</option><option value="ca">CATALÀ</option><option value="en">ENGLISH</option><option value="fr">FRANÇAIS</option><option value="de">DEUTSCH</option><option value="eu">EUSKARA</option><option value="gl">GALEGO</option></select></label>
+      <label>TESTIGO (SOLO EN VIVO) <input type="checkbox" id="testigo"></label>
+      <label>VOLUMEN <input type="range" id="vol" min="0" max="1.2" step="0.01" value="0.9"></label></div>
+    <div class="nota">El flujo es real: Wikimedia EventStreams, todas las wikis, en directo. Si se corta, la pieza sigue en MEMORIA con la misma estadística y el TESTIGO no se escribe. No se guarda ni se muestra ningún título ni usuario.</div>
+  </div>
+</div>
+<script src="flujo.js"></script><script src="partitura.js"></script><script src="imagen.js"></script>
+<script src="sonido.js"></script><script src="nadir.js"></script><script src="testigo.js"></script><script src="main.js"></script>
 <script>iniciar().catch(e=>{document.title='ERR '+e.message;console.error(e);});</script>
 </body></html>

@@ -80,6 +80,7 @@ class Montaje{
     this.fin=(b===15 && s>=8);                    // cada vuelta vuelve al negro
   }
   estado(t,dt,P){
+    if(!this.S) this.corta('ESCRITURA',this.cursor(),t);
     if(this.S && this.S.tipo==='ESCRITURA'){ const tg=this.cursor(); if(!this.S.Tl) this.S.Tl=tg;
       const d=Math.hypot(tg[0]-this.S.Tl[0],tg[2]-this.S.Tl[2]);
       if(d>1.2) this.S.Tl=tg; else { const k=1-Math.exp(-dt/.9); this.S.Tl=add(this.S.Tl,mul(sub(tg,this.S.Tl),k)); } }
@@ -108,48 +109,130 @@ function historia(E,I,seed){
 }
 
 // ------------------------------------------------------------ arranque
-async function iniciar(){
-  const seed=+(Q.get('seed')||Math.floor(Math.random()*1e6)); M.seed=seed; M.idioma=(Q.get('idioma')||'es')+'wiki'; M.audio=Q.get('audio')||'nadir';
-  const pick=Q.get('acento')||['ambar','ambar','rojo','cian','violeta','blanco'][seed%6]; M.acento=ACENTOS[pick]||ACENTOS.ambar;
-  const cv=document.getElementById('c');
-  const W=+(Q.get('w')||innerWidth), H=+(Q.get('h')||innerHeight);
-  M.I=new Imagen(cv,{render:RENDER,w:W,h:H,q:+(Q.get('q')||1)});
+// Tres modos de página: CONSOLA (index.html: flujo, sonido, vista previa y estado), SALIDA (salida.html: solo la obra,
+// en el proyector, sincronizada con la consola por BroadcastChannel) y RENDER (?render=1, validación offline).
+const SALIDA=Q.has('salida');
+function construye(seed,acento,idioma,W,H,q){
+  M.seed=seed; M.idioma=idioma; M.acento=ACENTOS[acento]||ACENTOS.ambar; M.acentoN=acento;
+  if(!M.I) M.I=new Imagen(document.getElementById('c'),{render:RENDER,w:W,h:H,q});
   M.E=new Escritura(seed); M.Mo=new Montaje(seed); M.P=new Partitura(seed);
   historia(M.E,M.I,seed);
+}
+async function iniciar(){
+  if(SALIDA) return iniciaSalida();
+  const seed=+(Q.get('seed')||Math.floor(Math.random()*1e6)); M.audio=Q.get('audio')||'nadir';
+  const acento=Q.get('acento')||['ambar','ambar','rojo','cian','violeta','blanco'][seed%6];
+  const cv=document.getElementById('c');
+  const W=+(Q.get('w')||cv.clientWidth||innerWidth), H=+(Q.get('h')||cv.clientHeight||innerHeight);
+  construye(seed,acento,(Q.get('idioma')||'es')+'wiki',W,H,RENDER?+(Q.get('q')||1):.6);
   if(RENDER){ prepRender(); document.title='LISTO'; return; }
-  document.getElementById('carga').style.display='none'; document.getElementById('inicio').style.display='flex';
+  consolaUI();
 }
 
 function aplica(P){ // un paso de la partitura → escritura en la losa
   const list=[]; for(const e of P.ev) for(const s of M.E.sello(e,!!e._suena)) list.push(s);
   if(P.ruptura){ const g=M.E.grieta(P.grietaDe); list.push(...g); M.E.grietaP={u:g[0].u,v:g[0].v}; }
+  if(P.eco && P.testigo) M.testigo={t0:P.t+P.dur*8, dur:P.dur*16*2.6, lineas:lineasTestigo(P.testigo)};
   M.I.sella(list); M.Mo.paso(P,M.E); M.ultP=P;
 }
+// capa de texto del TESTIGO (2D, encima de la obra)
+function capaTestigo(x,W,H,t){
+  x.clearRect(0,0,W,H); const T=M.testigo; if(!T || !M.verTestigo) return;
+  const u=(t-T.t0)/T.dur; if(u<0||u>1){ if(u>1) M.testigo=null; return; }
+  const k=Math.min(1,u/.3), a=u<.82?1:Math.max(0,1-(u-.82)/.18);
+  dibujaTestigo(x,W,H,T.lineas,k,a*M.Mo.fade,M.acento);
+}
+// estadísticas reales de la vuelta (solo ediciones humanas; nunca títulos ni usuarios)
+function cuenta(ev,tNow){ M.ventana=(M.ventana||[]).concat(ev.filter(e=>!e.bot&&e.kind!=='log').map(e=>({t:e.t,l:e.lang})));
+  const lim=tNow-34; M.ventana=M.ventana.filter(e=>e.t>lim); }
 
-// ---------------- en vivo
+// ---------------- CONSOLA: flujo, sonido, vista previa y estado
+function consolaUI(){
+  const $=id=>document.getElementById(id);
+  $('carga').style.display='none'; $('consola').classList.add('on');
+  M.verTestigo=true; M.ch=new BroadcastChannel('murmullo-salida'); M.salidaViva=0;
+  M.ch.onmessage=e=>{ if(e.data&&e.data.type==='vivo'){ M.salidaViva=performance.now(); M.salidaFps=e.data.fps; } if(e.data&&e.data.type==='hola') enviaCfg(); };
+  const enviaCfg=()=>M.ch.postMessage({type:'cfg',seed:M.seed,acento:M.acentoN,idioma:M.idioma,testigo:M.verTestigo,arranque:M.wall0||0});
+  M.enviaCfg=enviaCfg; setInterval(enviaCfg,2000);
+  $('salida').onclick=()=>window.open('salida.html?salida','murmullo-salida','popup,width=1280,height=720');
+  $('audio').value=M.audio; $('audio').onchange=e=>{ M.audio=e.target.value; if(M.ctx) cambiaAudio(); };
+  $('idioma').value=M.idioma.replace('wiki',''); $('idioma').onchange=e=>{ M.idioma=e.target.value+'wiki'; enviaCfg(); };
+  $('testigo').checked=true; $('testigo').onchange=e=>{ M.verTestigo=e.target.checked; enviaCfg(); };
+  $('vol').oninput=e=>{ if(M.master) M.master.gain.value=+e.target.value; };
+  $('arrancar').onclick=()=>{ $('arrancar').disabled=true; $('arrancar').textContent='EN MARCHA'; arrancar(); };
+  addEventListener('keydown',e=>{ if(e.key==='f'||e.key==='F') document.getElementById('vista').requestFullscreen&&document.getElementById('vista').requestFullscreen(); });
+  const ro=new ResizeObserver(()=>{ const c=$('c'); M.I.resize(c.clientWidth,c.clientHeight); const t=$('t'); t.width=c.clientWidth; t.height=c.clientHeight; }); ro.observe($('c'));
+}
+function cambiaAudio(){ // cambiar de modo de audio en marcha: el motor nuevo entra en el siguiente paso
+  const viejo=M.S; M.S=new (M.audio==='ritmo'?Sonido:SonidoNadir)(M.ctx,M.P,M.master);
+  M.S.acto(M.ctx.currentTime,M.ultP?M.ultP.acto:0,M.P.ritmo,{dur:M.P.STEP});
+  try{ viejo.out.gain.setTargetAtTime(0,M.ctx.currentTime,.3); setTimeout(()=>viejo.out.disconnect(),2500); }catch(e){}
+}
 function arrancar(){
-  document.getElementById('inicio').style.display='none';
   const ctx=new (window.AudioContext||window.webkitAudioContext)({latencyHint:'playback'}); M.ctx=ctx;
-  M.S=new (M.audio==='ritmo'?Sonido:SonidoNadir)(ctx,M.P);
+  // volumen de sala: todo sale por un único fader
+  M.master=ctx.createGain(); M.master.gain.value=+document.getElementById('vol').value;
+  M.master.connect(ctx.destination);
+  M.S=new (M.audio==='ritmo'?Sonido:SonidoNadir)(ctx,M.P,M.master);
   M.F=new Flujo(()=>ctx.currentTime,M.seed); M.F.conecta();
   M.P.t0=ctx.currentTime+LAT; M.P.fijaTempo(28);
+  M.wall0=performance.timeOrigin+performance.now(); M.enviaCfg();
   M.vis=[]; let last=performance.now();
-  setInterval(()=>{ M.F.tick(); M.P.ritmo=M.F.ritmo||M.P.ritmo; M.P.mete(M.F.saca().map(e=>(e.t+=LAT,e)));
-    while(true){ const k=M.P.paso; const tn=M.P.t0+M.P._acum(k); if(tn>ctx.currentTime+.18) break; const P=M.P.siguiente(); M.S.paso(P,M.P.ritmo); M.vis.push(P); } },25);
-  // calidad automática: si no llega a ~55 fps, baja la resolución interna (80 %, 70 %, 60 %); si va sobrado, recupera. Solo en un corte de plano.
-  let ema=1/60, cortes=0, paso30=false, impar=false;
-  const loop=()=>{ const now=performance.now(), dt=(now-last)/1000; last=now; const t=ctx.currentTime;
-    ema=ema*.97+dt*.03;
-    if(M.Mo.n!==cortes){ cortes=M.Mo.n; const q=M.I.q;
+  setInterval(()=>{ M.F.tick(); M.P.ritmo=M.F.ritmo||M.P.ritmo; const nuevos=M.F.saca().map(e=>(e.t+=LAT,e)); cuenta(nuevos,ctx.currentTime+LAT); M.P.mete(nuevos);
+    while(true){ const k=M.P.paso; const tn=M.P.t0+M.P._acum(k); if(tn>ctx.currentTime+.18) break; const P=M.P.siguiente();
+      if(P.eco){ const vivo=M.F.estado==='EN VIVO'; if(vivo) P.testigo={n:M.ventana.length, idiomas:new Set(M.ventana.map(e=>e.l)).size, seg:Math.min(34,P.dur*16*16)}; }
+      M.S.paso(P,M.P.ritmo); M.vis.push(P);
+      // a la salida: el paso con su instante en reloj de pared (la salida no tiene audio)
+      const wall=performance.timeOrigin+performance.now()+(P.t-ctx.currentTime)*1000;
+      M.ch.postMessage({type:'paso',P:limpia(P),wall});
+    } },25);
+  const tc=document.getElementById('t').getContext('2d');
+  // vista previa ligera: a 15 fps si la salida está abierta (el proyector es la obra)
+  let acc=0;
+  const loop=()=>{ requestAnimationFrame(loop); const now=performance.now(), dt=(now-last)/1000; const t=ctx.currentTime;
+    const conSalida=now-M.salidaViva<2000; acc+=dt; if(conSalida && acc<1/15) return; const step=acc; acc=0; last=now;
+    while(M.vis.length && M.vis[0].t<=t) aplica(M.vis.shift());
+    M.I.avanza(step,M.Mo.pol); const C=M.Mo.estado(t,step,M.ultP); M.I.dibuja(C); capaTestigo(tc,tc.canvas.width,tc.canvas.height,t); };
+  requestAnimationFrame(loop);
+  setInterval(estadoUI,250);
+}
+// los pasos viajan sin referencias circulares ni datos de más
+function limpia(P){ const o={...P}; o.ev=P.ev.map(e=>({t:e.t,wiki:e.wiki,lang:e.lang,bot:e.bot,delta:e.delta,kind:e.kind,_suena:!!e._suena}));
+  for(const k of ['tick','chapa','bajo','glitch']) if(o[k]) o[k]={...o[k],e:undefined};
+  if(o.grietaDe) o.grietaDe={wiki:o.grietaDe.wiki}; return o; }
+function estadoUI(){
+  const $=id=>document.getElementById(id), F=M.F, vivo=F.estado==='EN VIVO';
+  $('e-flujo').textContent=F.estado; $('e-flujo').className=vivo?'vivo':'mem';
+  $('e-ritmo').textContent=F.ritmo.toFixed(1)+' /s'; $('e-rec').textContent=F.recibidos.toLocaleString('es');
+  $('e-hum').textContent=(M.ventana||[]).length+' · '+new Set((M.ventana||[]).map(e=>e.l)).size+' idiomas';
+  const P=M.ultP; if(P){ $('e-acto').textContent=ACTOS[P.acto]+' · compás '+(P.bar+1)+'/16'; $('e-bpm').textContent=P.bpm+' BPM'; }
+  $('e-plano').textContent=M.Mo.S?M.Mo.S.tipo:'—';
+  const sv=performance.now()-M.salidaViva<2000; $('e-salida').textContent=sv?'CONECTADA · '+(M.salidaFps||'—')+' fps':'SIN ABRIR'; $('e-salida').className=sv?'vivo':'';
+  const u=F.ultimoEv; $('e-ult').textContent=u?(u.wiki+' · '+(u.delta>0?'+':'')+u.delta+' B'+(u.bot?' · bot':'')):'—';
+}
+
+// ---------------- SALIDA: solo la obra, en el proyector. Recibe los pasos de la consola y los dibuja en su instante.
+function iniciaSalida(){
+  const ch=new BroadcastChannel('murmullo-salida'); const cv=document.getElementById('c'), tcv=document.getElementById('t'), tc=tcv.getContext('2d');
+  let cfg=null, cola=[], base=0, last=performance.now(), fps=60, ema=1/60, cortes=0, paso30=false, impar=false;
+  const size=()=>{ const d=Math.min(devicePixelRatio||1,2); if(M.I) M.I.resize(innerWidth*d,innerHeight*d); tcv.width=innerWidth*d; tcv.height=innerHeight*d; };
+  ch.onmessage=e=>{ const d=e.data; if(!d) return;
+    if(d.type==='cfg'){ if(!cfg || cfg.seed!==d.seed){ construye(d.seed,d.acento,d.idioma,innerWidth*Math.min(devicePixelRatio||1,2),innerHeight*Math.min(devicePixelRatio||1,2),1); cola=[]; size(); }
+      cfg=d; M.idioma=d.idioma; M.verTestigo=d.testigo; document.getElementById('carga').style.display='none'; }
+    if(d.type==='paso' && cfg){ if(!base) base=d.wall-200; const P=d.P; P.t=(d.wall-base)/1000; cola.push(P); } };
+  ch.postMessage({type:'hola'}); setInterval(()=>ch.postMessage({type:'vivo',fps:Math.round(1/ema)}),500);
+  addEventListener('dblclick',()=>(document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()).catch(()=>{}));
+  addEventListener('resize',size);
+  const loop=()=>{ requestAnimationFrame(loop); if(!M.I||!base) return;
+    const now=performance.now(), dt=(now-last)/1000; last=now; ema=ema*.97+dt*.03;
+    if(M.Mo.n!==cortes){ cortes=M.Mo.n; const q=M.I.q;   // calidad automática, solo en un corte de plano
       if(ema>1/52){ if(q>.61) M.I.calidad(Math.round((q-.1)*10)/10); else paso30=true; }
       else if(ema<1/58 && q<1){ M.I.calidad(Math.min(1,Math.round((q+.1)*10)/10)); paso30=false; } }
-    if(paso30){ impar=!impar; if(impar){ requestAnimationFrame(loop); return; } }
-    while(M.vis.length && M.vis[0].t<=t) aplica(M.vis.shift());
-    M.I.avanza(dt,M.Mo.pol); const C=M.Mo.estado(t,dt,M.ultP); M.I.dibuja(C); requestAnimationFrame(loop); };
+    if(paso30){ impar=!impar; if(impar) return; }
+    const t=(performance.timeOrigin+now-base)/1000;
+    while(cola.length && cola[0].t<=t) aplica(cola.shift());
+    M.I.avanza(dt,M.Mo.pol); const C=M.Mo.estado(t,dt,M.ultP); M.I.dibuja(C); capaTestigo(tc,tcv.width,tcv.height,t); };
   requestAnimationFrame(loop);
-  addEventListener('keydown',e=>{ if(e.key==='f'||e.key==='F') document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen(); });
-  addEventListener('resize',()=>M.I.resize(innerWidth,innerHeight));
-  window.MURMULLO_ESTADO=()=>({estado:M.F.estado, ritmo:M.F.ritmo.toFixed(1), recibidos:M.F.recibidos, bpm:M.P.bpm, acto:ACTOS[actoDe(M.ultP?M.ultP.bar:0)]});
 }
 
 // ---------------- render offline (validación): mismo motor, flujo de MEMORIA con semilla
@@ -158,7 +241,10 @@ function prepRender(){
     prepara(dur){
       const ev=simula(M.seed,0,dur+2,+(Q.get('ritmo')||30)); M.P.t0=0; M.P.fijaTempo(+(Q.get('ritmo')||30));
       M.P.mete(ev.map(e=>({...e})));
-      M.pasos=[]; while(true){ const k=M.P.paso; if(M.P._acum(k)>dur) break; M.pasos.push(M.P.siguiente()); }
+      M.pasos=[]; while(true){ const k=M.P.paso; if(M.P._acum(k)>dur) break; const P=M.P.siguiente();
+        if(P.eco && Q.has('testigo')){ const w=ev.filter(e=>!e.bot&&e.kind!=='log'&&e.t>P.t-34&&e.t<=P.t); P.testigo={n:w.length,idiomas:new Set(w.map(e=>e.lang)).size,seg:34}; }
+        M.pasos.push(P); }
+      M.verTestigo=Q.has('testigo');
       M.ip=0; M.tv=0; return {pasos:M.pasos.length, bpm:M.P.bpm, eventos:ev.length};
     },
     frame(t){
@@ -166,7 +252,11 @@ function prepRender(){
       for(let i=0;i<sub;i++){ const tt=M.tv+(t-M.tv)*(i+1)/sub, dt=(t-M.tv)/sub;
         while(M.ip<M.pasos.length && M.pasos[M.ip].t<=tt) aplica(M.pasos[M.ip++]);
         M.I.avanza(dt,M.Mo.pol); M.C=M.Mo.estado(tt,dt,M.ultP); }
-      M.tv=t; M.C.render=true; M.I.dibuja(M.C); return M.I.cv.toDataURL('image/jpeg',.93);
+      M.tv=t; M.C.render=true; M.I.dibuja(M.C);
+      if(!M.verTestigo) return M.I.cv.toDataURL('image/jpeg',.93);
+      const o=M.cmp||(M.cmp=document.createElement('canvas')); o.width=M.I.W; o.height=M.I.H; const x=o.getContext('2d');
+      x.drawImage(M.I.cv,0,0); const tl=document.createElement('canvas'); tl.width=o.width; tl.height=o.height; capaTestigo(tl.getContext('2d'),o.width,o.height,t); x.drawImage(tl,0,0);
+      return o.toDataURL('image/jpeg',.93);
     },
     async audio(dur){
       const sr=48000, ctx=new OfflineAudioContext(2,Math.ceil(sr*dur),sr); const P2=new Partitura(M.seed); const S=new (M.audio==='ritmo'?Sonido:SonidoNadir)(ctx,P2);

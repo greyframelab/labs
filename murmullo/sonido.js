@@ -7,14 +7,14 @@
 // ======================================================================
 function hzM(m){ return 440*Math.pow(2,(m-69)/12); }
 class Sonido{
-  constructor(ctx,P){
-    this.ctx=ctx; this.P=P; const c=ctx;
+  constructor(ctx,P,dest){
+    this.ctx=ctx; this.P=P; dest=dest||ctx.destination; const c=ctx;
     this.out=c.createGain(); this.out.gain.value=.4;
     const hp=c.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=26;
     const shelf=c.createBiquadFilter(); shelf.type='highshelf'; shelf.frequency.value=2200; shelf.gain.value=-6;
     const comp=c.createDynamicsCompressor(); comp.threshold.value=-18; comp.ratio.value=3; comp.attack.value=.003; comp.release.value=.12; comp.knee.value=6;
     const lim=c.createDynamicsCompressor(); lim.threshold.value=-4.5; lim.ratio.value=20; lim.attack.value=.001; lim.release.value=.06; lim.knee.value=0;
-    this.out.connect(hp).connect(shelf).connect(comp).connect(lim).connect(c.destination);
+    this.out.connect(hp).connect(shelf).connect(comp).connect(lim).connect(dest);
     // sala corta y oscura
     this.verb=c.createConvolver(); this.verb.buffer=this.ir(1.1,2400); this.send=c.createGain(); this.send.gain.value=.16; this.send.connect(this.verb).connect(this.out);
     const nb=c.createBuffer(1,c.sampleRate,c.sampleRate), nd=nb.getChannelData(0); let s=9871; for(let i=0;i<nd.length;i++){ s=(s*16807)%2147483647; nd[i]=s/2147483647*2-1; } this.noise=nb;

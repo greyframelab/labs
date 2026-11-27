@@ -74,7 +74,7 @@ class Flujo{
       const es=new EventSource(STREAM_URL); this.es=es;
       es.onopen=()=>{ this.estado='EN VIVO'; };
       es.onmessage=(m)=>{ let d; try{ d=JSON.parse(m.data); }catch(e){ return; }
-        const e=normaliza(d,this.reloj()); if(!e) return; this.empuja(e); this.ultimo=performance.now(); this.recibidos++;
+        const e=normaliza(d,this.reloj()); if(!e) return; this.empuja(e); this.ultimoEv=e; this.ultimo=performance.now(); this.recibidos++;
         if(this.memoria.length<200000) this.memoria.push({...e, t:e.t}); else this.memoria.shift(); };
       es.onerror=()=>{ this.estado='MEMORIA'; /* EventSource reintenta solo */ };
     }catch(e){ this.estado='MEMORIA'; }
@@ -87,7 +87,7 @@ class Flujo{
       if(this.estado==='EN VIVO') this.estado='MEMORIA';
       if(this.simT<now-1) this.simT=now-1;
       const ev=simula(this.seed+Math.floor(this.simT), this.simT, now+.5); this.simT=now+.5;
-      for(const e of ev) this.empuja(e);
+      for(const e of ev) this.empuja(e); if(ev.length) this.ultimoEv=ev[ev.length-1];
     }
     while(this._cuenta.length && this._cuenta[0]<now-10) this._cuenta.shift();
     this.ritmo=this._cuenta.length/10;

@@ -11,8 +11,8 @@
 // Agudos domados, sin delay; solo una sala larga y oscura.
 // ======================================================================
 class SonidoNadir{
-  constructor(ctx,P){
-    this.ctx=ctx; this.P=P; const c=ctx; const r=rng(P.seed*313+9); this.r=r;
+  constructor(ctx,P,dest){
+    this.ctx=ctx; this.P=P; dest=dest||ctx.destination; const c=ctx; const r=rng(P.seed*313+9); this.r=r;
     this.out=c.createGain(); this.out.gain.value=.36;
     this.duck=c.createGain(); this.duck.gain.value=1;
     const hp=c.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=22;
@@ -20,7 +20,7 @@ class SonidoNadir{
     const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=7000; lp.Q.value=.5;
     const comp=c.createDynamicsCompressor(); comp.threshold.value=-13; comp.ratio.value=2; comp.attack.value=.01; comp.release.value=.3; comp.knee.value=8;
     const lim=c.createDynamicsCompressor(); lim.threshold.value=-5.5; lim.ratio.value=20; lim.attack.value=.001; lim.release.value=.08; lim.knee.value=0;
-    this.out.connect(this.duck).connect(hp).connect(shelf).connect(lp).connect(comp).connect(lim).connect(c.destination);
+    this.out.connect(this.duck).connect(hp).connect(shelf).connect(lp).connect(comp).connect(lim).connect(dest);
     // catedral oscura: cola larga, sin brillo
     this.verb=c.createConvolver(); this.verb.buffer=this.ir(5.5,1500); this.send=c.createGain(); this.send.gain.value=.55; this.send.connect(this.verb).connect(this.out);
     const nb=c.createBuffer(1,c.sampleRate*2,c.sampleRate), nd=nb.getChannelData(0); let s=7717; for(let i=0;i<nd.length;i++){ s=(s*16807)%2147483647; nd[i]=s/2147483647*2-1; } this.noise=nb;

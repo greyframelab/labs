@@ -3,7 +3,15 @@ Sala 1 del acto I (EL MUNDO) de la exposición [VØID_LOOM · PARTITURA](../muse
 
 Un territorio de obsidiana sin bordes, que se pierde en la oscuridad. Todo el mundo escribe en ella a la vez: cada edición de Wikipedia, en cualquier idioma, se talla en tiempo real. Nada está grabado. Lo que se ve y se oye es lo que la gente está escribiendo ahora mismo.
 
-**Abrir:** `murmullo/index.html` en Chrome o Edge → ARRANCAR. **F** pone la pantalla completa.
+**Abrir:** `murmullo/index.html` en Chrome o Edge. Es la CONSOLA: ARRANCAR, y luego ABRIR SALIDA, llevar esa ventana al proyector y hacer doble clic para pantalla completa.
+
+## Consola y salida (como SEMILLA)
+- **CONSOLA** (`index.html`): conecta al flujo, suena, enseña la vista previa (a 15 fps si la salida está abierta) y el estado. Muestra el flujo (EN VIVO / MEMORIA), las ediciones por segundo, las recibidas, las humanas de los últimos 34 s y los idiomas, la última edición (wiki y bytes, nunca título ni usuario), el acto, el tempo, el plano y la salida (conectada y fps). En la sala se puede cambiar el audio (NADIR / RITMO) en marcha, el idioma que sigue la cámara, el TESTIGO y el volumen.
+- **SALIDA** (`salida.html`): solo la obra, a la resolución del proyector, sin audio. Recibe cada paso de la partitura por `BroadcastChannel` con su instante en reloj de pared y lo dibuja a la vez que suena. Tiene su propia calidad automática.
+
+## El concepto: es real y es ahora
+- El dato es real y en tiempo real: cada incisión es una edición que alguien acaba de hacer en alguna Wikipedia del mundo, con 1,4 s de retardo para encajarla en la rejilla.
+- **TESTIGO:** en el ECO de cada vuelta, la máquina escribe abajo a la izquierda, celda a celda con la MATRIZ 5×7, `WIKIPEDIA · EN DIRECTO` y `618 EDICIONES EN 25 IDIOMAS · ÚLTIMOS 34 SEGUNDOS` (cifras reales, solo humanas). Después se apaga. **Solo aparece EN VIVO:** en MEMORIA no se escribe nada, porque la obra no miente. Se puede desactivar desde la consola.
 
 ## La partitura
 - **Fuente:** Wikimedia EventStreams `recentchange`, el flujo público de todas las wikis (20–50 eventos/s).
