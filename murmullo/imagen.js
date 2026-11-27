@@ -24,13 +24,16 @@ in vec2 uv; out vec4 o; uniform float dt; uniform vec3 pol;
 void main(){ float band=pol.z*smoothstep(pol.y,0.,abs(uv.x-pol.x)); o=vec4(1.-band*min(1.,dt*.9)); }`;
 // sello instanciado: a0=(u,v,anchoMundo,altoMundo) a1=(tipo,semilla,profundidad,emisión) a2=(giro,brillo,0,0)
 const VS_STAMP=GLSL_HEAD+`
-in vec2 c; in vec4 a0; in vec4 a1; in vec2 a2; out vec2 q; flat out vec4 k1; flat out vec2 k2;
+in vec2 c; in vec4 a0; in vec4 a1; in vec4 a2; out vec2 q; flat out vec4 k1; flat out vec4 k2;
 uniform vec2 slab;
 void main(){ q=c; k1=a1; k2=a2;
   vec2 l=(c-.5)*a0.zw; float cs=cos(a2.x), sn=sin(a2.x); l=vec2(cs*l.x-sn*l.y, sn*l.x+cs*l.y);
   vec2 u=a0.xy+l/slab; gl_Position=vec4(u*2.-1.,0,1); }`;
 const FS_STAMP=GLSL_HEAD+`
-in vec2 q; flat in vec4 k1; flat in vec2 k2; out vec4 o; uniform int modo;
+in vec2 q; flat in vec4 k1; flat in vec4 k2; out vec4 o; uniform int modo;
+// glifo real de la MATRIZ (lo que dice el dato): filas 0-3 en k2.z, filas 4-6 en k2.w
+float bit(vec2 ci){ if(ci.x<0.||ci.x>4.||ci.y<0.||ci.y>6.) return 0.; int c=int(ci.x), r=int(ci.y);
+  if(r<4) return float((uint(k2.z)>>uint(19-(r*5+c)))&1u); return float((uint(k2.w)>>uint(14-((r-4)*5+c)))&1u); }
 float h1(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
 float sdBox(vec2 p, vec2 b, float r){ vec2 d=abs(p)-b+r; return length(max(d,0.))+min(max(d.x,d.y),0.)-r; }
 void main(){
@@ -53,10 +56,11 @@ void main(){
   } else { // glifo de la MATRIZ: 5×7 celdas talladas con pared recta y fondo plano
     vec2 g=q*vec2(5.,7.); vec2 ci=floor(g); vec2 f=fract(g)-.5;
     float sdB=tipo==1?floor(sd*8.)/8.:sd;     // los bots repiten sus pocos glifos
-    float on=step(tipo==1?.5:.56,h1(ci+sdB*91.7));
+    bool real=k2.z+k2.w>.5;                    // edición humana: se talla lo que dice el dato
+    float on=real?bit(ci):step(tipo==1?.5:.56,h1(ci+sdB*91.7));
     // celdas vecinas encendidas se unen (trazo continuo, no puntos)
-    float onR=step(tipo==1?.5:.56,h1(ci+vec2(1,0)+sdB*91.7))*step(ci.x,3.5);
-    float onU=step(tipo==1?.5:.56,h1(ci+vec2(0,1)+sdB*91.7))*step(ci.y,5.5);
+    float onR=(real?bit(ci+vec2(1,0)):step(tipo==1?.5:.56,h1(ci+vec2(1,0)+sdB*91.7)))*step(ci.x,3.5);
+    float onU=(real?bit(ci+vec2(0,1)):step(tipo==1?.5:.56,h1(ci+vec2(0,1)+sdB*91.7)))*step(ci.y,5.5);
     float d=sdBox(f,vec2(.34),.02);
     if(onR>.5) d=min(d,sdBox(f-vec2(.5,0),vec2(.5,.34),.0));
     if(onU>.5) d=min(d,sdBox(f-vec2(0,.5),vec2(.34,.5),.0));
@@ -166,8 +170,8 @@ class Imagen{
     this.vaoS=gl.createVertexArray(); gl.bindVertexArray(this.vaoS);
     const cb=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,cb); gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([0,0,1,0,0,1,1,1]),gl.STATIC_DRAW);
     const ps=this.P.stamp; let loc=gl.getAttribLocation(ps,'c'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
-    this.ib=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,this.ib); this.MAXI=8192; this.idata=new Float32Array(this.MAXI*10); gl.bufferData(gl.ARRAY_BUFFER,this.idata.byteLength,gl.DYNAMIC_DRAW);
-    for(const [n,sz,off] of [['a0',4,0],['a1',4,16],['a2',2,32]]){ loc=gl.getAttribLocation(ps,n); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,sz,gl.FLOAT,false,40,off); gl.vertexAttribDivisor(loc,1); }
+    this.ib=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,this.ib); this.MAXI=8192; this.idata=new Float32Array(this.MAXI*12); gl.bufferData(gl.ARRAY_BUFFER,this.idata.byteLength,gl.DYNAMIC_DRAW);
+    for(const [n,sz,off] of [['a0',4,0],['a1',4,16],['a2',4,32]]){ loc=gl.getAttribLocation(ps,n); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,sz,gl.FLOAT,false,48,off); gl.vertexAttribDivisor(loc,1); }
     gl.bindVertexArray(null);
     this.vaoF=gl.createVertexArray(); gl.bindVertexArray(this.vaoF); gl.bindBuffer(gl.ARRAY_BUFFER,quad);
     for(const k of Object.keys(this.P)){ if(k==='stamp') continue; const l=gl.getAttribLocation(this.P[k],'p'); if(l>=0){ gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l,2,gl.FLOAT,false,0,0); } }
@@ -196,8 +200,8 @@ class Imagen{
     const gl=this.gl; if(!this.pend.length) return; const ps=this.P.stamp;
     gl.useProgram(ps); gl.uniform2f(this.U(ps,'slab'),SLAB[0],SLAB[1]); gl.bindVertexArray(this.vaoS); gl.enable(gl.BLEND);
     while(this.pend.length){ const n=Math.min(this.MAXI,this.pend.length); const d=this.idata;
-      for(let i=0;i<n;i++){ const s=this.pend[i], o=i*10; d[o]=s.u; d[o+1]=s.v; d[o+2]=s.w; d[o+3]=s.h; d[o+4]=s.tipo; d[o+5]=s.seed; d[o+6]=s.prof; d[o+7]=s.emis; d[o+8]=s.giro||0; d[o+9]=s.brillo||0; }
-      gl.bindBuffer(gl.ARRAY_BUFFER,this.ib); gl.bufferSubData(gl.ARRAY_BUFFER,0,d.subarray(0,n*10));
+      for(let i=0;i<n;i++){ const s=this.pend[i], o=i*12; d[o]=s.u; d[o+1]=s.v; d[o+2]=s.w; d[o+3]=s.h; d[o+4]=s.tipo; d[o+5]=s.seed; d[o+6]=s.prof; d[o+7]=s.emis; d[o+8]=s.giro||0; d[o+9]=s.brillo||0; d[o+10]=s.gh||0; d[o+11]=s.gl||0; }
+      gl.bindBuffer(gl.ARRAY_BUFFER,this.ib); gl.bufferSubData(gl.ARRAY_BUFFER,0,d.subarray(0,n*12));
       gl.bindFramebuffer(gl.FRAMEBUFFER,this.Hm.fb); gl.viewport(0,0,HW,HH);
       gl.blendFunc(gl.DST_COLOR,gl.ZERO); gl.uniform1i(this.U(ps,'modo'),0); gl.drawArraysInstanced(gl.TRIANGLE_STRIP,0,4,n);
       gl.blendFunc(gl.ONE,gl.ONE); gl.uniform1i(this.U(ps,'modo'),1); gl.drawArraysInstanced(gl.TRIANGLE_STRIP,0,4,n);
@@ -244,7 +248,8 @@ class Escritura{
   sello(e,suena){
     const c=this.fila(e.wiki), r=this.r; const rowH=SLAB[1]/ROWS;
     const big=Math.abs(e.delta);
-    const chars=e.kind==='log'?1:Math.max(1,Math.min(9,Math.round(Math.log10(big+1)*1.6)));
+    const txt=textoTalla(e);                  // humanos: se talla el dato (idioma, signo, bytes)
+    const chars=txt?txt.length: e.kind==='log'?1:Math.max(1,Math.min(9,Math.round(Math.log10(big+1)*1.6)));
     const gh=rowH*(e.bot?.62:.78), gw=gh*5/7, gap=gw*.32;
     const out=[];
     if(c.x+chars*(gw+gap)/SLAB[0]>.985){ c.x=.015; c.row=(c.row+c.salto)%ROWS; }
@@ -253,7 +258,9 @@ class Escritura{
       const u=c.x+(gw*.5)/SLAB[0];
       const tipo=e.kind==='del'?2: e.bot?1: 0;
       const emis=e.kind==='new'?1.5: suena?.9: e.kind==='log'?0: e.bot?.08:.22;
-      out.push({u, v:v+(e.bot?0:(r()-.5)*.0012), w:gw*(e.kind==='del'?1.25:1), h:gh, tipo, seed:r(), prof:e.kind==='log'?.35:(e.bot?.6:.9+Math.min(.5,big/20000)), emis, giro:jit*.15, brillo:suena?1:.15});
+      const g=txt?glifoM(txt[i]):0, bh=Math.floor(g/32768), bl=g%32768;
+      // la letra se talla en su turno: se ve escribir (los bots, a ráfaga)
+      out.push({u, v:v+(e.bot?0:(r()-.5)*.0012), w:gw*(e.kind==='del'&&!txt?1.25:1), h:gh, tipo:txt&&tipo===2?0:tipo, seed:r(), prof:e.kind==='log'?.35:e.bot?.6:e.kind==='del'?.5:.9+Math.min(.5,big/20000), emis, giro:jit*.15, brillo:suena?1:.15, gh:bh, gl:bl, d:i*(e.bot?.02:.07)});
       c.x+=(gw+gap)/SLAB[0];
     }
     c.x+=gap*2/SLAB[0];

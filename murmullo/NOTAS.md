@@ -19,6 +19,8 @@
 | 27 nov | **El dato es real y en tiempo real, y hay que transmitirlo.** Para eso se hizo el TESTIGO: en el ECO, la máquina escribe `WIKIPEDIA · EN DIRECTO / N EDICIONES EN M IDIOMAS · ÚLTIMOS 34 SEGUNDOS`. Solo con datos en vivo; en MEMORIA no se escribe nada. Activado por defecto y desactivable en la consola (va contra la regla de "nada de texto en la proyección": confirmar con Toni). |
 | 27 nov | App de escritorio (.exe y .dmg) como las demás, en la release `murmullo-app-latest`. |
 | 27 nov | Reel de Instagram de MURMULLO. |
+| 27 nov | **Que se entienda el concepto.** Pide más variedad de planos, ver cómo se escribe el dato y quizá una vista de código. Se hace (rama `murmullo-lectura`): vista **FUENTE** (el flujo `recentchange` en crudo, con la MATRIZ, solo EN VIVO), la piedra **talla el dato real** (idioma + signo + bytes: `JA+213`) letra a letra, planos nuevos **LÍNEA** y **ÓRBITA**, y el idioma que sigue la cámara **rota por vuelta** entre los que más escriben. Pendiente de su OK. |
+| 27 nov | **NADIR más variado.** Cada vuelta es otra sala: tonalidad que se desliza, intervalo del lecho, latido y una voz protagonista distinta (TECLAS, CAMPANA, CORO o VACÍO). En la FUENTE suena un teletipo suave al ritmo real de llegada. Pendiente de su OK. |
 
 ## Hecho
 - **PR #139** (rama `murmullo`): `museo/EXPOSICION.md`; `murmullo/` (flujo, partitura, imagen, sonido RITMO, NADIR, TESTIGO, consola y salida); `murmullo-app/` y su workflow `.github/workflows/murmullo-app.yml`.

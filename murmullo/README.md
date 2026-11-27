@@ -13,6 +13,12 @@ Un territorio de obsidiana sin bordes, que se pierde en la oscuridad. Todo el mu
 - El dato es real y en tiempo real: cada incisión es una edición que alguien acaba de hacer en alguna Wikipedia del mundo, con 1,4 s de retardo para encajarla en la rejilla.
 - **TESTIGO:** en el ECO de cada vuelta, la máquina escribe abajo a la izquierda, celda a celda con la MATRIZ 5×7, `WIKIPEDIA · EN DIRECTO` y `618 EDICIONES EN 25 IDIOMAS · ÚLTIMOS 34 SEGUNDOS` (cifras reales, solo humanas). Después se apaga. **Solo aparece EN VIVO:** en MEMORIA no se escribe nada, porque la obra no miente. Se puede desactivar desde la consola.
 
+## Que se entienda: del código a la piedra
+- **FUENTE** (vista de código): cada vuelta se abre con 2 compases en negro donde corre el flujo `recentchange` tal como llega (hora, wiki, tipo, bytes, BOT), escrito con la MATRIZ 5×7. Las líneas del idioma de la vuelta van en el acento, y cada edición humana acaba en lo que se va a tallar (`→ JA+213`). Después, corte a la piedra: ese mismo texto se está tallando. En vueltas impares vuelve un compás en la TENSIÓN. **Solo EN VIVO** (en MEMORIA no se enseña código). Desactivable en la consola (`?sinfuente`).
+- **La piedra talla el dato:** cada edición humana se talla como su idioma, su signo y sus bytes (`ES+142`, `DE-40`, `EN×1K` para una reversión), letra a letra, a la vez que suena. Los bots siguen siendo glifos repetidos de máquina. En CENITAL y ESCRITURA se lee.
+- **Planos:** ESCRITURA, LÍNEA (travelling lateral por el renglón), ÓRBITA, MACRO, RASANTE, CENITAL y ABISMO. No se repiten dos seguidos y cambian por vuelta.
+- **Idioma de la vuelta:** en ROTA (por defecto) la cámara sigue cada vuelta a otro de los idiomas que más escriben en ese momento; se puede fijar uno en la consola.
+
 ## La partitura
 - **Fuente:** Wikimedia EventStreams `recentchange`, el flujo público de todas las wikis (20–50 eventos/s).
 - **MEMORIA:** si en 4 s no llega nada, la pieza sigue sola con un flujo de la misma estadística. La sala nunca se para. Estado para el técnico: `MURMULLO_ESTADO()` en la consola.
@@ -41,7 +47,7 @@ Calidad automática: si no llega a ~55 fps baja la resolución interna (80 %, 70
 
 ## Sonido
 Dos modos (`?audio=`):
-- **NADIR** (por defecto): dark ambient inquietante, con un lecho tipo Tineidae y los metales de Blade Runner 2049. Sub que respira, un lecho CS-80 desafinado (raíz y segunda menor que baten), cristal que bate y un racimo que se hunde en la TENSIÓN. Cada edición humana es un susurro con la vocal de su idioma (el murmullo de la gente). Ediciones enormes: metal arqueado. Páginas nuevas: swell CS-80. Bots: tic lejano. Borrados: un portazo en otra sala. Reversiones: aire al revés. RUPTURA: BRAAM y caída de sub tras el silencio. El pulso es un latido. Sala larga y oscura, sin delay. ≈ −13,8 LUFS, pico −1,8 dBFS.
+- **NADIR** (por defecto): cada vuelta es otra sala (tonalidad que se desliza, intervalo del lecho, latido y voz protagonista: TECLAS, CAMPANA, CORO o VACÍO; teletipo en la FUENTE). Dark ambient inquietante, con un lecho tipo Tineidae y los metales de Blade Runner 2049. Sub que respira, un lecho CS-80 desafinado (raíz y segunda menor que baten), cristal que bate y un racimo que se hunde en la TENSIÓN. Cada edición humana es un susurro con la vocal de su idioma (el murmullo de la gente). Ediciones enormes: metal arqueado. Páginas nuevas: swell CS-80. Bots: tic lejano. Borrados: un portazo en otra sala. Reversiones: aire al revés. RUPTURA: BRAAM y caída de sub tras el silencio. El pulso es un latido. Sala larga y oscura, sin delay. ≈ −13,8 LUFS, pico −1,8 dBFS.
 - **RITMO** (`?audio=ritmo`): IDM. Referencia: Autechre (rejillas que rotan, golpes secos, sin melodía). Seco: sin delay ni eco, con solo una sala corta para la chapa y el bajo. Estante −6 dB desde 2,2 kHz, compresor y limitador. Bombo con cuerpo, armónico y clic; golpe doble cuando un mismo idioma escribe dos veces en el mismo paso. Medido ≈ −13,9 LUFS, pico −1,5 dBFS.
 
 ## Herramientas

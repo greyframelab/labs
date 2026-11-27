@@ -23,7 +23,7 @@ function normaliza(d,tLocal){
   if(!d||d.type==='categorize') return null;
   if(d.namespace!==undefined && d.namespace!==0 && d.namespace!==6 && d.namespace!==120 && d.namespace!==14) {
     // otros espacios (discusiones, usuarios): solo como 'log' suave
-    return {t:tLocal, wiki:d.wiki, lang:langOf(d.wiki), bot:!!d.bot, delta:0, kind:'log'};
+    return {t:tLocal, hora:Date.now(), wiki:d.wiki, lang:langOf(d.wiki), bot:!!d.bot, delta:0, kind:'log'};
   }
   let kind='edit', delta=0;
   if(d.type==='new'){ kind='new'; delta=(d.length&&d.length.new)||800; }
@@ -33,7 +33,7 @@ function normaliza(d,tLocal){
     if(d.comment && REVERT.test(d.comment)) kind='revert';
     else if(delta<0) kind='del';
   } else return null;
-  return {t:tLocal, wiki:d.wiki, lang:langOf(d.wiki), bot:!!d.bot, delta, kind};
+  return {t:tLocal, hora:Date.now(), wiki:d.wiki, lang:langOf(d.wiki), bot:!!d.bot, delta, kind};
 }
 
 // ---------------------------------------------------------------- MEMORIA
