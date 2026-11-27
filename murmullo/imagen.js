@@ -68,7 +68,7 @@ void main(){
 const FS_SCENE=GLSL_HEAD+`
 in vec2 uv; out vec4 o;
 uniform sampler2D H, E; uniform vec2 res, texel, slab; uniform vec3 cp, cf, cr, cu; uniform float fov, foco, apert, tiempo, pulso, rake, tira, depthK, ruptura, polvo;
-uniform vec3 acento; uniform vec3 bar0, barD; uniform float barL, barW; uniform vec3 rakeL;
+uniform vec3 acento; uniform vec3 bar0, barD; uniform float barL, barW; uniform vec3 rakeL; uniform vec3 pool;
 float h1(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
 float vn(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f); return mix(mix(h1(i),h1(i+vec2(1,0)),f.x),mix(h1(i+vec2(0,1)),h1(i+1.),f.x),f.y); }
 float LOD=0.;
@@ -89,15 +89,14 @@ float haz(vec3 ro, vec3 rd, float tmax){
 void main(){
   vec2 p=(uv*2.-1.)*vec2(res.x/res.y,1.);
   vec3 rd=normalize(cf+p.x*cr*fov+p.y*cu*fov); vec3 ro=cp;
-  vec3 bmin=vec3(-slab.x*.5,-.42,-slab.y*.5), bmax=vec3(slab.x*.5,0.,slab.y*.5);
-  vec3 inv=1./rd; vec3 t0=(bmin-ro)*inv, t1=(bmax-ro)*inv; vec3 tmn=min(t0,t1), tmx=max(t0,t1);
-  float tn=max(max(tmn.x,tmn.y),tmn.z), tf=min(min(tmx.x,tmx.y),tmx.z);
+  // superficie sin bordes: un territorio escrito que se pierde en la oscuridad
+  float tn=rd.y<-1e-4?-ro.y/rd.y:-1.;
   vec3 col=vec3(0); float dist=60.;
   { float tp=-ro.y/min(rd.y,-1e-4); vec2 u0=(ro.xz+rd.xz*tp)/slab+.5; vec2 px=1./texel;
     LOD=clamp(log2(max(length(dFdx(u0)*px),length(dFdy(u0)*px))),0.,9.); }
-  if(tf>max(tn,0.)){
+  if(tn>0.){
     dist=tn; vec3 P=ro+rd*tn; vec3 n; float rough=.1, alb=.012, groove=0., edge=0., em=0.;
-    if(abs(P.y)<1e-3*max(1.,tn)){
+    {
       vec2 u=P.xz/slab+.5; vec2 tx=texel*exp2(LOD);
       float h=Hh(u); u+=rd.xz/max(.12,-rd.y)*h*depthK/slab*.5; h=Hh(u);   // parallax corto
       float hx=Hh(u+vec2(tx.x,0))-Hh(u-vec2(tx.x,0)), hz=Hh(u+vec2(0,tx.y))-Hh(u-vec2(0,tx.y));
@@ -108,27 +107,24 @@ void main(){
       vec2 wp=P.xz*1.3; vec2 wg=vec2(vn(wp)-vn(wp+vec2(.7,0)),vn(wp)-vn(wp+vec2(0,.7)));
       n=normalize(vec3(-grad.x,1.,-grad.y)+vec3(mg.x,0,mg.y)*(.004+groove*.22)/(1.+LOD)+vec3(wg.x,0,wg.y)*.006);
       rough=mix(.05,.55,groove); alb=mix(.006,.07,groove);
-      vec2 ed=slab*.5-abs(P.xz); edge=smoothstep(.04,0.,min(ed.x,ed.y));
       vec4 e=texture(E,u); em=e.r*(.5+2.6*e.g)*(.15+.85*groove);
-    } else {
-      vec3 c=(P-(bmin+bmax)*.5)/((bmax-bmin)*.5); vec3 a=abs(c);
-      n=a.x>a.y&&a.x>a.z?vec3(sign(c.x),0,0): a.y>a.z?vec3(0,sign(c.y),0):vec3(0,0,sign(c.z)); rough=.06;
     }
     vec3 V=-rd; float nv=max(dot(n,V),0.); float F=.04+.96*pow(1.-nv,5.);
     vec3 r=reflect(rd,n);
     float ti=tira_(P,r,rough)*tira*(.6+.4*pulso);
     vec3 spec=vec3(.92,.95,1.)*ti*F*9.;
     float env=smoothstep(.05,.95,r.y)*(.5+.5*smoothstep(-.6,.6,dot(r.xz,normalize(barD.xz+vec2(1e-4)))));
-    spec+=vec3(.75,.8,.9)*env*F*(.8/(1.+rough*25.))*tira;
+    spec+=vec3(.75,.8,.9)*env*F*(.22/(1.+rough*25.))*tira;
     vec3 L=normalize(rakeL); float nl=max(dot(n,L),0.); vec3 Hv=normalize(L+V);
     float sp=pow(max(dot(n,Hv),0.),2./(rough*rough+1e-3))*(1./(rough*8.+.2));
     vec3 rk=vec3(.62,.68,.78)*rake*(nl*alb*14.+sp*F*1.6);
     vec3 Em=acento*em*(1.+ruptura*1.5);
     // el fuego también ilumina la pared de su propia incisión (rebote cálido)
-    col=spec+rk+Em+vec3(.8,.85,.95)*edge*(.05+.2*tira)*(.4+F);
+    vec2 dp=P.xz-pool.xy; float lit=exp(-dot(dp,dp)/(pool.z*pool.z));
+    col=(spec+rk)*lit+Em*(.35+.65*lit);
     col*=mix(1.,.5,groove*(1.-min(1.,em)));
   }
-  col*=exp(-max(0.,dist-7.)*.08);
+  col*=exp(-max(0.,dist-6.)*.12);
   col+=vec3(.7,.75,.85)*haz(ro,rd,dist)*polvo*tira;
   col=clamp(col,0.,48.); if(any(isnan(col))||any(isinf(col))) col=vec3(0);
   float coc=clamp(abs(dist-foco)/max(dist,.1)*apert,0.,1.);
@@ -188,7 +184,7 @@ class Imagen{
   U(p,n){ return p.u[n]!==undefined?p.u[n]:(p.u[n]=this.gl.getUniformLocation(p,n)); }
   rt(w,h,lin,mip,ifmt,fmt){ const gl=this.gl, t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t); gl.texImage2D(gl.TEXTURE_2D,0,ifmt||gl.RGBA16F,w,h,0,fmt||gl.RGBA,gl.HALF_FLOAT,null);
     const f=lin?gl.LINEAR:gl.NEAREST; gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,mip?gl.LINEAR_MIPMAP_LINEAR:f); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,f);
-    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+    const wr=mip||w===EW?gl.REPEAT:gl.CLAMP_TO_EDGE; gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,wr); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,wr);
     const fb=gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER,fb); gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0); return {t,fb,w,h}; }
   resize(w,h){ this.W=w; this.H=h; this.cv.width=w; this.cv.height=h; const s=this.q; const sw=Math.round(w*s), sh=Math.round(h*s);
     for(const r of [this.scene,this.b1,this.b2]) if(r){ this.gl.deleteTexture(r.t); this.gl.deleteFramebuffer(r.fb); }
@@ -231,7 +227,7 @@ class Imagen{
       const cam=C.cam; gl.uniform3fv(U(p,'cp'),cam.p); gl.uniform3fv(U(p,'cf'),cam.f); gl.uniform3fv(U(p,'cr'),cam.r); gl.uniform3fv(U(p,'cu'),cam.u);
       gl.uniform1f(U(p,'fov'),cam.fov); gl.uniform1f(U(p,'foco'),cam.foco); gl.uniform1f(U(p,'apert'),cam.apert);
       gl.uniform1f(U(p,'tiempo'),C.t); gl.uniform1f(U(p,'pulso'),C.pulso); gl.uniform1f(U(p,'rake'),C.rake); gl.uniform1f(U(p,'tira'),C.tira); gl.uniform1f(U(p,'depthK'),.009); gl.uniform1f(U(p,'ruptura'),C.ruptura); gl.uniform1f(U(p,'polvo'),C.polvo||0);
-      gl.uniform3fv(U(p,'acento'),C.acento); gl.uniform3fv(U(p,'bar0'),C.bar0); gl.uniform3fv(U(p,'barD'),C.barD); gl.uniform1f(U(p,'barL'),C.barL); gl.uniform1f(U(p,'barW'),C.barW); gl.uniform3fv(U(p,'rakeL'),C.rakeL); });
+      gl.uniform3fv(U(p,'acento'),C.acento); gl.uniform3fv(U(p,'bar0'),C.bar0); gl.uniform3fv(U(p,'barD'),C.barD); gl.uniform1f(U(p,'barL'),C.barL); gl.uniform1f(U(p,'barW'),C.barW); gl.uniform3fv(U(p,'rakeL'),C.rakeL); gl.uniform3fv(U(p,'pool'),C.pool); });
     this.pass(this.P.bright,this.b1,p=>{ this.tex(p,'T',this.scene.t,0); gl.uniform2f(U(p,'texel'),1/this.scene.w,1/this.scene.h); });
     for(let i=0;i<2;i++){
       this.pass(this.P.blur,this.b2,p=>{ this.tex(p,'T',this.b1.t,0); gl.uniform2f(U(p,'dir'),1/this.b1.w,0); });

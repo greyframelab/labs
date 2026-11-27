@@ -22,9 +22,10 @@ function plano(S,tl){
   const r=rng(S.seed*977+13), a=r()*6.283; let T=S.T;
   const dir=[Math.cos(a),0,Math.sin(a)]; let perp=[-dir[2],0,dir[0]];
   let cam, bar0, barD, rakeL;
-  if(S.tipo==='GENERAL'){
-    const ang=a+tl*.02, R=13.2-tl*.07;
-    cam=mira([Math.cos(ang)*R,3.6+r()*1.6,Math.sin(ang)*R],[0,-.9,0],null,.44,null,.3);
+  if(S.tipo==='ABISMO'){ // escala: cámara muy baja y abierta que se eleva despacio; el territorio se pierde en negro
+    const Tg=S.T||[0,0,0]; const h=.45+r()*.25+tl*.07;
+    const p=add(sub(Tg,mul(dir,4.2+tl*.04)),[0,h,0]);
+    cam=mira(p,add(Tg,add(mul(dir,2.5),[0,-.15,0])),null,.62,Math.hypot(...sub(Tg,p)),.9);
   } else if(S.tipo==='RASANTE'){
     // mirando hacia el centro de la losa: siempre un largo renglón por delante
     const Tc=[Math.max(-5.5,Math.min(5.5,T[0])),0,Math.max(-3,Math.min(3,T[2]))]; T=Tc;
@@ -39,19 +40,21 @@ function plano(S,tl){
     const p=add(sub(T,mul(dir,.62-tl*.012)),add(mul(perp,(tl*.01)),[0,.17+r()*.05,0]));
     cam=mira(p,T,null,.3,null,4.2);
   } else { // CENITAL: la página entera del mundo
-    const h=6.8-tl*.06, c=add(mul(T,.5),[0,h,0]);
-    cam=mira(c,add(mul(T,.5),[.001,0,0]),[Math.cos(a*.3),0,Math.sin(a*.3)],.42,h,.25);
+    const h=4.6-tl*.05, c=add(mul(T,.5),[Math.cos(a)*.9,h,Math.sin(a)*.9]);
+    cam=mira(c,mul(T,.5),[Math.cos(a*.3),0,Math.sin(a*.3)],.4,h,.4);
   }
   // la barra de luz se coloca donde su reflejo cruza el punto de interés: un brillo que barre lo escrito
   const fv=nrm([cam.f[0],0,cam.f[2]]); const pv=[-fv[2],0,fv[0]];
-  const Tf=S.tipo==='GENERAL'?[0,0,0]:S.tipo==='CENITAL'?mul(T,.5):S.tipo==='ESCRITURA'?(S.Tl||T):T;
-  const Hb={GENERAL:2.6,RASANTE:.9,MACRO:.55,ESCRITURA:.5,CENITAL:9.5}[S.tipo];
+  const Tf=S.tipo==='ABISMO'?(S.T||[0,0,0]):S.tipo==='CENITAL'?mul(T,.5):S.tipo==='ESCRITURA'?(S.Tl||T):T;
+  const Hb={ABISMO:1.1,RASANTE:.9,MACRO:.55,ESCRITURA:.5,CENITAL:9.5}[S.tipo];
   const hd=Math.hypot(cam.p[0]-Tf[0],cam.p[2]-Tf[2]), off=S.tipo==='CENITAL'?0:Hb*hd/Math.max(.05,cam.p[1]);
   const sweep=Math.sin(tl*.35+S.seed)*(S.tipo==='CENITAL'?1.6:off*.25);
   bar0=add(Tf,add(mul(fv,off+sweep),[0,Hb,0]));
   barD=S.tipo==='CENITAL'?[Math.cos(a),0,Math.sin(a)]:pv;
   rakeL=add(mul(perp,.96),[0,.09+r()*.06,0]);
-  return {cam,bar0,barD,barL:S.tipo==='CENITAL'?6:S.tipo==='GENERAL'?9:5,barW:(S.tipo==='MACRO'||S.tipo==='ESCRITURA')?.12:S.tipo==='GENERAL'?.4:.22,rakeL};
+    // la luz solo existe donde pasa algo: un charco alrededor del punto de interés
+  const pool=[Tf[0],Tf[2],{ABISMO:5.5,RASANTE:4.5,MACRO:2.5,ESCRITURA:2.2,CENITAL:4.2}[S.tipo]];
+  return {cam,bar0,barD,barL:S.tipo==='CENITAL'?5:S.tipo==='ABISMO'?7:4,barW:(S.tipo==='MACRO'||S.tipo==='ESCRITURA')?.05:.08,rakeL,pool};
 }
 
 // ------------------------------------------------------------ montaje
@@ -64,14 +67,14 @@ class Montaje{
     const b=P.bar, s=P.s16, ultimo=E.ultimo, grande=E.ultGrande;
     const pt=(o)=>uv2w(o.u,o.v);
     if(P.senal || !this.S){ const u=this.r(); if(u<.6) this.corta('ESCRITURA',this.cursor(),P.t); else this.corta(u<.8?'RASANTE':'MACRO',pt(ultimo),P.t); this.eco=null; }
-    if(P.acto===1 && s===0 && (b===4||b===6||b===7||b===8)){ const tipos=['MACRO','RASANTE','CENITAL','GENERAL'].filter(x=>x!==this.ultTipo); this.corta(tipos[Math.floor(this.r()*tipos.length)],pt(b%2?grande:ultimo),P.t); }
+    if(P.acto===1 && s===0 && (b===4||b===6||b===7||b===8)){ const tipos=['MACRO','RASANTE','CENITAL','ABISMO'].filter(x=>x!==this.ultTipo); this.corta(tipos[Math.floor(this.r()*tipos.length)],pt(b%2?grande:ultimo),P.t); }
     if(P.acto===1 && b===9 && (s===0||s===8)) { if(s===0) this.corta('ESCRITURA',this.cursor(),P.t); else this.corta('RASANTE',pt(grande),P.t); }
     this.negro = (b===9 && s>=14);                // antes del golpe, negro
-    if(P.ruptura){ this.corta('GENERAL',null,P.t); this.ruptura=1; }
+    if(P.ruptura){ this.corta('ABISMO',pt(E.grietaP||ultimo),P.t); this.ruptura=1; }
     if(P.acto===2 && s===0 && b===11) this.corta('MACRO',pt(E.grietaP||ultimo),P.t);
-    if(P.acto===2 && s===8 && b===12) this.corta('CENITAL',[0,0,0],P.t);
-    if(P.eco){ this.corta('CENITAL',[0,0,0],P.t); this.eco={t0:P.t,dur:P.dur*16*3}; }
-    if(P.acto===3 && b===15 && s===0) this.corta('GENERAL',null,P.t);
+    if(P.acto===2 && s===8 && b===12) this.corta('CENITAL',pt(E.grietaP||ultimo),P.t);
+    if(P.eco){ this.corta('CENITAL',pt(E.grietaP||ultimo),P.t); this.eco={t0:P.t,dur:P.dur*16*3}; }
+    if(P.acto===3 && b===15 && s===0) this.corta('ABISMO',pt(E.grietaP||ultimo),P.t);
     if(P.kick) this.pulso=Math.max(this.pulso,P.kick);
     if(P.tick) this.pulso=Math.max(this.pulso,P.tick.v*.35);
     this.fin=(b===15 && s>=8);                    // cada vuelta vuelve al negro
@@ -86,10 +89,10 @@ class Montaje{
     if(this.eco){ const k=(t-this.eco.t0)/this.eco.dur; this.pol=k>=0&&k<=1?[-.1+k*1.2,.09,.9]:[0,0,0]; } else this.pol=[0,0,0];
     const acto=P?P.acto:0;
     const L=plano(this.S,t-this.S.t0);
-    return {t,cam:L.cam,bar0:L.bar0,barD:L.barD,barL:L.barL,barW:L.barW,rakeL:L.rakeL,
+    return {t,cam:L.cam,bar0:L.bar0,barD:L.barD,barL:L.barL,barW:L.barW,rakeL:L.rakeL,pool:L.pool,
       pulso:this.pulso, ruptura:this.ruptura, fade:this.fade,
       tira:[.45,.8,1.25,.6][acto]+this.ruptura*.6, rake:[.25,.45,.7,.35][acto]+this.pulso*.5,
-      polvo:({GENERAL:.9,RASANTE:.45}[this.S.tipo]||0)*[.6,.8,1,.5][acto], expo:[1.0,1.1,1.25,1.0][acto]*(+(Q.get('expo')||1)), dof:1, acento:M.acento};
+      expo:[1.0,1.1,1.25,1.0][acto]*(+(Q.get('expo')||1)), dof:1, acento:M.acento};
   }
 }
 

@@ -1,7 +1,7 @@
 # VØID_LOOM · MURMULLO
 Sala 1 del acto I (EL MUNDO) de la exposición [VØID_LOOM · PARTITURA](../museo/EXPOSICION.md).
 
-Una losa de obsidiana flota en el vacío. Todo el mundo escribe en ella a la vez: cada edición de Wikipedia, en cualquier idioma, se talla en tiempo real. Nada está grabado. Lo que se ve y se oye es lo que la gente está escribiendo ahora mismo.
+Un territorio de obsidiana sin bordes, que se pierde en la oscuridad. Todo el mundo escribe en ella a la vez: cada edición de Wikipedia, en cualquier idioma, se talla en tiempo real. Nada está grabado. Lo que se ve y se oye es lo que la gente está escribiendo ahora mismo.
 
 **Abrir:** `murmullo/index.html` en Chrome o Edge → ARRANCAR. **F** pone la pantalla completa.
 
@@ -21,12 +21,12 @@ Una losa de obsidiana flota en el vacío. Todo el mundo escribe en ella a la vez
 
 ## Cuatro actos
 - **SEÑAL:** casi siempre ESCRITURA: la cámara acompaña el renglón del español mientras el mundo lo escribe (`?idioma=ca`, `en`… para seguir otro). Si no, rasante o macro. Solo suenan los golpes humanos que más pesan.
-- **TENSIÓN:** entran el bombo (rejilla euclidiana que rota), los bots y la caja, que solo suena cuando hay un borrado real en ese paso. Shuffle distinto en cada vuelta. Cortes: macro, rasante, cenital (la página entera del mundo) y general. Antes del golpe, negro y silencio.
-- **RUPTURA:** la losa se agrieta donde fue la última guerra de ediciones. Veta incandescente del acento, tritono en el dron.
+- **TENSIÓN:** entran el bombo (rejilla euclidiana que rota), los bots y la caja, que solo suena cuando hay un borrado real en ese paso. Shuffle distinto en cada vuelta. Cortes: macro, rasante, cenital y ABISMO (cámara muy baja y abierta que se eleva despacio). Nunca se ven los bordes: no es un objeto, es un lugar. Antes del golpe, negro y silencio.
+- **RUPTURA:** ABISMO sobre la grieta. La losa se agrieta donde fue la última guerra de ediciones. Veta incandescente del acento, tritono en el dron.
 - **ECO:** un pulido barre la losa. Lo escrito queda debajo, apenas legible (palimpsesto). Vuelve al negro.
 
 ## Imagen
-Losa de 16×9. La altura vive en un mapa de 4096×2304 (R16F) que solo se escribe por blending, con sellos y pulido, sin pasadas a pantalla completa. La emisión vive aparte, en baja (1024×576), y se apaga sola. Así las letras quedan talladas con pared recta y fondo plano incluso en macro. La losa nunca se borra del todo. Al arrancar ya lleva ~14 min de historia escrita. Laca negra con reflejo de una barra de luz que barre y una caja de luz tenue. La luz rasante solo encuentra los bordes de lo escrito. Bisel pulido en el filo, polvo tenue en el haz de la barra (solo en planos abiertos), DOF, bloom contenido y grano sutil. La grieta tiene labio levantado y veta incandescente en el centro. Un solo acento por pieza (ámbar por defecto; `?acento=rojo|cian|violeta|blanco`).
+Superficie infinita: la escritura de 16×9 se repite más allá de la vista y la luz solo existe en un charco alrededor de lo que pasa; lo que arde se ve más lejos, como estrellas. Barra de luz estrecha y rasante, que lee la piedra. La altura vive en un mapa de 4096×2304 (R16F) que solo se escribe por blending, con sellos y pulido, sin pasadas a pantalla completa. La emisión vive aparte, en baja (1024×576), y se apaga sola. Así las letras quedan talladas con pared recta y fondo plano incluso en macro. La losa nunca se borra del todo. Al arrancar ya lleva ~14 min de historia escrita. Laca negra con reflejo de una barra de luz que barre y una caja de luz tenue. La luz rasante solo encuentra los bordes de lo escrito. Bisel pulido en el filo, polvo tenue en el haz de la barra (solo en planos abiertos), DOF, bloom contenido y grano sutil. La grieta tiene labio levantado y veta incandescente en el centro. Un solo acento por pieza (ámbar por defecto; `?acento=rojo|cian|violeta|blanco`).
 
 ## Fluidez
 Calidad automática: si no llega a ~55 fps baja la resolución interna (80 %, 70 %, 60 %) y después fija 30 fps; si va sobrado, recupera. Los cambios esperan a un corte de plano.
