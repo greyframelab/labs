@@ -1,0 +1,17 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VØID_LOOM · MURMULLO</title>
+<style>html,body{margin:0;background:#000;overflow:hidden;height:100%;font-family:ui-monospace,Menlo,monospace;color:#9aa3b2}
+canvas{display:block;width:100vw;height:100vh}
+#carga,#inicio{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px;letter-spacing:.32em;font-size:11px;background:#000}
+#inicio{display:none}#inicio button{background:none;border:1px solid #2a2f38;color:#c9d2e0;padding:12px 22px;letter-spacing:.3em;font:inherit;cursor:pointer}
+#inicio button:hover{border-color:#ffb000;color:#ffb000}</style></head><body>
+<canvas id="c"></canvas>
+<div id="carga">VØID_LOOM · MURMULLO<span>ESCUCHANDO EL MUNDO</span></div>
+<div id="inicio">VØID_LOOM · MURMULLO<div><button onclick="arrancar()">ARRANCAR</button></div><span style="opacity:.5">F · PANTALLA COMPLETA</span></div>
+<script src="flujo.js"></script>
+<script src="partitura.js"></script>
+<script src="imagen.js"></script>
+<script src="sonido.js"></script>
+<script src="main.js"></script>
+<script>iniciar().catch(e=>{document.title='ERR '+e.message;console.error(e);});</script>
+</body></html>
