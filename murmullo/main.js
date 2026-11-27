@@ -161,6 +161,8 @@ function consolaUI(){
   $('vol').oninput=e=>{ if(M.master) M.master.gain.value=+e.target.value; };
   $('arrancar').onclick=()=>{ $('arrancar').disabled=true; $('arrancar').textContent='EN MARCHA'; arrancar(); };
   addEventListener('keydown',e=>{ if(e.key==='f'||e.key==='F') document.getElementById('vista').requestFullscreen&&document.getElementById('vista').requestFullscreen(); });
+  // modo instalación (app de escritorio): arranca sola y abre la salida en el proyector
+  if(Q.has('instalacion')) setTimeout(()=>{ $('arrancar').click(); $('salida').click(); },1500);
   const ro=new ResizeObserver(()=>{ const c=$('c'); M.I.resize(c.clientWidth,c.clientHeight); const t=$('t'); t.width=c.clientWidth; t.height=c.clientHeight; }); ro.observe($('c'));
 }
 function cambiaAudio(){ // cambiar de modo de audio en marcha: el motor nuevo entra en el siguiente paso

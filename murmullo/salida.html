@@ -6,5 +6,5 @@
 <canvas id="c"></canvas><canvas id="t"></canvas>
 <div id="carga">SALIDA DE VØID_LOOM · MURMULLO<br>ESPERANDO A LA CONSOLA (PULSA ARRANCAR)<br>LLEVA ESTA VENTANA AL PROYECTOR Y HAZ DOBLE CLIC: PANTALLA COMPLETA</div>
 <script src="flujo.js"></script><script src="partitura.js"></script><script src="imagen.js"></script><script src="testigo.js"></script><script src="main.js"></script>
-<script>iniciar().catch(e=>{document.title='ERR '+e.message;console.error(e);});</script>
+<script>iniciar().catch(e=>{document.title='ERR '+e.message;console.error('[MURMULLO_GPU_FALLO]',e&&e.message);});</script>
 </body></html>
