@@ -1,0 +1,46 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VØID_LOOM · MENSAJERO · CONSOLA</title><link rel="icon" href="data:,">
+<style>
+html,body{margin:0;background:#000;height:100%;overflow:hidden;font:400 11px/1.6 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.14em;color:#8d929c}
+#carga{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;letter-spacing:.32em;background:#000;z-index:9}
+#consola{display:none;height:100%;grid-template-columns:1fr 360px}#consola.on{display:grid}
+#vista{position:relative;display:flex;align-items:center;justify-content:center;padding:18px}
+#marco{position:relative;width:100%;aspect-ratio:16/9;max-height:100%;border:1px solid #16181d}
+#c,#t{position:absolute;inset:0;width:100%;height:100%;display:block}
+#vista .pie{position:absolute;left:20px;bottom:6px;font-size:9px;color:#4a4e57}
+#panel{border-left:1px solid #16181d;padding:22px;display:flex;flex-direction:column;gap:18px;overflow:auto}
+h1{margin:0;font-size:12px;letter-spacing:.34em;color:#d6d9e0;font-weight:400} h2{margin:0 0 6px;font-size:9px;letter-spacing:.3em;color:#4f535c;font-weight:400}
+.f{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid #111317;padding:4px 0}.f b{font-weight:400;color:#c9cdd6;text-align:right}
+.vivo{color:#e9eef7!important}.mem{color:#6d717b!important}
+button{background:none;border:1px solid #2a2e36;color:#c9cdd6;padding:10px 12px;font:inherit;letter-spacing:.24em;cursor:pointer;width:100%}
+button:hover:not(:disabled){border-color:#e9eef7;color:#fff}button:disabled{color:#e9eef7;border-color:#333;cursor:default}
+label{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0} input[type=range]{width:150px;accent-color:#e9eef7} input[type=checkbox]{accent-color:#e9eef7}
+.nota{font-size:9.5px;line-height:1.7;color:#5a5e67;letter-spacing:.08em}
+</style></head><body>
+<div id="carga">VØID_LOOM · MENSAJERO<span>ORIENTANDO LA ANTENA</span></div>
+<div id="consola">
+  <div id="vista"><div id="marco"><canvas id="c"></canvas><canvas id="t"></canvas></div><div class="pie">VISTA PREVIA · F PANTALLA COMPLETA</div></div>
+  <div id="panel">
+    <h1>VØID_LOOM · MENSAJERO</h1>
+    <div><button id="arrancar">ARRANCAR</button></div>
+    <div><button id="salida">ABRIR SALIDA (PROYECTOR)</button></div>
+    <div><h2>LA SEÑAL</h2>
+      <div class="f">FEED <b id="e-flujo">—</b></div>
+      <div class="f">ANTENA <b id="e-ant">—</b></div>
+      <div class="f">NAVE <b id="e-nave">—</b></div>
+      <div class="f">DISTANCIA <b id="e-dist">—</b></div>
+      <div class="f">SALIÓ HACE <b id="e-luz">—</b></div>
+      <div class="f">DATOS <b id="e-datos">—</b></div>
+      <div class="f">APUNTA <b id="e-apunta">—</b></div></div>
+    <div><h2>LA PIEZA</h2>
+      <div class="f">PLANO <b id="e-acto">—</b></div>
+      <div class="f">SALIDA <b id="e-salida">SIN ABRIR</b></div></div>
+    <div><h2>SALA</h2>
+      <label>TESTIGO (SOLO EN VIVO) <input type="checkbox" id="testigo"></label>
+      <label>VOLUMEN <input type="range" id="vol" min="0" max="1.2" step="0.01" value="0.9"></label></div>
+    <div class="nota">El dato es real: NASA Deep Space Network, en directo. La antena apunta donde apunta la de verdad y cada paquete que recibe la revela. Si el feed no responde, la pieza sigue en MEMORIA con la última lectura y el TESTIGO no se escribe. Modelo de la antena: NASA 3D Resources.</div>
+  </div>
+</div>
+<script src="testigo.js"></script><script src="datos.js"></script><script src="montaje.js"></script><script src="sonido.js"></script>
+<script type="module" src="main.js"></script>
+</body></html>

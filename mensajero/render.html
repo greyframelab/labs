@@ -1,0 +1,24 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><title>VØID_LOOM · MENSAJERO · render</title>
+<style>html,body{margin:0;background:#000}canvas{display:block}</style></head><body>
+<canvas id="c"></canvas><canvas id="t" style="display:none"></canvas>
+<script src="testigo.js"></script><script src="datos.js"></script><script src="montaje.js"></script><script src="sonido.js"></script>
+<script type="module">
+// render offline de validación y del Reel: mismo motor, montaje y sonido que en vivo, con la lectura real guardada (MEMORIA)
+import {crear} from './escena.js';
+const Q=new URLSearchParams(location.search); const W=+(Q.get('w')||1280), H=+(Q.get('h')||720);
+const c=document.getElementById('c'); c.width=W; c.height=H; const tcv=document.getElementById('t'); tcv.width=W; tcv.height=H; const tc=tcv.getContext('2d');
+const E=await crear({canvas:c,w:W,h:H,render:true,az:105,el:51});
+const datos={...MensajeroDatos.MEMORIA}; const o={dataRate:datos.dataRate,potencia:1,raiz:38,seed:7,dur:MensajeroMontaje.VUELTA};
+const P=MensajeroSonido.Partitura(o); const plan={golpes:P.golpes,datos};
+let tPrev=0;
+window.frame=(t)=>{ const st=MensajeroMontaje.estado(t,plan,{forzarTestigo:Q.has('testigo')}); E.dibuja(st,t-tPrev); tPrev=t;
+  const o2=document.createElement('canvas'); o2.width=W; o2.height=H; const x=o2.getContext('2d'); x.drawImage(c,0,0);
+  if(st.testigo){ tc.clearRect(0,0,W,H); dibujaTestigo(tc,W,H,st.testigo.lineas,st.testigo.k,st.testigo.a*(st.expo??1),[.91,.93,.97]); x.drawImage(tcv,0,0); }
+  return o2.toDataURL('image/jpeg',.93); };
+window.audio=async(dur)=>{ const sr=48000, ctx=new OfflineAudioContext(2,Math.ceil(sr*dur),sr); const A=MensajeroSonido.Motor(ctx,ctx.destination,o); MensajeroSonido.programa(A,P,o,0);
+  const buf=await ctx.startRendering(); const len=buf.length, out=new DataView(new ArrayBuffer(44+len*4)); const w=(p,s)=>{ for(let i=0;i<s.length;i++) out.setUint8(p+i,s.charCodeAt(i)); };
+  w(0,'RIFF'); out.setUint32(4,36+len*4,true); w(8,'WAVE'); w(12,'fmt '); out.setUint32(16,16,true); out.setUint16(20,1,true); out.setUint16(22,2,true); out.setUint32(24,sr,true); out.setUint32(28,sr*4,true); out.setUint16(32,4,true); out.setUint16(34,16,true); w(36,'data'); out.setUint32(40,len*4,true);
+  const a=buf.getChannelData(0), b=buf.getChannelData(1); let p=44; for(let i=0;i<len;i++){ out.setInt16(p,Math.max(-1,Math.min(1,a[i]))*32767,true); out.setInt16(p+2,Math.max(-1,Math.min(1,b[i]))*32767,true); p+=4; }
+  let s=''; const u=new Uint8Array(out.buffer); for(let i=0;i<u.length;i+=32768) s+=String.fromCharCode.apply(null,u.subarray(i,i+32768)); return btoa(s); };
+document.title='LISTO';
+</script></body></html>

@@ -78,7 +78,7 @@ function Motor(ctx,dest,o){
     E.lechoLP.frequency.setTargetAtTime(a==='RUPTURA'?560:a==='ECO'?170:230,t,tc);
     if(a==='TENSIÓN' && o2.dur){ for(const d of E.descOs){ d.x.frequency.cancelScheduledValues(t); d.x.frequency.setValueAtTime(f0*2*d.m,t); d.x.frequency.exponentialRampToValueAtTime(f0*2*d.m*Math.pow(2,-4/12),t+o2.dur); } } };
   E.silencio=(t)=>{ E.duck.gain.setTargetAtTime(0,t,.012); E.send.gain.setTargetAtTime(0,t,.01); };
-  E.vuelve=(t)=>{ E.duck.gain.cancelScheduledValues(t); E.duck.gain.setValueAtTime(1,t); E.send.gain.cancelScheduledValues(t); E.send.gain.setValueAtTime(.6,t); };
+  E.vuelve=(t,tau)=>{ E.duck.gain.cancelScheduledValues(t); E.duck.gain.setTargetAtTime(1,t,tau||.001); E.send.gain.cancelScheduledValues(t); E.send.gain.setValueAtTime(.6,t); };
   E.fin=(t,d)=>{ E.duck.gain.setTargetAtTime(0,t,d/3); };
   return E;
 }
@@ -102,12 +102,14 @@ function Partitura(o){
   golpes.push(22.3);
   return {bpm,actos,golpes:[...new Set(golpes)].sort((a,b)=>a-b),latidos,dur};
 }
-function programa(E,P,o){
-  E.acto(0,'SEÑAL',o); E.acto(6,'TENSIÓN',{...o,dur:14.6}); E.silencio(20.6); E.vuelve(22.3); E.acto(22.3,'RUPTURA',o); E.braam(22.3,1); E.acto(28,'ECO',o);
-  for(const g of P.golpes) if(g!==22.3) E.arco(g,g>22.3&&g<28?1:.75);
-  for(const l of P.latidos) E.latido(l.t,l.v);
-  E.cs80(1.2,E.f0,6,.55); E.cs80(28.4,E.f0*16/15,5,.7);
-  E.fin(P.dur-2.6,2.4);
+// programa una vuelta a partir del instante t0 (en vivo, una vuelta tras otra; en render, t0=0)
+function programa(E,P,o,t0){
+  t0=t0||0; const A=(x)=>t0+x;
+  E.vuelve(A(0),t0>0?.5:.001); E.acto(A(0),'SEÑAL',o); E.acto(A(6),'TENSIÓN',{...o,dur:14.6}); E.silencio(A(20.6)); E.vuelve(A(22.3)); E.acto(A(22.3),'RUPTURA',o); E.braam(A(22.3),1); E.acto(A(28),'ECO',o);
+  for(const g of P.golpes) if(g!==22.3) E.arco(A(g),g>22.3&&g<28?1:.75);
+  for(const l of P.latidos) E.latido(A(l.t),l.v);
+  E.cs80(A(1.2),E.f0,6,.55); E.cs80(A(28.4),E.f0*16/15,5,.7);
+  E.fin(A(P.dur-2.6),2.4);
 }
 window.MensajeroSonido={Motor,Partitura,programa};
 })();
