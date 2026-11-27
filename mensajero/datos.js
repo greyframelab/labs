@@ -38,7 +38,7 @@ function velocidad(b){ if(b>=1e6) return (b/1e6).toFixed(1).replace('.',',')+' M
 class Datos{
   constructor(){ this.d=null; this.estado='MEMORIA'; this.ultimo=0; this.errores=0; }
   async arranca(){ await nombres(); await this.lee(); setInterval(()=>this.lee(),5000); }
-  async lee(){ try{ const r=await fetch(base()+'dsn.xml?r='+Date.now(),{cache:'no-store'}); if(!r.ok) throw 0; const d=elige(await r.text()); if(d){ this.d=d; this.estado='EN VIVO'; this.ultimo=Date.now(); this.errores=0; } }
+  async lee(){ try{ const r=await fetch(base()+'data/dsn.xml?r='+Date.now(),{cache:'no-store'}); if(!r.ok) throw 0; const d=elige(await r.text()); if(d){ this.d=d; this.estado='EN VIVO'; this.ultimo=Date.now(); this.errores=0; } }
     catch(e){ this.errores++; if(Date.now()-this.ultimo>30000) this.estado='MEMORIA'; } }
   actual(){ return this.estado==='EN VIVO'&&this.d?this.d:{...(this.d||MEMORIA),vivo:false}; }
 }
