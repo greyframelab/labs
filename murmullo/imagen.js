@@ -257,10 +257,10 @@ class Escritura{
     for(let i=0;i<chars;i++){
       const u=c.x+(gw*.5)/SLAB[0];
       const tipo=e.kind==='del'?2: e.bot?1: 0;
-      const emis=e.kind==='new'?1.5: suena?.9: e.kind==='log'?0: e.bot?.08:.22;
+      const vuelta=typeof M!=='undefined'&&e.wiki===M.idioma; const emis=e.kind==='new'?1.6: suena?1.1: e.kind==='log'?0: e.bot?.08: vuelta?.85:.4;
       const g=txt?glifoM(txt[i]):0, bh=Math.floor(g/32768), bl=g%32768;
       // la letra se talla en su turno: se ve escribir (los bots, a ráfaga)
-      out.push({u, v:v+(e.bot?0:(r()-.5)*.0012), w:gw*(e.kind==='del'&&!txt?1.25:1), h:gh, tipo:txt&&tipo===2?0:tipo, seed:r(), prof:e.kind==='log'?.35:e.bot?.6:e.kind==='del'?.5:.9+Math.min(.5,big/20000), emis, giro:jit*.15, brillo:suena?1:.15, gh:bh, gl:bl, d:i*(e.bot?.02:.07)});
+      out.push({u, v:v+(e.bot?0:(r()-.5)*.0012), w:gw*(e.kind==='del'&&!txt?1.25:1), h:gh, tipo:txt&&tipo===2?0:tipo, seed:r(), prof:e.kind==='log'?.35:e.bot?.6:e.kind==='del'?.5:.9+Math.min(.5,big/20000), emis, giro:jit*.15, brillo:suena||vuelta?1:.35, gh:bh, gl:bl, d:i*(e.bot?.02:.07)});
       c.x+=(gw+gap)/SLAB[0];
     }
     c.x+=gap*2/SLAB[0];

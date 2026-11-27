@@ -131,6 +131,10 @@ app.whenReady().then(async () => {
   const allow = new Set(['screen-wake-lock', 'fullscreen']);
   ses.setPermissionRequestHandler((wc, perm, cb) => cb(allow.has(perm)));
   ses.setPermissionCheckHandler((wc, perm) => allow.has(perm));
+  // Wikimedia bloquea clientes sin User-Agent identificable: el flujo sale firmado como VØID_LOOM · MURMULLO
+  ses.webRequest.onBeforeSendHeaders({ urls: ['https://stream.wikimedia.org/*'] }, (d, cb) => {
+    d.requestHeaders['User-Agent'] = 'VOID_LOOM-MURMULLO/' + app.getVersion() + ' (https://greyframelab.github.io/labs/; museo, instalación) ' + d.requestHeaders['User-Agent'];
+    cb({ requestHeaders: d.requestHeaders }); });
   protocol.handle('murmullo', serveLocal);
   powerSaveBlocker.start('prevent-display-sleep');
   buildMenu();

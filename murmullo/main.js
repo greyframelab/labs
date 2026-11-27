@@ -136,7 +136,7 @@ function construye(seed,acento,idioma,W,H,q){
 async function iniciar(){
   if(SALIDA) return iniciaSalida();
   const seed=+(Q.get('seed')||Math.floor(Math.random()*1e6)); M.audio=Q.get('audio')||'nadir';
-  const acento=Q.get('acento')||['ambar','ambar','rojo','cian','violeta','blanco'][seed%6];
+  const acento=Q.get('acento')||['ambar','ambar','rojo','cian','violeta'][seed%5];   // blanco solo con ?acento=blanco
   const cv=document.getElementById('c');
   const W=+(Q.get('w')||cv.clientWidth||innerWidth), H=+(Q.get('h')||cv.clientHeight||innerHeight);
   construye(seed,acento,(Q.get('idioma')||'es')+'wiki',W,H,RENDER?+(Q.get('q')||1):.6);
@@ -234,7 +234,7 @@ function limpia(P){ const o={...P}; o.ev=P.ev.map(e=>({t:e.t,hora:e.hora,wiki:e.
   if(o.grietaDe) o.grietaDe={wiki:o.grietaDe.wiki}; return o; }
 function estadoUI(){
   const $=id=>document.getElementById(id), F=M.F, vivo=F.estado==='EN VIVO';
-  $('e-flujo').textContent=F.estado; $('e-flujo').className=vivo?'vivo':'mem';
+  $('e-flujo').textContent=F.estado+(F.motivo&&!vivo?' · '+F.motivo:''); $('e-flujo').className=vivo?'vivo':'mem';
   $('e-ritmo').textContent=F.ritmo.toFixed(1)+' /s'; $('e-rec').textContent=F.recibidos.toLocaleString('es');
   $('e-hum').textContent=(M.ventana||[]).length+' · '+new Set((M.ventana||[]).map(e=>e.l)).size+' idiomas';
   const P=M.ultP; if(P){ $('e-acto').textContent=ACTOS[P.acto]+' · compás '+(P.bar+1)+'/16'; $('e-bpm').textContent=P.bpm+' BPM'; }

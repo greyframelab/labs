@@ -27,7 +27,7 @@ class SonidoNadir{
     this.tanh=new Float32Array(1024); for(let i=0;i<1024;i++){ const x=i/511.5-1; this.tanh[i]=Math.tanh(2.4*x); }
     const f0=hzM(P.root); this.f0=f0; this.fc=f0; this.ton=[];   // Re2 por defecto; ton: osciladores que siguen la tonalidad de la vuelta
     // cada vuelta es otra sala: tonalidad, intervalo del lecho, voz protagonista y latido cambian (orden propio de la semilla)
-    this.voces=['teclas','campana','coro','vacio'].sort(()=>r()-.5); this.V={tr:0,voz:this.voces[0],lat:[0,3],int:16/15};
+    this.voces=['teclas','campana','coro','vacio'].sort(()=>r()-.5); this.V={tr:0,voz:this.voces[0],lat:[0,3],int:16/15,braam:0}; this.Vm=1;
     const osc=(type,f,det)=>{ const o=c.createOscillator(); o.type=type; o.frequency.value=f; if(det) o.detune.value=det; o.start(0); return o; };
     const lfo=(rate,depth,param)=>{ const l=osc('sine',rate), g=c.createGain(); g.gain.value=depth; l.connect(g).connect(param); return l; };
     // ---- 1 · SUB que respira
@@ -57,9 +57,9 @@ class SonidoNadir{
   _out(g,pan,send){ const c=this.ctx, p=c.createStereoPanner(); p.pan.value=pan||0; g.connect(p); p.connect(this.out); if(send){ const sg=c.createGain(); sg.gain.value=send; p.connect(sg).connect(this.send); } }
   // ---------------- voces
   susurro(t,v,lang,pan){ // una persona escribe: un soplo con vocal (formante por idioma)
-    const c=this.ctx, h=hashStr(lang), V=[[300,870],[400,800],[500,1700],[700,1100],[350,640],[600,1000]][h%6];
-    const n=c.createBufferSource(); n.buffer=this.noise; const g=c.createGain(); const L=.09+((h>>>4)%7)*.025;
-    const b1=c.createBiquadFilter(), b2=c.createBiquadFilter(); b1.type=b2.type='bandpass'; b1.frequency.value=V[0]; b2.frequency.value=V[1]; b1.Q.value=6; b2.Q.value=9;
+    const c=this.ctx, r=this.r, V=[[300,870],[400,800],[500,1700],[700,1100],[350,640],[600,1000],[280,2250],[450,1450]][Math.floor(r()*8)], k=(.82+r()*.4)*this.Vm;
+    const n=c.createBufferSource(); n.buffer=this.noise; const g=c.createGain(); const L=.07+r()*.2;
+    const b1=c.createBiquadFilter(), b2=c.createBiquadFilter(); b1.type=b2.type='bandpass'; b1.frequency.setValueAtTime(V[0]*k,t); b2.frequency.setValueAtTime(V[1]*k,t); b2.frequency.linearRampToValueAtTime(V[1]*k*(.8+r()*.4),t+L); b1.Q.value=6; b2.Q.value=9;
     const m=c.createGain(); n.connect(b1).connect(m); n.connect(b2).connect(m); m.connect(g);
     g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.085*v,t+L*.4); g.gain.linearRampToValueAtTime(0,t+L);
     this._out(g,pan,1.2); n.start(t,(t*1.37)%1.5); n.stop(t+L+.02);
@@ -108,9 +108,9 @@ class SonidoNadir{
   }
   braam(t,v){ // RUPTURA: el metal enorme (5 sierras desafinadas + octava grave), filtro que se abre de golpe y se cierra; sub que cae
     const c=this.ctx, f=this.fc, lp=c.createBiquadFilter(), g=c.createGain(), sh=c.createWaveShaper(); sh.curve=this.tanh;
-    lp.type='lowpass'; lp.Q.value=2.5; lp.frequency.setValueAtTime(160,t); lp.frequency.linearRampToValueAtTime(1300*v+300,t+.3); lp.frequency.setTargetAtTime(200,t+.4,1.4);
+    lp.type='lowpass'; lp.Q.value=2.5; lp.frequency.setValueAtTime(160,t); lp.frequency.linearRampToValueAtTime([1300,900,1700,1100][this.V.braam||0]*v+300,t+[.3,.6,.18,.9][this.V.braam||0]); lp.frequency.setTargetAtTime(200,t+.4,[1.4,2.2,.9,1.8][this.V.braam||0]);
     const os=[]; for(const d of [-16,-8,0,8,16]){ const o=c.createOscillator(); o.type='sawtooth'; o.frequency.value=f; o.detune.value=d; o.connect(lp); os.push(o); }
-    for(const [m,d] of [[.5,0],[.5,6],[Math.SQRT2,-5]]){ const o=c.createOscillator(); o.type='sawtooth'; o.frequency.value=f*m; o.detune.value=d; const og=c.createGain(); og.gain.value=m<1?.8:.25; o.connect(og).connect(lp); os.push(o); }
+    for(const [m,d] of [[[.5,0],[.5,6],[Math.SQRT2,-5]],[[.5,0],[1.5,4],[.75,-6]],[[.5,0],[16/15,3],[.25,0]],[[.5,0],[.5,9],[1.2,-4]]][this.V.braam||0]){ const o=c.createOscillator(); o.type='sawtooth'; o.frequency.value=f*m; o.detune.value=d; const og=c.createGain(); og.gain.value=m<1?.8:.25; o.connect(og).connect(lp); os.push(o); }
     g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.42*v,t+.06); g.gain.setTargetAtTime(0,t+.7,1.3);
     lp.connect(sh).connect(g); this._out(g,0,.9); os.forEach(o=>{ o.start(t); o.stop(t+7); });
     const s=c.createOscillator(), sg=c.createGain(); s.frequency.setValueAtTime(58,t); s.frequency.exponentialRampToValueAtTime(24,t+2.2); s.connect(sg);
@@ -143,7 +143,7 @@ class SonidoNadir{
     this.fc=this.f0*Math.pow(2,this.V.tr/12);
     for(const x of this.ton){ const m=x.int?2*this.V.int:x.m; x.o.frequency.cancelScheduledValues(t); x.o.frequency.setTargetAtTime(this.fc*m,t,2.5); }  // la sala se desliza a la nueva tonalidad
     this.send.gain.setTargetAtTime([.55,.7,.42,.6][k%4],t,1.5);
-    this.idi=P.idioma||this.idi;
+    this.idi=P.idioma||this.idi; this.V.braam=k%4; this.Vm=[1,.88,1.12,.94][k%4];   // otra garganta, otro metal
   }
   // ---------------- el lecho sigue a los actos
   acto(t,acto,rate,P){
@@ -153,6 +153,8 @@ class SonidoNadir{
     this.subG.gain.setTargetAtTime(A[0],t,tc); this.bedG.gain.setTargetAtTime(A[1],t,tc); this.murG.gain.setTargetAtTime(A[2]*k,t,tc*1.5);
     this.criG.gain.setTargetAtTime(A[3]*.12,t,tc*2); this.desG.gain.setTargetAtTime(A[4],t,1.5);
     this.bedLP.frequency.setTargetAtTime(acto===2?520:acto===3?170:240,t,tc);
+    const iv=[this.V.int,[16/15,6/5,45/32,8/5][(acto+(P.vuelta||0))%4],45/32,this.V.int][acto];
+    for(const x of this.ton) if(x.int) x.o.frequency.setTargetAtTime(this.fc*2*iv,t,acto===2?.05:3);
     if(acto===1){ const T=P.dur*16*6; for(const d of this.des){ d.o.frequency.cancelScheduledValues(t); d.o.frequency.setValueAtTime(this.fc*2*d.m,t); d.o.frequency.exponentialRampToValueAtTime(this.fc*2*d.m*Math.pow(2,-4/12),t+T); } }
     if(this.V.voz==='vacio'){ this.criG.gain.setTargetAtTime(A[3]*.3,t,tc*2); this.murG.gain.setTargetAtTime(A[2]*k*1.6,t,tc*1.5); }   // vuelta desnuda: cristal y gente al frente
   }

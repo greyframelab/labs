@@ -67,27 +67,31 @@ function simula(seed,t0,t1,base){
 class Flujo{
   constructor(reloj,seed){
     this.reloj=reloj; this.seed=seed||1; this.cola=[]; this.estado='MEMORIA'; this.recibidos=0; this.ultimo=0;
-    this.memoria=[]; this.simT=0; this.ritmo=0; this._cuenta=[]; this.es=null;
+    this.memoria=[]; this.simT=0; this.simK=0; this.ritmo=0; this._cuenta=[]; this.es=null; this.motivo='CONECTANDO';
   }
   conecta(){
     try{
       const es=new EventSource(STREAM_URL); this.es=es;
-      es.onopen=()=>{ this.estado='EN VIVO'; };
+      // EN VIVO solo cuando llegan datos de verdad (antes, el primer tick lo devolvía a MEMORIA y ya no salía)
+      es.onopen=()=>{ this.motivo='ABIERTO · ESPERANDO DATOS'; this.ultimo=performance.now(); };
       es.onmessage=(m)=>{ let d; try{ d=JSON.parse(m.data); }catch(e){ return; }
+        this.estado='EN VIVO'; this.motivo='';
         const e=normaliza(d,this.reloj()); if(!e) return; this.empuja(e); this.ultimoEv=e; this.ultimo=performance.now(); this.recibidos++;
         if(this.memoria.length<200000) this.memoria.push({...e, t:e.t}); else this.memoria.shift(); };
-      es.onerror=()=>{ this.estado='MEMORIA'; /* EventSource reintenta solo */ };
-    }catch(e){ this.estado='MEMORIA'; }
+      es.onerror=()=>{ this.estado='MEMORIA'; this.motivo=es.readyState===2?'SIN CONEXIÓN (BLOQUEADO)':'RECONECTANDO'; this.errores=(this.errores||0)+1;
+        if(es.readyState===2) setTimeout(()=>this.conecta(),8000); };   // si el navegador se rinde, se vuelve a intentar
+    }catch(e){ this.estado='MEMORIA'; this.motivo='SIN EVENTSOURCE'; }
   }
   empuja(e){ this.cola.push(e); this._cuenta.push(e.t); }
   // si no llega nada en 4 s, MEMORIA rellena con la misma estadística
   tick(){
     const now=this.reloj();
     if(this.estado!=='EN VIVO' || performance.now()-this.ultimo>4000){
-      if(this.estado==='EN VIVO') this.estado='MEMORIA';
+      if(this.estado==='EN VIVO'){ this.estado='MEMORIA'; this.motivo='SIN DATOS > 4 s'; }
+      // MEMORIA en tramos de 2 s, cada uno con su semilla (antes se repetía el mismo tramo 40 veces por segundo)
       if(this.simT<now-1) this.simT=now-1;
-      const ev=simula(this.seed+Math.floor(this.simT), this.simT, now+.5); this.simT=now+.5;
-      for(const e of ev) this.empuja(e); if(ev.length) this.ultimoEv=ev[ev.length-1];
+      while(this.simT<now+.5){ const ev=simula(this.seed*7+(++this.simK)*131, this.simT, this.simT+2); this.simT+=2;
+        for(const e of ev) this.empuja(e); if(ev.length) this.ultimoEv=ev[ev.length-1]; }
     }
     while(this._cuenta.length && this._cuenta[0]<now-10) this._cuenta.shift();
     this.ritmo=this._cuenta.length/10;
