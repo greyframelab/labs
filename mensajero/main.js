@@ -1,0 +1,88 @@
+// ======================================================================
+// VØID_LOOM · MENSAJERO — main.js
+// CONSOLA (index.html): lee el feed real de la DSN, suena, enseña la vista previa y el estado; cada vuelta (34 s)
+// fija los datos del momento y los manda a la SALIDA (salida.html, el proyector) por BroadcastChannel.
+// ======================================================================
+import {crear} from './escena.js';
+const Q=new URLSearchParams(location.search);
+const SALIDA=Q.has('salida')||/salida\.html/.test(location.pathname);
+const M={};
+const ahora=()=>performance.timeOrigin+performance.now();
+
+// ---------------- motor de imagen + capa del TESTIGO
+async function montaEscena(w,h,calidad){
+  const c=document.getElementById('c'), t=document.getElementById('t');
+  M.E=await crear({canvas:c,w,h,calidad,az:105,el:51}); M.tc=t.getContext('2d'); t.width=w; t.height=h;
+}
+function frame(tVuelta,plan,dt){
+  const st=MensajeroMontaje.estado(tVuelta,plan); M.E.dibuja(st,dt);
+  const t=M.tc.canvas; M.tc.clearRect(0,0,t.width,t.height);
+  if(st.testigo && M.verTestigo!==false) dibujaTestigo(M.tc,t.width,t.height,st.testigo.lineas,st.testigo.k,st.testigo.a*(st.expo??1),[.91,.93,.97]);
+  return st;
+}
+
+// ---------------- CONSOLA
+async function consola(){
+  const $=id=>document.getElementById(id);
+  const marco=$('c'); await montaEscena(marco.clientWidth||960,marco.clientHeight||540,.45);
+  $('carga').style.display='none'; $('consola').classList.add('on');
+  M.D=new MensajeroDatos.Datos(); M.D.arranca();
+  M.ch=new BroadcastChannel('mensajero-salida'); M.verTestigo=true; M.salidaViva=0;
+  M.ch.onmessage=e=>{ const d=e.data||{}; if(d.type==='vivo'){ M.salidaViva=performance.now(); M.salidaFps=d.fps; } if(d.type==='hola' && M.plan) M.ch.postMessage({type:'vuelta',plan:M.plan,wall0:M.wall0,testigo:M.verTestigo}); };
+  $('salida').onclick=()=>window.open('salida.html?salida','mensajero-salida','popup,width=1280,height=720');
+  $('testigo').checked=true; $('testigo').onchange=e=>{ M.verTestigo=e.target.checked; };
+  $('vol').oninput=e=>{ if(M.master) M.master.gain.value=+e.target.value; };
+  $('arrancar').onclick=()=>{ $('arrancar').disabled=true; $('arrancar').textContent='EN MARCHA'; arrancar(); };
+  if(Q.has('instalacion')) setTimeout(()=>{ $('arrancar').click(); $('salida').click(); },2500);
+  addEventListener('keydown',e=>{ if(e.key==='f'||e.key==='F') $('vista').requestFullscreen&&$('vista').requestFullscreen(); });
+  new ResizeObserver(()=>{ const w=marco.clientWidth, h=marco.clientHeight; if(w&&h){ M.E.resize(Math.round(w*.75),Math.round(h*.75)); $('t').width=Math.round(w*.75); $('t').height=Math.round(h*.75); } }).observe(marco);
+  setInterval(estadoUI,500); estadoUI();
+}
+function nuevaVuelta(t0){
+  const d=M.D.actual(); const o={dataRate:d.dataRate,potencia:Math.max(.6,Math.min(1.3,1+(d.potencia+120)/60)),raiz:38,seed:7,dur:MensajeroMontaje.VUELTA};
+  const P=MensajeroSonido.Partitura(o); MensajeroSonido.programa(M.S,P,o,t0);
+  M.plan={golpes:P.golpes,datos:d}; M.tVuelta0=t0; M.wall0=ahora()+(t0-M.ctx.currentTime)*1000;
+  M.ch.postMessage({type:'vuelta',plan:M.plan,wall0:M.wall0,testigo:M.verTestigo});
+}
+function arrancar(){
+  const ctx=new (window.AudioContext||window.webkitAudioContext)({latencyHint:'playback'}); M.ctx=ctx;
+  M.master=ctx.createGain(); M.master.gain.value=+document.getElementById('vol').value; M.master.connect(ctx.destination);
+  M.S=MensajeroSonido.Motor(ctx,M.master,{raiz:38,seed:7});
+  let t0=ctx.currentTime+.6; nuevaVuelta(t0);
+  // la siguiente vuelta se programa 1 s antes de que acabe la actual, con los datos de ese momento
+  setInterval(()=>{ if(ctx.currentTime>M.tVuelta0+MensajeroMontaje.VUELTA-1) nuevaVuelta(M.tVuelta0+MensajeroMontaje.VUELTA); },200);
+  let last=performance.now(), acc=0;
+  const loop=()=>{ requestAnimationFrame(loop); const now=performance.now(); acc+=(now-last)/1000; last=now;
+    const conSalida=now-M.salidaViva<2000; if(conSalida && acc<1/15) return; const dt=acc; acc=0;   // con la salida abierta, la vista previa va a 15 fps
+    const tv=ctx.currentTime-M.tVuelta0; M.st=frame(Math.max(0,tv),M.plan,dt); };
+  requestAnimationFrame(loop);
+}
+function estadoUI(){
+  const $=id=>document.getElementById(id), D=MensajeroDatos; if(!M.D) return; const d=M.D.actual(), vivo=M.D.estado==='EN VIVO';
+  $('e-flujo').textContent=M.D.estado; $('e-flujo').className=vivo?'vivo':'mem';
+  $('e-ant').textContent=d.dish+' · '+d.lugar; $('e-nave').textContent=d.nombre+' ('+d.nave+')';
+  $('e-dist').textContent=D.distancia(d.rango).toLowerCase(); $('e-luz').textContent=D.hace(d.rtlt/2).toLowerCase();
+  $('e-datos').textContent=D.velocidad(d.dataRate).toLowerCase()+' · banda '+d.banda+' · '+d.potencia+' dBm';
+  $('e-apunta').textContent='az '+d.az+'° · el '+d.el+'°';
+  if(M.st){ $('e-acto').textContent=M.st.plano; }
+  const sv=performance.now()-M.salidaViva<2000; $('e-salida').textContent=sv?'CONECTADA · '+(M.salidaFps||'—')+' fps':'SIN ABRIR'; $('e-salida').className=sv?'vivo':'';
+}
+
+// ---------------- SALIDA: solo la obra, en el proyector
+async function salida(){
+  const dpr=Math.min(devicePixelRatio||1,2); await montaEscena(innerWidth*dpr,innerHeight*dpr,1);
+  const ch=new BroadcastChannel('mensajero-salida'); let plan=null, wall0=0, ema=1/60, q=1, last=performance.now();
+  ch.onmessage=e=>{ const d=e.data||{}; if(d.type==='vuelta'){ plan=d.plan; wall0=d.wall0; M.verTestigo=d.testigo; document.getElementById('carga').style.display='none'; } };
+  ch.postMessage({type:'hola'}); setInterval(()=>ch.postMessage({type:'vivo',fps:Math.round(1/ema)}),500);
+  const size=()=>{ const w=Math.round(innerWidth*dpr*q), h=Math.round(innerHeight*dpr*q); M.E.resize(w,h); const t=document.getElementById('t'); t.width=w; t.height=h; };
+  addEventListener('resize',size);
+  addEventListener('dblclick',()=>(document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()).catch(()=>{}));
+  let cortes='';
+  const loop=()=>{ requestAnimationFrame(loop); if(!plan) return; const now=performance.now(), dt=(now-last)/1000; last=now; ema=ema*.97+dt*.03;
+    const tv=(ahora()-wall0)/1000; if(tv<0) return;
+    const st=frame(tv,plan,dt);
+    // calidad automática: solo en un corte de plano
+    if(st.plano!==cortes){ cortes=st.plano; if(ema>1/45&&q>.6){ q=Math.round((q-.1)*10)/10; size(); } else if(ema<1/58&&q<1){ q=Math.min(1,Math.round((q+.1)*10)/10); size(); } } };
+  requestAnimationFrame(loop);
+}
+(SALIDA?salida():consola()).catch(e=>{ document.title='ERR '+e.message; console.error('[MENSAJERO_GPU_FALLO]',e&&e.message); });

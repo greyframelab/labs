@@ -12,7 +12,7 @@ Cada sala es una partitura distinta. La regla es la misma en todas: **nada está
 
 | Acto | Sala | Partitura | Piezas |
 |---|---|---|---|
-| **I · SEÑAL** | EL MUNDO | Datos abiertos en tiempo real | **MURMULLO** (Wikipedia) · LÍTICA (sismos USGS) · CORONA (viento solar NOAA) · ENJAMBRE (Bluesky) · TRÁNSITO (vuelos OpenSky) · LATIDO (Barcelona: Bicing y sensores) |
+| **I · SEÑAL** | EL MUNDO | Datos abiertos en tiempo real | **MURMULLO** (Wikipedia) · **MENSAJERO** (NASA Deep Space Network) · LÍTICA (sismos USGS) · CORONA (viento solar NOAA) · ENJAMBRE (Bluesky) · TRÁNSITO (vuelos OpenSky) · LATIDO (Barcelona: Bicing y sensores) |
 | **II · TENSIÓN** | EL CUERPO | Biología | CÓRTEX (EEG de una noche de sueño) · ROSTRO (cabeza y emociones) |
 | **III · RUPTURA** | EL VISITANTE | La persona que entra | OJO (la máquina te mira) · SEMILLA (tu palabra se hace materia) |
 | **IV · ECO** | EL ARCHIVO | La memoria de la máquina | LIVE en AUTOPLAY: la serie de 18 loops, de negro a negro |
@@ -30,6 +30,7 @@ Seis piezas, una fuente cada una. Todas son gratuitas, sin clave y se leen desde
 | Pieza | Fuente | Ritmo del dato | Qué es |
 |---|---|---|---|
 | **MURMULLO** | Wikimedia EventStreams (`recentchange`) | 20–50 eventos/s, 24 h | Una losa de obsidiana donde el mundo escribe. Cada edición es una incisión, cada borrado lima la piedra, cada guerra de ediciones la agrieta. |
+| **MENSAJERO** | NASA DSN Now (`dsn.xml`) | Cada 5 s; paquetes según la velocidad de datos | La antena de 70 m de Robledo de Chavela apunta donde apunta la real. Cada paquete que recibe la revela en puntos de luz; la nave escribe su nombre en el cielo. |
 | LÍTICA | USGS (`all_hour.geojson`, cada minuto) | Irregular, a veces nada | Masa negra que se fractura con cada sismo real; la profundidad del sismo es el tono. La ausencia también es la obra. |
 | CORONA | NOAA SWPC (viento solar, Kp) | Lento (minutos) | Un halo que respira. La sala contemplativa. Cuando hay tormenta geomagnética, contamina todas las demás. |
 | ENJAMBRE | Bluesky Jetstream (WebSocket) | Cientos/s | Materia de enjambre: forma, idioma y conversación, nunca texto. Nada identificable. |
@@ -61,8 +62,9 @@ Lo que hace la exposición distinta: **las piezas se escuchan entre ellas**. Es 
 - Sala oscura, negro real, destellos seguros, volumen calibrado por sala. Cada sala con su propio campo sonoro; en los pasillos solo el dron de la siguiente.
 
 ## Hoja de ruta
-1. **MURMULLO** (en curso): primera sala y plantilla técnica del acto I (flujo en vivo, MEMORIA, partitura única imagen-sonido).
-2. LÍTICA: el contrapunto de MURMULLO (casi nada frente a todo el rato).
-3. Bus PULSO entre MURMULLO, LÍTICA y las que ya existen (OJO, SEMILLA, CÓRTEX).
-4. CORONA, ENJAMBRE, TRÁNSITO, LATIDO.
-5. Lanzador `museo/` y dossier de la exposición para centros (no solo festivales: CCCB, Arts Santa Mònica, Matadero, LABoral).
+1. **MURMULLO** (hecho, PR #139): primera sala y plantilla técnica del acto I (flujo en vivo, MEMORIA, partitura única imagen-sonido).
+2. **MENSAJERO** (hecho).
+3. LÍTICA: el contrapunto de MURMULLO (casi nada frente a todo el rato).
+4. Bus PULSO entre MURMULLO, LÍTICA y las que ya existen (OJO, SEMILLA, CÓRTEX).
+5. CORONA, CÉNIT, ENJAMBRE, TRÁNSITO, LATIDO.
+6. Lanzador `museo/` y dossier de la exposición para centros (no solo festivales: CCCB, Arts Santa Mònica, Matadero, LABoral).
