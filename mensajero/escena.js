@@ -121,11 +121,13 @@ export async function crear(opts){
   // nombre → celdas encendidas de la MATRIZ (textura de posiciones)
   let nombreActual='';
   function ponNombre(nombre){
-    nombre=(nombre||'').toUpperCase().slice(0,16); if(nombre===nombreActual) return; nombreActual=nombre;
-    const cel=[]; const n=nombre.length; for(let i=0;i<n;i++){ const g=(typeof glifoM!=='undefined')?glifoM(nombre[i]):0; for(let r=0;r<7;r++) for(let c=0;c<5;c++) if(Math.floor(g/2**(34-(r*5+c)))%2) cel.push((i*6+c)-(n*6-1)/2, r-3); }
+    nombre=(nombre||'').toUpperCase().slice(0,16); const vert=cam.aspect<1; if(nombre+vert===nombreActual) return; nombreActual=nombre+vert;
+    // en vertical (Reel), una palabra por línea
+    const lineas=vert?nombre.split(' ').filter(Boolean):[nombre]; const nl=lineas.length; let n=1; const cel=[];
+    lineas.forEach((L,li)=>{ n=Math.max(n,L.length); for(let i=0;i<L.length;i++){ const g=(typeof glifoM!=='undefined')?glifoM(L[i]):0; for(let r=0;r<7;r++) for(let c=0;c<5;c++) if(Math.floor(g/2**(34-(r*5+c)))%2) cel.push((i*6+c)-(L.length*6-1)/2, r-3+(li-(nl-1)/2)*9); } });
     const m=Math.max(1,cel.length/2), data=new Float32Array(m*4); for(let i=0;i<cel.length/2;i++){ data[i*4]=cel[i*2]; data[i*4+1]=cel[i*2+1]; }
     if(U.celdas.value) U.celdas.value.dispose();
-    const t=new THREE.DataTexture(data,m,1,THREE.RGBAFormat,THREE.FloatType); t.needsUpdate=true; U.celdas.value=t; U.nCeldas.value=cel.length/2; U.anchoNombre.value=Math.min(1,8/Math.max(1,n)); }
+    const t=new THREE.DataTexture(data,m,1,THREE.RGBAFormat,THREE.FloatType); t.needsUpdate=true; U.celdas.value=t; U.nCeldas.value=cel.length/2; U.anchoNombre.value=Math.min(1,8/Math.max(1,n))*(vert?Math.min(1,cam.aspect/1.778*1.25):1); }
 
   // ---------------------------------------------------------- posproceso propio: profundidad de campo, bloom, ACES, grano
   let rt,b1,b2,accA,accB,ultPlano='';

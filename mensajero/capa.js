@@ -39,7 +39,7 @@ function matriz(x,str,x0,y0,cell,k,alpha){
 //   marco = cabecera + frase + la señal de la nave escuchada en vuelo, abajo (sobre la escena)
 //   reloj = solo la cabecera (en el negro, el reloj sigue corriendo)
 function dibujaCapa(x,W,H,red,o){
-  const s=H/1080, F=(px,w)=>(w||300)+' '+Math.round(px*s)+"px 'JetBrains Mono', ui-monospace, monospace";
+  const s=Math.min(W,H)/1080, F=(px,w)=>(w||300)+' '+Math.round(px*s)+"px 'JetBrains Mono', ui-monospace, monospace";
   const a=o.alpha??1; const ahora=o.ahora; const modo=o.modo||'red';
   x.save(); x.globalAlpha=a; x.textBaseline='alphabetic';
   const m=70*s, xL=m, xR=W-m;
