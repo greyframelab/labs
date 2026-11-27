@@ -25,17 +25,19 @@ class SonidoNadir{
     this.verb=c.createConvolver(); this.verb.buffer=this.ir(5.5,1500); this.send=c.createGain(); this.send.gain.value=.55; this.send.connect(this.verb).connect(this.out);
     const nb=c.createBuffer(1,c.sampleRate*2,c.sampleRate), nd=nb.getChannelData(0); let s=7717; for(let i=0;i<nd.length;i++){ s=(s*16807)%2147483647; nd[i]=s/2147483647*2-1; } this.noise=nb;
     this.tanh=new Float32Array(1024); for(let i=0;i<1024;i++){ const x=i/511.5-1; this.tanh[i]=Math.tanh(2.4*x); }
-    const f0=hzM(P.root); this.f0=f0;          // Re2 por defecto
+    const f0=hzM(P.root); this.f0=f0; this.fc=f0; this.ton=[];   // Re2 por defecto; ton: osciladores que siguen la tonalidad de la vuelta
+    // cada vuelta es otra sala: tonalidad, intervalo del lecho, voz protagonista y latido cambian (orden propio de la semilla)
+    this.voces=['teclas','campana','coro','vacio'].sort(()=>r()-.5); this.V={tr:0,voz:this.voces[0],lat:[0,3],int:16/15};
     const osc=(type,f,det)=>{ const o=c.createOscillator(); o.type=type; o.frequency.value=f; if(det) o.detune.value=det; o.start(0); return o; };
     const lfo=(rate,depth,param)=>{ const l=osc('sine',rate), g=c.createGain(); g.gain.value=depth; l.connect(g).connect(param); return l; };
     // ---- 1 · SUB que respira
     this.subG=c.createGain(); this.subG.gain.value=0; this.subG.connect(this.out);
-    for(const [m,a] of [[.5,1],[1,.45]]){ const o=osc('sine',f0*m), g=c.createGain(); g.gain.value=a; o.connect(g).connect(this.subG); }
+    for(const [m,a] of [[.5,1],[1,.45]]){ const o=osc('sine',f0*m), g=c.createGain(); g.gain.value=a; o.connect(g).connect(this.subG); this.ton.push({o,m}); }
     const br=c.createGain(); br.gain.value=.75; lfo(.045,.25,br.gain); this.subG.disconnect(); this.subG.connect(br).connect(this.out);
     // ---- 2 · LECHO CS-80: raíz y segunda menor alta que baten (inquietud), filtro que respira, vibrato lento
     this.bedG=c.createGain(); this.bedG.gain.value=0; this.bedLP=c.createBiquadFilter(); this.bedLP.type='lowpass'; this.bedLP.frequency.value=240; this.bedLP.Q.value=1.2;
     lfo(.031,90,this.bedLP.frequency);
-    for(const [m,a] of [[1,.5],[2,.25],[2*16/15,.14],[3,.06]]) for(const d of [-9,9]){ const o=osc('sawtooth',f0*m,d), g=c.createGain(); g.gain.value=a*.5; lfo(.13+r()*.1,5,o.detune); o.connect(g).connect(this.bedLP); }
+    for(const [m,a] of [[1,.5],[2,.25],[2*16/15,.14],[3,.06]]) for(const d of [-9,9]){ const o=osc('sawtooth',f0*m,d), g=c.createGain(); g.gain.value=a*.5; lfo(.13+r()*.1,5,o.detune); o.connect(g).connect(this.bedLP); this.ton.push({o,m,int:m===2*16/15}); }
     this.bedLP.connect(this.bedG); this.bedG.connect(this.out); this.bedG.connect(this.send);
     // ---- 3 · MURMULLO continuo: ruido por formantes de vocal; su nivel lo pone cuánta gente escribe
     this.murG=c.createGain(); this.murG.gain.value=0; this.murG.connect(this.out); this.murG.connect(this.send);
@@ -43,7 +45,7 @@ class SonidoNadir{
     for(const [f,q,a] of [[420,7,1],[780,8,.7],[1250,9,.35]]){ const bp=c.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=f; bp.Q.value=q; lfo(.07+r()*.08,f*.12,bp.frequency); const g=c.createGain(); g.gain.value=a; lfo(.21+r()*.3,a*.6,g.gain); ns.connect(bp).connect(g).connect(this.murG); }
     // ---- 4 · CRISTAL: dos senos medios que casi coinciden (batido lento, inquietante), muy bajos
     this.criG=c.createGain(); this.criG.gain.value=0; this.criG.connect(this.send); this.criG.connect(this.out);
-    for(const [m,d] of [[8,0],[8*45/32,0],[8,11]]){ const o=osc('sine',f0*m/2,d), g=c.createGain(); g.gain.value=.3; o.connect(g).connect(this.criG); }
+    for(const [m,d] of [[8,0],[8*45/32,0],[8,11]]){ const o=osc('sine',f0*m/2,d), g=c.createGain(); g.gain.value=.3; o.connect(g).connect(this.criG); this.ton.push({o,m:m/2}); }
     // ---- 5 · DESCENSO: un racimo grave que se hunde durante la TENSIÓN (se programa por vuelta)
     this.desG=c.createGain(); this.desG.gain.value=0; this.desLP=c.createBiquadFilter(); this.desLP.type='lowpass'; this.desLP.frequency.value=380; this.desLP.connect(this.desG); this.desG.connect(this.out); this.desG.connect(this.send);
     this.des=[[1,-6],[1,6],[1.5,0]].map(([m,d])=>{ const o=osc('sawtooth',f0*2*m,d); o.connect(this.desLP); return {o,m}; });
@@ -105,7 +107,7 @@ class SonidoNadir{
     og.gain.setValueAtTime(.14,t); og.gain.setTargetAtTime(0,t+.3,.4); this._out(og,0,1); o.start(t); o.stop(t+2.5);
   }
   braam(t,v){ // RUPTURA: el metal enorme (5 sierras desafinadas + octava grave), filtro que se abre de golpe y se cierra; sub que cae
-    const c=this.ctx, f=this.f0, lp=c.createBiquadFilter(), g=c.createGain(), sh=c.createWaveShaper(); sh.curve=this.tanh;
+    const c=this.ctx, f=this.fc, lp=c.createBiquadFilter(), g=c.createGain(), sh=c.createWaveShaper(); sh.curve=this.tanh;
     lp.type='lowpass'; lp.Q.value=2.5; lp.frequency.setValueAtTime(160,t); lp.frequency.linearRampToValueAtTime(1300*v+300,t+.3); lp.frequency.setTargetAtTime(200,t+.4,1.4);
     const os=[]; for(const d of [-16,-8,0,8,16]){ const o=c.createOscillator(); o.type='sawtooth'; o.frequency.value=f; o.detune.value=d; o.connect(lp); os.push(o); }
     for(const [m,d] of [[.5,0],[.5,6],[Math.SQRT2,-5]]){ const o=c.createOscillator(); o.type='sawtooth'; o.frequency.value=f*m; o.detune.value=d; const og=c.createGain(); og.gain.value=m<1?.8:.25; o.connect(og).connect(lp); os.push(o); }
@@ -113,6 +115,35 @@ class SonidoNadir{
     lp.connect(sh).connect(g); this._out(g,0,.9); os.forEach(o=>{ o.start(t); o.stop(t+7); });
     const s=c.createOscillator(), sg=c.createGain(); s.frequency.setValueAtTime(58,t); s.frequency.exponentialRampToValueAtTime(24,t+2.2); s.connect(sg);
     sg.gain.setValueAtTime(0,t); sg.gain.linearRampToValueAtTime(.8*v,t+.02); sg.gain.setTargetAtTime(0,t+.4,.9); this._out(sg,0,0); s.start(t); s.stop(t+5);
+  }
+  teclas(t,v,pan){ // la máquina escribe: una tecla mecánica blanda (clic filtrado + golpe sordo), sin agudos
+    const c=this.ctx, n=c.createBufferSource(), bp=c.createBiquadFilter(), g=c.createGain(); n.buffer=this.noise; bp.type='bandpass'; bp.frequency.value=1500+this.r()*500; bp.Q.value=2.5;
+    n.connect(bp).connect(g); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.16*v,t+.001); g.gain.setTargetAtTime(0,t+.002,.006);
+    this._out(g,pan,.25); n.start(t,(t*3.1)%1.8); n.stop(t+.06);
+    const o=c.createOscillator(), og=c.createGain(); o.frequency.setValueAtTime(150,t); o.frequency.exponentialRampToValueAtTime(85,t+.04); o.connect(og);
+    og.gain.setValueAtTime(.12*v,t); og.gain.setTargetAtTime(0,t+.004,.02); this._out(og,pan*.5,.2); o.start(t); o.stop(t+.15);
+  }
+  campana(t,f,v,pan){ // una campana de hierro, grave y lejana: el idioma de la vuelta suena con altura
+    const c=this.ctx, g=c.createGain(); g.gain.value=1; const os=[];
+    for(const [rr,a,d] of [[1,.5,3.2],[2.76,.22,1.6],[5.4,.07,.7],[.5,.25,4]]){ const o=c.createOscillator(), og=c.createGain(); o.frequency.value=f*rr; o.connect(og).connect(g);
+      og.gain.setValueAtTime(0,t); og.gain.linearRampToValueAtTime(a*.16*v,t+.004); og.gain.setTargetAtTime(0,t+.01,d/3); os.push(o); }
+    this._out(g,pan,1.3); os.forEach(o=>{ o.start(t); o.stop(t+5); });
+  }
+  coro(t,f,dur,v){ // un coro sin palabras (sierras por formantes de vocal): sustituye al CS-80 en su vuelta
+    const c=this.ctx, g=c.createGain(), m=c.createGain(); m.gain.value=1; const os=[];
+    for(const [fm,d] of [[1,-7],[1,7],[1.5,-4],[2,5]]){ const o=c.createOscillator(); o.type='sawtooth'; o.frequency.value=f*fm; o.detune.value=d; o.connect(m); os.push(o); }
+    for(const [ff,q,a] of [[480,6,1],[920,8,.6],[2400,10,.12]]){ const bp=c.createBiquadFilter(), bg=c.createGain(); bp.type='bandpass'; bp.frequency.setValueAtTime(ff,t); bp.frequency.linearRampToValueAtTime(ff*.82,t+dur); bp.Q.value=q; bg.gain.value=a; m.connect(bp).connect(bg).connect(g); }
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.32*v,t+dur*.5); g.gain.setTargetAtTime(0,t+dur*.6,dur*.35);
+    this._out(g,0,1.4); os.forEach(o=>{ o.start(t); o.stop(t+dur*2.5); });
+  }
+  // ---------------- cada vuelta, otra sala
+  vuelta(t,P){
+    const k=P.vuelta||0, r=this.r;
+    this.V={tr:[0,-2,3,-5,1,-3][k%6], voz:this.voces[k%this.voces.length], lat:[[0,3],[0,6,10],[0,8],[0,3,8,11]][(k+Math.floor(r()*2))%4], int:[16/15,45/32,8/5,6/5][(k*3)%4]};
+    this.fc=this.f0*Math.pow(2,this.V.tr/12);
+    for(const x of this.ton){ const m=x.int?2*this.V.int:x.m; x.o.frequency.cancelScheduledValues(t); x.o.frequency.setTargetAtTime(this.fc*m,t,2.5); }  // la sala se desliza a la nueva tonalidad
+    this.send.gain.setTargetAtTime([.55,.7,.42,.6][k%4],t,1.5);
+    this.idi=P.idioma||this.idi;
   }
   // ---------------- el lecho sigue a los actos
   acto(t,acto,rate,P){
@@ -122,26 +153,35 @@ class SonidoNadir{
     this.subG.gain.setTargetAtTime(A[0],t,tc); this.bedG.gain.setTargetAtTime(A[1],t,tc); this.murG.gain.setTargetAtTime(A[2]*k,t,tc*1.5);
     this.criG.gain.setTargetAtTime(A[3]*.12,t,tc*2); this.desG.gain.setTargetAtTime(A[4],t,1.5);
     this.bedLP.frequency.setTargetAtTime(acto===2?520:acto===3?170:240,t,tc);
-    if(acto===1){ const T=P.dur*16*6; for(const d of this.des){ d.o.frequency.cancelScheduledValues(t); d.o.frequency.setValueAtTime(this.f0*2*d.m,t); d.o.frequency.exponentialRampToValueAtTime(this.f0*2*d.m*Math.pow(2,-4/12),t+T); } }
+    if(acto===1){ const T=P.dur*16*6; for(const d of this.des){ d.o.frequency.cancelScheduledValues(t); d.o.frequency.setValueAtTime(this.fc*2*d.m,t); d.o.frequency.exponentialRampToValueAtTime(this.fc*2*d.m*Math.pow(2,-4/12),t+T); } }
+    if(this.V.voz==='vacio'){ this.criG.gain.setTargetAtTime(A[3]*.3,t,tc*2); this.murG.gain.setTargetAtTime(A[2]*k*1.6,t,tc*1.5); }   // vuelta desnuda: cristal y gente al frente
   }
   paso(P,rate){
     const t=P.t, A=P.acto;
+    if(P.senal) this.vuelta(t,P);
     if(P.s16===0 && (P.bar===0||P.bar===4||P.bar===10||P.bar===13)) this.acto(t,A,rate,P);
     if(P.silencio && P.s16===14){ this.duck.gain.setTargetAtTime(0,t,.012); this.send.gain.setTargetAtTime(0,t,.01); }
     if(P.ruptura){ this.duck.gain.cancelScheduledValues(t); this.duck.gain.setValueAtTime(1,t); this.send.gain.cancelScheduledValues(t); this.send.gain.setValueAtTime(.55,t); this.braam(t,1); }
     if(P.senal && P.vuelta>0) this.braam(t,.45);                       // cada vuelta se abre con un metal lejano
     if(P.silencio) return;
+    const enF=P.fuente && ((A===0&&P.bar<2)||(A===1&&P.bar===6&&(P.vuelta||0)%2===1));
+    // FUENTE: la máquina lee el código; un teletipo suave al ritmo real de llegada
+    if(enF && P.ev.length) this.teclas(t,Math.min(1,.25+P.ev.length*.12)*.55,(this.r()-.5)*.6);
+    const V=this.V, idi=this.idi;
+    if(V.voz==='teclas' && !enF){ let m=0; for(const e of P.ev){ if(e.bot||e.kind==='log'||e.lang!==idi) continue; if(m++>=2) break; this.teclas(t+m*P.dur*.25,.7,((hashStr(e.wiki)%200)/100-1)*.5); } }
+    if(V.voz==='campana' && P.tick && P.tick.e && P.tick.e.lang===idi) this.campana(t,P.tick.f/4,P.tick.v,P.tick.pan);
     // el murmullo de la gente: hasta 3 susurros por paso (más en la RUPTURA)
     let n=0; const max=[1,2,3,1][A];
     for(const e of P.ev){ if(e.bot||e.kind==='log') continue; if(n++>=max) break;
       const v=Math.min(1,.25+Math.log10(Math.abs(e.delta)+10)/5)*(A===3?.5:1); this.susurro(t+this.r()*P.dur*.8,v,e.lang,((hashStr(e.wiki)%200)/100-1)*.8); }
     // latido: lub-dub al principio del compás (TENSIÓN y RUPTURA), y donde la partitura pone el bombo fuerte
-    if((A===1||A===2) && (P.s16===0||P.s16===3)) this.latido(t,P.s16===0?1:.6);
+    if((A===1||A===2) && V.lat.includes(P.s16)) this.latido(t,P.s16===0?1:.6);
     if(P.kick && A===2 && P.s16%4===0 && P.s16) this.latido(t,.7);
     if(P.hat && this.r()<.5) this.tic(t,P.hat);
     if(P.caja) this.portazo(t,P.caja);
     if(P.chapa) this.arco(t,P.chapa.f/2,P.chapa.v,P.chapa.pan);
-    if(P.bajo) this.cs80(t,[this.f0,this.f0*16/15,this.f0*1.5,this.f0*Math.SQRT2][hashStr(P.bajo.e.lang)%4],Math.max(3,P.dur*24),A===2?1:.75);
+    if(P.bajo){ const f=[this.fc,this.fc*16/15,this.fc*1.5,this.fc*Math.SQRT2][hashStr(P.bajo.e.lang)%4], d=Math.max(3,P.dur*24);
+      if(V.voz==='coro') this.coro(t,f,d,A===2?1:.75); else this.cs80(t,f,d,A===2?1:.75); }
     if(P.glitch) this.reves(t,P.glitch.f/2,P.dur);
   }
 }
