@@ -33,47 +33,61 @@ function plano(S,tl){
     const p=add(sub(T,mul(dir,3.4-tl*.05)),[0,.24+r()*.12,0]);
     cam=mira(p,add(T,add(mul(dir,1.2),[0,.1,0])),null,.36,3.2,2.4);
   } else if(S.tipo==='ESCRITURA'){ // la cámara acompaña al renglón de un idioma mientras se escribe
-    const Tl=S.Tl||T, sd=r()<.5?1:-1;
-    const p=add(Tl,[.42,.12+r()*.05,.26*sd]);
-    cam=mira(p,add(Tl,[-.08,0,0]),null,.3,null,4.6);
+    const Tl=S.Tl||T;
+    const p=add(Tl,[.25+r()*.1,.42+r()*.06,.62]);
+    cam=mira(p,add(Tl,[-.3,0,0]),null,.3,null,3.2);
+  } else if(S.tipo==='LINEA'){ // travelling lateral: el renglón entero del idioma, visto de lado mientras avanza
+    const Tl=S.Tl||T;
+    const p=add(Tl,[-.75+tl*.03,.34+r()*.06,.62]);
+    cam=mira(p,add(Tl,[-.05,0,-.05]),null,.36,null,3);
+  } else if(S.tipo==='ORBITA'){ // órbita lenta alrededor de lo que pasa: la escritura como relieve
+    const R0=1.5+r()*.5, aa=a+tl*.07*(r()<.5?1:-1);
+    const p=add(T,[Math.cos(aa)*R0,.5+r()*.25,Math.sin(aa)*R0]);
+    cam=mira(p,T,null,.4,null,2.6);
   } else if(S.tipo==='MACRO'){
     const p=add(sub(T,mul(dir,.62-tl*.012)),add(mul(perp,(tl*.01)),[0,.17+r()*.05,0]));
     cam=mira(p,T,null,.3,null,4.2);
   } else { // CENITAL: la página entera del mundo
     const h=4.6-tl*.05, c=add(mul(T,.5),[Math.cos(a)*.9,h,Math.sin(a)*.9]);
-    cam=mira(c,mul(T,.5),[Math.cos(a*.3),0,Math.sin(a*.3)],.4,h,.4);
+    const ga=(r()-.5)*.5; cam=mira(c,mul(T,.5),[Math.sin(ga),0,-Math.cos(ga)],.4,h,.4);
   }
   // la barra de luz se coloca donde su reflejo cruza el punto de interés: un brillo que barre lo escrito
   const fv=nrm([cam.f[0],0,cam.f[2]]); const pv=[-fv[2],0,fv[0]];
-  const Tf=S.tipo==='ABISMO'?(S.T||[0,0,0]):S.tipo==='CENITAL'?mul(T,.5):S.tipo==='ESCRITURA'?(S.Tl||T):T;
-  const Hb={ABISMO:1.1,RASANTE:.9,MACRO:.55,ESCRITURA:.5,CENITAL:9.5}[S.tipo];
+  const Tf=S.tipo==='ABISMO'?(S.T||[0,0,0]):S.tipo==='CENITAL'?mul(T,.5):(S.tipo==='ESCRITURA'||S.tipo==='LINEA')?(S.Tl||T):T;
+  const Hb={ABISMO:1.1,RASANTE:.9,MACRO:.55,ESCRITURA:.5,LINEA:.7,ORBITA:.8,CENITAL:9.5}[S.tipo];
   const hd=Math.hypot(cam.p[0]-Tf[0],cam.p[2]-Tf[2]), off=S.tipo==='CENITAL'?0:Hb*hd/Math.max(.05,cam.p[1]);
   const sweep=Math.sin(tl*.35+S.seed)*(S.tipo==='CENITAL'?1.6:off*.25);
   bar0=add(Tf,add(mul(fv,off+sweep),[0,Hb,0]));
   barD=S.tipo==='CENITAL'?[Math.cos(a),0,Math.sin(a)]:pv;
   rakeL=add(mul(perp,.96),[0,.09+r()*.06,0]);
     // la luz solo existe donde pasa algo: un charco alrededor del punto de interés
-  const pool=[Tf[0],Tf[2],{ABISMO:5.5,RASANTE:4.5,MACRO:2.5,ESCRITURA:2.2,CENITAL:4.2}[S.tipo]];
-  return {cam,bar0,barD,barL:S.tipo==='CENITAL'?5:S.tipo==='ABISMO'?7:4,barW:(S.tipo==='MACRO'||S.tipo==='ESCRITURA')?.05:.08,rakeL,pool};
+  const pool=[Tf[0],Tf[2],{ABISMO:5.5,RASANTE:4.5,MACRO:2.5,ESCRITURA:2.2,LINEA:3.2,ORBITA:3.2,CENITAL:4.2}[S.tipo]];
+  return {cam,bar0,barD,barL:S.tipo==='CENITAL'?5:S.tipo==='ABISMO'?7:4,barW:(S.tipo==='MACRO'||S.tipo==='ESCRITURA'||S.tipo==='LINEA')?.05:.08,rakeL,pool};
 }
 
 // ------------------------------------------------------------ montaje
 class Montaje{
-  constructor(seed){ this.seed=seed; this.r=rng(seed*29+5); this.S=null; this.ultTipo=''; this.n=0; this.fade=0; this.ruptura=0; this.pulso=0; this.pol=[0,0,0]; this.eco=null; this.negro=false; }
-  corta(tipo,T,t){ if(Q.get('plano')) tipo=Q.get('plano'); this.n++; this.S={tipo,T:T||[0,0,0],seed:this.seed*100+this.n,t0:t}; this.ultTipo=tipo; }
+  constructor(seed){ this.seed=seed; this.r=rng(seed*29+5); this.S=null; this.ultTipo=''; this.n=0; this.fade=0; this.ruptura=0; this.pulso=0; this.pol=[0,0,0]; this.eco=null; this.negro=false; this.recientes=[]; this.enFuente=false; this.fuenteA=0; }
+  corta(tipo,T,t){ if(Q.get('plano')) tipo=Q.get('plano'); if(tipo==='LINEA'||tipo==='ESCRITURA') T=this.cursor(); this.n++; this.recientes=[tipo,...this.recientes].slice(0,2); this.S={tipo,T:T||[0,0,0],seed:this.seed*100+this.n,t0:t}; this.ultTipo=tipo; }
   cursor(){ const c=M.E.fila(M.idioma); return uv2w(c.x,(c.row+.5)/ROWS); }
   // decide los cortes en los pasos de la partitura
   paso(P,E){
     const b=P.bar, s=P.s16, ultimo=E.ultimo, grande=E.ultGrande;
     const pt=(o)=>uv2w(o.u,o.v);
-    if(P.senal || !this.S){ const u=this.r(); if(u<.6) this.corta('ESCRITURA',this.cursor(),P.t); else this.corta(u<.8?'RASANTE':'MACRO',pt(ultimo),P.t); this.eco=null; }
-    if(P.acto===1 && s===0 && (b===4||b===6||b===7||b===8)){ const tipos=['MACRO','RASANTE','CENITAL','ABISMO'].filter(x=>x!==this.ultTipo); this.corta(tipos[Math.floor(this.r()*tipos.length)],pt(b%2?grande:ultimo),P.t); }
+    const F=!!P.fuente, V=P.vuelta||0;
+    if(P.idioma) M.idioma=P.idioma+'wiki';                // el idioma que sigue la cámara en esta vuelta
+    if(P.senal || !this.S){ const u=this.r(); if(F || u<.5) this.corta('ESCRITURA',this.cursor(),P.t); else this.corta(u<.75?'LINEA':u<.88?'RASANTE':'MACRO',pt(ultimo),P.t); this.eco=null; }
+    // FUENTE: la vuelta se abre con el código real (2 compases) y, en vueltas impares, vuelve un compás en la TENSIÓN
+    this.enFuente = F && ((P.acto===0 && b<2) || (P.acto===1 && b===6 && V%2===1));
+    if(F && P.acto===0 && b===2 && s===0) this.corta('ESCRITURA',this.cursor(),P.t);   // del código a la piedra
+    if(P.acto===0 && b===3 && s===0) this.corta(['LINEA','MACRO','ORBITA'][(V+Math.floor(this.r()*2))%3],pt(ultimo),P.t);
+    if(P.acto===1 && s===0 && (b===4||b===6||b===7||b===8)){ const tipos=['MACRO','RASANTE','CENITAL','ABISMO','LINEA','ORBITA'].filter(x=>!this.recientes.includes(x)); this.corta(tipos[Math.floor(this.r()*tipos.length)],pt(b%2?grande:ultimo),P.t); }
     if(P.acto===1 && b===9 && (s===0||s===8)) { if(s===0) this.corta('ESCRITURA',this.cursor(),P.t); else this.corta('RASANTE',pt(grande),P.t); }
     this.negro = (b===9 && s>=14);                // antes del golpe, negro
     if(P.ruptura){ this.corta('ABISMO',pt(E.grietaP||ultimo),P.t); this.ruptura=1; }
-    if(P.acto===2 && s===0 && b===11) this.corta('MACRO',pt(E.grietaP||ultimo),P.t);
+    if(P.acto===2 && s===0 && b===11) this.corta(V%2?'ORBITA':'MACRO',pt(E.grietaP||ultimo),P.t);
     if(P.acto===2 && s===8 && b===12) this.corta('CENITAL',pt(E.grietaP||ultimo),P.t);
-    if(P.eco){ this.corta('CENITAL',pt(E.grietaP||ultimo),P.t); this.eco={t0:P.t,dur:P.dur*16*3}; }
+    if(P.eco){ this.corta(V%3===2?'ORBITA':'CENITAL',pt(E.grietaP||ultimo),P.t); this.eco={t0:P.t,dur:P.dur*16*3}; }
     if(P.acto===3 && b===15 && s===0) this.corta('ABISMO',pt(E.grietaP||ultimo),P.t);
     if(P.kick) this.pulso=Math.max(this.pulso,P.kick);
     if(P.tick) this.pulso=Math.max(this.pulso,P.tick.v*.35);
@@ -81,12 +95,13 @@ class Montaje{
   }
   estado(t,dt,P){
     if(!this.S) this.corta('ESCRITURA',this.cursor(),t);
-    if(this.S && this.S.tipo==='ESCRITURA'){ const tg=this.cursor(); if(!this.S.Tl) this.S.Tl=tg;
+    if(this.S && (this.S.tipo==='ESCRITURA'||this.S.tipo==='LINEA')){ const tg=this.cursor(); if(!this.S.Tl) this.S.Tl=tg;
       const d=Math.hypot(tg[0]-this.S.Tl[0],tg[2]-this.S.Tl[2]);
       if(d>1.2) this.S.Tl=tg; else { const k=1-Math.exp(-dt/.9); this.S.Tl=add(this.S.Tl,mul(sub(tg,this.S.Tl),k)); } }
     this.pulso*=Math.exp(-dt/.16); this.ruptura*=Math.exp(-dt/2.6);
-    const objetivo=this.negro?0: this.fin?0: 1;
-    this.fade+=(objetivo-this.fade)*(1-Math.exp(-dt/(this.negro?.03:this.fin?.7:.5)));
+    const objetivo=this.negro||this.enFuente?0: this.fin?0: 1;
+    this.fade+=(objetivo-this.fade)*(1-Math.exp(-dt/(this.negro?.03:this.enFuente?.08:this.fin?.7:.5)));
+    this.fuenteA+=((this.enFuente?1:0)-this.fuenteA)*(1-Math.exp(-dt/(this.enFuente?.1:.22)));
     if(this.eco){ const k=(t-this.eco.t0)/this.eco.dur; this.pol=k>=0&&k<=1?[-.1+k*1.2,.09,.9]:[0,0,0]; } else this.pol=[0,0,0];
     const acto=P?P.acto:0;
     const L=plano(this.S,t-this.S.t0);
@@ -115,7 +130,7 @@ const SALIDA=Q.has('salida');
 function construye(seed,acento,idioma,W,H,q){
   M.seed=seed; M.idioma=idioma; M.acento=ACENTOS[acento]||ACENTOS.ambar; M.acentoN=acento;
   if(!M.I) M.I=new Imagen(document.getElementById('c'),{render:RENDER,w:W,h:H,q});
-  M.E=new Escritura(seed); M.Mo=new Montaje(seed); M.P=new Partitura(seed);
+  M.E=new Escritura(seed); M.Mo=new Montaje(seed); M.P=new Partitura(seed); M.F2=new Fuente(); M.dif=[];
   historia(M.E,M.I,seed);
 }
 async function iniciar(){
@@ -130,17 +145,29 @@ async function iniciar(){
 }
 
 function aplica(P){ // un paso de la partitura → escritura en la losa
-  const list=[]; for(const e of P.ev) for(const s of M.E.sello(e,!!e._suena)) list.push(s);
+  if(P.idioma) M.idioma=P.idioma+'wiki';
+  const list=[]; for(const e of P.ev) for(const s of M.E.sello(e,!!e._suena)){ if(s.d>0) M.dif.push({t:P.t+s.d,s}); else list.push(s); }
+  M.F2.mete(P.ev,P.t,M.idioma);
   if(P.ruptura){ const g=M.E.grieta(P.grietaDe); list.push(...g); M.E.grietaP={u:g[0].u,v:g[0].v}; }
   if(P.eco && P.testigo) M.testigo={t0:P.t+P.dur*8, dur:P.dur*16*2.6, lineas:lineasTestigo(P.testigo)};
   M.I.sella(list); M.Mo.paso(P,M.E); M.ultP=P;
 }
-// capa de texto del TESTIGO (2D, encima de la obra)
-function capaTestigo(x,W,H,t){
-  x.clearRect(0,0,W,H); const T=M.testigo; if(!T || !M.verTestigo) return;
+// la escritura letra a letra: cada signo se talla en su instante
+function suelta(t){ if(!M.dif.length) return; const l=[]; M.dif=M.dif.filter(d=>{ if(d.t<=t){ l.push(d.s); return false; } return true; }); if(l.length) M.I.sella(l); }
+// capa 2D encima de la obra: FUENTE (el código) y TESTIGO
+function capaTestigo(x,W,H,t,dt){
+  x.clearRect(0,0,W,H); M.F2.dibuja(x,W,H,t,dt||1/60,M.Mo.fuenteA,M.acento);
+  const T=M.testigo; if(!T || !M.verTestigo) return;
   const u=(t-T.t0)/T.dur; if(u<0||u>1){ if(u>1) M.testigo=null; return; }
   const k=Math.min(1,u/.3), a=u<.82?1:Math.max(0,1-(u-.82)/.18);
   dibujaTestigo(x,W,H,T.lineas,k,a*M.Mo.fade,M.acento);
+}
+// el idioma de la vuelta: rota entre los que más escriben ahora (humanos; sin Wikidata ni Commons)
+function eligeIdioma(w,prev,vuelta){
+  if(!vuelta) return 'es';
+  const c={}; for(const e of w){ const l=e.l||e.lang; if(e.bot||e.kind==='log'||!l||l==='wd'||l==='co'||l==='xx') continue; c[l]=(c[l]||0)+1; }
+  const top=Object.keys(c).sort((a,b)=>c[b]-c[a]).slice(0,6).filter(l=>l!==prev);
+  return top.length?top[(vuelta*3)%top.length]:(prev==='es'?'en':'es');
 }
 // estadísticas reales de la vuelta (solo ediciones humanas; nunca títulos ni usuarios)
 function cuenta(ev,tNow){ M.ventana=(M.ventana||[]).concat(ev.filter(e=>!e.bot&&e.kind!=='log').map(e=>({t:e.t,l:e.lang})));
@@ -156,7 +183,8 @@ function consolaUI(){
   M.enviaCfg=enviaCfg; setInterval(enviaCfg,2000);
   $('salida').onclick=()=>window.open('salida.html?salida','murmullo-salida','popup,width=1280,height=720');
   $('audio').value=M.audio; $('audio').onchange=e=>{ M.audio=e.target.value; if(M.ctx) cambiaAudio(); };
-  $('idioma').value=M.idioma.replace('wiki',''); $('idioma').onchange=e=>{ M.idioma=e.target.value+'wiki'; enviaCfg(); };
+  M.idiomaFijo=Q.get('idioma')||'auto'; $('idioma').value=M.idiomaFijo; $('idioma').onchange=e=>{ M.idiomaFijo=e.target.value; if(M.idiomaFijo!=='auto') M.idioma=M.idiomaFijo+'wiki'; };
+  M.verFuente=!Q.has('sinfuente'); $('fuente').checked=M.verFuente; $('fuente').onchange=e=>{ M.verFuente=e.target.checked; };
   $('testigo').checked=true; $('testigo').onchange=e=>{ M.verTestigo=e.target.checked; enviaCfg(); };
   $('vol').oninput=e=>{ if(M.master) M.master.gain.value=+e.target.value; };
   $('arrancar').onclick=()=>{ $('arrancar').disabled=true; $('arrancar').textContent='EN MARCHA'; arrancar(); };
@@ -182,6 +210,8 @@ function arrancar(){
   M.vis=[]; let last=performance.now();
   setInterval(()=>{ M.F.tick(); M.P.ritmo=M.F.ritmo||M.P.ritmo; const nuevos=M.F.saca().map(e=>(e.t+=LAT,e)); cuenta(nuevos,ctx.currentTime+LAT); M.P.mete(nuevos);
     while(true){ const k=M.P.paso; const tn=M.P.t0+M.P._acum(k); if(tn>ctx.currentTime+.18) break; const P=M.P.siguiente();
+      if(P.senal){ P.idioma=M.idiomaFijo!=='auto'?M.idiomaFijo:eligeIdioma(M.ventana||[],M.idiomaV,P.vuelta); M.idiomaV=P.idioma; }
+      P.fuente=M.verFuente && M.F.estado==='EN VIVO';    // el código solo se enseña si es real
       if(P.eco){ const vivo=M.F.estado==='EN VIVO'; if(vivo) P.testigo={n:M.ventana.length, idiomas:new Set(M.ventana.map(e=>e.l)).size, seg:Math.min(34,P.dur*16*16)}; }
       M.S.paso(P,M.P.ritmo); M.vis.push(P);
       // a la salida: el paso con su instante en reloj de pared (la salida no tiene audio)
@@ -193,13 +223,13 @@ function arrancar(){
   let acc=0;
   const loop=()=>{ requestAnimationFrame(loop); const now=performance.now(), dt=(now-last)/1000; const t=ctx.currentTime;
     const conSalida=now-M.salidaViva<2000; acc+=dt; if(conSalida && acc<1/15) return; const step=acc; acc=0; last=now;
-    while(M.vis.length && M.vis[0].t<=t) aplica(M.vis.shift());
-    M.I.avanza(step,M.Mo.pol); const C=M.Mo.estado(t,step,M.ultP); M.I.dibuja(C); capaTestigo(tc,tc.canvas.width,tc.canvas.height,t); };
+    while(M.vis.length && M.vis[0].t<=t) aplica(M.vis.shift()); suelta(t);
+    M.I.avanza(step,M.Mo.pol); const C=M.Mo.estado(t,step,M.ultP); M.I.dibuja(C); capaTestigo(tc,tc.canvas.width,tc.canvas.height,t,step); };
   requestAnimationFrame(loop);
   setInterval(estadoUI,250);
 }
 // los pasos viajan sin referencias circulares ni datos de más
-function limpia(P){ const o={...P}; o.ev=P.ev.map(e=>({t:e.t,wiki:e.wiki,lang:e.lang,bot:e.bot,delta:e.delta,kind:e.kind,_suena:!!e._suena}));
+function limpia(P){ const o={...P}; o.ev=P.ev.map(e=>({t:e.t,hora:e.hora,wiki:e.wiki,lang:e.lang,bot:e.bot,delta:e.delta,kind:e.kind,_suena:!!e._suena}));
   for(const k of ['tick','chapa','bajo','glitch']) if(o[k]) o[k]={...o[k],e:undefined};
   if(o.grietaDe) o.grietaDe={wiki:o.grietaDe.wiki}; return o; }
 function estadoUI(){
@@ -208,7 +238,7 @@ function estadoUI(){
   $('e-ritmo').textContent=F.ritmo.toFixed(1)+' /s'; $('e-rec').textContent=F.recibidos.toLocaleString('es');
   $('e-hum').textContent=(M.ventana||[]).length+' · '+new Set((M.ventana||[]).map(e=>e.l)).size+' idiomas';
   const P=M.ultP; if(P){ $('e-acto').textContent=ACTOS[P.acto]+' · compás '+(P.bar+1)+'/16'; $('e-bpm').textContent=P.bpm+' BPM'; }
-  $('e-plano').textContent=M.Mo.S?M.Mo.S.tipo:'—';
+  $('e-plano').textContent=M.Mo.enFuente?'FUENTE':M.Mo.S?M.Mo.S.tipo:'—'; $('e-idioma').textContent=(M.idioma||'').replace('wiki','').toUpperCase()+(M.idiomaFijo==='auto'?' · ROTA':'');
   const sv=performance.now()-M.salidaViva<2000; $('e-salida').textContent=sv?'CONECTADA · '+(M.salidaFps||'—')+' fps':'SIN ABRIR'; $('e-salida').className=sv?'vivo':'';
   const u=F.ultimoEv; $('e-ult').textContent=u?(u.wiki+' · '+(u.delta>0?'+':'')+u.delta+' B'+(u.bot?' · bot':'')):'—';
 }
@@ -220,7 +250,7 @@ function iniciaSalida(){
   const size=()=>{ const d=Math.min(devicePixelRatio||1,2); if(M.I) M.I.resize(innerWidth*d,innerHeight*d); tcv.width=innerWidth*d; tcv.height=innerHeight*d; };
   ch.onmessage=e=>{ const d=e.data; if(!d) return;
     if(d.type==='cfg'){ if(!cfg || cfg.seed!==d.seed){ construye(d.seed,d.acento,d.idioma,innerWidth*Math.min(devicePixelRatio||1,2),innerHeight*Math.min(devicePixelRatio||1,2),1); cola=[]; size(); }
-      cfg=d; M.idioma=d.idioma; M.verTestigo=d.testigo; document.getElementById('carga').style.display='none'; }
+      cfg=d; M.verTestigo=d.testigo; document.getElementById('carga').style.display='none'; }
     if(d.type==='paso' && cfg){ if(!base) base=d.wall-200; const P=d.P; P.t=(d.wall-base)/1000; cola.push(P); } };
   ch.postMessage({type:'hola'}); setInterval(()=>ch.postMessage({type:'vivo',fps:Math.round(1/ema)}),500);
   addEventListener('dblclick',()=>(document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()).catch(()=>{}));
@@ -232,8 +262,8 @@ function iniciaSalida(){
       else if(ema<1/58 && q<1){ M.I.calidad(Math.min(1,Math.round((q+.1)*10)/10)); paso30=false; } }
     if(paso30){ impar=!impar; if(impar) return; }
     const t=(performance.timeOrigin+now-base)/1000;
-    while(cola.length && cola[0].t<=t) aplica(cola.shift());
-    M.I.avanza(dt,M.Mo.pol); const C=M.Mo.estado(t,dt,M.ultP); M.I.dibuja(C); capaTestigo(tc,tcv.width,tcv.height,t); };
+    while(cola.length && cola[0].t<=t) aplica(cola.shift()); suelta(t);
+    M.I.avanza(dt,M.Mo.pol); const C=M.Mo.estado(t,dt,M.ultP); M.I.dibuja(C); capaTestigo(tc,tcv.width,tcv.height,t,dt); };
   requestAnimationFrame(loop);
 }
 
@@ -242,8 +272,10 @@ function prepRender(){
   window.MURMULLO={
     prepara(dur){
       const ev=simula(M.seed,0,dur+2,+(Q.get('ritmo')||30)); M.P.t0=0; M.P.fijaTempo(+(Q.get('ritmo')||30));
-      M.P.mete(ev.map(e=>({...e})));
+      const h0=new Date(); h0.setHours(21,14,0,0); M.P.mete(ev.map(e=>({...e,hora:h0.getTime()+e.t*1000})));
       M.pasos=[]; while(true){ const k=M.P.paso; if(M.P._acum(k)>dur) break; const P=M.P.siguiente();
+        if(P.senal){ const w=ev.filter(e=>e.t>P.t-34&&e.t<=P.t); P.idioma=eligeIdioma(w,M.idiomaV,P.vuelta); M.idiomaV=P.idioma; }
+        P.fuente=Q.has('fuente');
         if(P.eco && Q.has('testigo')){ const w=ev.filter(e=>!e.bot&&e.kind!=='log'&&e.t>P.t-34&&e.t<=P.t); P.testigo={n:w.length,idiomas:new Set(w.map(e=>e.lang)).size,seg:34}; }
         M.pasos.push(P); }
       M.verTestigo=Q.has('testigo');
@@ -252,12 +284,12 @@ function prepRender(){
     frame(t){
       const sub=Math.max(1,Math.ceil((t-M.tv)/(1/30)));
       for(let i=0;i<sub;i++){ const tt=M.tv+(t-M.tv)*(i+1)/sub, dt=(t-M.tv)/sub;
-        while(M.ip<M.pasos.length && M.pasos[M.ip].t<=tt) aplica(M.pasos[M.ip++]);
+        while(M.ip<M.pasos.length && M.pasos[M.ip].t<=tt) aplica(M.pasos[M.ip++]); suelta(tt);
         M.I.avanza(dt,M.Mo.pol); M.C=M.Mo.estado(tt,dt,M.ultP); }
-      M.tv=t; M.C.render=true; M.I.dibuja(M.C);
-      if(!M.verTestigo) return M.I.cv.toDataURL('image/jpeg',.93);
+      const dtv=t-M.tv; M.tv=t; M.C.render=true; M.I.dibuja(M.C);
+      if(!M.verTestigo && M.Mo.fuenteA<.002) return M.I.cv.toDataURL('image/jpeg',.93);
       const o=M.cmp||(M.cmp=document.createElement('canvas')); o.width=M.I.W; o.height=M.I.H; const x=o.getContext('2d');
-      x.drawImage(M.I.cv,0,0); const tl=document.createElement('canvas'); tl.width=o.width; tl.height=o.height; capaTestigo(tl.getContext('2d'),o.width,o.height,t); x.drawImage(tl,0,0);
+      x.drawImage(M.I.cv,0,0); const tl=document.createElement('canvas'); tl.width=o.width; tl.height=o.height; capaTestigo(tl.getContext('2d'),o.width,o.height,t,dtv); x.drawImage(tl,0,0);
       return o.toDataURL('image/jpeg',.93);
     },
     async audio(dur){

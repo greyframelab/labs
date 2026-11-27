@@ -38,16 +38,18 @@ input[type=range]{width:150px;accent-color:#ffb000} input[type=checkbox]{accent-
       <div class="f">ACTO <b id="e-acto">—</b></div>
       <div class="f">TEMPO <b id="e-bpm">—</b></div>
       <div class="f">PLANO <b id="e-plano">—</b></div>
+      <div class="f">IDIOMA <b id="e-idioma">—</b></div>
       <div class="f">SALIDA <b id="e-salida">SIN ABRIR</b></div></div>
     <div><h2>SALA</h2>
       <label>AUDIO <select id="audio"><option value="nadir">NADIR · AMBIENT</option><option value="ritmo">RITMO · IDM</option></select></label>
-      <label>IDIOMA QUE SIGUE <select id="idioma"><option value="es">ESPAÑOL</option><option value="ca">CATALÀ</option><option value="en">ENGLISH</option><option value="fr">FRANÇAIS</option><option value="de">DEUTSCH</option><option value="eu">EUSKARA</option><option value="gl">GALEGO</option></select></label>
+      <label>IDIOMA QUE SIGUE <select id="idioma"><option value="auto">ROTA · EL MUNDO</option><option value="es">ESPAÑOL</option><option value="ca">CATALÀ</option><option value="en">ENGLISH</option><option value="fr">FRANÇAIS</option><option value="de">DEUTSCH</option><option value="eu">EUSKARA</option><option value="gl">GALEGO</option></select></label>
+      <label>FUENTE · CÓDIGO (SOLO EN VIVO) <input type="checkbox" id="fuente"></label>
       <label>TESTIGO (SOLO EN VIVO) <input type="checkbox" id="testigo"></label>
       <label>VOLUMEN <input type="range" id="vol" min="0" max="1.2" step="0.01" value="0.9"></label></div>
-    <div class="nota">El flujo es real: Wikimedia EventStreams, todas las wikis, en directo. Si se corta, la pieza sigue en MEMORIA con la misma estadística y el TESTIGO no se escribe. No se guarda ni se muestra ningún título ni usuario.</div>
+    <div class="nota">El flujo es real: Wikimedia EventStreams, todas las wikis, en directo. Si se corta, la pieza sigue en MEMORIA con la misma estadística y ni la FUENTE ni el TESTIGO se enseñan. No se guarda ni se muestra ningún título ni usuario.</div>
   </div>
 </div>
 <script src="flujo.js"></script><script src="partitura.js"></script><script src="imagen.js"></script>
-<script src="sonido.js"></script><script src="nadir.js"></script><script src="testigo.js"></script><script src="main.js"></script>
+<script src="sonido.js"></script><script src="nadir.js"></script><script src="testigo.js"></script><script src="fuente.js"></script><script src="main.js"></script>
 <script>iniciar().catch(e=>{document.title='ERR '+e.message;console.error('[MURMULLO_GPU_FALLO]',e&&e.message);});</script>
 </body></html>
