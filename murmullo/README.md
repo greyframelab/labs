@@ -20,21 +20,24 @@ Una losa de obsidiana flota en el vacío. Todo el mundo escribe en ella a la vez
 | Reversión (guerra de ediciones) | La grieta de la RUPTURA nace ahí | Glitch: el golpe se repite cada vez más rápido y más grave |
 
 ## Cuatro actos
-- **SEÑAL:** plano rasante o macro, casi a oscuras. Solo los golpes de los humanos que más pesan.
-- **TENSIÓN:** entra el bombo (rejilla euclidiana que rota) y los bots. Cortes: macro, rasante, cenital (la página entera del mundo) y general. Antes del golpe, negro y silencio.
+- **SEÑAL:** casi siempre ESCRITURA: la cámara acompaña el renglón del español mientras el mundo lo escribe (`?idioma=ca`, `en`… para seguir otro). Si no, rasante o macro. Solo suenan los golpes humanos que más pesan.
+- **TENSIÓN:** entran el bombo (rejilla euclidiana que rota), los bots y la caja, que solo suena cuando hay un borrado real en ese paso. Shuffle distinto en cada vuelta. Cortes: macro, rasante, cenital (la página entera del mundo) y general. Antes del golpe, negro y silencio.
 - **RUPTURA:** la losa se agrieta donde fue la última guerra de ediciones. Veta incandescente del acento, tritono en el dron.
 - **ECO:** un pulido barre la losa. Lo escrito queda debajo, apenas legible (palimpsesto). Vuelve al negro.
 
 ## Imagen
-Losa de 16×9 con un mapa de altura de 2048×1152 (RGBA16F: altura, emisión, destello, frescura) que nunca se borra del todo. Al arrancar ya lleva ~14 min de historia escrita. Laca negra con reflejo de una barra de luz que barre y una caja de luz tenue. La luz rasante solo encuentra los bordes de lo escrito. Bisel pulido en el filo, DOF, bloom contenido y grano sutil. Un solo acento por pieza (ámbar por defecto; `?acento=rojo|cian|violeta|blanco`).
+Losa de 16×9. La altura vive en un mapa de 4096×2304 (R16F) que solo se escribe por blending, con sellos y pulido, sin pasadas a pantalla completa. La emisión vive aparte, en baja (1024×576), y se apaga sola. Así las letras quedan talladas con pared recta y fondo plano incluso en macro. La losa nunca se borra del todo. Al arrancar ya lleva ~14 min de historia escrita. Laca negra con reflejo de una barra de luz que barre y una caja de luz tenue. La luz rasante solo encuentra los bordes de lo escrito. Bisel pulido en el filo, polvo tenue en el haz de la barra (solo en planos abiertos), DOF, bloom contenido y grano sutil. La grieta tiene labio levantado y veta incandescente en el centro. Un solo acento por pieza (ámbar por defecto; `?acento=rojo|cian|violeta|blanco`).
+
+## Fluidez
+Calidad automática: si no llega a ~55 fps baja la resolución interna (80 %, 70 %, 60 %) y después fija 30 fps; si va sobrado, recupera. Los cambios esperan a un corte de plano.
 
 ## Sonido
-Referencia: Autechre (rejillas que rotan, golpes secos, sin melodía). Seco: sin delay ni eco, con solo una sala corta para la chapa y el bajo. Estante −6 dB desde 2,2 kHz, compresor y limitador. Medido ≈ −13,7 LUFS, pico −1,5 dBFS.
+Referencia: Autechre (rejillas que rotan, golpes secos, sin melodía). Seco: sin delay ni eco, con solo una sala corta para la chapa y el bajo. Estante −6 dB desde 2,2 kHz, compresor y limitador. Bombo con cuerpo, armónico y clic; golpe doble cuando un mismo idioma escribe dos veces en el mismo paso. Medido ≈ −13,9 LUFS, pico −1,5 dBFS.
 
 ## Herramientas
 `node tools/preview.js <carpeta> <ancho> <alto> <fps> <t0> <t1> <audio 0|1>` hace el render offline (frames JPG + WAV) con el flujo de MEMORIA. Variables: `SEED` y `EXTRA` (por ejemplo `&plano=MACRO`, `&acento=cian`). `index.html?render=1` expone `MURMULLO.prepara(dur)`, `frame(t)` y `audio(dur)`.
 
 ## Pendiente
 - Validar en vivo con el flujo real (desde la sandbox no se llega a Wikimedia; el render usa MEMORIA).
-- Calidad automática y app de escritorio, como SEMILLA.
+- App de escritorio, como SEMILLA.
 - Línea final del ECO con el dato real (pendiente de decidir si va).

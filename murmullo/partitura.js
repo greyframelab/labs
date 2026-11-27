@@ -16,7 +16,7 @@ class Partitura{
     this.seed=seed; const r=rng(seed*131+7); this.r=r;
     this.root=[38,37,41,33][Math.floor(r()*4)];  // Re por defecto en la mayoría de semillas
     if(r()<.5) this.root=38;
-    this.rot=Math.floor(r()*16);
+    this.rot=Math.floor(r()*16); this.swing=r()*.16;
     this.bpm=120; this.t0=0; this.vuelta=0;
     this.thr=6; this.ultBajo=-9; this.ultChapa=-9;
     this.cola=[];        // eventos pendientes de colocar
@@ -32,8 +32,8 @@ class Partitura{
   // genera el siguiente paso de la rejilla con los eventos llegados hasta su instante
   siguiente(){
     const STEP=this.STEP, k=this.paso, s16=k%16, barG=Math.floor(k/16), bar=barG%16;
-    if(s16===0 && bar===0 && k>0){ this.vuelta++; this.fijaTempo(this.ritmo); }
-    const t=this.t0+this._acum(k);
+    if(s16===0 && bar===0 && k>0){ this.vuelta++; this.fijaTempo(this.ritmo); this.swing=this.r()*.16; this.rot=(this.rot+5)%16; }
+    const t=this.t0+this._acum(k)+(s16%2?STEP*this.swing:0);   // shuffle de la vuelta
     const acto=actoDe(bar);
     // eventos de este paso
     const ev=[]; while(this.cola.length && this.cola[0].t<=t){ ev.push(this.cola.shift()); }
@@ -57,13 +57,17 @@ class Partitura{
     if(big.d>3500 && w>.7 && acto!==3){ P.kick=Math.max(P.kick||0, acto===0?.0:.9); if(k-this.ultChapa>3){ P.chapa={v:Math.min(1,.4+Math.log10(big.d)/8), f:this.langF(big.e.lang)/2, pan:((hashStr(big.e.wiki)%200)/100-1)*.6, e:big.e}; this.ultChapa=k; big.e._suena=true; } }
     // ---- máquina: los bots son hats a rejilla exacta; densidad = fracción real de bots
     if(acto===1||acto===2){ const nb=ev.filter(e=>e.bot).length; const hk=Math.round(this.botFrac*16*(acto===2?.8:.55)); if(euclid(hk,16,this.rot)[s16] && nb>0) P.hat=Math.min(1,.25+nb*.08); if(nb>=7 && acto===2) P.ratchet=1; }
+    // ---- caja: los borrados reales hacen el contratiempo (solo si hay un borrado en ese paso)
+    if((acto===1||acto===2) && (s16===4||s16===12||(acto===2&&s16===14)) && ev.some(e=>e.kind==='del'&&!e.bot)) P.caja=acto===2?1:.8;
+    // ---- ratchet humano: dos ediciones del mismo idioma en el mismo paso = golpe doble
+    if(P.tick && acto>=1){ const L=P.tick.e.lang; if(ev.filter(e=>!e.bot&&e.lang===L).length>=2) P.tick.doble=true; }
     // ---- páginas nuevas: una nota de bajo (monofónico, separado al menos un tiempo)
     const nueva=ev.find(e=>e.kind==='new'&&!e.bot);
     if(nueva && acto!==3 && k-this.ultBajo>=4){ P.bajo={f:this.langF(nueva.lang)/8, dur:STEP*(acto===2?3:2), e:nueva}; this.ultBajo=k; nueva._suena=true; }
     // ---- reversiones: una guerra de ediciones es un glitch (y la grieta de la RUPTURA)
     const rv=ev.find(e=>e.kind==='revert');
     if(rv){ this.ultRevert=rv; if(acto!==0) { P.glitch={f:this.langF(rv.lang), e:rv}; rv._suena=true; } }
-    if(bar===9 && s16>=14){ P.silencio=true; delete P.tick; delete P.kick; delete P.hat; delete P.ratchet; delete P.chapa; delete P.bajo; delete P.glitch; }
+    if(bar===9 && s16>=14){ P.silencio=true; delete P.tick; delete P.caja; delete P.kick; delete P.hat; delete P.ratchet; delete P.chapa; delete P.bajo; delete P.glitch; }
     if(bar===10 && s16===0){ P.ruptura=true; P.grietaDe=this.ultRevert; }
     if(bar===13 && s16===0) P.eco=true;
     if(bar===0 && s16===0) P.senal=true;

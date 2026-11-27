@@ -19,15 +19,22 @@ const ease=x=>x*x*(3-2*x);
 // ------------------------------------------------------------ planos
 // cada plano: tipo + semilla + punto de interés. Deriva lenta dentro del plano.
 function plano(S,tl){
-  const r=rng(S.seed*977+13), a=r()*6.283, T=S.T;
-  const dir=[Math.cos(a),0,Math.sin(a)], perp=[-dir[2],0,dir[0]];
+  const r=rng(S.seed*977+13), a=r()*6.283; let T=S.T;
+  const dir=[Math.cos(a),0,Math.sin(a)]; let perp=[-dir[2],0,dir[0]];
   let cam, bar0, barD, rakeL;
   if(S.tipo==='GENERAL'){
-    const ang=a+tl*.018, R=15.5-tl*.08;
-    cam=mira([Math.cos(ang)*R,6.2+r()*2,Math.sin(ang)*R],[0,-.6,0],null,.42,null,.3);
+    const ang=a+tl*.02, R=13.2-tl*.07;
+    cam=mira([Math.cos(ang)*R,3.6+r()*1.6,Math.sin(ang)*R],[0,-.9,0],null,.44,null,.3);
   } else if(S.tipo==='RASANTE'){
+    // mirando hacia el centro de la losa: siempre un largo renglón por delante
+    const Tc=[Math.max(-5.5,Math.min(5.5,T[0])),0,Math.max(-3,Math.min(3,T[2]))]; T=Tc;
+    const toC=nrm([-T[0]+(r()-.5)*4,0,-T[2]+(r()-.5)*3]); dir[0]=toC[0]; dir[2]=toC[2]; perp=[-dir[2],0,dir[0]];
     const p=add(sub(T,mul(dir,3.4-tl*.05)),[0,.24+r()*.12,0]);
-    cam=mira(p,add(T,add(mul(dir,1.2),[0,.32,0])),null,.36,3.2,2.4);
+    cam=mira(p,add(T,add(mul(dir,1.2),[0,.1,0])),null,.36,3.2,2.4);
+  } else if(S.tipo==='ESCRITURA'){ // la cámara acompaña al renglón de un idioma mientras se escribe
+    const Tl=S.Tl||T, sd=r()<.5?1:-1;
+    const p=add(Tl,[.42,.12+r()*.05,.26*sd]);
+    cam=mira(p,add(Tl,[-.08,0,0]),null,.3,null,4.6);
   } else if(S.tipo==='MACRO'){
     const p=add(sub(T,mul(dir,.62-tl*.012)),add(mul(perp,(tl*.01)),[0,.17+r()*.05,0]));
     cam=mira(p,T,null,.3,null,4.2);
@@ -37,27 +44,28 @@ function plano(S,tl){
   }
   // la barra de luz se coloca donde su reflejo cruza el punto de interés: un brillo que barre lo escrito
   const fv=nrm([cam.f[0],0,cam.f[2]]); const pv=[-fv[2],0,fv[0]];
-  const Tf=S.tipo==='GENERAL'?[0,0,0]:S.tipo==='CENITAL'?mul(T,.5):T;
-  const Hb={GENERAL:2.6,RASANTE:.9,MACRO:.55,CENITAL:9.5}[S.tipo];
+  const Tf=S.tipo==='GENERAL'?[0,0,0]:S.tipo==='CENITAL'?mul(T,.5):S.tipo==='ESCRITURA'?(S.Tl||T):T;
+  const Hb={GENERAL:2.6,RASANTE:.9,MACRO:.55,ESCRITURA:.5,CENITAL:9.5}[S.tipo];
   const hd=Math.hypot(cam.p[0]-Tf[0],cam.p[2]-Tf[2]), off=S.tipo==='CENITAL'?0:Hb*hd/Math.max(.05,cam.p[1]);
   const sweep=Math.sin(tl*.35+S.seed)*(S.tipo==='CENITAL'?1.6:off*.25);
   bar0=add(Tf,add(mul(fv,off+sweep),[0,Hb,0]));
   barD=S.tipo==='CENITAL'?[Math.cos(a),0,Math.sin(a)]:pv;
   rakeL=add(mul(perp,.96),[0,.09+r()*.06,0]);
-  return {cam,bar0,barD,barL:S.tipo==='CENITAL'?6:5,barW:S.tipo==='MACRO'?.12:.22,rakeL};
+  return {cam,bar0,barD,barL:S.tipo==='CENITAL'?6:S.tipo==='GENERAL'?9:5,barW:(S.tipo==='MACRO'||S.tipo==='ESCRITURA')?.12:S.tipo==='GENERAL'?.4:.22,rakeL};
 }
 
 // ------------------------------------------------------------ montaje
 class Montaje{
   constructor(seed){ this.seed=seed; this.r=rng(seed*29+5); this.S=null; this.ultTipo=''; this.n=0; this.fade=0; this.ruptura=0; this.pulso=0; this.pol=[0,0,0]; this.eco=null; this.negro=false; }
   corta(tipo,T,t){ if(Q.get('plano')) tipo=Q.get('plano'); this.n++; this.S={tipo,T:T||[0,0,0],seed:this.seed*100+this.n,t0:t}; this.ultTipo=tipo; }
+  cursor(){ const c=M.E.fila(M.idioma); return uv2w(c.x,(c.row+.5)/ROWS); }
   // decide los cortes en los pasos de la partitura
   paso(P,E){
     const b=P.bar, s=P.s16, ultimo=E.ultimo, grande=E.ultGrande;
     const pt=(o)=>uv2w(o.u,o.v);
-    if(P.senal || !this.S){ this.corta(this.r()<.5?'RASANTE':'MACRO',pt(ultimo),P.t); this.eco=null; }
+    if(P.senal || !this.S){ const u=this.r(); if(u<.6) this.corta('ESCRITURA',this.cursor(),P.t); else this.corta(u<.8?'RASANTE':'MACRO',pt(ultimo),P.t); this.eco=null; }
     if(P.acto===1 && s===0 && (b===4||b===6||b===7||b===8)){ const tipos=['MACRO','RASANTE','CENITAL','GENERAL'].filter(x=>x!==this.ultTipo); this.corta(tipos[Math.floor(this.r()*tipos.length)],pt(b%2?grande:ultimo),P.t); }
-    if(P.acto===1 && b===9 && (s===0||s===8)) this.corta(s===0?'MACRO':'RASANTE',pt(grande),P.t);
+    if(P.acto===1 && b===9 && (s===0||s===8)) { if(s===0) this.corta('ESCRITURA',this.cursor(),P.t); else this.corta('RASANTE',pt(grande),P.t); }
     this.negro = (b===9 && s>=14);                // antes del golpe, negro
     if(P.ruptura){ this.corta('GENERAL',null,P.t); this.ruptura=1; }
     if(P.acto===2 && s===0 && b===11) this.corta('MACRO',pt(E.grietaP||ultimo),P.t);
@@ -69,6 +77,9 @@ class Montaje{
     this.fin=(b===15 && s>=8);                    // cada vuelta vuelve al negro
   }
   estado(t,dt,P){
+    if(this.S && this.S.tipo==='ESCRITURA'){ const tg=this.cursor(); if(!this.S.Tl) this.S.Tl=tg;
+      const d=Math.hypot(tg[0]-this.S.Tl[0],tg[2]-this.S.Tl[2]);
+      if(d>1.2) this.S.Tl=tg; else { const k=1-Math.exp(-dt/.9); this.S.Tl=add(this.S.Tl,mul(sub(tg,this.S.Tl),k)); } }
     this.pulso*=Math.exp(-dt/.16); this.ruptura*=Math.exp(-dt/2.6);
     const objetivo=this.negro?0: this.fin?0: 1;
     this.fade+=(objetivo-this.fade)*(1-Math.exp(-dt/(this.negro?.03:this.fin?.7:.5)));
@@ -78,7 +89,7 @@ class Montaje{
     return {t,cam:L.cam,bar0:L.bar0,barD:L.barD,barL:L.barL,barW:L.barW,rakeL:L.rakeL,
       pulso:this.pulso, ruptura:this.ruptura, fade:this.fade,
       tira:[.45,.8,1.25,.6][acto]+this.ruptura*.6, rake:[.25,.45,.7,.35][acto]+this.pulso*.5,
-      expo:[1.0,1.1,1.25,1.0][acto]*(+(Q.get('expo')||1)), dof:1, acento:M.acento};
+      polvo:({GENERAL:.9,RASANTE:.45}[this.S.tipo]||0)*[.6,.8,1,.5][acto], expo:[1.0,1.1,1.25,1.0][acto]*(+(Q.get('expo')||1)), dof:1, acento:M.acento};
   }
 }
 
@@ -88,14 +99,14 @@ function historia(E,I,seed){
   const capas=7, por=Math.ceil(ev.length/capas);
   for(let c=0;c<capas;c++){
     const list=[]; for(const e of ev.slice(c*por,(c+1)*por)) for(const s of E.sello(e,false)){ s.emis=0; s.brillo=0; list.push(s); }
-    I.sella(list); I.avanza(.001,[.5,2,.0]);
-    I._decay(.25,[.5,2,.9]);                      // pulido parcial: lo viejo queda debajo
+    I.sella(list); I._flushStamps();
+    I.pule(.25,[.5,2,.9]); I.pule(.25,[.5,2,.9]);  // pulido parcial: lo viejo queda debajo
   }
 }
 
 // ------------------------------------------------------------ arranque
 async function iniciar(){
-  const seed=+(Q.get('seed')||Math.floor(Math.random()*1e6)); M.seed=seed;
+  const seed=+(Q.get('seed')||Math.floor(Math.random()*1e6)); M.seed=seed; M.idioma=(Q.get('idioma')||'es')+'wiki';
   const pick=Q.get('acento')||['ambar','ambar','rojo','cian','violeta','blanco'][seed%6]; M.acento=ACENTOS[pick]||ACENTOS.ambar;
   const cv=document.getElementById('c');
   const W=+(Q.get('w')||innerWidth), H=+(Q.get('h')||innerHeight);
@@ -122,7 +133,14 @@ function arrancar(){
   M.vis=[]; let last=performance.now();
   setInterval(()=>{ M.F.tick(); M.P.ritmo=M.F.ritmo||M.P.ritmo; M.P.mete(M.F.saca().map(e=>(e.t+=LAT,e)));
     while(true){ const k=M.P.paso; const tn=M.P.t0+M.P._acum(k); if(tn>ctx.currentTime+.18) break; const P=M.P.siguiente(); M.S.paso(P,M.P.ritmo); M.vis.push(P); } },25);
+  // calidad automática: si no llega a ~55 fps, baja la resolución interna (80 %, 70 %, 60 %); si va sobrado, recupera. Solo en un corte de plano.
+  let ema=1/60, cortes=0, paso30=false, impar=false;
   const loop=()=>{ const now=performance.now(), dt=(now-last)/1000; last=now; const t=ctx.currentTime;
+    ema=ema*.97+dt*.03;
+    if(M.Mo.n!==cortes){ cortes=M.Mo.n; const q=M.I.q;
+      if(ema>1/52){ if(q>.61) M.I.calidad(Math.round((q-.1)*10)/10); else paso30=true; }
+      else if(ema<1/58 && q<1){ M.I.calidad(Math.min(1,Math.round((q+.1)*10)/10)); paso30=false; } }
+    if(paso30){ impar=!impar; if(impar){ requestAnimationFrame(loop); return; } }
     while(M.vis.length && M.vis[0].t<=t) aplica(M.vis.shift());
     M.I.avanza(dt,M.Mo.pol); const C=M.Mo.estado(t,dt,M.ultP); M.I.dibuja(C); requestAnimationFrame(loop); };
   requestAnimationFrame(loop);
@@ -145,7 +163,7 @@ function prepRender(){
       for(let i=0;i<sub;i++){ const tt=M.tv+(t-M.tv)*(i+1)/sub, dt=(t-M.tv)/sub;
         while(M.ip<M.pasos.length && M.pasos[M.ip].t<=tt) aplica(M.pasos[M.ip++]);
         M.I.avanza(dt,M.Mo.pol); M.C=M.Mo.estado(tt,dt,M.ultP); }
-      M.tv=t; M.I.dibuja(M.C); return M.I.cv.toDataURL('image/jpeg',.93);
+      M.tv=t; M.C.render=true; M.I.dibuja(M.C); return M.I.cv.toDataURL('image/jpeg',.93);
     },
     async audio(dur){
       const sr=48000, ctx=new OfflineAudioContext(2,Math.ceil(sr*dur),sr); const P2=new Partitura(M.seed); const S=new Sonido(ctx,P2);

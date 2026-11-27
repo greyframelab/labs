@@ -52,12 +52,22 @@ class Sonido{
     this.env(g,t,.0008,.11*v,.018); n.start(t,(t*7.13)%0.9); n.stop(t+.06);
     const o=c.createOscillator(), og=c.createGain(); o.frequency.value=210; o.connect(og).connect(this.perc); this.env(og,t,.0005,.05*v,.008); o.start(t); o.stop(t+.03);
   }
-  kick(t,v){
+  kick(t,v){ // cuerpo (barrido grave) + armónico corto + clic: seco, con pegada
     const c=this.ctx, o=c.createOscillator(), g=c.createGain();
-    o.frequency.setValueAtTime(140,t); o.frequency.exponentialRampToValueAtTime(43,t+.075);
-    o.connect(g).connect(this.kb); this.env(g,t,.002,.95*v,.34); o.start(t); o.stop(t+.7);
+    o.frequency.setValueAtTime(155,t); o.frequency.exponentialRampToValueAtTime(46,t+.06); o.frequency.exponentialRampToValueAtTime(40,t+.4);
+    o.connect(g).connect(this.kb); this.env(g,t,.0015,.95*v,.3); o.start(t); o.stop(t+.7);
+    const o2=c.createOscillator(), g2=c.createGain(); o2.type='triangle'; o2.frequency.setValueAtTime(310,t); o2.frequency.exponentialRampToValueAtTime(92,t+.03);
+    o2.connect(g2).connect(this.kb); this.env(g2,t,.001,.28*v,.04); o2.start(t); o2.stop(t+.12);
     const n=c.createBufferSource(), lp=c.createBiquadFilter(), ng=c.createGain(); n.buffer=this.noise; lp.type='lowpass'; lp.frequency.value=2600;
     n.connect(lp).connect(ng).connect(this.kb); this.env(ng,t,.0005,.22*v,.006); n.start(t,.3); n.stop(t+.03);
+  }
+  caja(t,v){ // contratiempo: ruido con cuerpo FM, corto y seco (el borrado suena)
+    const c=this.ctx, n=c.createBufferSource(), bp=c.createBiquadFilter(), g=c.createGain(); n.buffer=this.noise;
+    bp.type='bandpass'; bp.frequency.value=1500; bp.Q.value=.9; n.connect(bp).connect(g).connect(this.perc);
+    this.env(g,t,.001,.32*v,.09); n.start(t,(t*3.1)%0.8); n.stop(t+.25);
+    const car=c.createOscillator(), mod=c.createOscillator(), mg=c.createGain(), cg=c.createGain();
+    car.frequency.setValueAtTime(240,t); car.frequency.exponentialRampToValueAtTime(170,t+.05); mod.frequency.value=377; mg.gain.setValueAtTime(500,t); mg.gain.exponentialRampToValueAtTime(10,t+.04);
+    mod.connect(mg).connect(car.frequency); car.connect(cg).connect(this.perc); this.env(cg,t,.001,.26*v,.06); car.start(t); mod.start(t); car.stop(t+.2); mod.stop(t+.2);
   }
   chapa(t,v,f,pan){ // metal golpeado (FM inarmónica), el brillo muere en milisegundos
     const c=this.ctx, p=c.createStereoPanner(); p.pan.value=pan; const g=c.createGain(); g.connect(p); p.connect(this.perc); p.connect(this.send);
@@ -99,7 +109,8 @@ class Sonido{
     if(P.s16===0 && (P.bar===0||P.bar===4||P.bar===10||P.bar===13)) this.acto(t,P.acto,rate);
     if(P.silencio && P.s16===14){ for(const g of [this.dr.gain,this.subG.gain,this.s1G.gain,this.s2G.gain,this.s3G.gain]) g.setTargetAtTime(0,t,.015); }
     if(P.kick) this.kick(t,P.kick);
-    if(P.tick){ if(P.tick.del && Math.abs(P.tick.e.delta)>700 && P.acto!==0) this.inhala(t-.15,P.tick.v); else this.tick(t,P.tick.v,P.tick.f,P.tick.pan,P.tick.del); }
+    if(P.tick){ if(P.tick.del && Math.abs(P.tick.e.delta)>700 && P.acto!==0) this.inhala(t-.15,P.tick.v); else { this.tick(t,P.tick.v,P.tick.f,P.tick.pan,P.tick.del); if(P.tick.doble) this.tick(t+P.dur/2,P.tick.v*.6,P.tick.f*1.5,-P.tick.pan,false); } }
+    if(P.caja) this.caja(t,P.caja);
     if(P.hat){ this.hat(t,P.hat); if(P.ratchet) this.hat(t+P.dur/2,P.hat*.7); }
     if(P.chapa) this.chapa(t,P.chapa.v,P.chapa.f,P.chapa.pan);
     if(P.bajo) this.bajo(t,P.bajo.dur,P.bajo.f);
