@@ -1,0 +1,88 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><title>VØID_LOOM · MENSAJERO · audio</title></head><body><script>
+// ======================================================================
+// VØID_LOOM · MENSAJERO — motor de sonido (validación offline; el mismo motor sonará en vivo)
+// Lento, denso y oscuro (70 BPM arrastrado). La señal real hace la música:
+//   portadora        → dron puro de senos con batido lento (la banda X/S/Ka elige la nota)
+//   bits de la sonda → patrón rítmico de tics graves (el nombre de la nave escribe la rejilla)
+//   paquete al foco  → golpe de placa metálica grave (el anillo de luz llega al centro)
+//   potencia/distancia → cuánto se ensucia el clúster grave de debajo
+// Limpio: senos, FM y resonadores; sin ruido blanco, nada por encima de ~1,5 kHz en los golpes, sin delay.
+// ======================================================================
+const hz=m=>440*Math.pow(2,(m-69)/12);
+function motor(ctx,dest,o){
+  const c=ctx, out=c.createGain(); out.gain.value=.95;
+  const hp=c.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=24;
+  const sh=c.createBiquadFilter(); sh.type='highshelf'; sh.frequency.value=1800; sh.gain.value=-8;
+  const comp=c.createDynamicsCompressor(); comp.threshold.value=-14; comp.ratio.value=2.2; comp.attack.value=.01; comp.release.value=.25;
+  const lim=c.createDynamicsCompressor(); lim.threshold.value=-6.5; lim.ratio.value=20; lim.attack.value=.001; lim.release.value=.08;
+  // techo: recorte suave a -1,5 dBFS (el compresor de WebAudio no tiene anticipación y deja pasar los picos)
+  const clip=c.createWaveShaper(); const cu=new Float32Array(2048); for(let i=0;i<2048;i++){ const x=i/1023.5-1; cu[i]=.84*Math.tanh(x/.84); } clip.curve=cu; clip.oversample='4x';
+  const pre=c.createGain(); pre.gain.value=.82;
+  out.connect(hp).connect(sh).connect(comp).connect(lim).connect(pre).connect(clip).connect(dest);
+  // sala grande y oscura (sin delay)
+  const n=Math.floor(c.sampleRate*4.5), ir=c.createBuffer(2,n,c.sampleRate); let s=17;
+  for(let ch=0;ch<2;ch++){ const d=ir.getChannelData(ch); let y=0; const a=Math.exp(-2*Math.PI*1200/c.sampleRate); for(let i=0;i<n;i++){ s=(s*16807)%2147483647; y=y*a+(s/2147483647*2-1)*(1-a); d[i]=y*Math.pow(1-i/n,2.4)*2; } }
+  const verb=c.createConvolver(); verb.buffer=ir; const send=c.createGain(); send.gain.value=.5; send.connect(verb).connect(out);
+  const voz=(g,pan,sd)=>{ const p=c.createStereoPanner(); p.pan.value=pan||0; g.connect(p); p.connect(out); if(sd){ const x=c.createGain(); x.gain.value=sd; p.connect(x).connect(send); } };
+  const f0=hz(o.raiz||38); // Re
+  const E={};
+  // portadora: senos puros con batido lento; entra con la señal
+  E.port=c.createGain(); E.port.gain.value=0; voz(E.port,0,.6);
+  for(const [m,a,dt] of [[1,1,0],[1,.8,.11],[2,.35,-.07],[3,.12,.05]]){ const x=c.createOscillator(); x.frequency.value=f0*m+dt; const g=c.createGain(); g.gain.value=a*.18; x.connect(g).connect(E.port); x.start(0); }
+  E.port.gain.value=0;
+  // clúster grave disonante debajo (se ensucia con la distancia: cuanto más lejos, más denso)
+  E.clu=c.createGain(); E.clu.gain.value=0; const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=220; lp.Q.value=.8; lp.connect(E.clu); voz(E.clu,0,.5); E.cluLP=lp;
+  for(const [m,d] of [[.5,0],[.5*16/15,4],[.5*1.414,-3],[1,7]]){ const x=c.createOscillator(); x.type='sawtooth'; x.frequency.value=f0*m; x.detune.value=d; const g=c.createGain(); g.gain.value=.06; x.connect(g).connect(lp); x.start(0); }
+  // voces de golpe
+  E.placa=(t,v,f)=>{ // placa metálica grave: parciales inarmónicos tipo placa, ataque seco, cola larga
+    const g=c.createGain(); voz(g,0,.9);
+    for(const [r,a,dc] of [[1,1,1.8],[1.594,.55,1.2],[2.136,.4,.9],[2.653,.25,.6],[3.156,.15,.4]]){ const x=c.createOscillator(); x.frequency.value=f*r; const m=c.createOscillator(); m.frequency.value=f*r*1.41; const mg=c.createGain(); mg.gain.setValueAtTime(f*r*1.6,t); mg.gain.exponentialRampToValueAtTime(f*r*.02,t+.12); m.connect(mg).connect(x.frequency);
+      const pg=c.createGain(); pg.gain.setValueAtTime(0,t); pg.gain.linearRampToValueAtTime(a*.28*v,t+.004); pg.gain.setTargetAtTime(0,t+.01,dc/3); x.connect(pg).connect(g); x.start(t); m.start(t); x.stop(t+dc*2); m.stop(t+dc*2); }
+    const sb=c.createOscillator(), sg=c.createGain(); sb.frequency.setValueAtTime(f*.5*1.6,t); sb.frequency.exponentialRampToValueAtTime(f*.5,t+.08); sb.connect(sg); sg.gain.setValueAtTime(0,t); sg.gain.linearRampToValueAtTime(.55*v,t+.005); sg.gain.setTargetAtTime(0,t+.02,.35); voz(sg,0,.2); sb.start(t); sb.stop(t+2); };
+  E.tic=(t,v,f,pan)=>{ // un bit: tic de madera hueca, grave y corto
+    const x=c.createOscillator(), g=c.createGain(); x.type='triangle'; x.frequency.setValueAtTime(f*1.25,t); x.frequency.exponentialRampToValueAtTime(f,t+.01);
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.2*v,t+.0015); g.gain.setTargetAtTime(0,t+.002,.018); x.connect(g); voz(g,pan,.35); x.start(t); x.stop(t+.15); };
+  E.bombo=(t,v)=>{ const x=c.createOscillator(), g=c.createGain(); x.frequency.setValueAtTime(120,t); x.frequency.exponentialRampToValueAtTime(41,t+.09); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(1.1*v,t+.002); g.gain.setTargetAtTime(0,t+.01,.22); x.connect(g); voz(g,0,.1); x.start(t); x.stop(t+1.2); };
+  E.enganche=(t)=>{ // RUPTURA: la antena "engancha" la señal: placa enorme + sub que cae + la portadora se abre
+    E.placa(t,1.3,f0); E.bombo(t,1); const s=c.createOscillator(), g=c.createGain(); s.frequency.setValueAtTime(70,t); s.frequency.exponentialRampToValueAtTime(26,t+2.4); s.connect(g); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.9,t+.02); g.gain.setTargetAtTime(0,t+.3,1.1); voz(g,0,0); s.start(t); s.stop(t+5); };
+  E.out=out; E.send=send; E.f0=f0; return E;
+}
+// partitura de validación (32 s): SEÑAL → TENSIÓN → silencio → RUPTURA (enganche) → ECO
+function partitura(o){
+  const bpm=70, beat=60/bpm, st=beat/4, ev=[];
+  // la rejilla de bits sale del nombre de la nave (VGR1 → patrón de 16)
+  let h=2166136261; for(const ch of o.nave){ h^=ch.charCodeAt(0); h=Math.imul(h,16777619)>>>0; }
+  const bits=[...Array(16)].map((_,i)=>((h>>>i)&1)|(i%4===0?1:0));
+  const dur=o.dur, actos=[[0,'SEÑAL'],[8.6,'TENSIÓN'],[20.6,'SILENCIO'],[22.3,'RUPTURA'],[27.4,'ECO']];
+  const acto=t=>actos.filter(a=>a[0]<=t).pop()[1];
+  for(let k=0;k*st<dur;k++){ const t=k*st, s=k%16, A=acto(t);
+    if(A==='SILENCIO') continue;
+    if(bits[s] && A!=='ECO') ev.push({t,tipo:'tic',v:A==='SEÑAL'?.45:(s%4?0.7:1),s});
+    if(A==='ECO' && bits[s] && s%2===0) ev.push({t,tipo:'tic',v:.35,s});
+    if((A==='TENSIÓN'||A==='RUPTURA') && (s===0||s===10)) ev.push({t,tipo:'bombo',v:s?.6:.9});
+    // paquete al foco: cada compás (y más denso en la RUPTURA) — el anillo de luz llega al centro
+    if((A==='TENSIÓN' && s===8) || (A==='RUPTURA' && (s===8||s===14)) || (A==='SEÑAL' && s===8 && k%32===8)) ev.push({t,tipo:'placa',v:A==='SEÑAL'?.45:.8});
+  }
+  ev.push({t:22.3,tipo:'enganche'});
+  return {ev,actos,bpm};
+}
+async function renderAudio(o){
+  const sr=48000, ctx=new OfflineAudioContext(2,Math.ceil(sr*o.dur),sr); const E=motor(ctx,ctx.destination,o); const P=partitura(o);
+  // lecho por actos
+  const L=(g,v,t,tc)=>g.gain.setTargetAtTime(v,t,tc);
+  L(E.port,.6,0,2.5); L(E.clu,.25,0,3);
+  L(E.port,.9,8.6,1.5); L(E.clu,.55,8.6,2); E.cluLP.frequency.setTargetAtTime(320,8.6,3);
+  for(const g of [E.port,E.clu]) L(g,0,20.6,.02); E.send.gain.setTargetAtTime(0,20.6,.02);
+  E.send.gain.setTargetAtTime(.5,22.3,.01); L(E.port,1.2,22.3,.05); L(E.clu,.8,22.3,.05); E.cluLP.frequency.setTargetAtTime(520,22.3,.2);
+  L(E.port,.5,27.4,2.5); L(E.clu,.2,27.4,3); E.cluLP.frequency.setTargetAtTime(180,27.4,3); L(E.port,0,o.dur-2.2,.7); L(E.clu,0,o.dur-2.2,.7);
+  const deg=[0,3,5,7,10,12];
+  for(const e of P.ev){ if(e.tipo==='tic') E.tic(e.t,e.v,E.f0*4*Math.pow(2,deg[e.s%deg.length]/12),((e.s*37)%9/4-1)*.7); else if(e.tipo==='bombo') E.bombo(e.t,e.v); else if(e.tipo==='placa') E.placa(e.t,e.v,E.f0*1.5); else if(e.tipo==='enganche') E.enganche(e.t); }
+  const buf=await ctx.startRendering();
+  const len=buf.length, out=new DataView(new ArrayBuffer(44+len*4)); const w=(o2,s2)=>{ for(let i=0;i<s2.length;i++) out.setUint8(o2+i,s2.charCodeAt(i)); };
+  w(0,'RIFF'); out.setUint32(4,36+len*4,true); w(8,'WAVE'); w(12,'fmt '); out.setUint32(16,16,true); out.setUint16(20,1,true); out.setUint16(22,2,true); out.setUint32(24,sr,true); out.setUint32(28,sr*4,true); out.setUint16(32,4,true); out.setUint16(34,16,true); w(36,'data'); out.setUint32(40,len*4,true);
+  const a=buf.getChannelData(0), b=buf.getChannelData(1); let p=44; for(let i=0;i<len;i++){ out.setInt16(p,Math.max(-1,Math.min(1,a[i]))*32767,true); out.setInt16(p+2,Math.max(-1,Math.min(1,b[i]))*32767,true); p+=4; }
+  let s=''; const u=new Uint8Array(out.buffer); for(let i=0;i<u.length;i+=32768) s+=String.fromCharCode.apply(null,u.subarray(i,i+32768));
+  return {wav:btoa(s), golpes:P.ev.filter(e=>e.tipo==='placa'||e.tipo==='enganche').map(e=>+e.t.toFixed(3)), actos:P.actos};
+}
+window.MENSAJERO_AUDIO={renderAudio,partitura,motor}; document.title='LISTO';
+</script></body></html>

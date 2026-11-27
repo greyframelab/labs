@@ -1,0 +1,113 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><title>VØID_LOOM · MENSAJERO · prototipo</title>
+<style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block}</style></head><body>
+<script type="module">
+// ======================================================================
+// VØID_LOOM · MENSAJERO — prototipo de validación (modelo real de la antena DSN de 70 m, NASA 3D Resources)
+// La antena, en laca negra, de noche, iluminada desde el pie. Apunta adonde apunta la de verdad (azimut y
+// elevación del feed de la DSN). Cada paquete de señal recorre los paneles del borde al centro y enciende el foco.
+// ======================================================================
+import * as THREE from '../rostro/vendor/three-rostro.js';
+const Q=new URLSearchParams(location.search);
+const W=+(Q.get('w')||1280), H=+(Q.get('h')||720);
+const ACC=new THREE.Color('#'+(Q.get('acento')||'e9eef7'));
+const R=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true,powerPreference:'high-performance'});
+R.setSize(W,H); R.setPixelRatio(1); R.toneMapping=THREE.ACESFilmicToneMapping; R.toneMappingExposure=.9; R.outputColorSpace=THREE.SRGBColorSpace;
+R.shadowMap.enabled=true; R.shadowMap.type=THREE.PCFSoftShadowMap; document.body.appendChild(R.domElement);
+const S=new THREE.Scene(); S.background=new THREE.Color(0x000000); S.fog=new THREE.FogExp2(0x000000,.0045);
+const cam=new THREE.PerspectiveCamera(35,W/H,.5,4000);
+
+// ---- cielo nocturno para los reflejos (casi negro, una banda fría muy tenue)
+{ const es=new THREE.Scene(); const g=new THREE.SphereGeometry(100,64,32);
+  const m=new THREE.ShaderMaterial({side:THREE.BackSide,uniforms:{},vertexShader:`varying vec3 d; void main(){ d=normalize(position); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+    fragmentShader:`varying vec3 d; void main(){ float hz=exp(-abs(d.y)*7.)*.05; float band=exp(-pow(dot(d,normalize(vec3(.4,.7,-.6))),2.)*7.)*.035*smoothstep(-.1,.3,d.y); float up=smoothstep(0.,1.,d.y)*.012; gl_FragColor=vec4(vec3(.55,.62,.8)*(hz+band+up),1.); }`});
+  es.add(new THREE.Mesh(g,m)); const pm=new THREE.PMREMGenerator(R); S.environment=pm.fromScene(es,.02).texture; S.environmentIntensity=1.0; }
+
+// ---- materiales
+const U={T:{value:0},sen:{value:1},paq:{value:1},acc:{value:ACC},golpe:{value:0},olas:{value:new THREE.Vector4(-9,-9,-9,-9)}};
+const MAT={
+  panel:new THREE.MeshPhysicalMaterial({color:0x070707,roughness:.34,metalness:0,clearcoat:.6,clearcoatRoughness:.22,side:THREE.DoubleSide}),
+  celosia:new THREE.MeshStandardMaterial({color:0x0b0b0c,roughness:.42,metalness:.75}),
+  cuadripode:new THREE.MeshStandardMaterial({color:0x0b0b0c,roughness:.38,metalness:.8}),
+  receptor:new THREE.MeshPhysicalMaterial({color:0x070707,roughness:.2,metalness:0,clearcoat:1,clearcoatRoughness:.05}),
+  estructura:new THREE.MeshStandardMaterial({color:0x080808,roughness:.7,metalness:.3}),
+  baranda:new THREE.MeshStandardMaterial({color:0x0a0a0a,roughness:.5,metalness:.6}),
+  hormigon:new THREE.MeshStandardMaterial({color:0x070707,roughness:.92,metalness:0}),
+};
+// la señal en los paneles: anillos que viajan del borde al centro (coordenadas locales de la parábola)
+MAT.panel.onBeforeCompile=(sh)=>{ Object.assign(sh.uniforms,U);
+  sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vLoc;').replace('#include <begin_vertex>','#include <begin_vertex>\nvLoc=position;');
+  sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vLoc; uniform float T,sen,paq,golpe; uniform vec3 acc; uniform vec4 olas;')
+    .replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
+      { float r=length(vLoc.xz); float em=0.;
+        // cada golpe de la partitura: la ola sale del borde 2,2 s antes y llega al centro justo en el golpe
+        for(int k=0;k<4;k++){ float ph=1.-(olas[k]-T)/2.2; if(ph<0.||ph>1.) continue; float rw=35.*(1.-ph*ph); float w=2.5+7.*(1.-ph); em+=exp(-pow((r-rw)/w,2.))*(.3+.7*ph); }
+        float an=atan(vLoc.z,vLoc.x); float ring=abs(fract(r/2.9)-.5); float rad=abs(fract(an/6.2832*(24.+floor(r/2.9)*6.))-.5);
+        float seam=smoothstep(.44,.5,ring);
+        float cara=gl_FrontFacing?0.:1.;   // en este modelo la cara cóncava es la trasera de los triángulos
+        totalEmissiveRadiance+=acc*sen*em*(.10+.35*seam)*.22*cara + acc*sen*golpe*.08*exp(-r*.08)*cara; }`); };
+
+// ---- modelo (binario propio, convertido desde el glTF oficial de NASA)
+const buf=await (await fetch('modelo/dsn70.bin')).arrayBuffer();
+const hl=new DataView(buf).getUint32(0,true); const head=JSON.parse(new TextDecoder().decode(new Uint8Array(buf,4,hl))); const base=4+hl;
+const G={fijo:new THREE.Group(), azimut:new THREE.Group(), elevacion:new THREE.Group()};
+S.add(G.fijo); S.add(G.azimut); G.azimut.add(G.elevacion); G.elevacion.position.set(...head.ejeElevacion);
+let foco=null;
+for(const p of head.piezas){
+  let o=base+p.pos; const pos=new Float32Array(buf,o,p.nv*3); o+=p.nv*12; const nor=new Float32Array(buf,o,p.nv*3); o+=p.nv*12; const idx=new Uint32Array(buf,o,p.ni);
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos,3)); g.setAttribute('normal',new THREE.BufferAttribute(nor,3)); g.setIndex(new THREE.BufferAttribute(idx,1));
+  const m=new THREE.Mesh(g,MAT[p.mat]); m.castShadow=true; m.receiveShadow=true; G[p.grupo].add(m);
+  if(p.nombre==='quad'){ g.computeBoundingBox(); foco=g.boundingBox.max.y; }
+}
+// el foco: luz del acento en lo alto del cuadrípode (subreflector)
+const focoL=new THREE.PointLight(ACC,0,140,1.8); focoL.position.set(0,foco-3.2,0); G.elevacion.add(focoL);
+const brillo=new THREE.Mesh(new THREE.SphereGeometry(.32,16,8),new THREE.MeshBasicMaterial({color:ACC})); brillo.position.copy(focoL.position); G.elevacion.add(brillo);
+// suelo
+const suelo=new THREE.Mesh(new THREE.PlaneGeometry(1200,1200),new THREE.MeshStandardMaterial({color:0x050505,roughness:.95})); suelo.rotation.x=-Math.PI/2; suelo.receiveShadow=true; S.add(suelo);
+// focos al pie: luz fría que esculpe la antena desde abajo, con sombra
+const focos=[];
+for(const [x,z] of [[-24,-40],[24,-40]]){
+  const s=new THREE.SpotLight(0xc8d4ee,7000,260,.34,.6,1.6); s.position.set(x,1.2,z); s.target.position.set(0,46,0); G.azimut.add(s); G.azimut.add(s.target);
+  s.castShadow=true; s.shadow.mapSize.set(2048,2048); s.shadow.bias=-.0004; s.shadow.camera.near=5; s.shadow.camera.far=260; focos.push(s);
+  // haz visible en la niebla: cono aditivo, se apaga hacia el final y en los bordes
+  const L=new THREE.Vector3(0,46,0).sub(s.position); const len=L.length(); const cone=new THREE.ConeGeometry(Math.tan(.36)*len,len,48,1,true); cone.translate(0,-len/2,0);
+  const cm=new THREE.ShaderMaterial({transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,
+    uniforms:{len:{value:len}},vertexShader:`varying float h; varying vec3 vn; varying vec3 vp; void main(){ h=-position.y; vn=normalize(normalMatrix*normal); vec4 mv=modelViewMatrix*vec4(position,1.); vp=mv.xyz; gl_Position=projectionMatrix*mv; }`,
+    fragmentShader:`uniform float len; varying float h; varying vec3 vn; varying vec3 vp; void main(){ float edge=pow(abs(dot(normalize(vn),normalize(-vp))),2.2); float fall=exp(-h/len*2.6)*smoothstep(0.,6.,h); gl_FragColor=vec4(vec3(.6,.68,.85)*edge*fall*.05,1.); }`});
+  const cn=new THREE.Mesh(cone,cm); cn.position.copy(s.position); cn.lookAt(0,46,0); cn.rotateX(-Math.PI/2); G.azimut.add(cn);
+}
+S.add(new THREE.HemisphereLight(0x8090b0,0x000000,.02));
+// fondo: niebla lejana apenas iluminada en el horizonte; la celosía se recorta contra ella
+{ const m=new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,fog:false,uniforms:{},vertexShader:`varying vec3 d; void main(){ d=normalize(position); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+    fragmentShader:`varying vec3 d; void main(){ float hz=exp(-max(d.y,0.)*5.5)*smoothstep(-.06,.02,d.y); float va=.6+.4*sin(atan(d.z,d.x)*1.3+.7); gl_FragColor=vec4(vec3(.42,.47,.58)*hz*.075*va,1.); }`});
+  const bg=new THREE.Mesh(new THREE.SphereGeometry(1500,48,24),m); bg.renderOrder=-1; S.add(bg); }
+
+// ---- posprocesado: bloom contenido + grano sutil + viñeta
+const comp=new THREE.EffectComposer(R); comp.addPass(new THREE.RenderPass(S,cam));
+const bloom=new THREE.UnrealBloomPass(new THREE.Vector2(W,H),.55,.6,.82); comp.addPass(bloom);
+const fin=new THREE.ShaderPass({uniforms:{tDiffuse:{value:null},t:{value:0},res:{value:new THREE.Vector2(W,H)}},vertexShader:`varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+  fragmentShader:`uniform sampler2D tDiffuse; uniform float t; uniform vec2 res; varying vec2 vUv; float h(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+  void main(){ vec4 c=texture2D(tDiffuse,vUv); vec2 q=vUv-.5; c.rgb*=1.-dot(q,q)*.85; c.rgb+=(h(vUv*res+fract(t*13.)*91.)-.5)*.012; gl_FragColor=c; }`});
+comp.addPass(fin); comp.addPass(new THREE.OutputPass());
+
+// ---- apuntar: azimut desde el norte (-z) en sentido horario, elevación sobre el horizonte
+function apunta(az,el){ G.elevacion.rotation.x=-(Math.PI/2-el*Math.PI/180); G.azimut.rotation.y=-az*Math.PI/180; S.updateMatrixWorld(true); }
+const eje=()=>new THREE.Vector3(0,1,0).applyQuaternion(G.elevacion.getWorldQuaternion(new THREE.Quaternion())).normalize();
+const centro=()=>G.elevacion.localToWorld(new THREE.Vector3(0,14,0));
+const focoW=()=>focoL.getWorldPosition(new THREE.Vector3());
+window.PLANOS={
+  // desde el suelo, mirando arriba: el monumento
+  CONTRAPICADO:()=>{ const c=centro(), a=eje(); const h=new THREE.Vector3(a.x,0,a.z).normalize(), side=new THREE.Vector3(h.z,0,-h.x); cam.fov=42; cam.position.copy(c).addScaledVector(h,-58).addScaledVector(side,40); cam.position.y=2.2; cam.lookAt(c.x,c.y+2,c.z); },
+  // dentro del cuenco: el ojo, con el foco y el cuadrípode
+  CUENCO:(tl)=>{ const c=centro(), a=eje(); const side=new THREE.Vector3().crossVectors(a,new THREE.Vector3(0,1,0)).normalize(); cam.fov=34-tl*.25; cam.position.copy(c).addScaledVector(a,95-tl*1.2).addScaledVector(side,22-tl*.8); cam.lookAt(c.clone().addScaledVector(a,6)); },
+  // desde el foco: el cuadrípode baja hacia el cuenco; la ola de señal llega al centro
+  FOCO:(tl)=>{ const c=centro(), a=eje(), f=focoW(); const side=new THREE.Vector3().crossVectors(a,new THREE.Vector3(0,1,0)).normalize(); cam.fov=46; cam.position.copy(f).addScaledVector(a,7+tl*.25).addScaledVector(side,13-tl*.35); cam.lookAt(c.clone().addScaledVector(side,-4)); },
+  // lejos, de noche: la antena en la niebla con sus dos haces
+  NOCHE:(tl)=>{ const c=centro(), a=eje(); const side=new THREE.Vector3(a.z,0,-a.x).normalize(); cam.fov=24-tl*.12; cam.position.copy(c).addScaledVector(side,-300+tl*2).addScaledVector(new THREE.Vector3(a.x,0,a.z).normalize(),-60); cam.position.y=8; cam.lookAt(c.x,c.y*.62,c.z); },
+};
+window.dibuja=(st)=>{
+  apunta(st.az,st.el); U.T.value=st.t; const ol=(st.olas||[]).concat([-9,-9,-9,-9]); U.olas.value.set(ol[0],ol[1],ol[2],ol[3]); U.sen.value=st.sen; U.paq.value=st.paq; U.golpe.value=st.golpe||0;
+  focoL.intensity=st.sen*(160+st.golpe*900); brillo.visible=st.sen>.02; brillo.material.color.copy(ACC).multiplyScalar(1+st.golpe*3);
+  window.PLANOS[st.plano](st.tl||0); R.toneMappingExposure=.9*(st.expo??1); cam.aspect=W/H; cam.updateProjectionMatrix(); fin.uniforms.t.value=st.t;
+  comp.render(); return R.domElement.toDataURL('image/jpeg',.93); };
+document.title='LISTO';
+</script></body></html>

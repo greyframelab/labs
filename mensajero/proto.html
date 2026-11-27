@@ -1,0 +1,166 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><title>VØID_LOOM · MENSAJERO · prototipo</title>
+<style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block}</style></head><body>
+<canvas id="c"></canvas>
+<script>
+// ======================================================================
+// VØID_LOOM · MENSAJERO — prototipo de validación (imagen + audio)
+// Una antena de espacio profundo de 70 m, en laca negra, de noche. Apunta adonde apunta la real
+// (azimut y elevación del feed de la DSN). Cuando llega la señal de una sonda, sus paquetes bajan
+// del cielo hasta el foco y el cuenco se enciende por dentro. Lo que se ve salió de allí hace horas.
+// ======================================================================
+const Q=new URLSearchParams(location.search);
+const W=+(Q.get('w')||1280), H=+(Q.get('h')||720);
+const ACC=(Q.get('acento')||'8a2bff').match(/../g).map(h=>parseInt(h,16)/255);
+const cv=document.getElementById('c'); cv.width=W; cv.height=H;
+const gl=cv.getContext('webgl2',{preserveDrawingBuffer:true,antialias:false}); gl.getExtension('EXT_color_buffer_float');
+const HEAD=`#version 300 es
+precision highp float;`;
+const VS=HEAD+`in vec2 p; out vec2 uv; void main(){ uv=p*.5+.5; gl_Position=vec4(p,0,1); }`;
+const FS_SCENE=HEAD+`
+in vec2 uv; out vec4 o;
+uniform vec2 res; uniform vec3 cp,cf,cr,cu; uniform float fov,foco,apert,T,sen,paq,golpe,az,el; uniform vec3 acc;
+#define R 1.0
+#define FL .66
+const vec3 PV=vec3(0.,0.,0.);
+mat3 B; vec3 AX;
+float h1(float x){ return fract(sin(x*127.1)*43758.5453); }
+float h2(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+float vn(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f); return mix(mix(h2(i),h2(i+vec2(1,0)),f.x),mix(h2(i+vec2(0,1)),h2(i+1.),f.x),f.y); }
+float sdCap(vec3 p, vec3 a, vec3 b, float r){ vec3 pa=p-a, ba=b-a; float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.); return length(pa-ba*h)-r; }
+float sdBox(vec3 p, vec3 b){ vec3 d=abs(p)-b; return length(max(d,0.))+min(max(d.x,max(d.y,d.z)),0.); }
+float sdCyl(vec3 p, float r, float h){ vec2 d=abs(vec2(length(p.xz),p.y))-vec2(r,h); return min(max(d.x,d.y),0.)+length(max(d,0.)); }
+// ---- la antena: reflector parabólico, costillas y anillos detrás, cubo, cuadrípode, subreflector, montura
+vec2 dish(vec3 p){
+  vec3 q=p-PV; vec3 l=vec3(dot(q,B[0]),dot(q,B[1]),dot(q,AX))-vec3(0,0,.3);
+  float r=length(l.xy), h=r*r/(4.*FL), g=sqrt(1.+r*r/(4.*FL*FL));
+  float dz=(l.z-h)/g;
+  // espejo: concha fina con el canto biselado (el único filo de luz del objeto)
+  float refl=max(abs(dz+.012)-.012,r-R); refl=max(refl,-(R+.02-r)-.0);
+  float quad=1e9; for(int i=0;i<4;i++){ float a=float(i)*1.5708+.785; vec3 s=vec3(cos(a)*.74,sin(a)*.74,.74*.74/(4.*FL)); quad=min(quad,sdCap(l,s,vec3(0,0,FL-.03),.006)); }
+  vec3 ls=l-vec3(0,0,FL); float sub=max(abs(ls.z+dot(ls.xy,ls.xy)*.6)-.01,length(ls.xy)-.085);
+  float feed=sdCap(l,vec3(0,0,-.01),vec3(0,0,.2),.035);
+  vec2 res=vec2(refl,1.); float m3=min(min(quad,sub),feed); if(m3<res.x) res=vec2(m3,3.);
+  return res; }
+vec2 map(vec3 p){ return dish(p); }
+vec3 nrm(vec3 p){ vec2 e=vec2(.0007,0); return normalize(vec3(map(p+e.xyy).x-map(p-e.xyy).x,map(p+e.yxy).x-map(p-e.yxy).x,map(p+e.yyx).x-map(p-e.yyx).x)); }
+vec3 cielo(vec3 r){ // noche: casi negro; un horizonte frío apenas visible y estrellas muy tenues
+  float hz=exp(-abs(r.y)*9.)*.022; float up=smoothstep(-.1,1.,r.y)*.006;
+  float band=exp(-pow(dot(r,normalize(vec3(.35,.75,-.55))),2.)*9.)*.016*smoothstep(-.2,.3,r.y);
+  vec2 sp=r.xz/(abs(r.y)+.25)*90.; float st=pow(h2(floor(sp)),180.)*step(0.,r.y)*.35;
+  return vec3(.55,.62,.78)*(hz+up+band)+vec3(st); }
+void main(){
+  vec2 p=(uv*2.-1.)*vec2(res.x/res.y,1.);
+  vec3 rd=normalize(cf+p.x*cr*fov+p.y*cu*fov), ro=cp;
+  AX=normalize(vec3(cos(el)*sin(az),sin(el),cos(el)*cos(az)));
+  vec3 up=abs(AX.y)>.99?vec3(1,0,0):vec3(0,1,0); vec3 bx=normalize(cross(up,AX)); B=mat3(bx,cross(AX,bx),AX);
+  vec3 F=PV+AX*(FL+.3);                        // el foco
+  float t=0., id=-1.; vec3 col=vec3(0);
+  for(int i=0;i<170;i++){ vec2 d=map(ro+rd*t); if(d.x<.0006*t){ id=d.y; break; } t+=d.x*.85; if(t>40.) break; }
+  float dist=40.;
+  if(id>=0.){
+    dist=t; vec3 P=ro+rd*t, n=nrm(P), V=-rd; float nv=max(dot(n,V),0.), Fr=.04+.96*pow(1.-nv,5.);
+    vec3 q=P-PV; vec3 l=vec3(dot(q,B[0]),dot(q,B[1]),dot(q,AX))-vec3(0,0,.3); float r=length(l.xy);
+    float rough=.12, alb=.01;
+    if(id==1.){ // paneles del reflector: costuras radiales y anulares (el detalle que da escala)
+      float an=atan(l.y,l.x); float ring=abs(fract(r/.09)-.5); float rad=abs(fract(an/6.2832*(36.+floor(r/.09)*8.))-.5);
+      float seam=smoothstep(.47,.5,max(ring,rad*1.));
+      float pn=h2(vec2(floor(r/.09),floor(an/6.2832*(36.+floor(r/.09)*8.))));
+      n=normalize(n+(vec3(vn(P.xz*40.),vn(P.zy*40.),vn(P.xy*40.))-.5)*.02+B[0]*(pn-.5)*.015);
+      rough=mix(.09,.35,seam); alb=mix(.012,.004,seam);
+    } else if(id==2.){ rough=.28; alb=.016; }
+    else if(id==3.){ rough=.2; alb=.02; }
+    else { rough=.75; alb=.006; }
+    vec3 rr=reflect(rd,n);
+    // cielo reflejado: la laca negra lee su propia curvatura
+    col+=cielo(rr)*Fr*(3.2/(1.+rough*12.));
+    // el foco: brillos del acento cuando hay señal
+    vec3 Lf=F-P; float df=length(Lf); Lf/=df; float att=1./(1.+df*df*5.);
+    vec3 Hf=normalize(Lf+V); float spf=pow(max(dot(n,Hf),0.),2./(rough*rough+1e-3))*.25;
+    col+=acc*sen*(1.+golpe*2.)*att*(max(dot(n,Lf),0.)*alb*8.+spf*Fr*7.);
+    // contraluz fría (luna invisible): dibuja el canto
+    vec3 Lm=normalize(vec3(-.5,.6,-.65)); col+=vec3(.6,.66,.8)*pow(max(dot(rr,Lm),0.),80./(1.+rough*20.))*Fr*.8;
+    if(id==1.){
+      float front=step(0.,dot(n,AX)); // la cara cóncava mira al cielo
+      // la señal: cada paquete es un anillo que recorre el espejo del borde hasta el foco
+      float em=0.;
+      for(int k=0;k<3;k++){ float ph=fract(T*paq*.45+float(k)/3.); float rw=R*(1.-ph*ph);
+        float w=.012+.03*(1.-ph); em+=exp(-pow((r-rw)/w,2.))*(.35+.65*ph)*smoothstep(1.,.85,ph); }
+      // las costuras de los paneles se encienden un poco más (el anillo se lee como estructura, no como gradiente)
+      float an=atan(l.y,l.x); float ring=abs(fract(r/.09)-.5); float rad=abs(fract(an/6.2832*(36.+floor(r/.09)*8.))-.5);
+      float seam=smoothstep(.44,.5,max(ring,rad));
+      col+=acc*sen*em*front*(.06+1.1*seam)*.45;
+      // canto: filo pulido
+      col+=vec3(.75,.8,.9)*smoothstep(R-.012,R,r)*(.04+.25*Fr);
+    }
+  }
+  // haz: los paquetes de la señal bajan por el eje hasta el foco (rayas, no un hilo continuo)
+  { vec3 a=F, b=F+AX*30.; vec3 ba=normalize(b-a); vec3 w0=ro-a;
+    float bb=dot(rd,ba), d0=dot(rd,w0), e0=dot(ba,w0), den=1.-bb*bb;
+    float s=(bb*d0-e0)/max(den,1e-4), tt=(d0-bb*e0)/max(den,1e-4)*-1.;
+    s=max(s,0.); vec3 pc=a+ba*s; vec3 pr=ro+rd*max(0.,dot(pc-ro,rd));
+    float dl=length(pc-pr); float vis=step(dot(pc-ro,rd),dist);
+    float w=.004+.0015*s;
+    float pk=step(.5,fract(s*1.7+T*paq*1.3))*smoothstep(.0,.4,fract(s*1.7+T*paq*1.3)) ;
+    float core=exp(-dl*dl/(w*w))*(.25+.75*pk)*exp(-s*.12)*sen*vis;
+    float halo=exp(-dl*dl/(w*w*60.))*.06*sen*exp(-s*.2)*vis;
+    col+=acc*(core*1.6+halo)+vec3(1)*core*.35; }
+  // resplandor del propio foco
+  { vec3 fo=F-ro; float tf=dot(fo,rd); vec3 c=ro+rd*tf; float df=length(c-F); float vis=step(tf,dist+.05);
+    col+=acc*sen*(1.+golpe*3.)*(.02/(df*df*80.+.02))*.25*vis; }
+  col*=exp(-max(0.,dist-6.)*.05);
+  col=clamp(col,0.,40.); if(any(isnan(col))) col=vec3(0);
+  float coc=clamp(abs(dist-foco)/max(dist,.1)*apert,0.,1.);
+  o=vec4(col,coc); }`;
+const FS_BRIGHT=HEAD+`in vec2 uv; out vec4 o; uniform sampler2D T; uniform vec2 texel;
+void main(){ vec3 c=vec3(0); for(int i=-1;i<=1;i++) for(int j=-1;j<=1;j++) c+=min(texture(T,uv+vec2(i,j)*texel*1.5).rgb,vec3(32.)); c/=9.;
+  float l=max(c.r,max(c.g,c.b)); o=vec4(c*smoothstep(.35,1.4,l),1); }`;
+const FS_BLUR=HEAD+`in vec2 uv; out vec4 o; uniform sampler2D T; uniform vec2 dir;
+void main(){ vec3 c=texture(T,uv).rgb*.227; float w[4]=float[4](.194,.121,.054,.016);
+  for(int i=0;i<4;i++){ vec2 d=dir*float(i+1)*1.6; c+=(texture(T,uv+d).rgb+texture(T,uv-d).rgb)*w[i]; } o=vec4(c,1); }`;
+const FS_FINAL=HEAD+`in vec2 uv; out vec4 o; uniform sampler2D T,Bl; uniform vec2 res,texel; uniform float tiempo,expo;
+float h1(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+void main(){ vec4 c0=texture(T,uv); float coc=c0.a; vec3 acc=c0.rgb; float ws=1.;
+  if(coc>.02){ float Rr=coc*res.y*.016; for(int i=0;i<28;i++){ float a=float(i)*2.39996; float rr=sqrt(float(i)+.5)/sqrt(28.)*Rr; vec4 s=texture(T,uv+vec2(cos(a),sin(a))*rr*texel); float w=smoothstep(0.,.6,s.a)+.1; acc+=s.rgb*w; ws+=w; } }
+  vec3 c=acc/ws+texture(Bl,uv).rgb*.7; c*=expo; c=c*(2.51*c+.03)/(c*(2.43*c+.59)+.14);
+  vec2 q=uv-.5; c*=1.-dot(q,q)*.8; c+=(h1(uv*res+fract(tiempo*13.)*91.)-.5)*.006*(.4+c*.6);
+  o=vec4(pow(max(c,0.),vec3(1./2.2)),1); }`;
+function prog(fs){ const mk=(t,s)=>{ const sh=gl.createShader(t); gl.shaderSource(sh,s); gl.compileShader(sh); if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh)); return sh; };
+  const p=gl.createProgram(); gl.attachShader(p,mk(gl.VERTEX_SHADER,VS)); gl.attachShader(p,mk(gl.FRAGMENT_SHADER,fs)); gl.bindAttribLocation(p,0,'p'); gl.linkProgram(p); if(!gl.getProgramParameter(p,gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p)); return p; }
+function rt(w,h){ const t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t); gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA16F,w,h,0,gl.RGBA,gl.HALF_FLOAT,null);
+  for(const [k,v] of [[gl.TEXTURE_MIN_FILTER,gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR],[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D,k,v);
+  const fb=gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER,fb); gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0); return {t,fb,w,h}; }
+const P={scene:prog(FS_SCENE),bright:prog(FS_BRIGHT),blur:prog(FS_BLUR),final:prog(FS_FINAL)};
+const vb=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,vb); gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+const S=rt(W,H), B1=rt(W>>2,H>>2), B2=rt(W>>2,H>>2);
+const U=(p,n)=>gl.getUniformLocation(p,n);
+function pass(p,tg,f){ gl.bindFramebuffer(gl.FRAMEBUFFER,tg?tg.fb:null); gl.viewport(0,0,tg?tg.w:W,tg?tg.h:H); gl.useProgram(p); f(p); gl.drawArrays(gl.TRIANGLE_STRIP,0,4); }
+function tex(p,n,t,u){ gl.activeTexture(gl.TEXTURE0+u); gl.bindTexture(gl.TEXTURE_2D,t); gl.uniform1i(U(p,n),u); }
+const nrm=a=>{ const l=Math.hypot(...a); return a.map(x=>x/l); }, cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+function cam(p,t,fov,apert){ const f=nrm(t.map((x,i)=>x-p[i])), r=nrm(cross(f,[0,1,0])), u=cross(r,f); return {p,f,r,u,fov,foco:Math.hypot(...t.map((x,i)=>x-p[i])),apert}; }
+// estado: azimut/elevación (grados), señal 0–1, velocidad de paquetes, golpe
+window.dibuja=(st)=>{
+  const az=st.az*Math.PI/180, el=st.el*Math.PI/180;
+  const AX=[Math.cos(el)*Math.sin(az),Math.sin(el),Math.cos(el)*Math.cos(az)], F=[AX[0]*.4,1.18+AX[1]*.4,AX[2]*.4];
+  const C=st.cam(AX,F);
+  pass(P.scene,S,p=>{ gl.uniform2f(U(p,'res'),W,H); for(const k of ['p','f','r','u']) gl.uniform3fv(U(p,'c'+k),C[k]);
+    gl.uniform1f(U(p,'fov'),C.fov); gl.uniform1f(U(p,'foco'),C.foco); gl.uniform1f(U(p,'apert'),C.apert);
+    gl.uniform1f(U(p,'T'),st.t); gl.uniform1f(U(p,'sen'),st.sen); gl.uniform1f(U(p,'paq'),st.paq); gl.uniform1f(U(p,'golpe'),st.golpe||0);
+    gl.uniform1f(U(p,'az'),az); gl.uniform1f(U(p,'el'),el); gl.uniform3fv(U(p,'acc'),ACC); });
+  pass(P.bright,B1,p=>{ tex(p,'T',S.t,0); gl.uniform2f(U(p,'texel'),1/W,1/H); });
+  for(let i=0;i<2;i++){ pass(P.blur,B2,p=>{ tex(p,'T',B1.t,0); gl.uniform2f(U(p,'dir'),1/B1.w,0); }); pass(P.blur,B1,p=>{ tex(p,'T',B2.t,0); gl.uniform2f(U(p,'dir'),0,1/B1.h); }); }
+  pass(P.final,null,p=>{ tex(p,'T',S.t,0); tex(p,'Bl',B1.t,1); gl.uniform2f(U(p,'res'),W,H); gl.uniform2f(U(p,'texel'),1/W,1/H); gl.uniform1f(U(p,'tiempo'),st.t); gl.uniform1f(U(p,'expo'),st.expo||1); });
+  return cv.toDataURL('image/jpeg',.93);
+};
+// planos de validación
+window.PLANOS={
+  // dentro del cuenco, casi sobre el eje: un ojo negro con el foco encima
+  CUENCO:(AX,F)=>{ const side=nrm(cross(AX,[0,1,0])); const p=F.map((x,i)=>x+AX[i]*1.4+side[i]*.45); return cam(p,[AX[0]*.15,AX[1]*.15,AX[2]*.15],.7,.9); },
+  // rasante sobre la superficie: paneles enormes, el anillo pasando
+  RASANTE:(AX,F)=>{ const side=nrm(cross(AX,[0,1,0])), upv=cross(side,AX); const e=side.map((x,i)=>x*.82+AX[i]*(.82*.82/2.64+.3)); const p=e.map((x,i)=>x+AX[i]*.07-side[i]*.05+upv[i]*.08); const tg=upv.map((x,i)=>x*.4+AX[i]*(.4*.4/2.64+.3)); return cam(p,tg,.42,4.5); },
+  // de perfil: solo el canto, un filo en el vacío, y el foco
+  PERFIL:(AX,F)=>{ const side=nrm(cross(AX,[0,1,0])); const p=side.map((x,i)=>x*3.2+[0,.15,0][i]+AX[i]*.25); return cam(p,[AX[0]*.4,AX[1]*.4,AX[2]*.4],.5,.4); },
+  // lejos: un espejo negro mirando al cielo
+  NOCHE:(AX,F)=>cam([-4.2,-1.4,5.2],[0,.2,0],.4,.2),
+};
+document.title='LISTO';
+</script></body></html>
