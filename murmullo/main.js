@@ -109,7 +109,7 @@ function historia(E,I,seed){
 
 // ------------------------------------------------------------ arranque
 async function iniciar(){
-  const seed=+(Q.get('seed')||Math.floor(Math.random()*1e6)); M.seed=seed; M.idioma=(Q.get('idioma')||'es')+'wiki';
+  const seed=+(Q.get('seed')||Math.floor(Math.random()*1e6)); M.seed=seed; M.idioma=(Q.get('idioma')||'es')+'wiki'; M.audio=Q.get('audio')||'nadir';
   const pick=Q.get('acento')||['ambar','ambar','rojo','cian','violeta','blanco'][seed%6]; M.acento=ACENTOS[pick]||ACENTOS.ambar;
   const cv=document.getElementById('c');
   const W=+(Q.get('w')||innerWidth), H=+(Q.get('h')||innerHeight);
@@ -130,7 +130,7 @@ function aplica(P){ // un paso de la partitura → escritura en la losa
 function arrancar(){
   document.getElementById('inicio').style.display='none';
   const ctx=new (window.AudioContext||window.webkitAudioContext)({latencyHint:'playback'}); M.ctx=ctx;
-  M.S=new Sonido(ctx,M.P);
+  M.S=new (M.audio==='ritmo'?Sonido:SonidoNadir)(ctx,M.P);
   M.F=new Flujo(()=>ctx.currentTime,M.seed); M.F.conecta();
   M.P.t0=ctx.currentTime+LAT; M.P.fijaTempo(28);
   M.vis=[]; let last=performance.now();
@@ -169,7 +169,7 @@ function prepRender(){
       M.tv=t; M.C.render=true; M.I.dibuja(M.C); return M.I.cv.toDataURL('image/jpeg',.93);
     },
     async audio(dur){
-      const sr=48000, ctx=new OfflineAudioContext(2,Math.ceil(sr*dur),sr); const P2=new Partitura(M.seed); const S=new Sonido(ctx,P2);
+      const sr=48000, ctx=new OfflineAudioContext(2,Math.ceil(sr*dur),sr); const P2=new Partitura(M.seed); const S=new (M.audio==='ritmo'?Sonido:SonidoNadir)(ctx,P2);
       for(const P of M.pasos) if(P.t<dur-.05) S.paso(P,M.P.ritmo);
       const buf=await ctx.startRendering(); return wavB64(buf);
     },

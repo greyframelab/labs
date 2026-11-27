@@ -32,7 +32,9 @@ Superficie infinita: la escritura de 16×9 se repite más allá de la vista y la
 Calidad automática: si no llega a ~55 fps baja la resolución interna (80 %, 70 %, 60 %) y después fija 30 fps; si va sobrado, recupera. Los cambios esperan a un corte de plano.
 
 ## Sonido
-Referencia: Autechre (rejillas que rotan, golpes secos, sin melodía). Seco: sin delay ni eco, con solo una sala corta para la chapa y el bajo. Estante −6 dB desde 2,2 kHz, compresor y limitador. Bombo con cuerpo, armónico y clic; golpe doble cuando un mismo idioma escribe dos veces en el mismo paso. Medido ≈ −13,9 LUFS, pico −1,5 dBFS.
+Dos modos (`?audio=`):
+- **NADIR** (por defecto): dark ambient inquietante, con un lecho tipo Tineidae y los metales de Blade Runner 2049. Sub que respira, un lecho CS-80 desafinado (raíz y segunda menor que baten), cristal que bate y un racimo que se hunde en la TENSIÓN. Cada edición humana es un susurro con la vocal de su idioma (el murmullo de la gente). Ediciones enormes: metal arqueado. Páginas nuevas: swell CS-80. Bots: tic lejano. Borrados: un portazo en otra sala. Reversiones: aire al revés. RUPTURA: BRAAM y caída de sub tras el silencio. El pulso es un latido. Sala larga y oscura, sin delay. ≈ −13,8 LUFS, pico −1,8 dBFS.
+- **RITMO** (`?audio=ritmo`): IDM. Referencia: Autechre (rejillas que rotan, golpes secos, sin melodía). Seco: sin delay ni eco, con solo una sala corta para la chapa y el bajo. Estante −6 dB desde 2,2 kHz, compresor y limitador. Bombo con cuerpo, armónico y clic; golpe doble cuando un mismo idioma escribe dos veces en el mismo paso. Medido ≈ −13,9 LUFS, pico −1,5 dBFS.
 
 ## Herramientas
 `node tools/preview.js <carpeta> <ancho> <alto> <fps> <t0> <t1> <audio 0|1>` hace el render offline (frames JPG + WAV) con el flujo de MEMORIA. Variables: `SEED` y `EXTRA` (por ejemplo `&plano=MACRO`, `&acento=cian`). `index.html?render=1` expone `MURMULLO.prepara(dur)`, `frame(t)` y `audio(dur)`.
