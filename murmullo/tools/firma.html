@@ -1,0 +1,12 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../../semilla/fonts/fonts.css">
+<style>html,body{margin:0;background:#000}</style></head><body>
+<canvas id="o" width="1080" height="1920"></canvas>
+<script src="../../semilla/void-loom-sting.js"></script>
+<script>
+// Firma de cierre de VØID_LOOM para el Reel de MURMULLO (acento de la pieza), frame a frame
+const out=document.getElementById('o').getContext('2d');
+const acc=new URLSearchParams(location.search).get('acento')||'#FFB000';
+window.firma=(t,frame)=>{ const c=VL.sceneCtx(); VL.drawSting(c,t,{accent:acc}); const st=VL.stingState(t,{accent:acc});
+  VL.post(out,frame,{grain:.5,flash:st.flash,flashColor:acc}); return document.getElementById('o').toDataURL('image/jpeg',.94); };
+document.fonts.load("400 40px 'JetBrains Mono'").then(()=>document.title='LISTO',()=>document.title='LISTO');
+</script></body></html>

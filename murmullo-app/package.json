@@ -1,0 +1,82 @@
+{
+  "name": "voidloom-murmullo",
+  "productName": "VØID_LOOM MURMULLO",
+  "version": "1.0.0",
+  "description": "VØID_LOOM · MURMULLO · el mundo escribe en una losa de obsidiana: las ediciones de Wikipedia en tiempo real se tallan y suenan. Consola y salida al proyector.",
+  "author": "VØID_LOOM",
+  "license": "MIT",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "copy": "node scripts/copy.js",
+    "start": "npm run copy && electron .",
+    "dist:win": "npm run copy && electron-builder --win --publish never",
+    "dist:mac": "npm run copy && electron-builder --mac --publish never"
+  },
+  "devDependencies": {
+    "electron": "45.3.2",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "labs.greyframe.voidloom.murmullo",
+    "productName": "VØID_LOOM MURMULLO",
+    "copyright": "VØID_LOOM",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "package.json",
+      "www/**/*"
+    ],
+    "asar": true,
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "VØID_LOOM MURMULLO",
+      "artifactName": "VOID_LOOM-MURMULLO-${version}-windows-instalador.${ext}"
+    },
+    "portable": {
+      "artifactName": "VOID_LOOM-MURMULLO-${version}-windows-portable.${ext}"
+    },
+    "mac": {
+      "icon": "build/icon.png",
+      "category": "public.app-category.entertainment",
+      "identity": "-",
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ]
+    },
+    "dmg": {
+      "artifactName": "VOID_LOOM-MURMULLO-${version}-mac-${arch}.${ext}"
+    }
+  },
+  "repository": "github:greyframelab/labs"
+}
