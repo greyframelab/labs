@@ -16,5 +16,5 @@
 ## Pendiente
 - [ ] Probar con el feed real en la app (en el navegador puede que la NASA no permita CORS: entonces la web irá en MEMORIA).
 - [ ] Rendimiento en el PC de sala (590.000 puntos): bajar `calidad` si hace falta.
-- [ ] Reel de MENSAJERO.
+- [x] Reel de MENSAJERO (27 nov): 9:16, 27 s, desde los 12,5 s de la vuelta (cuenco → LA RED → negro → nombre → golpe → ECO) + firma en blanco espectral con sonido propio (`tools/firma_audio.py`, BRAAM grave y arco metálico, nada de tonos que suben). Se regenera con `PW=… tools/reel.sh <carpeta>`.
 - [ ] Si la antena cambia de nave a mitad de vuelta, el nombre del cielo sigue siendo el de la vuelta (se actualiza en la siguiente). Valorar si se quiere un "cambio de nave" como evento.

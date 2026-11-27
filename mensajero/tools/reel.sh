@@ -16,7 +16,7 @@ const { chromium } = require(process.env.PW||'playwright-core'); const fs=requir
  await f.waitForFunction(()=>document.title==='LISTO',null,{timeout:0});
  for(let k=0;k<Math.round(5.5*$FPS);k++){ const d=await f.evaluate(([t,k])=>window.firma(t,k),[k/$FPS,k]); fs.writeFileSync('$OUT/firma/f'+String(k).padStart(5,'0')+'.jpg',Buffer.from(d.split(',')[1],'base64')); }
  await b.close(); })();"
-python3 "$D/../murmullo/tools/firma_audio.py" "$OUT/firma.wav"
+python3 "$D/tools/firma_audio.py" "$OUT/firma.wav"
 # montaje: pieza (desde T0) + firma, audio a -14 LUFS / -1 dBTP
 S0=$(python3 -c "print(round($T0*$FPS))")
 ffmpeg -loglevel error -y -framerate $FPS -start_number $S0 -i "$OUT/pieza/f%05d.jpg" -framerate $FPS -i "$OUT/firma/f%05d.jpg" \
