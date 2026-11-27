@@ -310,7 +310,7 @@
     for (let i = 0; i < n; i++) {
       const g = glyph(t[i]);
       for (let r = 0; r < 7; r++) for (let c = 0; c < 5; c++) {
-        if (!((g >> (34 - (r * 5 + c))) & 1)) continue;
+        if (!(Math.floor(g / 2 ** (34 - (r * 5 + c))) % 2)) continue;   // las letras ocupan 35 bits: los operadores de bits de JS solo ven 32
         const px = x0 + i * adv + c * cell, py = y0 + r * cell, s = cell * (1 - gap);
         if (opt.cellFn) opt.cellFn(i, r, c, px, py, s); else x.fillRect(px + (cell - s) / 2, py + (cell - s) / 2, s, s);
       }
