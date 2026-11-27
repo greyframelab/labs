@@ -240,6 +240,12 @@ float mobius(vec3 p){
   float d2=(length(max(b2,0.0))+min(max(b2.x,b2.y),0.0)-0.006)*0.55;
   return min(d1,d2);
 }
+vec4 lamL(vec3 p){       // LÁMINAS: coordenadas locales del estrato y su medio ancho
+  float sp=0.16, id=clamp(floor(p.y/sp+0.5),-6.0,6.0); vec3 r=p; r.y-=id*sp;   // una torre de 13 estratos: se ve entera, como un mazo de cartas de vidrio
+  float hw=fract(sin(id*17.3+uV0.x*31.0)*43758.5);
+  r.x+=0.35*sin(id*1.7+uPhase+uV0.y*6.0)+uImpact*0.25*sin(id*3.1);
+  r.xz=rot(id*0.18*tw()+0.25*sin(uPhase*0.4+id*0.5))*r.xz;
+  return vec4(r,0.45+0.5*hw); }
 float map(vec3 p){
   float ph=uPhase;
   if(uFam==7){ float k=uPhase*4.0; ph=(floor(k)+smoothstep(0.82,1.0,fract(k)))/4.0; }   // MÁQUINA: gira a pasos exactos
@@ -248,7 +254,7 @@ float map(vec3 p){
   else { p.xz=rot(ph+uV0.w*6.28)*p.xz; p.xy=rot(0.22*sin(ph)+uRot*0.25)*p.xy; }
   float sc=1.0+uKick*0.025+(uFam==10?0.05*uBass:0.0); p/=sc;
   float bars=uT/uBar, lip=1.0;
-  if(uFam==6){ float id=floor(p.y/0.11+0.5); p.x+=(uForm==8?0.035:0.09)*sin(id*2.1+ph*(1.0+fract(id*0.37)))*(0.4+uEnergy); lip=0.55; }   // TIEMPO: estratos que se deslizan
+  if(uFam==6){ float id=floor(p.y/0.2+0.5); p.x+=(uForm==8?0.022:0.05)*sin(id*2.1+ph*(1.0+fract(id*0.37)))*(0.4+uEnergy); lip=0.55; }   // TIEMPO: estratos que se deslizan (más anchos y con menos recorrido: antes parecían un error de render)
   // CAOS: la materia se parte en bloques que se separan con la ruptura
   vec3 cid=vec3(0.0), cpo=p; float cz=2.4;
   if(uFam==9){ cid=floor(p*cz); vec3 hh=fract(sin(cid*vec3(12.9898,78.233,37.719)+uV0.x*9.0)*43758.5453);
@@ -303,12 +309,9 @@ float map(vec3 p){
     d=(length(p)-0.55-sp*(0.45+0.3*uBass+0.2*uChaos))*0.45;
   } else if(uForm==8){     // MÖBIUS de láminas
     d=mobius(p);   // pasa por la capa común: respira, y la familia de la palabra la deforma como al resto
-  } else if(uForm==9){     // LÁMINAS: estratos de vidrio negro que se desplazan
-    float sp=0.32, id=floor(p.y/sp+0.5); vec3 r=p; r.y-=id*sp;
-    float hw=fract(sin(id*17.3+uV0.x*31.0)*43758.5);
-    r.x+=0.6*sin(id*1.7+uPhase+uV0.y*6.0)+uImpact*0.3*sin(id*3.1);
-    r.xz=rot(id*0.22*tw())*r.xz;
-    d=sdBox(r,vec3(0.4+1.4*hw,0.025+0.02*uDen,4.0))-0.006;
+  } else if(uForm==9){     // LÁMINAS: estratos de vidrio negro, finos, que se desplazan; entre ellos corre una lámina de luz
+    vec4 L=lamL(p);
+    d=sdBox(L.xyz,vec3(L.w,0.012+0.01*uDen,0.55+0.15*sin(L.w*9.0)))-0.004;
     return d*0.8;
   } else if(uForm==10){    // FILOS: un bosque de cuchillas
     vec2 cell=vec2(0.5); vec2 id=floor(p.xz/cell+0.5); vec3 r=p; r.xz-=id*cell;
@@ -331,7 +334,7 @@ float map(vec3 p){
     float trail=(0.05*smoothstep(1.5,4.0,bars)+0.22*smoothstep(4.0,7.5,bars)+0.2*uImpact)*(1.0-eco)*(0.25+hs)*(1.0-0.6*clamp(uKick,0.0,1.0));   // estela corta: la letra manda
     float d2=wordD(r.xy,bars); vec2 w=vec2(d2,abs(r.z+trail*0.5)-(uWH.w+trail*0.5));
     d=min(max(w.x,w.y),0.0)+length(max(w,0.0))-0.002;
-    float g=(0.5-abs(fract(r.y/sh)-0.5))*sh-0.0035*(1.0-0.6*eco);   // ranura fina entre láminas
+    float g=(0.5-abs(fract(r.y/sh)-0.5))*sh-0.0035*(1.0-eco);   // ranura fina entre láminas (en el ECO desaparece: la letra queda lisa)
     d=max(d,-g)*0.6;
   } else {                 // MONOLITO: una losa y una grieta de luz
     vec3 r=p; r.xz=rot(0.3*sin(ph))*r.xz;
@@ -387,26 +390,30 @@ vec3 shade(vec3 p, vec3 rd, float t, float bars, float lift, bool full){
   if(uForm==11){ float eco=max(smoothstep(11.5,12.8,bars)*(1.0-smoothstep(15.0,15.8,bars)),1.0-smoothstep(1.4,2.6,bars)); key+=0.4*pow(fr,1.4)+0.12+0.9*eco*(0.4+pow(fr,0.8));   // la palabra siempre tiene un filo de luz que la dibuja
     float sx=(bars-11.3)/0.16*uAt.z-uWL.x*uAt.z*0.5;   // la letra que se acaba de fijar se enciende un instante
     key+=0.55*exp(-pow((p.x-sx)/(uAt.z*0.7),2.0))*step(11.2,bars)*(1.0-step(13.2,bars));
-    key*=mix(0.55,1.0,smoothstep(0.5,1.8,t)); }   // de muy cerca la palabra llenaba el cuadro de luz y se quemaba
-  if(uForm>=8&&uForm<=10) key+=0.55*exp(-t*0.55)*pow(max(dot(n,v),0.0),3.0)+0.3*pow(fr,1.5);           // en los campos, la cámara lleva su propia luz
+    key*=mix(0.55,1.0,smoothstep(0.5,1.8,t));
+    }   // de muy cerca la palabra llenaba el cuadro de luz y se quemaba
+  if(uForm==8||uForm==10) key+=0.55*exp(-t*0.55)*pow(max(dot(n,v),0.0),3.0)+0.3*pow(fr,1.5);           // en los campos, la cámara lleva su propia luz
+  key=1.7*(1.0-exp(-key/1.7));
+  if(uForm==9) key*=0.15;   // LÁMINAS: caras grandes y rasantes; con la luz completa se volvían paredes claras   // la luz principal se comprime arriba: un reflejo de caja grande ya no blanquea toda la superficie
   float spec=pow(max(dot(r,Ld),0.0),uMat==0?140.0:uMat==1?90.0:60.0)*sh;
   vec3 base;
   // materia negra de verdad: casi sin luz difusa; la luz vive en el filo (Fresnel) y en el reflejo
-  if(uMat==0)      base=INK*(key*(0.09+F*1.25)+spec*1.1+fr*0.03);
-  else if(uMat==1) base=INK*(key*(0.11+F*0.95)+spec*0.8+fr*0.025);
+  if(uMat==0)      base=INK*(key*(0.09+F*1.25)+spec*1.9+fr*0.03);   // brillos pequeños y nítidos: la laca tiene que destellar
+  else if(uMat==1) base=INK*(key*(0.11+F*0.95)+spec*1.4+fr*0.025);
   else if(uMat==2) base=mix(INK,uAcc,0.12)*(key*(0.1+0.7*F)*1.2+spec*1.2)+fr*0.02;
   else             base=INK*(pow(fr,1.3)*1.1*(0.5+key)+key*0.12);
   // en la RUPTURA la luz principal se vuelve masa de acento en los planos impares
   float hot=(bars>=8.0&&bars<12.0&&fract(uShotK*13.0)>0.45)?(uFam==2?0.25:1.0):0.0;   // en FUEGO el color ya está en las venas: no se inunda
   vec3 col=mix(base,base*uAcc*1.3,hot*0.5)*lift*ao;
   col+=mix(INK,uAcc,hot)*key*uKick*0.55*lift*ao;
-  col+=uAcc*acc*(0.08+uMetal*1.1+uImpact*0.9)*(0.2+fr)*ao*(dot(uAcc,vec3(0.33))>0.85?0.55:1.0);   // la luz de acento perfila, no inunda (el blanco, aún menos)
+  col+=uAcc*acc*(0.08+uMetal*1.1+uImpact*0.9)*(0.2+(uForm==9?pow(fr,4.0):fr))*ao*(dot(uAcc,vec3(0.33))>0.85?0.55:1.0)*(uForm==9?0.4:1.0);
+  if(uForm!=9) col+=uAcc*pow(fr,4.0)*(0.06+0.14*uEnergy+0.22*uKick)*lift*(dot(uAcc,vec3(0.33))>0.85?0.5:1.0);   // contraluz de color en el filo: la silueta se lee siempre, también en los planos oscuros   // la luz de acento perfila, no inunda (el blanco, aún menos)
   float vein=exp(-abs(gyr(p*7.0+vec3(uPhase)))*16.0);
   col+=uAcc*vein*(uImpact*1.0+(bars>=8.0&&bars<12.0?0.03:0.0));
   if(uMat==1&&full){ float inside=clamp(-map(p-n*0.07)/0.07,0.0,1.0); col+=uAcc*(1.0-inside)*0.06*uEnergy*uEnergy*(1.0-fr); }
   if(uFam==2){ float cr=exp(-abs(gyr(p*5.5+vec3(0.0,uT*0.2,0.0)))*26.0);   // FUEGO: venas incandescentes dentro de las grietas
     col+=mix(uAcc,vec3(1.0,0.82,0.55),cr*cr*0.6)*cr*(0.18+1.1*uEnergy+2.2*uImpact)*(0.85+0.15*sin(uT*19.0+p.y*11.0)); }
-  if(uFam==6){ float s=fract(p.y/0.11+0.5); col*=0.7+0.3*step(0.5,fract((p.y/0.11+0.5)*0.5)); col+=uAcc*exp(-min(s,1.0-s)*70.0)*(0.04+0.25*uEnergy*uEnergy)*lift; }
+  if(uFam==6){ float s=fract(p.y/0.2+0.5); col*=0.8+0.2*step(0.5,fract((p.y/0.2+0.5)*0.5)); col+=uAcc*exp(-min(s,1.0-s)*90.0)*(0.04+0.25*uEnergy*uEnergy)*lift; }
   if(uFam==7){ float sy=mod(bars*0.5,1.0)*2.4-1.2; col+=uAcc*exp(-abs(p.y-sy)*38.0)*(0.25+0.8*uEnergy)*(0.4+fr); }   // MÁQUINA: una lectura que barre
   if(uForm==8){            // MÖBIUS de láminas: el canto exterior de cada lámina coge luz, y la luz corre por la vuelta con el bombo
     vec3 pp=preRot(p); pp.yz=rot(0.55+0.25*sin(uPhase*0.27)+(uV0.x-0.5)*0.8)*pp.yz;
@@ -417,6 +424,18 @@ vec3 shade(vec3 p, vec3 rd, float t, float bars, float lift, bool full){
     col+=mix(uAcc,vec3(1.0,0.97,0.92),0.3*e)*e*(0.35+0.65*run)*pulse*1.25;
     vec3 c2=mobCS2(preRot(p)); float e2=exp(-max(0.11-abs(c2.x),0.0)/0.009)*step(abs(c2.y),0.05);
     col+=uAcc*e2*(0.55+0.45*sin(c2.z*5.0+uT*3.1))*(0.25+0.6*uKick+1.4*uImpact)*0.8; }
+  if(uForm==9){            // LÁMINAS: el canto de cada estrato se enciende y una franja de luz recorre las caras, como un escáner entre capas
+    vec4 L=lamL(p); float edge=exp(-max(L.w-abs(L.x),0.0)/0.012);
+    float ez=exp(-max(0.55+0.15*sin(L.w*9.0)-abs(L.z),0.0)/0.012); edge=max(edge,ez);
+    float run=pow(0.5+0.5*sin(L.y*0.0+p.y*18.0-uT*3.0),4.0);     // la luz sube estrato a estrato
+    float pulse=0.25+0.9*uKick+1.6*uImpact+0.5*uEnergy;
+    col+=mix(uAcc,vec3(1.0),0.3*edge)*edge*pulse*(0.35+0.65*run)*0.8; }
+  if(uForm==11){           // PALABRA: laca negra brillante. La cara de cada letra refleja una caja de luz alargada que la barre
+    // despacio (reflejo nítido, el resto de la cara negra) y el canto toma el color de la emoción: se lee como materia con volumen
+    float face=smoothstep(0.5,0.95,n.z), sweep=uPhase*0.7+uV0.y*6.0;
+    float band=exp(-pow((r.y-0.12-0.3*sin(sweep))*6.0,2.0))+0.5*exp(-pow((r.x+0.45*cos(sweep*0.6))*5.0,2.0)); float lw=max(lift,0.85);
+    col=col*mix(1.0,0.35,face)+mix(vec3(1.0,0.98,0.95),uAcc,0.15)*face*(band*1.1+0.05)*lw;
+    col+=uAcc*smoothstep(0.25,0.0,n.z)*0.6*(0.6+0.5*uEnergy+uKick)*lw; }   // los cantos, en el color de la palabra
   if(uSurf==4&&uForm<8&&uComp==0){ float hl=holeF(p); float inside=smoothstep(-0.002,-0.03,hl);   // dentro del hueco, el acento: se enciende con el pulso
     col+=uAcc*inside*(0.03+0.35*uKick+0.5*uImpact+0.1*uEnergy)*(0.3+0.7*ao); }
   if(uFam==1){ // AGUA: cáusticas, la luz que atraviesa un agua invisible y se enreda sobre la materia negra
@@ -429,6 +448,7 @@ vec3 shade(vec3 p, vec3 rd, float t, float bars, float lift, bool full){
   // PALABRA: juntas de luz entre láminas, como un circuito encendido por dentro (laten con el bombo)
   if(uForm==11){ float sh=uAt.w/15.0, sy=fract(p.y/sh); float seam=exp(-min(sy,1.0-sy)*sh/0.0012);
     float on=0.25+1.4*uKick+1.6*uImpact+0.6*uEnergy;
+    float bb=uT/uBar; seam*=1.0-0.9*smoothstep(11.5,12.8,bb)*(1.0-smoothstep(15.0,15.8,bb));   // en el ECO las juntas se cierran: la letra es un bloque
     col+=mix(uAcc,vec3(1.0,0.97,0.92),0.2)*seam*on*0.22; }
   return col+INK*0.003;
 }
@@ -439,7 +459,7 @@ void main(){
   vec3 dir=normalize(vec3(cos(K*31.0),0.35*sin(K*17.0),sin(K*31.0)));
   if(uForm==11) dir=normalize(vec3(dir.x*0.8,dir.y,abs(dir.z)+0.45));   // la palabra se mira de frente: detrás solo hay su estela
   vec3 ro, ta; float lens;
-  bool field=uForm>=9&&uForm<=10;   // MÖBIUS (8) es un objeto: se rodea
+  bool field=uForm==10;   // MÖBIUS (8) y LÁMINAS (9) son objetos: se rodean
   if(uFam==2) sp+=vec2(0.0025*sin(q.y*55.0+uT*8.0)*(0.3+uEnergy),0.0);   // FUEGO: el aire tiembla de calor
   if(uFam==9&&bars0()>=8.0&&bars0()<12.0) sp+=(vec2(h11(floor(uT*24.0)),h11(floor(uT*24.0)+7.0))-0.5)*0.012*uImpact;
   if(uShot==1){            // MACRO: la materia tan cerca que deja de ser un objeto
@@ -456,9 +476,10 @@ void main(){
     ro=vec3(0.3*sin(K*7.0),3.2-push*3.0,0.25); ta=vec3(0.0); lens=1.9+0.8*fract(K*3.0);
   } else {                 // GENERAL
     float ca=uPhase+uV0.w*6.0, dist=(4.1+1.5*uV1.y)/(0.75+0.35*uZoom)-push*2.0;
-    if(uForm==8) dist*=0.68+0.25*step(0.5,fract(K*3.0));   // MÖBIUS: llena el cuadro, a veces entera
+    if(uForm==8) dist*=0.68+0.25*step(0.5,fract(K*3.0));
+    if(uForm==9) dist*=1.15;   // LÁMINAS: la torre entera, con aire   // MÖBIUS: llena el cuadro, a veces entera
     ro=vec3(sin(ca)*0.55,0.18+0.14*cos(ca)+0.3*(uV1.z-0.5),dist); ta=vec3(uOff*0.55,0.0); lens=1.5+0.6*uV1.w;
-    if(uForm==11){ ro=vec3(sin(ca)*0.4,0.1+0.1*cos(ca),max(dist,uWH.x*1.7*1.3/(0.5*min(uRes.x/uRes.y,1.8))+uWH.w)+0.4-push*1.0); ta=vec3(0.0); lens=1.7; }
+    if(uForm==11){ float dz=max(dist*0.6,uWH.x*1.7*1.02/(0.5*min(uRes.x/uRes.y,1.8))+uWH.w)+0.2-push*1.0; ro=vec3((0.35+0.15*sin(ca))*dz*(fract(K*3.0)<0.5?-1.0:1.0),0.16*dz,dz); ta=vec3(0.0); lens=1.7; }   // la palabra llena el cuadro y se ve un poco de lado: se lee su volumen
   }
   if(field&&uShot!=3){
     // dentro del campo: busca un hueco abierto y mira a lo largo de él
@@ -471,7 +492,6 @@ void main(){
       if(tj>bd){ bd=tj; best=dj; } }
     ta=ro+best; lens=1.05+0.6*fract(K*11.0);
   }
-  if(uForm==9&&uShot!=3){ ro.y=(floor(ro.y/0.32)+0.5)*0.32; ta.y=ro.y+(K-0.5)*0.3; }
   for(int j=0;j<6;j++){ float dc=map(ro); if(dc>0.06) break; ro+=normalize(ro-ta+vec3(0.0,0.001,0.0))*0.12; }
   vec3 fw=normalize(ta-ro), rt=normalize(cross(fw,abs(fw.y)>0.95?vec3(0,0,1):vec3(0,1,0))), up=cross(rt,fw);
   vec3 rd=normalize(fw*lens+rt*sp.x+up*sp.y);
@@ -487,7 +507,7 @@ void main(){
     if(d<0.0004*t+0.0002||t>9.0) break; t+=d*(uQ>0.5?0.9:1.0); }
   float bars=uT/uBar;
   vec3 col=vec3(0.0);
-  float lift=uForm==8?1.05+0.45*uEnergy:field?0.95+0.45*uEnergy:0.78+0.5*uEnergy;   // MÖBIUS: laca pulida, la luz la ponen los reflejos y el borde
+  float lift=uForm==9?0.5+0.35*uEnergy:uForm==8?1.05+0.45*uEnergy:field?0.95+0.45*uEnergy:0.78+0.5*uEnergy;   // MÖBIUS: laca pulida, la luz la ponen los reflejos y el borde
     // la ruptura se nota en el ritmo y el color, no en inundar de luz   // la SEÑAL en penumbra (visible en proyección), la RUPTURA a plena luz
   if(uFam==4&&h11(floor(uT*13.0)+uV0.x*99.0)<0.07+0.1*uEnergy) lift*=0.2;   // MIEDO: la luz falla
   // la materia que llena el cuadro (muy cerca) se oscurece: el negro domina y nada se quema
@@ -495,7 +515,7 @@ void main(){
   if(t<9.0) col=shade(ro+rd*t,rd,t,bars,lift,true)*(field?mix(0.45,1.0,smoothstep(0.15,1.3,t)):mix(0.5,1.0,smoothstep(0.25,2.6,t)));
   // borde: en calidad alta se sombrea de verdad; si no, un filo barato (el borde de la materia negra es su luz de contorno)
   if(cov>0.0&&!field) col=mix(col,uQ>1.5?shade(ro+rd*tMin,rd,tMin,bars,lift,false)*mix(0.5,1.0,smoothstep(0.25,2.6,tMin)):INK*0.22*lift,cov);   // bordes suaves, sin dientes de sierra   // la materia pegada a la lente se hunde en negro, no en gris
-  col+=uAcc*exp(-minD*9.0)*(t>=9.0?1.0:0.0)*(uRig==3?0.16+uImpact*0.3:0.02)*(0.5+uEnergy);
+  col+=uAcc*exp(-minD*(uForm==9?22.0:9.0))*(t>=9.0?1.0:0.0)*(uRig==3?0.16+uImpact*0.3:0.02)*(0.5+uEnergy)*(uForm==9?0.35:1.0);   // en LÁMINAS los huecos entre estratos se llenaban de halo
   if(field) col=mix(col,uAcc*(0.003+0.018*uEnergy*uEnergy+0.06*uImpact),1.0-exp(-min(t,9.0)*0.13));
   // suelo negro pulido: refleja de verdad la materia, cada vez más difuso con la distancia
   // la PALABRA no se refleja: su reflejo salía del revés y el desenfoque lo convertía en discos rojos con la palabra dentro
@@ -516,12 +536,13 @@ void main(){
     col+=mix(uAcc,vec3(1.0,0.97,0.92),0.35)*bm/float(nb)*tm*0.32*(0.35+uEnergy+uImpact); }
   if(uForm!=11) col*=mix(0.22,1.0,compMask(q*0.8));   // la composición guía la mirada sin apagar la forma; la palabra no se recorta
   // MIEDO: la oscuridad se cierra sobre la forma y solo se abre en el ECO
-  if(uFam==4){ float cl=mix(1.5,0.5,smoothstep(0.0,11.0,bars)); cl=mix(cl,1.3,smoothstep(12.0,15.0,bars)); col*=1.0-smoothstep(cl-0.55,cl,length(q)); }
-  vec3 tz=trazos(q,bars,t<9.0?1.0:0.0); col+=tz;
+  if(uFam==4){ float cl=mix(1.5,uForm==11?1.0:0.5,smoothstep(0.0,11.0,bars)); cl=mix(cl,1.3,smoothstep(12.0,15.0,bars)); col*=1.0-smoothstep(cl-0.55,cl,length(q)); }   // con la PALABRA la oscuridad no llega a taparla
+  vec3 tz=trazos(q,bars,t<9.0?1.0:0.0); if(uForm==11) tz*=t<9.0?0.0:0.55; col+=tz;   // con la PALABRA los trazos solo pasan por detrás: las letras quedan limpias
   float tt=min(t,9.0), coc=clamp(abs(tt-fd)/max(tt,0.35)*dofK,0.0,1.0);
   coc*=1.0-clamp(dot(tz,vec3(0.3,0.59,0.11))*4.0,0.0,1.0);   // los trazos de luz siempre nítidos (el desenfoque los convertía en bruma)
   if(any(isnan(col))||any(isinf(col))) col=vec3(0.0);
-  { float L=dot(col,vec3(0.3,0.59,0.11)); col*=min(1.0,1.1/(L+1e-4)); }   // techo de luz: ninguna zona se quema (el blanco nunca satura)
+  { float L=dot(col,vec3(0.3,0.59,0.11)); float Lc=L<0.5?L:0.5+0.55*(1.0-exp(-(L-0.5)/0.55)); col*=Lc/(L+1e-4);
+    col=mix(col,vec3(dot(col,vec3(0.3,0.59,0.11))),smoothstep(0.75,1.05,Lc)*0.25); }   // techo de luz con rodilla suave: las zonas muy iluminadas conservan su degradado (antes el tope cortaba en seco y quedaban placas blancas planas)
   o=vec4(col*uW,coc*uW);
 }`;
 
@@ -625,7 +646,7 @@ void main(){
   if(uGhost>0.001){ vec3 gh=texture(uGhostT,(uv-0.5)/(1.0+0.03*(1.0-uGhost))+0.5).rgb; c=max(c,gh*uGhost)+gh*uGhost*0.12; }
   c+=uFlashC*uFlash*0.22;
   c*=uFade;
-  if(uTone<0.5){ c=0.96*(1.0-exp(-c*1.5)); c=mix(c,c*c*(3.0-2.0*c),0.12); }   // hombro suave y curva en S: negros densos, brillos con detalle   // exposición: los medios respiran sin quemar los brillos
+  if(uTone<0.5){ c=0.96*(1.0-exp(-c*1.75)); c=mix(c,c*c*(3.0-2.0*c),0.12); }   // hombro suave y curva en S: negros densos, brillos con detalle   // exposición: los medios respiran sin quemar los brillos
   else c=mix(c,0.85+0.15*(1.0-exp(-(c-0.85)/0.15)),step(0.85,c));   // color fiel, solo un hombro arriba
   c*=1.0-uVig*pow(clamp(length(dc*vec2(1.0,1.12))*1.3,0.0,1.0),2.4);
   c*=1.0-uScan*(0.5+0.5*sin(gl_FragCoord.y*3.14159));
@@ -944,7 +965,7 @@ void main(){
     let first = true;
     for (const f of this.chain) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, f.fb); gl.viewport(0, 0, f.w, f.h);
-      gl.uniform1f(D.u.uThr, first ? 0.18 : 0.0); first = false;
+      gl.uniform1f(D.u.uThr, first ? 0.32 : 0.0);   // umbral más alto: el halo solo nace de la luz de verdad, no de superficies claras first = false;
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.tex); gl.uniform1i(D.u.uTex, 0);
       gl.uniform2f(D.u.uTexel, 1 / src.w, 1 / src.h);
       gl.drawArrays(gl.TRIANGLES, 0, 3); src = f;
