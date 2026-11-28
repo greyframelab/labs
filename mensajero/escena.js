@@ -31,15 +31,18 @@ export async function crear(opts){
   cielo.renderOrder=-10; S.add(cielo);
 
   // ---------------------------------------------------------- el modelo
-  const buf=await (await fetch(opts.modelo||'modelo/dsn70.bin')).arrayBuffer();
-  const hl=new DataView(buf).getUint32(0,true); const head=JSON.parse(new TextDecoder().decode(new Uint8Array(buf,4,hl))); const base=4+hl;
-  const G={fijo:new THREE.Group(),azimut:new THREE.Group(),elevacion:new THREE.Group()};
-  S.add(G.fijo); S.add(G.azimut); G.azimut.add(G.elevacion); G.elevacion.position.set(...head.ejeElevacion);
+  // DOS MODELOS REALES DE NASA: la de 70 m (DSS14, DSS43, DSS63) y la de 34 m (el resto). Se ve la que se escucha.
   const negro=new THREE.MeshBasicMaterial({color:0x010101,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1});
   const calidad=opts.calidad??1;
   const DENS={panel:24,celosia:70,cuadripode:70,receptor:40,estructura:9,baranda:40,hormigon:6};
   const GID={fijo:0,azimut:1,elevacion:2};
-  const P=[], N=[], K=[]; let fy=0; let sem=12345; const rnd=()=>{ sem=(sem*16807)%2147483647; return sem/2147483647; };
+  let sem=12345; const rnd=()=>{ sem=(sem*16807)%2147483647; return sem/2147483647; };
+  async function construye(url){
+  const buf=await (await fetch(url)).arrayBuffer();
+  const hl=new DataView(buf).getUint32(0,true); const head=JSON.parse(new TextDecoder().decode(new Uint8Array(buf,4,hl))); const base=4+hl;
+  const G={fijo:new THREE.Group(),azimut:new THREE.Group(),elevacion:new THREE.Group()};
+  S.add(G.fijo); S.add(G.azimut); G.azimut.add(G.elevacion); G.elevacion.position.set(...head.ejeElevacion);
+  const P=[], N=[], K=[]; let fy=0;
   for(const p of head.piezas){
     let o=base+p.pos; const pos=new Float32Array(buf,o,p.nv*3); o+=p.nv*12; const nor=new Float32Array(buf,o,p.nv*3); o+=p.nv*12; const idx=new Uint32Array(buf,o,p.ni);
     const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos,3)); g.setIndex(new THREE.BufferAttribute(idx,1));
@@ -54,6 +57,12 @@ export async function crear(opts){
       for(let k=0;k<n;k++){ let r1=rnd(), r2=rnd(); if(r1+r2>1){ r1=1-r1; r2=1-r2; }
         P.push(pos[a]+ux*r1+vx*r2, pos[a+1]+uy*r1+vy*r2, pos[a+2]+uz*r1+vz*r2); N.push(nor[a],nor[a+1],nor[a+2]); K.push(GID[p.grupo],mid,rnd()); } }
   }
+  const pg=new THREE.BufferGeometry(); pg.setAttribute('position',new THREE.Float32BufferAttribute(P,3)); pg.setAttribute('nrm',new THREE.Float32BufferAttribute(N,3)); pg.setAttribute('k',new THREE.Float32BufferAttribute(K,3));
+  const d=head.diametro||70;
+  return {G,pg,fy,d,cy:d===34?6.9:14,eleY:head.ejeElevacion[1]};
+  }
+  const MOD={70:await construye(opts.modelo||'modelo/dsn70.bin'),34:await construye(opts.modelo34||'modelo/dsn34.bin')};
+  let A=MOD[70], G=A.G, fy=A.fy;
 
   // ---------------------------------------------------------- uniforms comunes
   const U={T:{value:0},Mfijo:{value:new THREE.Matrix4()},Maz:{value:new THREE.Matrix4()},Mel:{value:new THREE.Matrix4()},
@@ -61,7 +70,6 @@ export async function crear(opts){
     celdas:{value:null},nCeldas:{value:0},tNombre:{value:-99},anchoNombre:{value:1}};
 
   // ---------------------------------------------------------- la antena en puntos, revelada por la onda
-  const pg=new THREE.BufferGeometry(); pg.setAttribute('position',new THREE.Float32BufferAttribute(P,3)); pg.setAttribute('nrm',new THREE.Float32BufferAttribute(N,3)); pg.setAttribute('k',new THREE.Float32BufferAttribute(K,3));
   const pm=new THREE.ShaderMaterial({uniforms:U,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
     vertexShader:`attribute vec3 nrm; attribute vec3 k; uniform mat4 Mfijo,Maz,Mel; uniform vec3 eje,foco,camP,acc; uniform float T,golpes[8],px,sen; varying vec3 vC;
     void main(){ mat4 M=k.x<.5?Mfijo:(k.x<1.5?Maz:Mel); vec4 wp=M*vec4(position,1.); vec3 wn=normalize(mat3(M)*nrm);
@@ -82,7 +90,12 @@ export async function crear(opts){
       float dz=-mv.z; gl_PointSize=clamp(px*(1.6+k.z*1.2)*(60./dz),1.,4.)*(1.+blanco*.4); lum*=smoothstep(5.,30.,dz);
       float bruma=1.-exp(-dz/420.); vC=mix(mix(vec3(1.,.97,.92),acc,.35),vec3(.55,.64,.82),bruma)*lum*(1.-bruma*.55); if(lum<.002) gl_Position=vec4(9.,9.,9.,1.); }`,
     fragmentShader:`varying vec3 vC; void main(){ vec2 q=gl_PointCoord-.5; float a=1.-smoothstep(.15,.5,length(q)); gl_FragColor=vec4(vC*a,1.); }`});
-  const nube=new THREE.Points(pg,pm); nube.frustumCulled=false; S.add(nube);
+  for(const m of Object.values(MOD)){ m.nube=new THREE.Points(m.pg,pm); m.nube.frustumCulled=false; S.add(m.nube); }
+  // la antena que se escucha: 70 m o 34 m (solo una visible)
+  function usa(d){ const m=MOD[d===34?34:70]; if(m===A&&m.nube.visible) return;
+    for(const x of Object.values(MOD)){ const v=x===m; x.G.fijo.visible=v; x.G.azimut.visible=v; x.nube.visible=v; }
+    A=m; G=m.G; fy=m.fy; }
+  usa(70);
 
   // ---------------------------------------------------------- la nave, sus fotones y su nombre
   const NF=2400; const fg=new THREE.BufferGeometry(); { const a=new Float32Array(NF*3), kk=[], ii=[]; for(let i=0;i<NF;i++){ kk.push(rnd(),rnd(),rnd()); ii.push(i); } fg.setAttribute('position',new THREE.BufferAttribute(a,3)); fg.setAttribute('k',new THREE.Float32BufferAttribute(kk,3)); fg.setAttribute('ix',new THREE.Float32BufferAttribute(ii,1)); }
@@ -159,7 +172,7 @@ export async function crear(opts){
   const az={v:opts.az??105}, el={v:opts.el??51};
   function apunta(a,e){ G.elevacion.rotation.x=-(Math.PI/2-e*Math.PI/180); G.azimut.rotation.y=-a*Math.PI/180; S.updateMatrixWorld(true); }
   const eje=()=>new THREE.Vector3(0,1,0).applyQuaternion(G.elevacion.getWorldQuaternion(new THREE.Quaternion())).normalize();
-  const centro=()=>G.elevacion.localToWorld(new THREE.Vector3(0,14,0));
+  const centro=()=>G.elevacion.localToWorld(new THREE.Vector3(0,A.cy,0));
   const focoW=()=>G.elevacion.localToWorld(new THREE.Vector3(0,fy-3.5,0));
   const V3=(x,y,z)=>new THREE.Vector3(x,y,z);
   const PLANOS={
@@ -180,11 +193,16 @@ export async function crear(opts){
     // la antena gira a su posición real a la velocidad de una antena de 70 m (≈0,25°/s)
     const vel=(dt??1/30)*.25*(st.giroRapido?100:1);
     const da=((st.az-az.v+540)%360)-180; az.v+=Math.sign(da)*Math.min(Math.abs(da),vel); const de=st.el-el.v; el.v+=Math.sign(de)*Math.min(Math.abs(de),vel);
-    apunta(az.v,el.v); ponNombre(st.nombre);
+    usa(st.diametro||70); apunta(az.v,el.v); ponNombre(st.nombre);
     const gl=(st.golpes||[]).concat(Array(8).fill(-99)).slice(0,8); U.golpes.value.set(gl);
     U.T.value=st.t; U.sen.value=st.sen; U.eje.value.copy(eje()); U.foco.value.copy(focoW()); U.tNombre.value=st.tNombre??-99;
     U.Mfijo.value.copy(G.fijo.matrixWorld); U.Maz.value.copy(G.azimut.matrixWorld); U.Mel.value.copy(G.elevacion.matrixWorld);
-    const fd=PLANOS[st.plano](st.tl||0); if(st.optica&&st.plano!=='NOMBRE') cam.fov=Math.min(80,cam.fov*st.optica); cam.aspect=W/H; cam.updateProjectionMatrix(); cam.updateMatrixWorld(); U.camP.value.copy(cam.position);
+    let fd=PLANOS[st.plano](st.tl||0);
+    // con la de 34 m los planos se acercan a su escala (menos el GIRO, donde se ve que es más pequeña, y el NOMBRE, que mira al cielo)
+    if(A.d===34&&st.plano!=='GIRO'&&st.plano!=='NOMBRE'){ const k=.5, c=centro(), p0=cam.position.clone(), dir=new THREE.Vector3(); cam.getWorldDirection(dir);
+      const T=p0.clone().addScaledVector(dir,p0.distanceTo(c)); const np=c.clone().add(p0.clone().sub(c).multiplyScalar(k)); if(p0.y<12) np.y=p0.y;
+      cam.position.copy(np); cam.lookAt(c.clone().add(T.sub(c).multiplyScalar(k))); fd*=k; }
+    if(st.optica&&st.plano!=='NOMBRE') cam.fov=Math.min(80,cam.fov*st.optica); cam.aspect=W/H; cam.updateProjectionMatrix(); cam.updateMatrixWorld(); U.camP.value.copy(cam.position);
     R.setRenderTarget(rt); R.setClearColor(0x000000,1); R.clear(); R.render(S,cam);
     // larga exposición: max(actual, anterior·decaimiento); un corte de plano la reinicia
     const corte=st.plano!==ultPlano; ultPlano=st.plano;

@@ -1,6 +1,7 @@
-// Convierte el modelo oficial de NASA de la antena DSN de 70 m (glTF con Draco) a un binario propio y ligero
+// Convierte los modelos oficiales de NASA de las antenas DSN de 70 m y de 34 m (glTF con Draco) a un binario propio y ligero
 // para MENSAJERO: piezas con posiciones, normales e índices, agrupadas por eje (fijo / azimut / elevación).
 // Uso: node convierte_modelo.mjs "<Deep Space Network 70-meter.glb>" ../modelo/dsn70.bin
+//      node convierte_modelo.mjs "<Deep Space Network 34-meter.glb>" ../modelo/dsn34.bin 34
 // (necesita @gltf-transform/core, @gltf-transform/extensions y draco3dgltf)
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
@@ -9,15 +10,16 @@ import fs from 'fs';
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'draco3d.decoder': await draco3d.createDecoderModule() });
 const doc = await io.read(process.argv[2]);
 const GRUPO = { base: 'fijo', azimuth: 'azimut', landing: 'azimut', rails: 'azimut', stairs: 'azimut' };
-const MAT = { dish: 'panel', 'dish.001': 'panel', 'dish.002': 'panel', truss_dish: 'celosia', truss_box: 'celosia', truss_pendulum: 'celosia', quad: 'cuadripode', collector: 'receptor', base: 'hormigon', azimuth: 'estructura', landing: 'estructura', rails: 'baranda', stairs: 'baranda' };
+const MAT = { _root: 'hormigon', dish_center: 'receptor', elevation: 'estructura', dish: 'panel', 'dish.001': 'panel', 'dish.002': 'panel', truss_dish: 'celosia', truss_box: 'celosia', truss_pendulum: 'celosia', quad: 'cuadripode', collector: 'receptor', base: 'hormigon', azimuth: 'estructura', landing: 'estructura', rails: 'baranda', stairs: 'baranda' };
 const mul = (a, b) => { const o = new Array(16).fill(0); for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) for (let k = 0; k < 4; k++) o[j * 4 + i] += a[k * 4 + i] * b[j * 4 + k]; return o; };
-const piezas = []; const bufs = []; let off = 0;
+const piezas = []; const bufs = []; let off = 0; let EJE = [0, 33.9, 0];
+const M34 = process.argv[4] === '34';
 function walk(n, M, grupo) {
   const name = n.getName(); const L = n.getMatrix();
   let g = GRUPO[name] || grupo;
   // el grupo de elevación guarda sus vértices relativos a su eje (0, 33.9, 0 en el sistema de azimut)
-  const Mloc = name === 'elevation' ? [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1] : mul(M, L);
-  if (name === 'elevation') g = 'elevacion';
+  let Mloc = mul(M, L);
+  if (name === 'elevation') { g = 'elevacion'; EJE = [Mloc[12], Mloc[13], Mloc[14]]; Mloc = [...Mloc.slice(0, 12), 0, 0, 0, 1]; }
   const m = n.getMesh();
   if (m && MAT[name]) for (const p of m.listPrimitives()) {
     const P = p.getAttribute('POSITION'), N = p.getAttribute('NORMAL'), I = p.getIndices();
@@ -33,7 +35,8 @@ function walk(n, M, grupo) {
   n.listChildren().forEach((c) => walk(c, Mloc, g));
 }
 for (const s of doc.getRoot().listScenes()) s.listChildren().forEach((n) => walk(n, [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1], 'fijo'));
-const head = Buffer.from(JSON.stringify({ fuente: 'NASA 3D Resources · Deep Space Network 70-meter (NASA/Brian E. Kumanchik)', ejeElevacion: [0, 33.9, 0], piezas }));
+const head = Buffer.from(JSON.stringify({ fuente: M34 ? 'NASA 3D Resources · Deep Space Network 34-meter (NASA/Brian E. Kumanchik, NASA/Christian A. Lopez)' : 'NASA 3D Resources · Deep Space Network 70-meter (NASA/Brian E. Kumanchik)', diametro: M34 ? 34 : 70, ejeElevacion: EJE, piezas }));
+console.log('eje de elevación', EJE.map((x) => +x.toFixed(2)));
 const pad = Buffer.alloc((4 - (head.length + 4) % 4) % 4, 32);
 const len = Buffer.alloc(4); len.writeUInt32LE(head.length + pad.length);
 fs.writeFileSync(process.argv[3], Buffer.concat([len, head, pad, ...bufs]));

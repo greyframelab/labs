@@ -27,7 +27,7 @@ Una antena de espacio profundo de 70 m, de noche, apuntando exactamente donde ap
 | 28–34 | ECO | Noche. TESTIGO: `ESTA SEÑAL SALIÓ HACE <TIEMPO> / <ANTENA> · <LUGAR> · EN DIRECTO` | Swell y cola |
 
 ## Imagen
-- Modelo real de la antena DSN de 70 m de **NASA 3D Resources** (NASA/Brian E. Kumanchik), convertido con `tools/convierte_modelo.mjs` a `modelo/dsn70.bin`. Va articulado en azimut y elevación como la real.
+- Modelos reales de **NASA 3D Resources**: la antena DSN de 70 m (NASA/Brian E. Kumanchik) para DSS14, DSS43 y DSS63, y la de 34 m (NASA/Brian E. Kumanchik, NASA/Christian A. Lopez) para el resto de la red. Convertidos con `tools/convierte_modelo.mjs` a `modelo/dsn70.bin` y `modelo/dsn34.bin`; los dos van articulados en azimut y elevación como los reales. Se ve el de la antena que se escucha.
 - Unos 590.000 puntos muestreados sobre su superficie, más densos en lo fino. El sólido va en negro absoluto como silueta.
 - Cielo con estrellas y Vía Láctea. La nave es un punto en el eje.
 - Profundidad de campo propia (con la profundidad real), bloom contenido, ACES y grano sutil. Acento: blanco espectral.
