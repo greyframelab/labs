@@ -28,7 +28,7 @@ function matriz(x,str,x0,y0,cell,k,alpha){
   for(let i=0;i<t.length;i++){ const g=(typeof glifoM!=='undefined')?glifoM(t[i]):0; if(!g) continue;
     for(let r=0;r<7;r++) for(let c=0;c<5;c++){ if(!(Math.floor(g/2**(34-(r*5+c)))%2)) continue;
       const hh=((i*131+r*17+c*7)%97)/97, ord=(i+hh*.8)/total, vis=Math.max(0,Math.min(1,(k*1.15-ord)*14)); if(vis<=0) continue;
-      x.fillStyle='rgba('+BL+','+(alpha*vis)+')'; const s=cell*.8; x.fillRect(x0+i*adv+c*cell+(cell-s)/2,y0+r*cell+(cell-s)/2,s,s); }
+      x.fillStyle='rgba('+BL+','+(alpha*vis)+')'; const s=Math.max(1,Math.round(cell*.8)); x.fillRect(Math.round(x0+i*adv+c*cell+(cell-s)/2),Math.round(y0+r*cell+(cell-s)/2),s,s); }
     // tilde: dos celdas en diagonal sobre la letra (la MATRIZ 5×7 no tiene sitio para ella)
     if('ÁÉÍÓÚ'.includes(t[i])){ const hh=((i*131)%97)/97, vis=Math.max(0,Math.min(1,(k*1.15-(i+hh*.8)/total)*14)); if(vis>0){ x.fillStyle='rgba('+BL+','+(alpha*vis)+')'; const s=cell*.8;
       x.fillRect(x0+i*adv+3*cell+(cell-s)/2,y0-2.6*cell,s,s); x.fillRect(x0+i*adv+2*cell+(cell-s)/2,y0-1.6*cell,s,s); } } }

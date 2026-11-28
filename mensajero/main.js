@@ -13,8 +13,12 @@ const ahora=()=>performance.timeOrigin+performance.now();
 async function montaEscena(w,h,calidad){
   try{ await Promise.all([300,400,600].map(p=>document.fonts.load(p+" 20px 'JetBrains Mono'"))); }catch(e){}
   const c=document.getElementById('c'), t=document.getElementById('t');
-  M.E=await crear({canvas:c,w,h,calidad,az:105,el:51}); M.tc=t.getContext('2d'); t.width=w; t.height=h;
+  M.E=await crear({canvas:c,w,h,calidad,az:105,el:51}); M.tc=t.getContext('2d'); tamTexto();
 }
+// LA CAPA DE TEXTO, siempre nítida: a la resolución real del lienzo en pantalla (CSS × devicePixelRatio),
+// independiente de la resolución de la escena, que baja en la vista previa y con la calidad automática
+function tamTexto(){ const t=document.getElementById('t'), r=t.getBoundingClientRect(), dpr=devicePixelRatio||1;
+  const w=Math.max(2,Math.round(r.width*dpr)), h=Math.max(2,Math.round(r.height*dpr)); if(t.width!==w||t.height!==h){ t.width=w; t.height=h; } }
 // la capa de datos se dibuja encima con el reloj de verdad (Date.now) y la última lectura real del feed
 function frame(tVuelta,plan,dt){
   const st=MensajeroMontaje.estado(tVuelta,plan,{vivo:M.vivo}); M.E.dibuja(st,dt);
@@ -55,7 +59,7 @@ async function consola(){
   $('arrancar').onclick=()=>{ $('arrancar').disabled=true; $('arrancar').textContent='EN MARCHA'; arrancar(); };
   if(Q.has('instalacion')) setTimeout(()=>{ $('arrancar').click(); $('salida').click(); },2500);
   addEventListener('keydown',e=>{ if(e.key==='f'||e.key==='F') $('vista').requestFullscreen&&$('vista').requestFullscreen(); });
-  new ResizeObserver(()=>{ const w=marco.clientWidth, h=marco.clientHeight; if(w&&h){ M.E.resize(Math.round(w*.75),Math.round(h*.75)); $('t').width=Math.round(w*.75); $('t').height=Math.round(h*.75); } }).observe(marco);
+  new ResizeObserver(()=>{ const w=marco.clientWidth, h=marco.clientHeight; if(w&&h){ M.E.resize(Math.round(w*.75),Math.round(h*.75)); tamTexto(); } }).observe(marco);
   setInterval(estadoUI,500); estadoUI();
 }
 // cada vuelta, otro enlace real (ROTACIÓN DE ESCUCHA); de él salen los planos y el sonido
@@ -103,8 +107,8 @@ async function salida(){
     if(d.type==='lectura'){ M.red=d.red; M.lectura=d.lectura; M.vivo=d.vivo; M.eventos=d.eventos||M.eventos; if(plan){ if(d.datos) plan.datos=d.datos; if(d.planos) plan.planos=d.planos; if(d.golpe!=null) plan.golpes=[...plan.golpes,d.golpe].sort((a,b)=>a-b); } } };
   setInterval(()=>{ if(Date.now()-(M.lectura||0)>30000) M.vivo=false; },1000);
   ch.postMessage({type:'hola'}); setInterval(()=>ch.postMessage({type:'vivo',fps:Math.round(1/ema)}),500);
-  const size=()=>{ const w=Math.round(innerWidth*dpr*q), h=Math.round(innerHeight*dpr*q); M.E.resize(w,h); const t=document.getElementById('t'); t.width=w; t.height=h; };
-  addEventListener('resize',size);
+  const size=()=>{ const w=Math.round(innerWidth*dpr*q), h=Math.round(innerHeight*dpr*q); M.E.resize(w,h); tamTexto(); };
+  addEventListener('resize',size); addEventListener('fullscreenchange',()=>setTimeout(tamTexto,50));
   addEventListener('dblclick',()=>(document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()).catch(()=>{}));
   let cortes='';
   const loop=()=>{ requestAnimationFrame(loop); if(!plan) return; const now=performance.now(), dt=(now-last)/1000; last=now; ema=ema*.97+dt*.03;
