@@ -21,6 +21,7 @@ const MEMORIA_RED=[
  {estacion:'cdscc',dish:'DSS34',az:47,el:27,activo:true,nave:'M01O',nombre:'Mars Odyssey',rango:180000000,rtlt:1200,dataRate:14220,potencia:-130},
  {estacion:'cdscc',dish:'DSS36',az:47,el:32,activo:true,nave:'PSYC',nombre:'Psyche',rango:230000000,rtlt:1530,dataRate:1,potencia:-150},
  {estacion:'cdscc',dish:'DSS43',az:200,el:56,activo:false}];
+MEMORIA_RED.forEach(d=>{ d.lugar=ESTACION[d.estacion]; d.banda=d.banda||'X'; d.vivo=false; });
 const MEMORIA={estacion:'mdscc',lugar:'Robledo de Chavela',dish:'DSS63',az:210,el:24,nave:'NHPC',nombre:'New Horizons',rango:1e10,rtlt:66700,dataRate:501.4,banda:'X',potencia:-150,ts:1795799087000,vivo:false};
 const base=()=>location.protocol==='mensajero:'?'mensajero://dsn/':'https://eyes.nasa.gov/dsn/';
 async function nombres(){ try{ const x=new DOMParser().parseFromString(await (await fetch(base()+'config.xml',{cache:'no-store'})).text(),'text/xml');
@@ -42,20 +43,47 @@ function elige(xml){
       rango:+tg.getAttribute('downlegRange'),rtlt:+tg.getAttribute('rtlt'),dataRate:+down.getAttribute('dataRate'),banda:down.getAttribute('band'),potencia:+down.getAttribute('power'),vivo:true});
   }
   const ts=+(x.querySelector('timestamp')||{}).textContent||Date.now();
-  cands.sort((a,b)=>a.prio-b.prio||b.dataRate-a.dataRate); return cands[0]?{foco:{...cands[0],ts},red}:null;
+  cands.sort((a,b)=>a.prio-b.prio||b.dataRate-a.dataRate); cands.forEach(c=>c.ts=ts); return cands[0]?{foco:cands[0],red,enlaces:cands}:null;
 }
 // formato para el TESTIGO
 const miles=n=>String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g,'.');
 function distancia(km){ if(km<1e6) return miles(km)+' KM'; if(km<1e9) return (km/1e6).toFixed(1).replace('.',',')+' MILLONES DE KM'; return miles(km/1e6)+' MILLONES DE KM'; }
 function hace(s){ if(s<60) return s.toFixed(1).replace('.',',').replace(',0','')+' SEGUNDOS'; if(s<3600) return Math.floor(s/60)+' MIN '+Math.round(s%60)+' S'; return Math.floor(s/3600)+' H '+Math.round((s%3600)/60)+' MIN'; }
 function velocidad(b){ if(b>=1e6) return (b/1e6).toFixed(1).replace('.',',')+' MBIT/S'; if(b>=1e3) return Math.round(b/1e3)+' KBIT/S'; return Math.round(b)+' BIT/S'; }
+// EVENTOS REALES: lo que ha cambiado en la red entre dos lecturas (cada 5 s)
+const LUG={mdscc:'MADRID',gdscc:'GOLDSTONE',cdscc:'CANBERRA'};
+function cambios(a,b){ const ev=[], A={}; for(const d of a) A[d.dish]=d;
+  for(const d of b){ const p=A[d.dish], q=d.dish+' '+(LUG[d.estacion]||'');
+    if(d.activo&&(!p||!p.activo)) ev.push({t:'ADQUIERE',txt:q+' ADQUIERE SEÑAL DE '+d.nombre.toUpperCase(),dish:d.dish});
+    else if(!d.activo&&p&&p.activo) ev.push({t:'PIERDE',txt:q+' DEJA DE ESCUCHAR A '+p.nombre.toUpperCase(),dish:d.dish});
+    else if(d.activo&&p&&p.activo&&p.nave!==d.nave) ev.push({t:'CAMBIA',txt:q+' PASA DE '+p.nombre.toUpperCase()+' A '+d.nombre.toUpperCase(),dish:d.dish});
+    else if(d.activo&&p&&p.activo&&p.dataRate>0&&Math.abs(d.dataRate/p.dataRate-1)>.1) ev.push({t:'DATOS',txt:d.nombre.toUpperCase()+' · '+velocidad(p.dataRate)+' → '+velocidad(d.dataRate),dish:d.dish}); }
+  return ev; }
+// ROTACIÓN DE ESCUCHA: cada vuelta la pieza escucha otro enlace real (antena → nave).
+// DSS63 (Robledo de Chavela) manda: si está recibiendo, sale una vuelta sí y otra no.
+// Entre las demás, la que hace más que no se escucha, mejor de otra estación que la anterior.
+class Rotacion{
+  constructor(){ this.prev=null; this.vista={}; this.n=0; }
+  siguiente(enl,rotar){
+    const key=d=>d.dish+'|'+d.nave; if(!enl.length) return null; this.n++;
+    let d;
+    if(rotar===false) d=enl[0];
+    else { const p=this.prev, d63=enl.find(x=>x.dish==='DSS63');
+      if(d63&&(!p||p.dish!=='DSS63')) d=d63;
+      else { let c=enl.filter(x=>!p||key(x)!==key(p)); if(d63&&c.length>1) c=c.filter(x=>x.dish!=='DSS63'); if(!c.length) c=enl;
+        const po=this.otra; c.sort((x,y)=>(this.vista[key(x)]??-1)-(this.vista[key(y)]??-1)||((po&&x.estacion===po.estacion)?1:0)-((po&&y.estacion===po.estacion)?1:0)||y.dataRate-x.dataRate);
+        d=c[0]; } }
+    const cambio=!!this.prev&&key(this.prev)!==key(d), antes=this.prev; this.prev=d; if(d.dish!=='DSS63') this.otra=d; this.vista[key(d)]=this.n;
+    return {d:{...d},cambio,antes:antes&&{...antes}}; }
+}
 class Datos{
   constructor(){ this.d=null; this.r=null; this.estado='MEMORIA'; this.ultimo=0; this.errores=0; this.lecturas=0; this.onLectura=null; }
   async arranca(){ await nombres(); await this.lee(); setInterval(()=>this.lee(),5000); }
-  async lee(){ try{ const r=await fetch(base()+'data/dsn.xml?r='+Date.now(),{cache:'no-store'}); if(!r.ok) throw 0; const e=elige(await r.text()); if(e){ this.d=e.foco; this.r=e.red; this.estado='EN VIVO'; this.ultimo=Date.now(); this.errores=0; this.lecturas++; this.onLectura&&this.onLectura(this.d,this.r); } }
+  async lee(){ try{ const r=await fetch(base()+'data/dsn.xml?r='+Date.now(),{cache:'no-store'}); if(!r.ok) throw 0; const e=elige(await r.text()); if(e){ const ev=this.r?cambios(this.r,e.red):[]; this.d=e.foco; this.r=e.red; this.e=e.enlaces; this.estado='EN VIVO'; this.ultimo=Date.now(); this.errores=0; this.lecturas++; this.onLectura&&this.onLectura(this.d,this.r,ev); } }
     catch(e){ this.errores++; if(Date.now()-this.ultimo>30000) this.estado='MEMORIA'; } }
+  enlaces(){ return this.estado==='EN VIVO'&&this.e?this.e:MEMORIA_RED.filter(d=>d.activo).map(d=>({...d,vivo:false})); }
   red(){ return this.estado==='EN VIVO'&&this.r?this.r:MEMORIA_RED; }
   actual(){ return this.estado==='EN VIVO'&&this.d?this.d:{...(this.d||MEMORIA),vivo:false}; }
 }
-window.MensajeroDatos={Datos,MEMORIA,MEMORIA_RED,ESTACION,distancia,hace,velocidad,miles};
+window.MensajeroDatos={Datos,Rotacion,cambios,LUG,MEMORIA,MEMORIA_RED,ESTACION,distancia,hace,velocidad,miles};
 })();

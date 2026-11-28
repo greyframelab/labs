@@ -8,20 +8,29 @@ import {crear} from './escena.js';
 const Q=new URLSearchParams(location.search); const W=+(Q.get('w')||1280), H=+(Q.get('h')||720);
 const c=document.getElementById('c'); c.width=W; c.height=H; const tcv=document.getElementById('t'); tcv.width=W; tcv.height=H; const tc=tcv.getContext('2d');
 await Promise.all([300,400,600].map(p=>document.fonts.load(p+" 20px 'JetBrains Mono'")));
-const E=await crear({canvas:c,w:W,h:H,render:true,az:105,el:51});
-const datos={...MensajeroDatos.MEMORIA}; const o={dataRate:datos.dataRate,potencia:1,raiz:38,seed:7,dur:MensajeroMontaje.VUELTA};
+// ?enlace=DSS65 escucha ese enlace de la lectura guardada; &desde=DSS63 simula el CAMBIO DE ESCUCHA desde otro (la antena gira)
+const RED=MensajeroDatos.MEMORIA_RED, porDish=k=>RED.find(d=>d.dish===k);
+const datos={...MensajeroDatos.MEMORIA,...(Q.get('enlace')?porDish(Q.get('enlace')):{}),ts:MensajeroDatos.MEMORIA.ts,vivo:true};
+const desde=Q.get('desde')&&porDish(Q.get('desde'));
+const E=await crear({canvas:c,w:W,h:H,render:true,az:desde?desde.az:datos.az,el:desde?desde.el:datos.el});
+const o=MensajeroSonido.opciones(datos,MensajeroMontaje.VUELTA);
+const L=MensajeroDatos.LUG, ts0=datos.ts;
+const eventos=[{ts:ts0-41000,txt:'DSS26 GOLDSTONE DEJA DE ESCUCHAR A PERSEVERANCE'},{ts:ts0-17000,txt:'MARS ODYSSEY · 7 KBIT/S → 14 KBIT/S'}];
+if(desde) eventos.push({ts:ts0,txt:'LA PIEZA PASA A ESCUCHAR '+datos.dish+' '+L[datos.estacion]+' → '+datos.nombre.toUpperCase(),pieza:true});
+eventos.push({ts:ts0+9000,txt:'DSS24 GOLDSTONE PASA DE WIND A ACE'});
 const P=MensajeroSonido.Partitura(o);
 // lecturas simuladas cada 5 s (como el feed): cada una llega como un paquete 1,2 s después
 const LECT=[]; for(let l=.4;l<MensajeroMontaje.VUELTA;l+=5) LECT.push(l);
 const libre=(tv)=>tv>1.5&&!(tv>19.6&&tv<22.8)&&tv<MensajeroMontaje.VUELTA-3;
 const extra=LECT.map(l=>l+1.2).filter(libre);
-const plan={golpes:[...P.golpes,...extra].sort((a,b)=>a-b),datos};
+const plan={golpes:[...P.golpes,...extra].sort((a,b)=>a-b),datos,cambio:!!desde,planos:MensajeroMontaje.planos(datos,{vuelta:+(Q.get('vuelta')||1),cambio:!!desde}),sonido:{bpm:o.bpm,raiz:o.raiz}};
+for(const l of LECT) MensajeroMontaje.corte(plan,l+.4);
 let tPrev=0;
 window.frame=(t)=>{ const st=MensajeroMontaje.estado(t,plan,{vivo:true}); E.dibuja(st,t-tPrev); tPrev=t;
   const o2=document.createElement('canvas'); o2.width=W; o2.height=H; const x=o2.getContext('2d'); x.drawImage(c,0,0);
   if(!Q.has('sincapa')){ const ts=datos.ts, ul=LECT.filter(l=>l<=t).pop()??0; tc.clearRect(0,0,W,H);
     const fade=t>MensajeroMontaje.VUELTA-1.2?Math.max(.35,(MensajeroMontaje.VUELTA-t)/1.2):1;
-    MensajeroCapa.dibujaCapa(tc,W,H,MensajeroDatos.MEMORIA_RED,{modo:st.capa.modo,ahora:ts+t*1000,lectura:ts+ul*1000,vivo:true,foco:datos,frase:st.capa.frase,alpha:fade}); x.drawImage(tcv,0,0); }
+    MensajeroCapa.dibujaCapa(tc,W,H,MensajeroDatos.MEMORIA_RED,{modo:st.capa.modo,ahora:ts+t*1000,lectura:ts+ul*1000,vivo:true,foco:datos,frase:st.capa.frase,leyenda:st.capa.leyenda,eventos:eventos.filter(e=>e.ts<=ts0+t*1000),alpha:fade}); x.drawImage(tcv,0,0); }
   return o2.toDataURL('image/jpeg',.93); };
 window.audio=async(dur)=>{ const sr=48000, ctx=new OfflineAudioContext(2,Math.ceil(sr*dur),sr); const A=MensajeroSonido.Motor(ctx,ctx.destination,o); MensajeroSonido.programa(A,P,o,0); for(const g of extra) A.arco(g,.7);
   const buf=await ctx.startRendering(); const len=buf.length, out=new DataView(new ArrayBuffer(44+len*4)); const w=(p,s)=>{ for(let i=0;i<s.length;i++) out.setUint8(p+i,s.charCodeAt(i)); };
