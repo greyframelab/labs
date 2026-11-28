@@ -37,6 +37,8 @@ function corte(plan,tv){ const L=plan.planos.lista; const i=L.findIndex(p=>p[1]=
   L.push([+tv.toFixed(2),pl,.9]); L.sort((a,b)=>a[0]-b[0]); return true; }
 // LA CAPA DE DATOS: qué se ve encima de la escena en cada momento, y la frase de la máquina (MATRIZ)
 const LUGAR={mdscc:'MADRID',gdscc:'GOLDSTONE',cdscc:'CANBERRA'};
+// las tres de 70 m; el resto de la red son de 34 m (cada una se ve con su modelo real de NASA)
+const DIAM70=['DSS14','DSS43','DSS63']; const diametro=d=>DIAM70.includes(d.dish)?70:34;
 function capa(t,d,vivo,plan){
   const D=window.MensajeroDatos;
   const ventana=(a,b)=>{ const u=(t-a)/(b-a); return u>=0&&u<=1?{k:Math.min(1,u/.3),a:u<.85?1:Math.max(0,1-(u-.85)/.15)}:null; };
@@ -44,7 +46,7 @@ function capa(t,d,vivo,plan){
   let frase=null, w=ventana(1,6);
   if(w) frase={...w,lineas:vivo?['AHORA MISMO · UNA ANTENA EN '+(LUGAR[d.estacion]||d.lugar.toUpperCase())+' ESCUCHA A '+d.nombre.toUpperCase(),D.distancia(d.rango)+' · '+D.velocidad(d.dataRate)]
                                  :['SIN CONEXIÓN · LA ÚLTIMA SEÑAL FUE DE '+d.nombre.toUpperCase(),D.distancia(d.rango)]};
-  if(w&&plan&&plan.cambio) frase={...w,lineas:['CAMBIO DE ESCUCHA → '+d.dish+' · '+(LUGAR[d.estacion]||''),'AHORA ESCUCHA A '+d.nombre.toUpperCase()+(vivo?'':' (MEMORIA)'),D.distancia(d.rango)+' · '+D.velocidad(d.dataRate)]};
+  if(w&&plan&&plan.cambio) frase={...w,lineas:['CAMBIO DE ESCUCHA → '+d.dish+' · '+(LUGAR[d.estacion]||'')+' · '+diametro(d)+' M','AHORA ESCUCHA A '+d.nombre.toUpperCase()+(vivo?'':' (MEMORIA)'),D.distancia(d.rango)+' · '+D.velocidad(d.dataRate)]};
   // la leyenda: qué dato está tocando qué, mientras suena (7–13 s)
   const lw=ventana(7,13.5); const so=plan&&plan.sonido;
   const leyenda=lw&&so?{...lw,txt:['TONO ← DISTANCIA '+D.distancia(d.rango),'PULSO ← '+D.velocidad(d.dataRate)+' = '+so.bpm+' BPM','BRILLO ← '+(d.potencia||'—')+' DBM','TIMBRE ← '+(LUGAR[d.estacion]||'')+'  ·  VOZ ← '+d.nombre.toUpperCase()]}:null;
@@ -64,9 +66,9 @@ function estado(t,plan,opts){
   const vivo=opts.vivo??d.vivo;
   // GIRO: la antena va a la posición real nueva rápido (para que se vea en la sala), no a la velocidad de la real
   const giro=!!plan.cambio&&t<8;
-  return {t,tl:t-cur[0],plano,az:d.az,el:d.el,giroRapido:giro,optica:(plan.planos&&plan.planos.optica)||1,sen:cur[2]*pw,expo,
+  return {t,tl:t-cur[0],plano,az:d.az,el:d.el,diametro:diametro(d),giroRapido:giro,optica:(plan.planos&&plan.planos.optica)||1,sen:cur[2]*pw,expo,
     golpes:plan.golpes.filter(x=>x>t-4.2&&x<t+2.7).slice(0,8),nombre:d.nombre,tNombre:T_RUPTURA,
     capa:capa(t,d,vivo,plan),vivo};
 }
-window.MensajeroMontaje={VUELTA,T_RUPTURA,estado,planos,corte};
+window.MensajeroMontaje={VUELTA,T_RUPTURA,estado,planos,corte,diametro};
 })();
