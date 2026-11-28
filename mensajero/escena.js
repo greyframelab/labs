@@ -163,6 +163,8 @@ export async function crear(opts){
   const focoW=()=>G.elevacion.localToWorld(new THREE.Vector3(0,fy-3.5,0));
   const V3=(x,y,z)=>new THREE.Vector3(x,y,z);
   const PLANOS={
+    // GIRO: cámara fija en el mundo (no sigue a la antena): al cambiar de escucha se ve la antena girar hasta su posición real
+    GIRO:(tl)=>{ const c=centro(); cam.fov=34-tl*.25; cam.position.set(-170+tl*1.2,9,150); cam.lookAt(c.x,c.y+4,c.z); return cam.position.distanceTo(c); },
     HEROE:(tl)=>{ const c=centro(), a=eje(); const h=V3(a.x,0,a.z).normalize(), lado=V3(h.z,0,-h.x); cam.fov=58; cam.position.copy(c).addScaledVector(h,22-tl*.5).addScaledVector(lado,-58+tl*.8); cam.position.y=1.6; cam.lookAt(c.x,c.y+4,c.z); return cam.position.distanceTo(c); },
     // BAJO: a ras de suelo junto al pedestal; la antena encima, desbordando el encuadre
     BAJO:(tl)=>{ const c=centro(), a=eje(); const h=V3(a.x,0,a.z).normalize(), lado=V3(h.z,0,-h.x); cam.fov=70; cam.position.copy(V3(0,0,0)).addScaledVector(h,34+tl*.3).addScaledVector(lado,30); cam.position.y=1.4; cam.lookAt(c.clone().addScaledVector(h,10).add(V3(0,10+tl*.4,0))); return cam.position.distanceTo(c); },
@@ -176,13 +178,13 @@ export async function crear(opts){
   };
   function dibuja(st,dt){
     // la antena gira a su posición real a la velocidad de una antena de 70 m (≈0,25°/s)
-    const vel=(dt??1/30)*.25*(st.giroRapido?60:1);
+    const vel=(dt??1/30)*.25*(st.giroRapido?100:1);
     const da=((st.az-az.v+540)%360)-180; az.v+=Math.sign(da)*Math.min(Math.abs(da),vel); const de=st.el-el.v; el.v+=Math.sign(de)*Math.min(Math.abs(de),vel);
     apunta(az.v,el.v); ponNombre(st.nombre);
     const gl=(st.golpes||[]).concat(Array(8).fill(-99)).slice(0,8); U.golpes.value.set(gl);
     U.T.value=st.t; U.sen.value=st.sen; U.eje.value.copy(eje()); U.foco.value.copy(focoW()); U.tNombre.value=st.tNombre??-99;
     U.Mfijo.value.copy(G.fijo.matrixWorld); U.Maz.value.copy(G.azimut.matrixWorld); U.Mel.value.copy(G.elevacion.matrixWorld);
-    const fd=PLANOS[st.plano](st.tl||0); cam.aspect=W/H; cam.updateProjectionMatrix(); cam.updateMatrixWorld(); U.camP.value.copy(cam.position);
+    const fd=PLANOS[st.plano](st.tl||0); if(st.optica&&st.plano!=='NOMBRE') cam.fov=Math.min(80,cam.fov*st.optica); cam.aspect=W/H; cam.updateProjectionMatrix(); cam.updateMatrixWorld(); U.camP.value.copy(cam.position);
     R.setRenderTarget(rt); R.setClearColor(0x000000,1); R.clear(); R.render(S,cam);
     // larga exposición: max(actual, anterior·decaimiento); un corte de plano la reinicia
     const corte=st.plano!==ultPlano; ultPlano=st.plano;

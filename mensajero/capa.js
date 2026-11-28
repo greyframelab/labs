@@ -51,9 +51,18 @@ function dibujaCapa(x,W,H,red,o){
   x.fillText('ÚLTIMA LECTURA HACE '+edad.toFixed(1).replace('.',',')+' S  ·  SE LEE CADA 5 S',xR,m+30*s);
   // pulso de lectura nueva: una línea fina barre la capa de arriba abajo (nunca un destello de pantalla completa)
   if(edad<.9){ const yb=m+40*s+(H-2*m)*edad/.9; x.fillStyle='rgba('+BL+','+(.35*(1-edad/.9))+')'; x.fillRect(0,yb,W,1.2*s); }
+  // ---- EL REGISTRO: los eventos reales de la red, con su hora UTC (lo más nuevo, arriba y más brillante)
+  if(o.eventos&&o.eventos.length){ x.textAlign='left'; let y=m+30*s;
+    o.eventos.slice(-4).reverse().forEach((e,i)=>{ const age=(ahora-e.ts)/1000; const nuevo=Math.max(0,1-age/2.5);
+      const n=Math.min(e.txt.length,Math.floor(age*55)); x.font=F(i?12:14,i?300:400);
+      x.fillStyle='rgba('+BL+','+(i?Math.max(.15,.4-i*.08):.6+.4*nuevo)+')';
+      x.fillText(utc(e.ts).slice(12,24)+'  '+(e.pieza?'▸ ':'· ')+e.txt.slice(0,n),xL,y); y+=(i?18:22)*s; }); }
   if(modo==='reloj'){ x.restore(); return; }
   // ---- la frase de la máquina
   if(o.frase){ let y=170*s; for(const L of o.frase.lineas){ const cel=Math.min(5.2*s,(xR-xL)/(L.length*6.2)); matriz(x,L,xL,y,cel,o.frase.k,(L===o.frase.lineas[0]?.95:.6)*o.frase.a); y+=56*s; } }
+  // ---- LA LEYENDA: qué dato está tocando qué (la pieza se explica sola)
+  if(o.leyenda){ const L=o.leyenda; x.textAlign='right'; x.font=F(15,400); let y=H*.42;
+    L.txt.forEach((t,i)=>{ const v=Math.max(0,Math.min(1,(L.k*1.4-i*.25)*3)); x.fillStyle='rgba('+BL+','+(.85*v*L.a)+')'; x.fillText(t,xR,y); y+=26*s; }); }
   if(modo==='marco'){ marco(x,W,H,o,s,F,xL,xR); x.restore(); return; }
   // ---- EJE DE DISTANCIAS
   const yA=H*.56, X=km=>xL+(xR-xL)*Math.max(0,Math.min(1,(Math.log10(Math.max(km,1))-LOG0)/(LOG1-LOG0)));
